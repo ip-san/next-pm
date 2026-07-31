@@ -53,4 +53,11 @@ describe("postMessage", () => {
     const messageRepository = makeRepo({ findById: mock(async () => lockedRoot) });
     await expect(postMessage({ messageRepository }, { ...baseTopicInput, parentId: "root-1" })).rejects.toThrow(LockedTopicError);
   });
+
+  it("rejects a reply whose parent topic belongs to a different board", async () => {
+    const rootOnOtherBoard: Message = { id: "root-1", boardId: "other-board", parentId: null, authorId: "u1", subject: "Root", content: "c", locked: false, sticky: false, repliesCount: 0, createdAt: new Date() };
+    const messageRepository = makeRepo({ findById: mock(async () => rootOnOtherBoard) });
+    await expect(postMessage({ messageRepository }, { ...baseTopicInput, boardId: "board-1", parentId: "root-1" })).rejects.toThrow(InvalidMessageError);
+    expect(messageRepository.create).not.toHaveBeenCalled();
+  });
 });

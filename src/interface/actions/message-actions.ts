@@ -117,6 +117,11 @@ export async function editMessageAction(_prevState: MessageMutationActionState, 
     return { error: "投稿が見つかりません。" };
   }
 
+  const board = await new DrizzleBoardRepository().findById(message.boardId);
+  if (!board || board.projectId !== project.id) {
+    return { error: "投稿が見つかりません。" };
+  }
+
   const { actor } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   const hasEditMessages = can({ permission: "edit_messages", project: projectContext, actor });
@@ -165,6 +170,11 @@ export async function deleteMessageAction(_prevState: MessageMutationActionState
   const messageRepository = new DrizzleMessageRepository();
   const message = await messageRepository.findById(parsed.data.messageId);
   if (!message || message.boardId !== parsed.data.boardId) {
+    return { error: "投稿が見つかりません。" };
+  }
+
+  const board = await new DrizzleBoardRepository().findById(message.boardId);
+  if (!board || board.projectId !== project.id) {
     return { error: "投稿が見つかりません。" };
   }
 

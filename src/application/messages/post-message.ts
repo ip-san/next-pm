@@ -23,7 +23,7 @@ export async function postMessage(repositories: { messageRepository: MessageRepo
 
   if (input.parentId) {
     const root = await repositories.messageRepository.findById(input.parentId);
-    if (!root) {
+    if (!root || root.boardId !== input.boardId) {
       throw new InvalidMessageError("返信先のトピックが見つかりません。");
     }
     if (root.locked) {
