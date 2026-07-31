@@ -28,6 +28,13 @@ export class DrizzleQueryRepository implements QueryRepository {
     return attachRoleIds(rows);
   }
 
+  async findById(id: string): Promise<SavedQuery | null> {
+    const [row] = await db.select().from(queries).where(eq(queries.id, id));
+    if (!row) return null;
+    const [saved] = await attachRoleIds([row]);
+    return saved;
+  }
+
   async create(query: Omit<SavedQuery, "id">): Promise<SavedQuery> {
     const [row] = await db
       .insert(queries)

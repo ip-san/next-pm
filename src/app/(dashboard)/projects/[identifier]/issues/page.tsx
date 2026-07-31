@@ -1,38 +1,55 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
-import { compileFilters } from "@/domain/query/filter-builder";
+import { compileFilters, type FilterCondition } from "@/domain/query/filter-builder";
+import { isQueryVisible } from "@/domain/query/visibility";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { SaveQueryForm } from "./save-query-form";
 
 export default async function ProjectIssuesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ identifier: string }>;
-  searchParams: Promise<{ status_id?: string }>;
+  searchParams: Promise<{ status_id?: string; query_id?: string }>;
 }) {
   const { identifier } = await params;
-  const { status_id: statusFilter } = await searchParams;
+  const { status_id: statusFilter, query_id: queryId } = await searchParams;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
     notFound();
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
 
-  const predicates = statusFilter
-    ? compileFilters([{ field: "status_id", operator: "=", values: [statusFilter] }])
-    : [];
+  const queryRepository = new DrizzleQueryRepository();
+  const allQueries = await queryRepository.listForProject(project.id);
+  const visibleQueries = allQueries.filter((q) => isQueryVisible(q, user?.id ?? "", roleIds));
+
+  // ?query_id= is client-supplied — re-verify it belongs to this project and is visible to
+  // this actor before trusting its filters, rather than trusting the id alone (IDOR-safe).
+  let appliedFilters: FilterCondition[] = [];
+  if (queryId) {
+    const query = await queryRepository.findById(queryId);
+    if (query && query.projectId === project.id && isQueryVisible(query, user?.id ?? "", roleIds)) {
+      appliedFilters = query.filters;
+    }
+  } else if (statusFilter) {
+    appliedFilters = [{ field: "status_id", operator: "=", values: [statusFilter] }];
+  }
+
+  const predicates = compileFilters(appliedFilters);
 
   const [allIssues, statuses, trackers] = await Promise.all([
     new DrizzleIssueRepository().listByProject(project.id, predicates),
@@ -61,6 +78,24 @@ export default async function ProjectIssuesPage({
         </div>
       </div>
 
+      {visibleQueries.length > 0 && (
+        <nav className="flex items-center gap-3 text-sm">
+          <span className="text-gray-500">保存済みクエリ:</span>
+          <Link href={`/projects/${identifier}/issues`} className={!queryId ? "font-semibold underline" : "underline"}>
+            (絞り込みなし)
+          </Link>
+          {visibleQueries.map((query) => (
+            <Link
+              key={query.id}
+              href={`/projects/${identifier}/issues?query_id=${query.id}`}
+              className={queryId === query.id ? "font-semibold underline" : "underline"}
+            >
+              {query.name}
+            </Link>
+          ))}
+        </nav>
+      )}
+
       <form method="get" className="flex items-center gap-2 text-sm">
         <label htmlFor="status_id">ステータスで絞り込み:</label>
         <select id="status_id" name="status_id" defaultValue={statusFilter ?? ""} className="border rounded px-2 py-1">
@@ -75,6 +110,14 @@ export default async function ProjectIssuesPage({
           適用
         </button>
       </form>
+
+      {appliedFilters.length > 0 && (
+        <SaveQueryForm
+          projectIdentifier={identifier}
+          filters={appliedFilters}
+          canPublish={can({ permission: "edit_issues", project: toAuthorizationProject(project), actor })}
+        />
+      )}
 
       <form method="get" action={`/projects/${identifier}/issues/bulk-edit`} className="flex flex-col gap-3">
         <table className="text-sm border-collapse">
