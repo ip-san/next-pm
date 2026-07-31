@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { customFieldFormatEnum } from "@/infrastructure/db/schema/custom-fields";
 import { enumerationTypeEnum } from "@/infrastructure/db/schema/enumerations";
+import { coerceCustomFieldValue } from "@/domain/custom-field/coerce";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -176,5 +179,81 @@ export async function createEnumerationAction(
   });
 
   revalidatePath("/admin/enumerations");
+  return { error: null };
+}
+
+const createCustomFieldSchema = z.object({
+  name: z.string().min(1).max(30),
+  fieldFormat: z.enum(customFieldFormatEnum),
+  possibleValues: z.string().default(""),
+  defaultValue: z.string().default(""),
+  isRequired: z.coerce.boolean().default(false),
+  trackerIds: z.array(z.string().uuid()).default([]),
+});
+
+export async function createCustomFieldAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = createCustomFieldSchema.safeParse({
+    name: formData.get("name"),
+    fieldFormat: formData.get("fieldFormat"),
+    possibleValues: formData.get("possibleValues") ?? "",
+    defaultValue: formData.get("defaultValue") ?? "",
+    isRequired: formData.get("isRequired") === "on",
+    trackerIds: formData.getAll("trackerIds"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  if (parsed.data.trackerIds.length === 0) {
+    return { error: "対象トラッカーを1つ以上選択してください。" };
+  }
+
+  const trackers = await new DrizzleTrackerRepository().findByIds(parsed.data.trackerIds);
+  if (trackers.length !== parsed.data.trackerIds.length) {
+    return { error: "存在しないトラッカーが指定されました。" };
+  }
+
+  const possibleValues =
+    parsed.data.fieldFormat === "list"
+      ? parsed.data.possibleValues
+          .split(",")
+          .map((v) => v.trim())
+          .filter((v) => v.length > 0)
+      : [];
+  if (parsed.data.fieldFormat === "list" && possibleValues.length === 0) {
+    return { error: "リスト形式には選択肢を1つ以上指定してください。" };
+  }
+
+  let defaultValue: string | null = null;
+  if (parsed.data.defaultValue.trim().length > 0) {
+    const result = coerceCustomFieldValue(
+      { name: parsed.data.name, fieldFormat: parsed.data.fieldFormat, isRequired: false, possibleValues },
+      parsed.data.defaultValue,
+    );
+    if (!result.ok) {
+      return { error: result.error };
+    }
+    defaultValue = result.value;
+  }
+
+  await new DrizzleCustomFieldRepository().create({
+    name: parsed.data.name,
+    fieldFormat: parsed.data.fieldFormat,
+    isRequired: parsed.data.isRequired,
+    defaultValue,
+    possibleValues,
+    position: 0,
+    trackerIds: parsed.data.trackerIds,
+  });
+
+  revalidatePath("/admin/custom-fields");
   return { error: null };
 }

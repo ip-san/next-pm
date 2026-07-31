@@ -26,6 +26,11 @@ async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Pro
 }
 
 export class DrizzleCustomFieldRepository implements CustomFieldRepository {
+  async listAll(): Promise<CustomField[]> {
+    const rows = await db.select().from(customFields);
+    return attachTrackerIds(rows);
+  }
+
   async findById(id: string): Promise<CustomField | null> {
     const [row] = await db.select().from(customFields).where(eq(customFields.id, id)).limit(1);
     if (!row) return null;

@@ -20,6 +20,7 @@ function makeField(overrides: Partial<CustomField> = {}): CustomField {
 
 function makeRepos(fields: CustomField[]) {
   const customFieldRepository: CustomFieldRepository = {
+    listAll: mock(async () => fields),
     listForTracker: mock(async () => fields),
     findById: mock(async () => fields[0] ?? null),
     create: mock(async (f) => ({ ...f, id: "new-field" })),
