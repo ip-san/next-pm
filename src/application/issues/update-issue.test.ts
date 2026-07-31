@@ -40,6 +40,9 @@ function makeRepositories(overrides: {
   const issueRepository: IssueRepository = {
     findById: mock(async () => issue),
     listByProject: mock(async () => []),
+    findByAssignee: mock(async () => []),
+    findByAuthor: mock(async () => []),
+    findByIds: mock(async () => []),
     search: mock(async () => []),
     create: mock(async () => issue),
     update: mock(async (_id, _lockVersion, changes) => ({ ...issue, ...changes, lockVersion: issue.lockVersion + 1 })),

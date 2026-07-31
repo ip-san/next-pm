@@ -19,6 +19,12 @@ export interface IssueUpdate {
 export interface IssueRepository {
   findById(id: string): Promise<Issue | null>;
   listByProject(projectId: string, predicates?: CompiledPredicate[]): Promise<Issue[]>;
+  /** Across every project — callers must filter by per-project visibility themselves. */
+  findByAssignee(userId: string): Promise<Issue[]>;
+  /** Across every project — callers must filter by per-project visibility themselves. */
+  findByAuthor(userId: string): Promise<Issue[]>;
+  /** Across every project — callers must filter by per-project visibility themselves. */
+  findByIds(ids: string[]): Promise<Issue[]>;
   create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue>;
   /**
    * Applies `changes` only if `expectedLockVersion` still matches the stored row

@@ -7,6 +7,7 @@ function makeRepo(isWatching: boolean): WatcherRepository {
     isWatching: mock(async () => isWatching),
     watch: mock(async () => {}),
     unwatch: mock(async () => {}),
+    listWatchedIds: mock(async () => []),
   };
 }
 

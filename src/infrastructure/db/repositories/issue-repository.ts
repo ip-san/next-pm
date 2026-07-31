@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { issues } from "@/infrastructure/db/schema/issues";
 import { StaleIssueError, type Issue } from "@/domain/issue/entity";
@@ -49,6 +49,22 @@ export class DrizzleIssueRepository implements IssueRepository {
     const extraCondition = toDrizzleCondition(predicates, ISSUE_FILTER_COLUMNS);
     const condition = extraCondition ? and(eq(issues.projectId, projectId), extraCondition) : eq(issues.projectId, projectId);
     const rows = await db.select().from(issues).where(condition).orderBy(issues.createdAt);
+    return rows.map(toDomain);
+  }
+
+  async findByAssignee(userId: string): Promise<Issue[]> {
+    const rows = await db.select().from(issues).where(eq(issues.assignedToId, userId)).orderBy(desc(issues.createdAt));
+    return rows.map(toDomain);
+  }
+
+  async findByAuthor(userId: string): Promise<Issue[]> {
+    const rows = await db.select().from(issues).where(eq(issues.authorId, userId)).orderBy(desc(issues.createdAt));
+    return rows.map(toDomain);
+  }
+
+  async findByIds(ids: string[]): Promise<Issue[]> {
+    if (ids.length === 0) return [];
+    const rows = await db.select().from(issues).where(inArray(issues.id, ids));
     return rows.map(toDomain);
   }
 

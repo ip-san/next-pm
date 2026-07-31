@@ -35,6 +35,9 @@ function makeRepos(issuesById: Record<string, Issue>, existingRelations: IssueRe
   const issueRepository: IssueRepository = {
     findById: mock(async (id: string) => issuesById[id] ?? null),
     listByProject: mock(async () => []),
+    findByAssignee: mock(async () => []),
+    findByAuthor: mock(async () => []),
+    findByIds: mock(async () => []),
     search: mock(async () => []),
     create: mock(async () => {
       throw new Error("not used");
