@@ -38,4 +38,21 @@ export class DrizzleMemberRepository implements MemberRepository {
     const rows = await db.select().from(members).where(eq(members.projectId, projectId));
     return attachRoleIds(rows);
   }
+
+  async create(member: Omit<Member, "id">): Promise<Member> {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(members)
+        .values({ userId: member.userId, projectId: member.projectId })
+        .returning();
+      if (member.roleIds.length > 0) {
+        await tx.insert(memberRoles).values(member.roleIds.map((roleId) => ({ memberId: row.id, roleId })));
+      }
+      return { id: row.id, userId: row.userId, projectId: row.projectId, roleIds: member.roleIds };
+    });
+  }
+
+  async delete(memberId: string): Promise<void> {
+    await db.delete(members).where(eq(members.id, memberId));
+  }
 }
