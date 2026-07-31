@@ -21,4 +21,23 @@ describe("encodeCsv", () => {
   it("leaves an empty field bare", () => {
     expect(encodeCsv([["", "x"]])).toBe(",x\r\n");
   });
+
+  it("neutralizes a leading = to prevent formula injection", () => {
+    expect(encodeCsv([["=cmd|'/c calc'!A1"]])).toBe("'=cmd|'/c calc'!A1\r\n");
+  });
+
+  it("neutralizes leading +, -, and @", () => {
+    expect(encodeCsv([["+1+1"]])).toBe("'+1+1\r\n");
+    expect(encodeCsv([["-1+1"]])).toBe("'-1+1\r\n");
+    expect(encodeCsv([["@1+1"]])).toBe("'@1+1\r\n");
+  });
+
+  it("neutralizes a leading tab or CR (still quoted, since CR also triggers quoting)", () => {
+    expect(encodeCsv([["\t1+1"]])).toBe("'\t1+1\r\n");
+    expect(encodeCsv([["\r1+1"]])).toBe('"\'\r1+1"\r\n');
+  });
+
+  it("does not touch a field with = in the middle", () => {
+    expect(encodeCsv([["a=b"]])).toBe("a=b\r\n");
+  });
 });
