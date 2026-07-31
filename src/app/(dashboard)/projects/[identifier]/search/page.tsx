@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can } from "@/domain/authorization/authorization-service";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { SearchResult } from "@/domain/search/entity";
+import { searchProject } from "@/application/search/search-project";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
@@ -13,12 +12,6 @@ import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/i
 
 export const dynamic = "force-dynamic";
 
-/**
- * Searches each entity type with its own permission gate rather than one merged query —
- * every type has a different view_* permission, and Message additionally has no project_id
- * of its own (it only reaches a project through its board), so a single UNION would either
- * mis-scope messages or need a fragile ad-hoc join. See domain repositories' search() methods.
- */
 export default async function SearchPage({
   params,
   searchParams,
@@ -37,32 +30,23 @@ export default async function SearchPage({
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  const projectContext = toAuthorizationProject(project);
 
-  const results: SearchResult[] = [];
-
-  if (query.length > 0) {
-    if (can({ permission: "view_issues", project: projectContext, actor })) {
-      const issues = await new DrizzleIssueRepository().search(project.id, query);
-      const visibleIssues = issues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor)));
-      results.push(...visibleIssues.map((issue) => ({ type: "issue" as const, id: issue.id, title: issue.subject, excerpt: issue.description })));
-    }
-
-    if (can({ permission: "view_wiki_pages", project: projectContext, actor })) {
-      const hits = await new DrizzleWikiContentRepository().search(project.id, query);
-      results.push(...hits.map((hit) => ({ type: "wiki_page" as const, id: hit.page.title, title: hit.page.title, excerpt: hit.currentVersion.text })));
-    }
-
-    if (can({ permission: "view_news", project: projectContext, actor })) {
-      const newsItems = await new DrizzleNewsRepository().search(project.id, query);
-      results.push(...newsItems.map((item) => ({ type: "news" as const, id: item.id, title: item.title, excerpt: item.description })));
-    }
-
-    if (can({ permission: "view_messages", project: projectContext, actor })) {
-      const messages = await new DrizzleMessageRepository().search(project.id, query);
-      results.push(...messages.map((message) => ({ type: "message" as const, id: message.id, title: message.subject, excerpt: message.content })));
-    }
-  }
+  const results = await searchProject(
+    {
+      issueRepository: new DrizzleIssueRepository(),
+      wikiContentRepository: new DrizzleWikiContentRepository(),
+      newsRepository: new DrizzleNewsRepository(),
+      messageRepository: new DrizzleMessageRepository(),
+    },
+    {
+      projectId: project.id,
+      projectContext: toAuthorizationProject(project),
+      actor,
+      userId: user?.id ?? null,
+      issueVisibilityRoles: issuesVisibilityRoles(actor),
+      query,
+    },
+  );
 
   const urlFor = (result: SearchResult): string => {
     switch (result.type) {
