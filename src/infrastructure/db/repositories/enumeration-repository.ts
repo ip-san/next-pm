@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { enumerations } from "@/infrastructure/db/schema/enumerations";
 import type { Enumeration, EnumerationType } from "@/domain/enumeration/entity";
@@ -39,5 +39,12 @@ export class DrizzleEnumerationRepository implements EnumerationRepository {
       })
       .returning();
     return toDomain(row);
+  }
+
+  async unsetSystemDefaultsForType(type: EnumerationType): Promise<void> {
+    await db
+      .update(enumerations)
+      .set({ isDefault: 0 })
+      .where(and(eq(enumerations.type, type), isNull(enumerations.projectId)));
   }
 }

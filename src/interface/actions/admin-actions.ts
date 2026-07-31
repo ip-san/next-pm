@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { enumerationTypeEnum } from "@/infrastructure/db/schema/enumerations";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
@@ -133,5 +135,46 @@ export async function updateWorkflowAction(
   await new DrizzleWorkflowRepository().replaceForTrackerAndRole(tracker.id, role.id, transitions);
 
   revalidatePath("/admin/workflows");
+  return { error: null };
+}
+
+const createEnumerationSchema = z.object({
+  type: z.enum(enumerationTypeEnum),
+  name: z.string().min(1).max(30),
+  isDefault: z.coerce.boolean().default(false),
+});
+
+export async function createEnumerationAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = createEnumerationSchema.safeParse({
+    type: formData.get("type"),
+    name: formData.get("name"),
+    isDefault: formData.get("isDefault") === "on",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const enumerationRepository = new DrizzleEnumerationRepository();
+  if (parsed.data.isDefault) {
+    await enumerationRepository.unsetSystemDefaultsForType(parsed.data.type);
+  }
+  await enumerationRepository.create({
+    type: parsed.data.type,
+    name: parsed.data.name,
+    position: 0,
+    isDefault: parsed.data.isDefault,
+    projectId: null,
+    parentId: null,
+  });
+
+  revalidatePath("/admin/enumerations");
   return { error: null };
 }
