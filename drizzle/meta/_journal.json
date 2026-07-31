@@ -78,6 +78,13 @@
       "when": 1785468512774,
       "tag": "0010_bored_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785470384408,
+      "tag": "0011_add_versions",
+      "breakpoints": true
     }
   ]
 }

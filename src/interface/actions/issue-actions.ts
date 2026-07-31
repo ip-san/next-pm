@@ -13,6 +13,7 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -82,6 +83,7 @@ const updateIssueStatusSchema = z.object({
   issueId: z.string().uuid(),
   lockVersion: z.coerce.number().int(),
   statusId: z.string().uuid(),
+  fixedVersionId: z.string().uuid().or(z.literal("")).default(""),
   notes: z.string().default(""),
 });
 
@@ -93,6 +95,7 @@ export async function updateIssueStatusAction(
     issueId: formData.get("issueId"),
     lockVersion: formData.get("lockVersion"),
     statusId: formData.get("statusId"),
+    fixedVersionId: formData.get("fixedVersionId") ?? "",
     notes: formData.get("notes") ?? "",
   });
   if (!parsed.success) {
@@ -125,6 +128,15 @@ export async function updateIssueStatusAction(
     return { error: "この操作を行う権限がありません。" };
   }
 
+  let fixedVersionId: string | null = null;
+  if (parsed.data.fixedVersionId.length > 0) {
+    const version = await new DrizzleVersionRepository().findById(parsed.data.fixedVersionId);
+    if (!version || version.projectId !== project.id) {
+      return { error: "バージョンが見つかりません。" };
+    }
+    fixedVersionId = version.id;
+  }
+
   try {
     await updateIssue(
       {
@@ -135,7 +147,7 @@ export async function updateIssueStatusAction(
       {
         issueId: parsed.data.issueId,
         expectedLockVersion: parsed.data.lockVersion,
-        changes: { statusId: parsed.data.statusId },
+        changes: { statusId: parsed.data.statusId, fixedVersionId },
         notes: parsed.data.notes,
         actingUserId: user.id,
         actorRoleIds: roleIds,

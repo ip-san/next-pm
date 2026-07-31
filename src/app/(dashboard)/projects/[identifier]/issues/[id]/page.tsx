@@ -12,6 +12,7 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -54,7 +55,7 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const [transitions, customFields, customValues, timeEntries, activities, attachments, isWatching] = await Promise.all([
+  const [transitions, customFields, customValues, timeEntries, activities, attachments, isWatching, versions] = await Promise.all([
     new DrizzleWorkflowRepository().listForTracker(issue.trackerId),
     new DrizzleCustomFieldRepository().listForTracker(issue.trackerId),
     new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
@@ -62,6 +63,7 @@ export default async function IssueDetailPage({
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
     new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
     user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
+    new DrizzleVersionRepository().listByProject(project.id),
   ]);
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
   const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
@@ -132,7 +134,9 @@ export default async function IssueDetailPage({
             issueId={issue.id}
             lockVersion={issue.lockVersion}
             currentStatusId={issue.statusId}
+            currentFixedVersionId={issue.fixedVersionId}
             allowedStatuses={allowedStatuses}
+            versions={versions}
           />
         ) : (
           <p className="text-sm text-gray-500">このステータスから遷移できるワークフロー設定がありません。</p>

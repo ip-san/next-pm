@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateIssueStatusAction, type UpdateIssueStatusActionState } from "@/interface/actions/issue-actions";
 import type { IssueStatus } from "@/domain/issue-status/entity";
+import type { Version } from "@/domain/version/entity";
 
 const initialState: UpdateIssueStatusActionState = { error: null };
 
@@ -10,12 +11,16 @@ export function StatusUpdateForm({
   issueId,
   lockVersion,
   currentStatusId,
+  currentFixedVersionId,
   allowedStatuses,
+  versions,
 }: {
   issueId: string;
   lockVersion: number;
   currentStatusId: string;
+  currentFixedVersionId: string | null;
   allowedStatuses: IssueStatus[];
+  versions: Version[];
 }) {
   const [state, formAction, pending] = useActionState(updateIssueStatusAction, initialState);
 
@@ -31,6 +36,19 @@ export function StatusUpdateForm({
           {allowedStatuses.map((status) => (
             <option key={status.id} value={status.id}>
               {status.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="fixedVersionId" className="text-sm font-medium">
+          対象バージョン
+        </label>
+        <select id="fixedVersionId" name="fixedVersionId" defaultValue={currentFixedVersionId ?? ""} className="border rounded px-3 py-2">
+          <option value="">(なし)</option>
+          {versions.map((version) => (
+            <option key={version.id} value={version.id}>
+              {version.name}
             </option>
           ))}
         </select>

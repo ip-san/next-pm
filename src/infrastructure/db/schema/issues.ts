@@ -5,6 +5,7 @@ import { issueStatuses } from "./issue-statuses";
 import { projects } from "./projects";
 import { trackers } from "./trackers";
 import { users } from "./users";
+import { versions } from "./versions";
 
 export const issues = pgTable("issues", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -28,7 +29,7 @@ export const issues = pgTable("issues", {
   assignedToId: uuid("assigned_to_id").references(() => users.id),
   /** Adjacency-list subtask tree (not a nested set) — matches the plan's simplification of Redmine's issue side. */
   parentId: uuid("parent_id").references((): AnyPgColumn => issues.id, { onDelete: "set null" }),
-  fixedVersionId: uuid("fixed_version_id"),
+  fixedVersionId: uuid("fixed_version_id").references(() => versions.id, { onDelete: "set null" }),
   categoryId: uuid("category_id").references(() => issueCategories.id),
   isPrivate: boolean("is_private").notNull().default(false),
   doneRatio: integer("done_ratio").notNull().default(0),
