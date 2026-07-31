@@ -24,6 +24,7 @@ function makeUser(overrides: Partial<User> = {}): User {
 
 function repoWith(user: User | null): UserRepository {
   return {
+    listAll: mock(async () => (user ? [user] : [])),
     findByLogin: mock(async () => user),
     findById: mock(async () => user),
     findByIds: mock(async () => (user ? [user] : [])),

@@ -1,6 +1,7 @@
 import type { User } from "./entity";
 
 export interface UserRepository {
+  listAll(): Promise<User[]>;
   findById(id: string): Promise<User | null>;
   findByIds(ids: string[]): Promise<User[]>;
   findByLogin(login: string): Promise<User | null>;

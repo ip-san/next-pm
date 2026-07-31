@@ -21,6 +21,11 @@ function toDomain(row: typeof users.$inferSelect): User {
 }
 
 export class DrizzleUserRepository implements UserRepository {
+  async listAll(): Promise<User[]> {
+    const rows = await db.select().from(users);
+    return rows.map(toDomain);
+  }
+
   async findById(id: string): Promise<User | null> {
     const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return row ? toDomain(row) : null;

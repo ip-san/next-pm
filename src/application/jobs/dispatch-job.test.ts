@@ -39,6 +39,7 @@ describe("dispatchJob", () => {
   it("sends mail to active recipients' addresses", async () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
+      listAll: mock(async () => []),
       findById: mock(async () => makeUser()),
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
@@ -52,6 +53,7 @@ describe("dispatchJob", () => {
   it("excludes locked/registered (non-active) recipients", async () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
+      listAll: mock(async () => []),
       findById: mock(async () => makeUser({ status: "locked" })),
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
@@ -65,6 +67,7 @@ describe("dispatchJob", () => {
   it("skips sending when no recipient resolves to a user", async () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
+      listAll: mock(async () => []),
       findById: mock(async () => null),
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
@@ -78,6 +81,7 @@ describe("dispatchJob", () => {
   it("throws on an unknown job type", async () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
+      listAll: mock(async () => []),
       findById: mock(async () => null),
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
