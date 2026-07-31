@@ -5,6 +5,7 @@ import type { VersionRepository } from "@/domain/version/repository";
 function makeRepo(fixedIssueCount: number): VersionRepository {
   return {
     listByProject: mock(async () => []),
+    listSharedWith: mock(async () => []),
     findById: mock(async () => null),
     create: mock(async () => {
       throw new Error("not implemented");

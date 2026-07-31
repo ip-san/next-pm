@@ -20,6 +20,7 @@ const createVersionSchema = z.object({
   name: z.string().min(1),
   description: z.string(),
   effectiveDate: z.string(),
+  sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]),
 });
 
 export async function createVersionAction(_prevState: VersionActionState, formData: FormData): Promise<VersionActionState> {
@@ -28,6 +29,7 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
     name: formData.get("name"),
     description: formData.get("description") ?? "",
     effectiveDate: formData.get("effectiveDate") ?? "",
+    sharing: formData.get("sharing") ?? "none",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -56,6 +58,7 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
         name: parsed.data.name,
         description: parsed.data.description,
         effectiveDate: parsed.data.effectiveDate.length > 0 ? parsed.data.effectiveDate : null,
+        sharing: parsed.data.sharing,
         wikiPageTitle: null,
       },
     );
@@ -77,6 +80,7 @@ const updateVersionSchema = z.object({
   description: z.string(),
   effectiveDate: z.string(),
   status: z.enum(["open", "locked", "closed"]),
+  sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]),
 });
 
 export async function updateVersionAction(_prevState: VersionActionState, formData: FormData): Promise<VersionActionState> {
@@ -87,6 +91,7 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
     description: formData.get("description") ?? "",
     effectiveDate: formData.get("effectiveDate") ?? "",
     status: formData.get("status"),
+    sharing: formData.get("sharing") ?? "none",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -122,6 +127,7 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
         description: parsed.data.description,
         effectiveDate: parsed.data.effectiveDate.length > 0 ? parsed.data.effectiveDate : null,
         status: parsed.data.status,
+        sharing: parsed.data.sharing,
         wikiPageTitle: version.wikiPageTitle,
       },
     );

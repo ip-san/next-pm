@@ -23,6 +23,7 @@ function makeVersion(overrides: Partial<Version> = {}): Version {
 function makeRepo(version: Version | null, siblings: Version[] = []): VersionRepository {
   return {
     listByProject: mock(async () => siblings),
+    listSharedWith: mock(async () => siblings),
     findById: mock(async () => version),
     create: mock(async () => {
       throw new Error("not implemented");
@@ -33,7 +34,15 @@ function makeRepo(version: Version | null, siblings: Version[] = []): VersionRep
   };
 }
 
-const baseInput = { versionId: "version-1", name: "1.0.1", description: "Updated", effectiveDate: "2026-08-01", status: "open" as const, wikiPageTitle: null };
+const baseInput = {
+  versionId: "version-1",
+  name: "1.0.1",
+  description: "Updated",
+  effectiveDate: "2026-08-01",
+  status: "open" as const,
+  sharing: "none" as const,
+  wikiPageTitle: null,
+};
 
 describe("updateVersion", () => {
   it("updates a version's fields", async () => {
@@ -61,5 +70,19 @@ describe("updateVersion", () => {
     const versionRepository = makeRepo(version, [version]);
     // @ts-expect-error intentionally invalid status for the runtime check
     await expect(updateVersion({ versionRepository }, { ...baseInput, status: "bogus" })).rejects.toThrow(InvalidVersionError);
+  });
+
+  it("rejects an invalid sharing value", async () => {
+    const version = makeVersion();
+    const versionRepository = makeRepo(version, [version]);
+    // @ts-expect-error intentionally invalid sharing for the runtime check
+    await expect(updateVersion({ versionRepository }, { ...baseInput, sharing: "bogus" })).rejects.toThrow(InvalidVersionError);
+  });
+
+  it("updates the sharing value", async () => {
+    const version = makeVersion();
+    const versionRepository = makeRepo(version, [version]);
+    const updated = await updateVersion({ versionRepository }, { ...baseInput, sharing: "descendants" });
+    expect(updated.sharing).toBe("descendants");
   });
 });

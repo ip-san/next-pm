@@ -63,7 +63,7 @@ export default async function IssueDetailPage({
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
     new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
     user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
-    new DrizzleVersionRepository().listByProject(project.id),
+    new DrizzleVersionRepository().listSharedWith(project.id),
   ]);
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
   const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });

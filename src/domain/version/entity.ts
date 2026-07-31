@@ -1,7 +1,6 @@
 export type VersionStatus = "open" | "locked" | "closed";
 
-/** Sharing hierarchy walk is out of scope for now; only "none" is supported. */
-export type VersionSharing = "none";
+export type VersionSharing = "none" | "descendants" | "hierarchy" | "tree" | "system";
 
 export interface Version {
   id: string;

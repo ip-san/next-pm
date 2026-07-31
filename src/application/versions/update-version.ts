@@ -1,4 +1,4 @@
-import type { Version, VersionStatus } from "@/domain/version/entity";
+import type { Version, VersionSharing, VersionStatus } from "@/domain/version/entity";
 import type { VersionRepository } from "@/domain/version/repository";
 import { InvalidVersionError } from "./create-version";
 
@@ -8,10 +8,12 @@ export interface UpdateVersionInput {
   description: string;
   effectiveDate: string | null;
   status: VersionStatus;
+  sharing: VersionSharing;
   wikiPageTitle: string | null;
 }
 
 const VERSION_STATUSES: VersionStatus[] = ["open", "locked", "closed"];
+const VERSION_SHARINGS: VersionSharing[] = ["none", "descendants", "hierarchy", "tree", "system"];
 
 export async function updateVersion(repositories: { versionRepository: VersionRepository }, input: UpdateVersionInput): Promise<Version> {
   if (input.name.trim().length === 0 || input.name.length > 60) {
@@ -25,6 +27,9 @@ export async function updateVersion(repositories: { versionRepository: VersionRe
   }
   if (!VERSION_STATUSES.includes(input.status)) {
     throw new InvalidVersionError("不正なステータスです。");
+  }
+  if (!VERSION_SHARINGS.includes(input.sharing)) {
+    throw new InvalidVersionError("不正な共有設定です。");
   }
 
   const version = await repositories.versionRepository.findById(input.versionId);
@@ -42,6 +47,7 @@ export async function updateVersion(repositories: { versionRepository: VersionRe
     description: input.description,
     effectiveDate: input.effectiveDate,
     status: input.status,
+    sharing: input.sharing,
     wikiPageTitle: input.wikiPageTitle,
   });
 }

@@ -130,11 +130,13 @@ export async function updateIssueStatusAction(
 
   let fixedVersionId: string | null = null;
   if (parsed.data.fixedVersionId.length > 0) {
-    const version = await new DrizzleVersionRepository().findById(parsed.data.fixedVersionId);
-    if (!version || version.projectId !== project.id) {
+    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
+    // shared with (not just owned by) this issue's project, per its sharing setting.
+    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
+    if (!sharedVersions.some((version) => version.id === parsed.data.fixedVersionId)) {
       return { error: "バージョンが見つかりません。" };
     }
-    fixedVersionId = version.id;
+    fixedVersionId = parsed.data.fixedVersionId;
   }
 
   try {

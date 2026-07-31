@@ -13,6 +13,13 @@ import { VersionCreateForm } from "./version-create-form";
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = { open: "進行中", locked: "ロック中", closed: "終了" };
+const SHARING_LABEL: Record<string, string> = {
+  none: "共有しない",
+  descendants: "サブプロジェクト",
+  hierarchy: "プロジェクト階層",
+  tree: "プロジェクトツリー",
+  system: "全プロジェクト",
+};
 
 export default async function VersionsPage({ params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
@@ -51,6 +58,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
             <th className="pb-2">名前</th>
             <th className="pb-2">期日</th>
             <th className="pb-2">状態</th>
+            <th className="pb-2">共有</th>
             <th className="pb-2">進捗</th>
             {canManageVersions ? <th className="pb-2" /> : null}
           </tr>
@@ -66,6 +74,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
                 <td className="py-2">{version.name}</td>
                 <td className="py-2">{version.effectiveDate ?? "-"}</td>
                 <td className="py-2">{STATUS_LABEL[version.status]}</td>
+                <td className="py-2">{SHARING_LABEL[version.sharing]}</td>
                 <td className="py-2">{Math.round(progress.completedPercent)}%</td>
                 {canManageVersions ? (
                   <td className="py-2">

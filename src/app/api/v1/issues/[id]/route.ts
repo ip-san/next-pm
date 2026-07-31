@@ -10,6 +10,7 @@ import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/c
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -106,6 +107,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
   if (!canEditAny && !canEditOwn) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  if (parsed.data.fixed_version_id) {
+    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
+    // shared with (not just owned by) this issue's project, per its sharing setting.
+    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
+    if (!sharedVersions.some((version) => version.id === parsed.data.fixed_version_id)) {
+      return NextResponse.json({ error: "invalid_fixed_version" }, { status: 422 });
+    }
   }
 
   try {

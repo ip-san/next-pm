@@ -27,7 +27,7 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
   }
 
   const [versions, issues, statuses] = await Promise.all([
-    new DrizzleVersionRepository().listByProject(project.id),
+    new DrizzleVersionRepository().listSharedWith(project.id),
     new DrizzleIssueRepository().listByProject(project.id),
     new DrizzleIssueStatusRepository().listAll(),
   ]);

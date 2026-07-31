@@ -27,6 +27,16 @@ export function VersionEditForm({ projectIdentifier, version }: { projectIdentif
           <option value="closed">終了</option>
         </select>
       </label>
+      <label className="text-xs text-gray-600 flex flex-col gap-1">
+        共有
+        <select name="sharing" defaultValue={version.sharing} className="border rounded px-3 py-2 text-sm">
+          <option value="none">共有しない</option>
+          <option value="descendants">サブプロジェクト</option>
+          <option value="hierarchy">プロジェクト階層</option>
+          <option value="tree">プロジェクトツリー</option>
+          <option value="system">全プロジェクト</option>
+        </select>
+      </label>
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
         保存

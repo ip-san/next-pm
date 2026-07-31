@@ -15,7 +15,11 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-/** Mirrors the gate on projects/[identifier]/versions/page.tsx: view_issues, nothing else. */
+/**
+ * Mirrors Redmine's versions.json (Project#shared_versions): every version assignable to
+ * an issue in this project, including ones shared in from other projects — not just the
+ * ones this project itself owns. Gated the same as the HTML page: view_issues, nothing else.
+ */
 export async function GET(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
 
@@ -30,7 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const versions = await new DrizzleVersionRepository().listByProject(project.id);
+  const versions = await new DrizzleVersionRepository().listSharedWith(project.id);
   return NextResponse.json({ versions });
 }
 
@@ -38,6 +42,7 @@ const createVersionSchema = z.object({
   name: z.string().min(1),
   description: z.string().default(""),
   effective_date: z.string().nullable().default(null),
+  sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]).default("none"),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
@@ -68,7 +73,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ide
   try {
     const version = await createVersion(
       { versionRepository: new DrizzleVersionRepository() },
-      { projectId: project.id, name: parsed.data.name, description: parsed.data.description, effectiveDate: parsed.data.effective_date, wikiPageTitle: null },
+      {
+        projectId: project.id,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        effectiveDate: parsed.data.effective_date,
+        sharing: parsed.data.sharing,
+        wikiPageTitle: null,
+      },
     );
     return NextResponse.json({ version }, { status: 201 });
   } catch (error) {

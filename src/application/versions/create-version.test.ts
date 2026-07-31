@@ -6,6 +6,7 @@ import type { VersionRepository } from "@/domain/version/repository";
 function makeRepo(existing: Version[] = []): VersionRepository {
   return {
     listByProject: mock(async () => existing),
+    listSharedWith: mock(async () => existing),
     findById: mock(async () => null),
     create: mock(async (version) => ({ ...version, id: "version-1", createdAt: new Date(), updatedAt: new Date() }) as Version),
     update: mock(async () => {
@@ -16,7 +17,7 @@ function makeRepo(existing: Version[] = []): VersionRepository {
   };
 }
 
-const baseInput = { projectId: "proj-1", name: "1.0.0", description: "First release", effectiveDate: null, wikiPageTitle: null };
+const baseInput = { projectId: "proj-1", name: "1.0.0", description: "First release", effectiveDate: null, sharing: "none" as const, wikiPageTitle: null };
 
 describe("createVersion", () => {
   it("creates a version with valid fields", async () => {
@@ -40,6 +41,12 @@ describe("createVersion", () => {
   it("rejects a description longer than 255 characters", async () => {
     const versionRepository = makeRepo();
     await expect(createVersion({ versionRepository }, { ...baseInput, description: "a".repeat(256) })).rejects.toThrow(InvalidVersionError);
+  });
+
+  it("rejects an invalid sharing value", async () => {
+    const versionRepository = makeRepo();
+    // @ts-expect-error intentionally invalid sharing for the runtime check
+    await expect(createVersion({ versionRepository }, { ...baseInput, sharing: "bogus" })).rejects.toThrow(InvalidVersionError);
   });
 
   it("rejects a duplicate name within the same project", async () => {
