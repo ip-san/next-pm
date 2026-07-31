@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 
 export type AdminActionState = {
@@ -82,5 +84,54 @@ export async function createTrackerAction(
   });
 
   revalidatePath("/admin/trackers");
+  return { error: null };
+}
+
+const updateWorkflowSchema = z.object({
+  trackerId: z.string().uuid(),
+  roleId: z.string().uuid(),
+  transitions: z.array(z.string()),
+});
+
+export async function updateWorkflowAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = updateWorkflowSchema.safeParse({
+    trackerId: formData.get("trackerId"),
+    roleId: formData.get("roleId"),
+    transitions: formData.getAll("transitions"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const [tracker, role, statuses] = await Promise.all([
+    new DrizzleTrackerRepository().findById(parsed.data.trackerId),
+    new DrizzleRoleRepository().findById(parsed.data.roleId),
+    new DrizzleIssueStatusRepository().listAll(),
+  ]);
+  if (!tracker || !role) {
+    return { error: "トラッカーまたはロールが見つかりません。" };
+  }
+
+  const statusIds = new Set(statuses.map((s) => s.id));
+  const transitions: Array<{ oldStatusId: string; newStatusId: string; author: boolean; assignee: boolean }> = [];
+  for (const pair of parsed.data.transitions) {
+    const [oldStatusId, newStatusId] = pair.split(":");
+    if (!oldStatusId || !newStatusId || !statusIds.has(oldStatusId) || !statusIds.has(newStatusId)) {
+      return { error: "不正な遷移が指定されました。" };
+    }
+    transitions.push({ oldStatusId, newStatusId, author: false, assignee: false });
+  }
+
+  await new DrizzleWorkflowRepository().replaceForTrackerAndRole(tracker.id, role.id, transitions);
+
+  revalidatePath("/admin/workflows");
   return { error: null };
 }
