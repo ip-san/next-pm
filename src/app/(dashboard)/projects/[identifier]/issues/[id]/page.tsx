@@ -4,14 +4,17 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { LogTimeForm } from "./log-time-form";
 import { StatusUpdateForm } from "./status-update-form";
 
 export default async function IssueDetailPage({
@@ -47,11 +50,15 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const [transitions, customFields, customValues] = await Promise.all([
+  const [transitions, customFields, customValues, timeEntries, activities] = await Promise.all([
     new DrizzleWorkflowRepository().listForTracker(issue.trackerId),
     new DrizzleCustomFieldRepository().listForTracker(issue.trackerId),
     new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
+    new DrizzleTimeEntryRepository().listForIssue(issue.id),
+    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
   ]);
+  const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
+  const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const allowedStatusIds = allowedNewStatusIds(transitions, {
     trackerId: issue.trackerId,
     roleIds,
@@ -118,6 +125,20 @@ export default async function IssueDetailPage({
         ) : (
           <p className="text-sm text-gray-500">このステータスから遷移できるワークフロー設定がありません。</p>
         )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">工数（合計 {totalHours}h）</h2>
+        <ul className="flex flex-col gap-1 text-sm">
+          {timeEntries.map((entry) => (
+            <li key={entry.id}>
+              {entry.spentOn} — {entry.hours}h {entry.comments ? `(${entry.comments})` : null}
+            </li>
+          ))}
+        </ul>
+        {canLogTime ? (
+          <LogTimeForm issueId={issue.id} projectIdentifier={identifier} activities={activities} />
+        ) : null}
       </section>
     </main>
   );
