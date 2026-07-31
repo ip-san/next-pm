@@ -32,6 +32,8 @@ export type PermissionKey =
   | "manage_documents"
   | "view_files"
   | "manage_files"
+  | "browse_repository"
+  | "view_changesets"
   | "manage_repository";
 
 interface PermissionDefinition {
@@ -83,6 +85,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_documents: { module: "documents", readOnly: false },
   view_files: { module: "files", readOnly: true },
   manage_files: { module: "files", readOnly: false },
+  browse_repository: { module: "repository", readOnly: true },
+  view_changesets: { module: "repository", readOnly: true },
   manage_repository: { module: "repository", readOnly: false },
 };
 

@@ -61,6 +61,9 @@ async function seed() {
         "comment_news",
         "view_files",
         "manage_files",
+        "browse_repository",
+        "view_changesets",
+        "manage_repository",
       ],
     })
     .returning();

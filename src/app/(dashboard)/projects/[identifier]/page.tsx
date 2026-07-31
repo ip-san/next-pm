@@ -8,6 +8,7 @@ const NAV_LINKS: { module: string; path: string; label: string }[] = [
   { module: "wiki", path: "wiki", label: "Wiki" },
   { module: "boards", path: "boards", label: "フォーラム" },
   { module: "news", path: "news", label: "ニュース" },
+  { module: "repository", path: "repository", label: "リポジトリ" },
 ];
 
 export default async function ProjectPage({

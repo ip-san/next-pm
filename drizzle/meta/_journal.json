@@ -71,6 +71,13 @@
       "when": 1785466814534,
       "tag": "0009_thankful_shiver_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785468512774,
+      "tag": "0010_bored_speed",
+      "breakpoints": true
     }
   ]
 }
