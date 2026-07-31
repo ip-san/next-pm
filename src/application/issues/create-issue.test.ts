@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createIssue } from "./create-issue";
 import type { Issue } from "@/domain/issue/entity";
-import type { IssueRepository } from "@/domain/issue/repository";
+import { makeIssueRepositoryMock } from "@/domain/issue/test-support";
 import type { Tracker } from "@/domain/tracker/entity";
 import type { TrackerRepository } from "@/domain/tracker/repository";
 
@@ -14,18 +14,9 @@ describe("createIssue", () => {
       listAll: mock(async () => [tracker]),
       create: mock(async () => tracker),
     };
-    const issueRepository: IssueRepository = {
-      findById: mock(async () => null),
-      listByProject: mock(async () => []),
-      findByAssignee: mock(async () => []),
-      findByAuthor: mock(async () => []),
-      findByIds: mock(async () => []),
-      search: mock(async () => []),
+    const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
-      update: mock(async () => {
-        throw new Error("not used");
-      }),
-    };
+    });
 
     const issue = await createIssue(
       { issueRepository, trackerRepository },
@@ -60,20 +51,7 @@ describe("createIssue", () => {
         throw new Error("not used");
       }),
     };
-    const issueRepository: IssueRepository = {
-      findById: mock(async () => null),
-      listByProject: mock(async () => []),
-      findByAssignee: mock(async () => []),
-      findByAuthor: mock(async () => []),
-      findByIds: mock(async () => []),
-      search: mock(async () => []),
-      create: mock(async () => {
-        throw new Error("not used");
-      }),
-      update: mock(async () => {
-        throw new Error("not used");
-      }),
-    };
+    const issueRepository = makeIssueRepositoryMock();
 
     await expect(
       createIssue(

@@ -2,51 +2,20 @@ import { describe, expect, it, mock } from "bun:test";
 import { updateIssue, WorkflowTransitionDeniedError } from "./update-issue";
 import type { Issue } from "@/domain/issue/entity";
 import { StaleIssueError } from "@/domain/issue/entity";
-import type { IssueRepository } from "@/domain/issue/repository";
+import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { WorkflowRepository } from "@/domain/workflow/repository";
-
-function makeIssue(overrides: Partial<Issue> = {}): Issue {
-  return {
-    id: "issue-1",
-    projectId: "proj-1",
-    trackerId: "tracker-1",
-    statusId: "new",
-    priorityId: "normal",
-    subject: "Subject",
-    description: "",
-    authorId: "user-1",
-    assignedToId: null,
-    parentId: null,
-    fixedVersionId: null,
-    categoryId: null,
-    isPrivate: false,
-    doneRatio: 0,
-    estimatedHours: null,
-    startDate: null,
-    dueDate: null,
-    lockVersion: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  };
-}
 
 function makeRepositories(overrides: {
   issue?: Issue | null;
   transitions?: Parameters<WorkflowRepository["listForTracker"]>[0] extends never ? never : unknown[];
 } = {}) {
-  const issue = overrides.issue ?? makeIssue();
-  const issueRepository: IssueRepository = {
+  const issue = overrides.issue ?? makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
+  const issueRepository = makeIssueRepositoryMock({
     findById: mock(async () => issue),
-    listByProject: mock(async () => []),
-    findByAssignee: mock(async () => []),
-    findByAuthor: mock(async () => []),
-    findByIds: mock(async () => []),
-    search: mock(async () => []),
     create: mock(async () => issue),
     update: mock(async (_id, _lockVersion, changes) => ({ ...issue, ...changes, lockVersion: issue.lockVersion + 1 })),
-  };
+  });
   const journalRepository: JournalRepository = {
     listForIssue: mock(async () => []),
     create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date() })),

@@ -121,26 +121,30 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
       assignedToId = assignee.id;
     }
 
-    await createIssue(
-      { issueRepository, trackerRepository },
-      {
-        projectId: project.id,
-        trackerId: tracker.id,
-        priorityId: priority.id,
-        subject,
-        description: cell(row, "description"),
-        authorId: user.id,
-        assignedToId,
-        parentId: null,
-        fixedVersionId: null,
-        categoryId: null,
-        isPrivate: false,
-        estimatedHours: null,
-        startDate: null,
-        dueDate: null,
-      },
-    );
-    created++;
+    try {
+      await createIssue(
+        { issueRepository, trackerRepository },
+        {
+          projectId: project.id,
+          trackerId: tracker.id,
+          priorityId: priority.id,
+          subject,
+          description: cell(row, "description"),
+          authorId: user.id,
+          assignedToId,
+          parentId: null,
+          fixedVersionId: null,
+          categoryId: null,
+          isPrivate: false,
+          estimatedHours: null,
+          startDate: null,
+          dueDate: null,
+        },
+      );
+      created++;
+    } catch (error) {
+      rowErrors.push(`${rowNumber}行目: ${error instanceof Error ? error.message : "作成に失敗しました。"}`);
+    }
   }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues`);

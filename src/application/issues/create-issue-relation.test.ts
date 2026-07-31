@@ -1,51 +1,14 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createIssueRelation, InvalidRelationError, otherIssueId, relationLabelFor } from "./create-issue-relation";
 import type { Issue } from "@/domain/issue/entity";
-import type { IssueRepository } from "@/domain/issue/repository";
+import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
 import type { IssueRelation } from "@/domain/issue-relation/entity";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
 
-function makeIssue(overrides: Partial<Issue> = {}): Issue {
-  return {
-    id: "issue-a",
-    projectId: "proj-1",
-    trackerId: "tracker-1",
-    statusId: "status-1",
-    priorityId: "priority-1",
-    subject: "Subject",
-    description: "",
-    authorId: "user-1",
-    assignedToId: null,
-    parentId: null,
-    fixedVersionId: null,
-    categoryId: null,
-    isPrivate: false,
-    doneRatio: 0,
-    estimatedHours: null,
-    startDate: null,
-    dueDate: null,
-    lockVersion: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  };
-}
-
 function makeRepos(issuesById: Record<string, Issue>, existingRelations: IssueRelation[] = []) {
-  const issueRepository: IssueRepository = {
+  const issueRepository = makeIssueRepositoryMock({
     findById: mock(async (id: string) => issuesById[id] ?? null),
-    listByProject: mock(async () => []),
-    findByAssignee: mock(async () => []),
-    findByAuthor: mock(async () => []),
-    findByIds: mock(async () => []),
-    search: mock(async () => []),
-    create: mock(async () => {
-      throw new Error("not used");
-    }),
-    update: mock(async () => {
-      throw new Error("not used");
-    }),
-  };
+  });
   const issueRelationRepository: IssueRelationRepository = {
     listForIssue: mock(async () => existingRelations),
     findById: mock(async () => null),
