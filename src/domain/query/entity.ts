@@ -9,4 +9,6 @@ export interface SavedQuery {
   userId: string;
   visibility: QueryVisibility;
   filters: FilterCondition[];
+  /** Only meaningful when visibility is "roles". */
+  roleIds: string[];
 }

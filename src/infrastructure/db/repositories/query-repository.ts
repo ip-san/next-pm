@@ -1,25 +1,31 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
-import { queries } from "@/infrastructure/db/schema/queries";
+import { queries, queriesRoles } from "@/infrastructure/db/schema/queries";
 import type { FilterCondition } from "@/domain/query/filter-builder";
 import type { SavedQuery } from "@/domain/query/entity";
 import type { QueryRepository } from "@/domain/query/repository";
 
-function toDomain(row: typeof queries.$inferSelect): SavedQuery {
-  return {
-    id: row.id,
-    name: row.name,
-    projectId: row.projectId,
-    userId: row.userId,
-    visibility: row.visibility,
-    filters: row.filters as FilterCondition[],
-  };
+async function attachRoleIds(rows: (typeof queries.$inferSelect)[]): Promise<SavedQuery[]> {
+  const result: SavedQuery[] = [];
+  for (const row of rows) {
+    const roleRows = await db.select({ roleId: queriesRoles.roleId }).from(queriesRoles).where(eq(queriesRoles.queryId, row.id));
+    result.push({
+      id: row.id,
+      name: row.name,
+      projectId: row.projectId,
+      userId: row.userId,
+      visibility: row.visibility,
+      filters: row.filters as FilterCondition[],
+      roleIds: roleRows.map((r) => r.roleId),
+    });
+  }
+  return result;
 }
 
 export class DrizzleQueryRepository implements QueryRepository {
   async listForProject(projectId: string): Promise<SavedQuery[]> {
     const rows = await db.select().from(queries).where(eq(queries.projectId, projectId));
-    return rows.map(toDomain);
+    return attachRoleIds(rows);
   }
 
   async create(query: Omit<SavedQuery, "id">): Promise<SavedQuery> {
@@ -33,6 +39,11 @@ export class DrizzleQueryRepository implements QueryRepository {
         filters: query.filters,
       })
       .returning();
-    return toDomain(row);
+
+    if (query.visibility === "roles" && query.roleIds.length > 0) {
+      await db.insert(queriesRoles).values(query.roleIds.map((roleId) => ({ queryId: row.id, roleId })));
+    }
+
+    return { ...query, id: row.id };
   }
 }
