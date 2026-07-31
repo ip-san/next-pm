@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import { boards } from "@/infrastructure/db/schema/boards";
 import { messages } from "@/infrastructure/db/schema/messages";
 import type { Message } from "@/domain/message/entity";
 import type { MessageRepository } from "@/domain/message/repository";
@@ -69,5 +70,20 @@ export class DrizzleMessageRepository implements MessageRepository {
       .update(messages)
       .set({ repliesCount: sql`${messages.repliesCount} + 1` })
       .where(eq(messages.id, parentId));
+  }
+
+  async search(projectId: string, query: string): Promise<Message[]> {
+    const rows = await db
+      .select({ message: messages })
+      .from(messages)
+      .innerJoin(boards, eq(boards.id, messages.boardId))
+      .where(
+        and(
+          eq(boards.projectId, projectId),
+          sql`to_tsvector('english', ${messages.subject} || ' ' || ${messages.content}) @@ plainto_tsquery('english', ${query})`,
+        ),
+      )
+      .orderBy(messages.createdAt);
+    return rows.map((row) => toDomain(row.message));
   }
 }

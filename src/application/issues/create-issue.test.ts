@@ -17,6 +17,7 @@ describe("createIssue", () => {
     const issueRepository: IssueRepository = {
       findById: mock(async () => null),
       listByProject: mock(async () => []),
+      search: mock(async () => []),
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
       update: mock(async () => {
         throw new Error("not used");
@@ -58,6 +59,7 @@ describe("createIssue", () => {
     const issueRepository: IssueRepository = {
       findById: mock(async () => null),
       listByProject: mock(async () => []),
+      search: mock(async () => []),
       create: mock(async () => {
         throw new Error("not used");
       }),

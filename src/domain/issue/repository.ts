@@ -26,4 +26,6 @@ export interface IssueRepository {
    * locking. Throws StaleIssueError when the row moved on (0 rows affected) or vanished.
    */
   update(id: string, expectedLockVersion: number, changes: IssueUpdate): Promise<Issue>;
+  /** Full-text search over subject/description, scoped to one project. */
+  search(projectId: string, query: string): Promise<Issue[]>;
 }

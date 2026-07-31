@@ -12,6 +12,7 @@ function makeRepo(overrides: Partial<MessageRepository> = {}): MessageRepository
     update: mock(async (id, changes) => ({ id, boardId: "board-1", parentId: null, authorId: "u1", subject: "s", content: "c", locked: false, sticky: false, repliesCount: 0, createdAt: new Date(), ...changes }) as Message),
     delete: mock(async () => {}),
     incrementRepliesCount: mock(async () => {}),
+    search: mock(async () => []),
     ...overrides,
   };
 }

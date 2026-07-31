@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { news, newsComments } from "@/infrastructure/db/schema/news";
 import type { News, NewsComment } from "@/domain/news/entity";
@@ -41,6 +41,20 @@ export class DrizzleNewsRepository implements NewsRepository {
 
   async delete(id: string): Promise<void> {
     await db.delete(news).where(eq(news.id, id));
+  }
+
+  async search(projectId: string, query: string): Promise<News[]> {
+    const rows = await db
+      .select()
+      .from(news)
+      .where(
+        and(
+          eq(news.projectId, projectId),
+          sql`to_tsvector('english', ${news.title} || ' ' || ${news.summary} || ' ' || ${news.description}) @@ plainto_tsquery('english', ${query})`,
+        ),
+      )
+      .orderBy(desc(news.createdAt));
+    return rows.map(toDomain);
   }
 }
 

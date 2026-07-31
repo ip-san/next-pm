@@ -30,6 +30,9 @@ export default async function ProjectPage({
             {link.label}
           </Link>
         ))}
+        <Link href={`/projects/${identifier}/search`} className="underline">
+          検索
+        </Link>
       </nav>
       <p className="text-sm text-gray-600">{project.description}</p>
       <dl className="text-sm flex flex-col gap-1">

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { issues } from "@/infrastructure/db/schema/issues";
 import { StaleIssueError, type Issue } from "@/domain/issue/entity";
@@ -91,5 +91,19 @@ export class DrizzleIssueRepository implements IssueRepository {
     }
 
     return toDomain(row);
+  }
+
+  async search(projectId: string, query: string): Promise<Issue[]> {
+    const rows = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.projectId, projectId),
+          sql`to_tsvector('english', ${issues.subject} || ' ' || ${issues.description}) @@ plainto_tsquery('english', ${query})`,
+        ),
+      )
+      .orderBy(desc(issues.createdAt));
+    return rows.map(toDomain);
   }
 }

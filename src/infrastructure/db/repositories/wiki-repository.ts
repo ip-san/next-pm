@@ -1,8 +1,8 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { wikiContentVersions, wikiPages } from "@/infrastructure/db/schema/wiki";
 import type { WikiContentVersion, WikiPage } from "@/domain/wiki/entity";
-import type { WikiContentRepository, WikiPageRepository } from "@/domain/wiki/repository";
+import type { WikiContentRepository, WikiPageRepository, WikiSearchHit } from "@/domain/wiki/repository";
 
 function pageToDomain(row: typeof wikiPages.$inferSelect): WikiPage {
   return {
@@ -91,5 +91,48 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
       })
       .returning();
     return versionToDomain(row);
+  }
+
+  /**
+   * DISTINCT ON (page_id) picks each page's highest-version row — Drizzle's typed query
+   * builder has no clean way to express "latest row per group" joins, so this one query
+   * is raw SQL rather than the builder used everywhere else in this file.
+   */
+  async search(projectId: string, query: string): Promise<WikiSearchHit[]> {
+    const result = await db.execute(sql`
+      select wp.id as page_id, wp.project_id, wp.title, wp.parent_id, wp.is_protected,
+             wcv.id as version_id, wcv.version, wcv.author_id, wcv.text, wcv.comments, wcv.created_at
+      from (
+        select distinct on (page_id) *
+        from ${wikiContentVersions}
+        order by page_id, version desc
+      ) wcv
+      join ${wikiPages} wp on wp.id = wcv.page_id
+      where wp.project_id = ${projectId}
+        and to_tsvector('english', wp.title || ' ' || wcv.text) @@ plainto_tsquery('english', ${query})
+      order by wp.title
+    `);
+
+    return result.rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        page: {
+          id: r.page_id as string,
+          projectId: r.project_id as string,
+          title: r.title as string,
+          parentId: r.parent_id as string | null,
+          isProtected: r.is_protected as boolean,
+        },
+        currentVersion: {
+          id: r.version_id as string,
+          pageId: r.page_id as string,
+          version: r.version as number,
+          authorId: r.author_id as string,
+          text: r.text as string,
+          comments: r.comments as string,
+          createdAt: r.created_at as Date,
+        },
+      };
+    });
   }
 }
