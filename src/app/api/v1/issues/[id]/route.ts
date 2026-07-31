@@ -4,6 +4,9 @@ import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { CustomFieldValidationError, setIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -42,8 +45,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const journals = await new DrizzleJournalRepository().listForIssue(id);
-  return NextResponse.json({ issue, journals });
+  const [journals, customValues] = await Promise.all([
+    new DrizzleJournalRepository().listForIssue(id),
+    new DrizzleCustomValueRepository().listForCustomized("Issue", id),
+  ]);
+  return NextResponse.json({ issue, journals, customValues });
 }
 
 const updateIssueSchema = z.object({
@@ -61,6 +67,7 @@ const updateIssueSchema = z.object({
   estimated_hours: z.number().nullable().optional(),
   start_date: z.string().nullable().optional(),
   due_date: z.string().nullable().optional(),
+  custom_field_values: z.record(z.string(), z.string()).default({}),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -132,6 +139,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         },
       },
     );
+
+    if (Object.keys(parsed.data.custom_field_values).length > 0) {
+      try {
+        await setIssueCustomFieldValues(
+          { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+          issue.trackerId,
+          issue.id,
+          parsed.data.custom_field_values,
+        );
+      } catch (customFieldError) {
+        if (customFieldError instanceof CustomFieldValidationError) {
+          return NextResponse.json(
+            { issue, error: "invalid_custom_field_values", details: customFieldError.fieldErrors },
+            { status: 422 },
+          );
+        }
+        throw customFieldError;
+      }
+    }
+
     return NextResponse.json({ issue });
   } catch (error) {
     if (error instanceof StaleIssueError) {

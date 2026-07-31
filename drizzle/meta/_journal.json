@@ -36,6 +36,13 @@
       "when": 1785436100554,
       "tag": "0004_pretty_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785461750172,
+      "tag": "0005_clammy_blue_blade",
+      "breakpoints": true
     }
   ]
 }

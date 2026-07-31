@@ -3,6 +3,9 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { createIssue } from "@/application/issues/create-issue";
+import { CustomFieldValidationError, setIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
@@ -54,6 +57,7 @@ const createIssueSchema = z.object({
   estimated_hours: z.number().nullable().default(null),
   start_date: z.string().nullable().default(null),
   due_date: z.string().nullable().default(null),
+  custom_field_values: z.record(z.string(), z.string()).default({}),
 });
 
 export async function POST(request: Request) {
@@ -98,6 +102,34 @@ export async function POST(request: Request) {
       dueDate: parsed.data.due_date,
     },
   );
+
+  // Best-effort: the issue itself is already committed above, so a custom-field
+  // validation failure here reports 422 with the created issue but doesn't roll it back.
+  //
+  // setIssueCustomFieldValues only validates keys present in its input (partial-update
+  // semantics, needed so PATCH doesn't reject unrelated already-set required fields). At
+  // create time we want the opposite: every field applicable to this tracker should be
+  // considered, so a required field the caller omitted entirely is still caught — hence
+  // filling in "" for anything not explicitly provided before validating.
+  const customFieldRepository = new DrizzleCustomFieldRepository();
+  const applicableFields = await customFieldRepository.listForTracker(parsed.data.tracker_id);
+  const customFieldValuesForCreate = Object.fromEntries(
+    applicableFields.map((field) => [field.id, parsed.data.custom_field_values[field.id] ?? ""]),
+  );
+
+  try {
+    await setIssueCustomFieldValues(
+      { customFieldRepository, customValueRepository: new DrizzleCustomValueRepository() },
+      parsed.data.tracker_id,
+      issue.id,
+      customFieldValuesForCreate,
+    );
+  } catch (error) {
+    if (error instanceof CustomFieldValidationError) {
+      return NextResponse.json({ issue, error: "invalid_custom_field_values", details: error.fieldErrors }, { status: 422 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ issue }, { status: 201 });
 }

@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
@@ -45,7 +47,11 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const transitions = await new DrizzleWorkflowRepository().listForTracker(issue.trackerId);
+  const [transitions, customFields, customValues] = await Promise.all([
+    new DrizzleWorkflowRepository().listForTracker(issue.trackerId),
+    new DrizzleCustomFieldRepository().listForTracker(issue.trackerId),
+    new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
+  ]);
   const allowedStatusIds = allowedNewStatusIds(transitions, {
     trackerId: issue.trackerId,
     roleIds,
@@ -55,6 +61,7 @@ export default async function IssueDetailPage({
   });
   const allowedStatuses = statuses.filter((s) => allowedStatusIds.includes(s.id));
   const statusById = new Map(statuses.map((s) => [s.id, s]));
+  const customValueByFieldId = new Map(customValues.map((cv) => [cv.customFieldId, cv.value]));
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -67,6 +74,20 @@ export default async function IssueDetailPage({
       </div>
 
       <p className="whitespace-pre-wrap text-sm">{issue.description}</p>
+
+      {customFields.length > 0 ? (
+        <section className="flex flex-col gap-1">
+          <h2 className="font-medium">カスタムフィールド</h2>
+          <dl className="text-sm flex flex-col gap-1">
+            {customFields.map((field) => (
+              <div key={field.id}>
+                <dt className="inline font-medium">{field.name}: </dt>
+                <dd className="inline">{customValueByFieldId.get(field.id) ?? "(未設定)"}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">履歴</h2>
