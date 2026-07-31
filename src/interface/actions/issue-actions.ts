@@ -53,6 +53,7 @@ export async function createIssueFormAction(
       authorId: user.id,
       assignedToId: null,
       parentId: null,
+      fixedVersionId: null,
       categoryId: null,
       isPrivate: false,
       estimatedHours: null,

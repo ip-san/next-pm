@@ -11,6 +11,7 @@ export interface CreateIssueInput {
   authorId: string;
   assignedToId: string | null;
   parentId: string | null;
+  fixedVersionId: string | null;
   categoryId: string | null;
   isPrivate: boolean;
   estimatedHours: number | null;
@@ -37,7 +38,7 @@ export async function createIssue(
     authorId: input.authorId,
     assignedToId: input.assignedToId,
     parentId: input.parentId,
-    fixedVersionId: null,
+    fixedVersionId: input.fixedVersionId,
     categoryId: input.categoryId,
     isPrivate: input.isPrivate,
     doneRatio: 0,

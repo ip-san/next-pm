@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { createIssue } from "@/application/issues/create-issue";
-import { CustomFieldValidationError, setIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -52,6 +53,7 @@ const createIssueSchema = z.object({
   description: z.string().default(""),
   assigned_to_id: z.string().uuid().nullable().default(null),
   parent_id: z.string().uuid().nullable().default(null),
+  fixed_version_id: z.string().uuid().nullable().default(null),
   category_id: z.string().uuid().nullable().default(null),
   is_private: z.boolean().default(false),
   estimated_hours: z.number().nullable().default(null),
@@ -84,6 +86,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  // Validated before the issue is created — never persist an issue that a caller's own
+  // 422 response says failed. setIssueCustomFieldValues only validates keys present in its
+  // input (partial-update semantics, needed so PATCH doesn't reject unrelated already-set
+  // required fields); at create time we want every applicable field considered, so a
+  // required field the caller omitted entirely is still caught — hence filling in "" for
+  // anything not explicitly provided before validating.
+  const customFieldRepository = new DrizzleCustomFieldRepository();
+  const applicableFields = await customFieldRepository.listForTracker(parsed.data.tracker_id);
+  const customFieldValuesForCreate = Object.fromEntries(
+    applicableFields.map((field) => [field.id, parsed.data.custom_field_values[field.id] ?? ""]),
+  );
+  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, customFieldValuesForCreate);
+  if (Object.keys(fieldErrors).length > 0) {
+    return NextResponse.json({ error: "invalid_custom_field_values", details: fieldErrors }, { status: 422 });
+  }
+
+  if (parsed.data.fixed_version_id) {
+    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
+    // shared with (not just owned by) this issue's project, per its sharing setting.
+    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
+    if (!sharedVersions.some((version) => version.id === parsed.data.fixed_version_id)) {
+      return NextResponse.json({ error: "invalid_fixed_version" }, { status: 422 });
+    }
+  }
+
   const issue = await createIssue(
     { issueRepository: new DrizzleIssueRepository(), trackerRepository: new DrizzleTrackerRepository() },
     {
@@ -95,6 +122,7 @@ export async function POST(request: Request) {
       authorId: user.id,
       assignedToId: parsed.data.assigned_to_id,
       parentId: parsed.data.parent_id,
+      fixedVersionId: parsed.data.fixed_version_id,
       categoryId: parsed.data.category_id,
       isPrivate: parsed.data.is_private,
       estimatedHours: parsed.data.estimated_hours,
@@ -103,32 +131,9 @@ export async function POST(request: Request) {
     },
   );
 
-  // Best-effort: the issue itself is already committed above, so a custom-field
-  // validation failure here reports 422 with the created issue but doesn't roll it back.
-  //
-  // setIssueCustomFieldValues only validates keys present in its input (partial-update
-  // semantics, needed so PATCH doesn't reject unrelated already-set required fields). At
-  // create time we want the opposite: every field applicable to this tracker should be
-  // considered, so a required field the caller omitted entirely is still caught — hence
-  // filling in "" for anything not explicitly provided before validating.
-  const customFieldRepository = new DrizzleCustomFieldRepository();
-  const applicableFields = await customFieldRepository.listForTracker(parsed.data.tracker_id);
-  const customFieldValuesForCreate = Object.fromEntries(
-    applicableFields.map((field) => [field.id, parsed.data.custom_field_values[field.id] ?? ""]),
-  );
-
-  try {
-    await setIssueCustomFieldValues(
-      { customFieldRepository, customValueRepository: new DrizzleCustomValueRepository() },
-      parsed.data.tracker_id,
-      issue.id,
-      customFieldValuesForCreate,
-    );
-  } catch (error) {
-    if (error instanceof CustomFieldValidationError) {
-      return NextResponse.json({ issue, error: "invalid_custom_field_values", details: error.fieldErrors }, { status: 422 });
-    }
-    throw error;
+  const customValueRepository = new DrizzleCustomValueRepository();
+  for (const { customFieldId, value } of coerced) {
+    await customValueRepository.set(customFieldId, "Issue", issue.id, value);
   }
 
   return NextResponse.json({ issue }, { status: 201 });

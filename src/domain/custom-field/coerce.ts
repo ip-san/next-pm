@@ -47,3 +47,35 @@ export function coerceCustomFieldValue(field: Pick<CustomField, "name" | "fieldF
         : { ok: false, error: `"${trimmed}"は許可された値ではありません。` };
   }
 }
+
+export interface CustomFieldValidation {
+  fieldErrors: Record<string, string>;
+  coerced: { customFieldId: string; value: string | null }[];
+}
+
+type ValidatableField = Pick<CustomField, "id" | "name" | "fieldFormat" | "isRequired" | "possibleValues">;
+
+/**
+ * Pure validate-only counterpart to setIssueCustomFieldValues — runs the same per-field
+ * coercion without touching any repository, so a caller can reject an entirely invalid
+ * submission (e.g. at issue-create time) before persisting anything else.
+ */
+export function validateCustomFieldValues(fields: ValidatableField[], rawValues: Record<string, string>): CustomFieldValidation {
+  const fieldById = new Map(fields.map((field) => [field.id, field]));
+  const fieldErrors: Record<string, string> = {};
+  const coerced: { customFieldId: string; value: string | null }[] = [];
+
+  for (const [customFieldId, raw] of Object.entries(rawValues)) {
+    const field = fieldById.get(customFieldId);
+    if (!field) continue; // not applicable to this tracker — silently ignored, not an error
+
+    const result = coerceCustomFieldValue(field, raw);
+    if (!result.ok) {
+      fieldErrors[customFieldId] = result.error;
+    } else {
+      coerced.push({ customFieldId, value: result.value });
+    }
+  }
+
+  return { fieldErrors, coerced };
+}
