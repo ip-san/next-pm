@@ -7,7 +7,7 @@ import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/i
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 import { VersionCreateForm } from "./version-create-form";
 
 export const dynamic = "force-dynamic";
@@ -36,11 +36,12 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
   }
   const canManageVersions = can({ permission: "manage_versions", project: toAuthorizationProject(project), actor });
 
-  const [versions, issues, statuses] = await Promise.all([
+  const [versions, allIssues, statuses] = await Promise.all([
     new DrizzleVersionRepository().listByProject(project.id),
     new DrizzleIssueRepository().listByProject(project.id),
     new DrizzleIssueStatusRepository().listAll(),
   ]);
+  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor));
   const statusById = new Map(statuses.map((status) => [status.id, status]));
 
   return (

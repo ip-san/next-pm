@@ -1,11 +1,18 @@
+import { notFound } from "next/navigation";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
 import { TrackerForm } from "./tracker-form";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
 
 export default async function TrackersPage() {
+  const user = await currentUserFromCookies();
+  if (!user?.isAdmin) {
+    notFound();
+  }
+
   const [trackers, statuses] = await Promise.all([
     new DrizzleTrackerRepository().listAll(),
     new DrizzleIssueStatusRepository().listAll(),

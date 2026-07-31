@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
 import { IssueStatusForm } from "./issue-status-form";
 
 // Always needs a live DB read with no per-request caching benefit — opt out of static
@@ -6,6 +8,11 @@ import { IssueStatusForm } from "./issue-status-form";
 export const dynamic = "force-dynamic";
 
 export default async function IssueStatusesPage() {
+  const user = await currentUserFromCookies();
+  if (!user?.isAdmin) {
+    notFound();
+  }
+
   const statuses = await new DrizzleIssueStatusRepository().listAll();
 
   return (

@@ -4,10 +4,19 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
 
 export type AdminActionState = {
   error: string | null;
 };
+
+async function requireAdmin(): Promise<string | null> {
+  const user = await currentUserFromCookies();
+  if (!user?.isAdmin) {
+    return "この操作を行う権限がありません。";
+  }
+  return null;
+}
 
 const createIssueStatusSchema = z.object({
   name: z.string().min(1).max(30),
@@ -18,6 +27,11 @@ export async function createIssueStatusAction(
   _prevState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
   const parsed = createIssueStatusSchema.safeParse({
     name: formData.get("name"),
     isClosed: formData.get("isClosed") === "on",
@@ -47,6 +61,11 @@ export async function createTrackerAction(
   _prevState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
   const parsed = createTrackerSchema.safeParse({
     name: formData.get("name"),
     defaultStatusId: formData.get("defaultStatusId"),

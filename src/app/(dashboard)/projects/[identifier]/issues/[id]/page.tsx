@@ -19,7 +19,7 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueRelationForm } from "./issue-relation-form";
@@ -82,9 +82,7 @@ export default async function IssueDetailPage({
     issueRepository.listByProject(issue.projectId),
     new DrizzleIssueRelationRepository().listForIssue(issue.id),
   ]);
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const isVisibleToActor = (candidate: { isPrivate: boolean; authorId: string; assignedToId: string | null }) =>
-    isPrivateIssueVisible(candidate, user?.id ?? null, visibilityRoles);
+  const isVisibleToActor = visibleIssueFilter(user?.id ?? null, actor);
 
   const visibleParentIssue = parentIssue && isVisibleToActor(parentIssue) ? parentIssue : null;
   const childIssues = projectIssues.filter((candidate) => candidate.parentId === issue.id && isVisibleToActor(candidate));
