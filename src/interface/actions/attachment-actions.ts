@@ -132,6 +132,9 @@ export async function deleteIssueAttachmentAction(
   }
 
   const { actor } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+    return { error: "チケットが見つかりません。" };
+  }
   const projectContext = toAuthorizationProject(project);
   const hasEditIssues = can({ permission: "edit_issues", project: projectContext, actor });
   const hasEditOwnIssues = can({ permission: "edit_own_issues", project: projectContext, actor });

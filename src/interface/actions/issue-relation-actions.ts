@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { createIssueRelation, InvalidRelationError } from "@/application/issues/create-issue-relation";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export type IssueRelationActionState = {
   error: string | null;
@@ -54,8 +55,20 @@ export async function createIssueRelationAction(
   }
 
   const { actor } = await resolveActor(user, project.id);
+  const visibilityRoles = issuesVisibilityRoles(actor);
+  if (!isPrivateIssueVisible(issue, user.id, visibilityRoles)) {
+    return { error: "チケットが見つかりません。" };
+  }
   if (!can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
+  }
+
+  // The target issue must be independently visible too — otherwise creating a relation
+  // to it would both confirm its existence and let the actor manipulate a private issue
+  // they can't see.
+  const targetIssue = await issueRepository.findById(parsed.data.targetIssueId);
+  if (!targetIssue || !isPrivateIssueVisible(targetIssue, user.id, visibilityRoles)) {
+    return { error: "対象のチケットが見つかりません。" };
   }
 
   const delay = parsed.data.delay.trim().length > 0 ? Number(parsed.data.delay) : null;
@@ -120,6 +133,9 @@ export async function deleteIssueRelationAction(
   }
 
   const { actor } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+    return { error: "チケットが見つかりません。" };
+  }
   if (!can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
   }

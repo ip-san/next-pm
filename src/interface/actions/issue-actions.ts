@@ -67,7 +67,11 @@ export async function createIssueFormAction(
 
   if (parsed.data.parentId) {
     const parentIssue = await new DrizzleIssueRepository().findById(parsed.data.parentId);
-    if (!parentIssue || parentIssue.projectId !== project.id) {
+    if (
+      !parentIssue ||
+      parentIssue.projectId !== project.id ||
+      !isPrivateIssueVisible(parentIssue, user.id, issuesVisibilityRoles(actor))
+    ) {
       return { ok: false, error: "親チケットが見つかりません。" };
     }
   }

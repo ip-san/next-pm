@@ -111,6 +111,20 @@ export async function POST(request: Request) {
     }
   }
 
+  if (parsed.data.parent_id) {
+    // Must exist, be in the same project, and be visible to this actor — otherwise
+    // creating the link would both confirm a private/cross-project issue's existence and
+    // attach to something the caller has no business referencing.
+    const parentIssue = await new DrizzleIssueRepository().findById(parsed.data.parent_id);
+    if (
+      !parentIssue ||
+      parentIssue.projectId !== project.id ||
+      !isPrivateIssueVisible(parentIssue, user.id, issuesVisibilityRoles(actor))
+    ) {
+      return NextResponse.json({ error: "invalid_parent_id" }, { status: 422 });
+    }
+  }
+
   const issue = await createIssue(
     { issueRepository: new DrizzleIssueRepository(), trackerRepository: new DrizzleTrackerRepository() },
     {
