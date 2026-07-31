@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { can } from "@/domain/authorization/authorization-service";
 import { compileFilters } from "@/domain/query/filter-builder";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export default async function ProjectIssuesPage({
   params,
@@ -20,15 +24,23 @@ export default async function ProjectIssuesPage({
     notFound();
   }
 
+  const user = await currentUserFromCookies();
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+    notFound();
+  }
+
   const predicates = statusFilter
     ? compileFilters([{ field: "status_id", operator: "=", values: [statusFilter] }])
     : [];
 
-  const [issues, statuses, trackers] = await Promise.all([
+  const [allIssues, statuses, trackers] = await Promise.all([
     new DrizzleIssueRepository().listByProject(project.id, predicates),
     new DrizzleIssueStatusRepository().listAll(),
     new DrizzleTrackerRepository().listAll(),
   ]);
+  const visibilityRoles = issuesVisibilityRoles(actor);
+  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 

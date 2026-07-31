@@ -1,5 +1,6 @@
 import type { User } from "@/domain/user/entity";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
+import type { IssuesVisibility } from "@/domain/role/entity";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 
@@ -44,4 +45,22 @@ export async function resolveActor(user: User | null, projectId: string): Promis
 
   const nonMember = await roleRepository.findBuiltinNonMember();
   return { actor: { kind: "non_member", role: nonMember }, roleIds: [nonMember.id] };
+}
+
+/**
+ * Roles to feed into `isPrivateIssueVisible`. An admin actor carries no real roles here,
+ * but Redmine's admin bypass means an admin must always pass the private-issue check too
+ * — so this returns a synthetic `{issuesVisibility: "all"}` for admins rather than making
+ * every call site special-case `actor.kind === "admin"`.
+ */
+export function issuesVisibilityRoles(actor: AuthorizationActor): { issuesVisibility: IssuesVisibility }[] {
+  switch (actor.kind) {
+    case "admin":
+      return [{ issuesVisibility: "all" }];
+    case "member":
+      return actor.roles;
+    case "non_member":
+    case "anonymous":
+      return [actor.role];
+  }
 }

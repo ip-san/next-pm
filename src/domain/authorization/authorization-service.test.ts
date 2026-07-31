@@ -80,7 +80,7 @@ describe("authorization-service.can", () => {
         project: project(),
         actor: {
           kind: "member",
-          roles: [{ builtin: ROLE_BUILTIN_MEMBER, permissions: ["add_issues"] }],
+          roles: [{ builtin: ROLE_BUILTIN_MEMBER, permissions: ["add_issues"], issuesVisibility: "default" }],
         },
       }),
     ).toBe(true);
@@ -93,7 +93,7 @@ describe("authorization-service.can", () => {
         project: project(),
         actor: {
           kind: "member",
-          roles: [{ builtin: ROLE_BUILTIN_MEMBER, permissions: ["view_issues"] }],
+          roles: [{ builtin: ROLE_BUILTIN_MEMBER, permissions: ["view_issues"], issuesVisibility: "default" }],
         },
       }),
     ).toBe(false);
@@ -107,8 +107,8 @@ describe("authorization-service.can", () => {
         actor: {
           kind: "member",
           roles: [
-            { builtin: ROLE_BUILTIN_MEMBER, permissions: ["view_issues"] },
-            { builtin: ROLE_BUILTIN_MEMBER, permissions: ["add_issues"] },
+            { builtin: ROLE_BUILTIN_MEMBER, permissions: ["view_issues"], issuesVisibility: "default" },
+            { builtin: ROLE_BUILTIN_MEMBER, permissions: ["add_issues"], issuesVisibility: "default" },
           ],
         },
       }),
@@ -122,7 +122,7 @@ describe("authorization-service.can", () => {
         project: project({ isPublic: false }),
         actor: {
           kind: "non_member",
-          role: { builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_issues"] },
+          role: { builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_issues"], issuesVisibility: "default" },
         },
       }),
     ).toBe(false);
@@ -135,7 +135,7 @@ describe("authorization-service.can", () => {
         project: project({ isPublic: true }),
         actor: {
           kind: "non_member",
-          role: { builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_issues"] },
+          role: { builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_issues"], issuesVisibility: "default" },
         },
       }),
     ).toBe(true);
@@ -148,7 +148,7 @@ describe("authorization-service.can", () => {
         project: project({ isPublic: true }),
         actor: {
           kind: "anonymous",
-          role: { builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_issues"] },
+          role: { builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_issues"], issuesVisibility: "default" },
         },
       }),
     ).toBe(true);
@@ -161,7 +161,7 @@ describe("authorization-service.can", () => {
         project: project({ isPublic: false }),
         actor: {
           kind: "anonymous",
-          role: { builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_issues"] },
+          role: { builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_issues"], issuesVisibility: "default" },
         },
       }),
     ).toBe(false);

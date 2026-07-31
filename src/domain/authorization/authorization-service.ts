@@ -9,7 +9,7 @@ export interface ProjectAuthorizationContext {
   enabledModules: string[];
 }
 
-type RoleForAuthorization = Pick<Role, "builtin" | "permissions">;
+type RoleForAuthorization = Pick<Role, "builtin" | "permissions" | "issuesVisibility">;
 
 export type AuthorizationActor =
   | { kind: "admin" }

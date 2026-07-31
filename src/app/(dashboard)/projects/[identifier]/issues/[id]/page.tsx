@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { can } from "@/domain/authorization/authorization-service";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
@@ -7,7 +9,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { StatusUpdateForm } from "./status-update-form";
 
 export default async function IssueDetailPage({
@@ -35,7 +37,14 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const { roleIds } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
+  if (
+    !can({ permission: "view_issues", project: toAuthorizationProject(project), actor }) ||
+    !isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor))
+  ) {
+    notFound();
+  }
+
   const transitions = await new DrizzleWorkflowRepository().listForTracker(issue.trackerId);
   const allowedStatusIds = allowedNewStatusIds(transitions, {
     trackerId: issue.trackerId,

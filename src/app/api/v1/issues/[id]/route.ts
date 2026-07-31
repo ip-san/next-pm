@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 
 async function resolveUser(request: Request) {
@@ -34,6 +35,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  // Mirrors Redmine raising RecordNotFound for an invisible issue rather than 403 —
+  // doesn't confirm to an unauthorized caller that a given private issue id exists.
+  if (!isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   const journals = await new DrizzleJournalRepository().listForIssue(id);
@@ -86,6 +92,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const isAuthor = existing.authorId === user.id;
   const isAssignee = existing.assignedToId === user.id;
   const projectContext = toAuthorizationProject(project);
+  if (!isPrivateIssueVisible(existing, user.id, issuesVisibilityRoles(actor))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
   if (!canEditAny && !canEditOwn) {
