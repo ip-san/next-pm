@@ -2,6 +2,9 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { ProjectForm } from "./project-form";
 
+// See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
+export const dynamic = "force-dynamic";
+
 export default async function NewProjectPage() {
   const [projects, trackers] = await Promise.all([
     new DrizzleProjectRepository().listAll(),

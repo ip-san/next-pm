@@ -1,6 +1,10 @@
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { IssueStatusForm } from "./issue-status-form";
 
+// Always needs a live DB read with no per-request caching benefit — opt out of static
+// prerendering so `next build` doesn't try to reach Postgres at build time.
+export const dynamic = "force-dynamic";
+
 export default async function IssueStatusesPage() {
   const statuses = await new DrizzleIssueStatusRepository().listAll();
 

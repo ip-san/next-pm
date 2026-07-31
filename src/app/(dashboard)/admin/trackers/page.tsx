@@ -2,6 +2,9 @@ import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/i
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { TrackerForm } from "./tracker-form";
 
+// See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
+export const dynamic = "force-dynamic";
+
 export default async function TrackersPage() {
   const [trackers, statuses] = await Promise.all([
     new DrizzleTrackerRepository().listAll(),
