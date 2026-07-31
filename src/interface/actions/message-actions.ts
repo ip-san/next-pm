@@ -5,8 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { canDeleteMessage, canEditMessage } from "@/domain/message/authorization";
+import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { InvalidMessageError, LockedTopicError, postMessage } from "@/application/messages/post-message";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
+import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -71,6 +74,17 @@ export async function postMessageAction(_prevState: PostMessageActionState, form
     }
     throw error;
   }
+
+  const members = await new DrizzleMemberRepository().listByProject(project.id);
+  await enqueueNotification(
+    { jobRepository: new DrizzleJobRepository() },
+    {
+      recipientGroups: [members.map((m) => m.userId)],
+      excludeUserId: user.id,
+      subject: `[${project.name}] ${message.subject}`,
+      body: message.content,
+    },
+  );
 
   const topicId = parsed.data.parentId ?? message.id;
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/boards/${board.id}`);

@@ -1,4 +1,8 @@
 import * as Sentry from "@sentry/node";
+import { dispatchJob } from "@/application/jobs/dispatch-job";
+import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { ConsoleMailer } from "@/infrastructure/mail/console-mailer";
 import { startHealthServer } from "./health-server";
 
 Sentry.init({
@@ -8,10 +12,28 @@ Sentry.init({
 });
 
 const POLL_INTERVAL_MS = 5000;
+const MAX_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 30000;
 
+const jobRepository = new DrizzleJobRepository();
+const userRepository = new DrizzleUserRepository();
+const mailer = new ConsoleMailer();
+
+/** Drains the queue until it's empty — the outer loop's sleep only kicks in once there's nothing left to claim. */
 async function drainOnce() {
-  // Phase 7 fills this in: dequeue jobs table rows via
-  // `SELECT ... FOR UPDATE SKIP LOCKED` and dispatch to application/jobs/*.
+  for (;;) {
+    const job = await jobRepository.claimNext();
+    if (!job) {
+      return;
+    }
+    try {
+      await dispatchJob({ mailer, userRepository }, job);
+      await jobRepository.markDone(job.id);
+    } catch (error) {
+      Sentry.captureException(error);
+      await jobRepository.markFailed(job.id, RETRY_DELAY_MS, MAX_ATTEMPTS);
+    }
+  }
 }
 
 async function main() {
