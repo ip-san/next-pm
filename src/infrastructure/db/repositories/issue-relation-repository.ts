@@ -24,6 +24,15 @@ export class DrizzleIssueRelationRepository implements IssueRelationRepository {
     return rows.map(toDomain);
   }
 
+  async findById(id: string): Promise<IssueRelation | null> {
+    const [row] = await db.select().from(issueRelations).where(eq(issueRelations.id, id)).limit(1);
+    return row ? toDomain(row) : null;
+  }
+
+  async delete(id: string): Promise<void> {
+    await db.delete(issueRelations).where(eq(issueRelations.id, id));
+  }
+
   async create(relation: Omit<IssueRelation, "id">): Promise<IssueRelation> {
     // Re-normalize defensively: callers should already pass canonical values, but this
     // keeps the invariant enforced at the one place rows actually get written.

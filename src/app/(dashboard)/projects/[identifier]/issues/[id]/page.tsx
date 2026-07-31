@@ -1,11 +1,14 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { otherIssueId, relationLabelFor } from "@/application/issues/create-issue-relation";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
@@ -18,6 +21,8 @@ import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/work
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { AttachmentUploadForm } from "./attachment-upload-form";
+import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
+import { IssueRelationForm } from "./issue-relation-form";
 import { LogTimeForm } from "./log-time-form";
 import { StatusUpdateForm } from "./status-update-form";
 import { WatchToggleForm } from "./watch-toggle-form";
@@ -69,6 +74,18 @@ export default async function IssueDetailPage({
   const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
   const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
   const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
+  const canManageRelations = can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor });
+
+  const issueRepository = new DrizzleIssueRepository();
+  const [parentIssue, projectIssues, relations] = await Promise.all([
+    issue.parentId ? issueRepository.findById(issue.parentId) : Promise.resolve(null),
+    issueRepository.listByProject(issue.projectId),
+    new DrizzleIssueRelationRepository().listForIssue(issue.id),
+  ]);
+  const childIssues = projectIssues.filter((candidate) => candidate.parentId === issue.id);
+  const relatedIssues = await Promise.all(
+    relations.map(async (relation) => ({ relation, issue: await issueRepository.findById(otherIssueId(relation, issue.id)) })),
+  );
   const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const allowedStatusIds = allowedNewStatusIds(transitions, {
     trackerId: issue.trackerId,
@@ -86,6 +103,14 @@ export default async function IssueDetailPage({
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-gray-500">{tracker?.name}</p>
+          {parentIssue ? (
+            <p className="text-xs text-gray-500">
+              親チケット:{" "}
+              <Link href={`/projects/${identifier}/issues/${parentIssue.id}`} className="underline">
+                {parentIssue.subject}
+              </Link>
+            </p>
+          ) : null}
           <h1 className="text-xl font-semibold">{issue.subject}</h1>
           <p className="text-sm text-gray-600">
             ステータス: {statusById.get(issue.statusId)?.name ?? "?"} / 進捗: {issue.doneRatio}%
@@ -155,6 +180,44 @@ export default async function IssueDetailPage({
         {canLogTime ? (
           <LogTimeForm issueId={issue.id} projectIdentifier={identifier} activities={activities} />
         ) : null}
+      </section>
+
+      {childIssues.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">子チケット</h2>
+          <ul className="flex flex-col gap-1 text-sm">
+            {childIssues.map((child) => (
+              <li key={child.id}>
+                <Link href={`/projects/${identifier}/issues/${child.id}`} className="underline">
+                  {child.subject}
+                </Link>
+                <span className="text-gray-500 text-xs"> — {statusById.get(child.statusId)?.name ?? "?"}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-medium">関連チケット</h2>
+        <ul className="flex flex-col gap-1 text-sm">
+          {relatedIssues.map(({ relation, issue: other }) =>
+            other ? (
+              <li key={relation.id} className="flex items-center gap-2">
+                <span className="text-gray-500 text-xs">{relationLabelFor(relation, issue.id)}</span>
+                <Link href={`/projects/${identifier}/issues/${other.id}`} className="underline">
+                  {other.subject}
+                </Link>
+                <span className="text-gray-500 text-xs">— {statusById.get(other.statusId)?.name ?? "?"}</span>
+                {canManageRelations ? (
+                  <DeleteIssueRelationButton projectIdentifier={identifier} issueId={issue.id} relationId={relation.id} />
+                ) : null}
+              </li>
+            ) : null,
+          )}
+          {relatedIssues.length === 0 ? <li className="text-gray-400 text-xs">関連チケットはありません。</li> : null}
+        </ul>
+        {canManageRelations ? <IssueRelationForm projectIdentifier={identifier} issueId={issue.id} /> : null}
       </section>
 
       <section className="flex flex-col gap-3">
