@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, integer, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { enumerations } from "./enumerations";
 import { issueCategories } from "./issue-categories";
 import { issueStatuses } from "./issue-statuses";
@@ -33,7 +33,7 @@ export const issues = pgTable("issues", {
   categoryId: uuid("category_id").references(() => issueCategories.id),
   isPrivate: boolean("is_private").notNull().default(false),
   doneRatio: integer("done_ratio").notNull().default(0),
-  estimatedHours: integer("estimated_hours"),
+  estimatedHours: doublePrecision("estimated_hours"),
   startDate: text("start_date"),
   dueDate: text("due_date"),
   lockVersion: integer("lock_version").notNull().default(0),

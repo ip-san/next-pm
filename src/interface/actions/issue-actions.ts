@@ -7,6 +7,7 @@ import { StaleIssueError } from "@/domain/issue/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
@@ -42,6 +43,43 @@ export async function createIssueFormAction(
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
 
+  const members = await new DrizzleMemberRepository().listByProject(project.id);
+  if (parsed.data.assignedToId && !members.some((member) => member.userId === parsed.data.assignedToId)) {
+    return { ok: false, error: "担当者が見つかりません。" };
+  }
+
+  if (parsed.data.categoryId) {
+    const categories = await new DrizzleIssueCategoryRepository().listByProject(project.id);
+    if (!categories.some((category) => category.id === parsed.data.categoryId)) {
+      return { ok: false, error: "カテゴリが見つかりません。" };
+    }
+  }
+
+  if (parsed.data.fixedVersionId) {
+    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
+    // shared with (not just owned by) this issue's project, per its sharing setting.
+    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
+    if (!sharedVersions.some((version) => version.id === parsed.data.fixedVersionId)) {
+      return { ok: false, error: "バージョンが見つかりません。" };
+    }
+  }
+
+  if (parsed.data.parentId) {
+    const parentIssue = await new DrizzleIssueRepository().findById(parsed.data.parentId);
+    if (!parentIssue || parentIssue.projectId !== project.id) {
+      return { ok: false, error: "親チケットが見つかりません。" };
+    }
+  }
+
+  let estimatedHours: number | null = null;
+  if (parsed.data.estimatedHours.trim().length > 0) {
+    const parsedHours = Number(parsed.data.estimatedHours);
+    if (!Number.isFinite(parsedHours) || parsedHours < 0) {
+      return { ok: false, error: "予定工数は0以上の数値で入力してください。" };
+    }
+    estimatedHours = parsedHours;
+  }
+
   const issue = await createIssue(
     { issueRepository: new DrizzleIssueRepository(), trackerRepository: new DrizzleTrackerRepository() },
     {
@@ -51,18 +89,17 @@ export async function createIssueFormAction(
       subject: parsed.data.subject,
       description: parsed.data.description,
       authorId: user.id,
-      assignedToId: null,
-      parentId: null,
-      fixedVersionId: null,
-      categoryId: null,
-      isPrivate: false,
-      estimatedHours: null,
-      startDate: null,
-      dueDate: null,
+      assignedToId: parsed.data.assignedToId || null,
+      parentId: parsed.data.parentId || null,
+      fixedVersionId: parsed.data.fixedVersionId || null,
+      categoryId: parsed.data.categoryId || null,
+      isPrivate: parsed.data.isPrivate,
+      estimatedHours,
+      startDate: parsed.data.startDate || null,
+      dueDate: parsed.data.dueDate || null,
     },
   );
 
-  const members = await new DrizzleMemberRepository().listByProject(project.id);
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
     {

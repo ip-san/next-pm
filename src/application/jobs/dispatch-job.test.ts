@@ -40,6 +40,7 @@ describe("dispatchJob", () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
       findById: mock(async () => makeUser()),
+      findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
@@ -52,6 +53,7 @@ describe("dispatchJob", () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
       findById: mock(async () => makeUser({ status: "locked" })),
+      findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
@@ -64,6 +66,7 @@ describe("dispatchJob", () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
       findById: mock(async () => null),
+      findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
@@ -76,6 +79,7 @@ describe("dispatchJob", () => {
     const mailer: Mailer = { send: mock(async () => {}) };
     const userRepository: UserRepository = {
       findById: mock(async () => null),
+      findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),

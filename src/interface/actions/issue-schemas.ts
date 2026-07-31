@@ -14,6 +14,14 @@ export const createIssueFormSchema = z.object({
   priorityId: z.string().uuid(),
   subject: z.string().min(1, "件名を入力してください。"),
   description: z.string(),
+  assignedToId: z.string().uuid().or(z.literal("")),
+  categoryId: z.string().uuid().or(z.literal("")),
+  fixedVersionId: z.string().uuid().or(z.literal("")),
+  parentId: z.string().uuid().or(z.literal("")),
+  isPrivate: z.boolean(),
+  estimatedHours: z.string(),
+  startDate: z.string(),
+  dueDate: z.string(),
 });
 
 export type CreateIssueFormValues = z.infer<typeof createIssueFormSchema>;

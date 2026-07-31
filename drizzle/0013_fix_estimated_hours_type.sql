@@ -1,0 +1,1 @@
+ALTER TABLE "issues" ALTER COLUMN "estimated_hours" SET DATA TYPE double precision;
