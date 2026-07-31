@@ -29,11 +29,11 @@ async function seed() {
   console.log("Seeding builtin roles...");
   const [nonMember] = await db
     .insert(roles)
-    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_issues"] })
+    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_issues"] })
     .returning();
   const [anonymous] = await db
     .insert(roles)
-    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_issues"] })
+    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_project", "view_issues"] })
     .returning();
   const [manager] = await db
     .insert(roles)
