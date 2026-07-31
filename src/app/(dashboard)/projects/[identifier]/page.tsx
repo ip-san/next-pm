@@ -1,5 +1,14 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+
+const NAV_LINKS: { module: string; path: string; label: string }[] = [
+  { module: "issue_tracking", path: "issues", label: "チケット" },
+  { module: "time_tracking", path: "time-entries", label: "工数" },
+  { module: "wiki", path: "wiki", label: "Wiki" },
+  { module: "boards", path: "boards", label: "フォーラム" },
+  { module: "news", path: "news", label: "ニュース" },
+];
 
 export default async function ProjectPage({
   params,
@@ -15,6 +24,13 @@ export default async function ProjectPage({
   return (
     <main className="p-8 flex flex-col gap-4">
       <h1 className="text-xl font-semibold">{project.name}</h1>
+      <nav className="flex gap-3 text-sm">
+        {NAV_LINKS.filter((link) => project.enabledModules.includes(link.module)).map((link) => (
+          <Link key={link.path} href={`/projects/${identifier}/${link.path}`} className="underline">
+            {link.label}
+          </Link>
+        ))}
+      </nav>
       <p className="text-sm text-gray-600">{project.description}</p>
       <dl className="text-sm flex flex-col gap-1">
         <div>

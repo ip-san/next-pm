@@ -20,9 +20,17 @@ export type PermissionKey =
   | "edit_wiki_pages"
   | "manage_wiki"
   | "manage_boards"
+  | "view_messages"
   | "add_messages"
+  | "edit_messages"
+  | "edit_own_messages"
+  | "delete_messages"
+  | "delete_own_messages"
+  | "view_news"
   | "manage_news"
+  | "comment_news"
   | "manage_documents"
+  | "view_files"
   | "manage_files"
   | "manage_repository";
 
@@ -62,10 +70,18 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_wiki: { module: "wiki", readOnly: false },
 
   manage_boards: { module: "boards", readOnly: false },
+  view_messages: { module: "boards", readOnly: true },
   add_messages: { module: "boards", readOnly: false },
+  edit_messages: { module: "boards", readOnly: false },
+  edit_own_messages: { module: "boards", readOnly: false },
+  delete_messages: { module: "boards", readOnly: false },
+  delete_own_messages: { module: "boards", readOnly: false },
 
+  view_news: { module: "news", readOnly: true },
   manage_news: { module: "news", readOnly: false },
+  comment_news: { module: "news", readOnly: false },
   manage_documents: { module: "documents", readOnly: false },
+  view_files: { module: "files", readOnly: true },
   manage_files: { module: "files", readOnly: false },
   manage_repository: { module: "repository", readOnly: false },
 };

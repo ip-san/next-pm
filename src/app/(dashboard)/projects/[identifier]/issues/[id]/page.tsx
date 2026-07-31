@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -11,11 +12,14 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { AttachmentUploadForm } from "./attachment-upload-form";
 import { LogTimeForm } from "./log-time-form";
 import { StatusUpdateForm } from "./status-update-form";
+import { WatchToggleForm } from "./watch-toggle-form";
 
 export default async function IssueDetailPage({
   params,
@@ -50,14 +54,19 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const [transitions, customFields, customValues, timeEntries, activities] = await Promise.all([
+  const [transitions, customFields, customValues, timeEntries, activities, attachments, isWatching] = await Promise.all([
     new DrizzleWorkflowRepository().listForTracker(issue.trackerId),
     new DrizzleCustomFieldRepository().listForTracker(issue.trackerId),
     new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
     new DrizzleTimeEntryRepository().listForIssue(issue.id),
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+    new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
+    user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
   ]);
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
+  const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
+  const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
+  const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
   const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const allowedStatusIds = allowedNewStatusIds(transitions, {
     trackerId: issue.trackerId,
@@ -72,12 +81,15 @@ export default async function IssueDetailPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <div>
-        <p className="text-sm text-gray-500">{tracker?.name}</p>
-        <h1 className="text-xl font-semibold">{issue.subject}</h1>
-        <p className="text-sm text-gray-600">
-          ステータス: {statusById.get(issue.statusId)?.name ?? "?"} / 進捗: {issue.doneRatio}%
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500">{tracker?.name}</p>
+          <h1 className="text-xl font-semibold">{issue.subject}</h1>
+          <p className="text-sm text-gray-600">
+            ステータス: {statusById.get(issue.statusId)?.name ?? "?"} / 進捗: {issue.doneRatio}%
+          </p>
+        </div>
+        {user ? <WatchToggleForm issueId={issue.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
       </div>
 
       <p className="whitespace-pre-wrap text-sm">{issue.description}</p>
@@ -139,6 +151,21 @@ export default async function IssueDetailPage({
         {canLogTime ? (
           <LogTimeForm issueId={issue.id} projectIdentifier={identifier} activities={activities} />
         ) : null}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">添付ファイル</h2>
+        <ul className="flex flex-col gap-1 text-sm">
+          {attachments.map((attachment) => (
+            <li key={attachment.id}>
+              <a href={`/api/attachments/${attachment.id}`} className="underline">
+                {attachment.filename}
+              </a>{" "}
+              <span className="text-gray-500 text-xs">({Math.ceil(attachment.fileSize / 1024)} KB)</span>
+            </li>
+          ))}
+        </ul>
+        {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} /> : null}
       </section>
     </main>
   );

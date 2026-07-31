@@ -51,6 +51,16 @@ async function seed() {
         "log_time",
         "view_wiki_pages",
         "edit_wiki_pages",
+        "manage_boards",
+        "view_messages",
+        "add_messages",
+        "edit_messages",
+        "delete_messages",
+        "view_news",
+        "manage_news",
+        "comment_news",
+        "view_files",
+        "manage_files",
       ],
     })
     .returning();
