@@ -76,32 +76,41 @@ export default async function ProjectIssuesPage({
         </button>
       </form>
 
-      <table className="text-sm border-collapse">
-        <thead>
-          <tr className="text-left border-b">
-            <th className="pr-4 py-1">#</th>
-            <th className="pr-4 py-1">トラッカー</th>
-            <th className="pr-4 py-1">件名</th>
-            <th className="pr-4 py-1">ステータス</th>
-            <th className="pr-4 py-1">進捗率</th>
-          </tr>
-        </thead>
-        <tbody>
-          {issues.map((issue) => (
-            <tr key={issue.id} className="border-b">
-              <td className="pr-4 py-1">
-                <Link href={`/projects/${identifier}/issues/${issue.id}`} className="underline">
-                  {issue.id.slice(0, 8)}
-                </Link>
-              </td>
-              <td className="pr-4 py-1">{trackerById.get(issue.trackerId)?.name ?? "?"}</td>
-              <td className="pr-4 py-1">{issue.subject}</td>
-              <td className="pr-4 py-1">{statusById.get(issue.statusId)?.name ?? "?"}</td>
-              <td className="pr-4 py-1">{issue.doneRatio}%</td>
+      <form method="get" action={`/projects/${identifier}/issues/bulk-edit`} className="flex flex-col gap-3">
+        <table className="text-sm border-collapse">
+          <thead>
+            <tr className="text-left border-b">
+              <th className="pr-4 py-1" />
+              <th className="pr-4 py-1">#</th>
+              <th className="pr-4 py-1">トラッカー</th>
+              <th className="pr-4 py-1">件名</th>
+              <th className="pr-4 py-1">ステータス</th>
+              <th className="pr-4 py-1">進捗率</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {issues.map((issue) => (
+              <tr key={issue.id} className="border-b">
+                <td className="pr-4 py-1">
+                  <input type="checkbox" name="ids" value={issue.id} />
+                </td>
+                <td className="pr-4 py-1">
+                  <Link href={`/projects/${identifier}/issues/${issue.id}`} className="underline">
+                    {issue.id.slice(0, 8)}
+                  </Link>
+                </td>
+                <td className="pr-4 py-1">{trackerById.get(issue.trackerId)?.name ?? "?"}</td>
+                <td className="pr-4 py-1">{issue.subject}</td>
+                <td className="pr-4 py-1">{statusById.get(issue.statusId)?.name ?? "?"}</td>
+                <td className="pr-4 py-1">{issue.doneRatio}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button type="submit" className="border rounded px-3 py-2 text-sm self-start">
+          選択したチケットを編集
+        </button>
+      </form>
     </main>
   );
 }
