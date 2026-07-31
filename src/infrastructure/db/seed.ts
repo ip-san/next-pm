@@ -59,6 +59,10 @@ async function seed() {
         "view_news",
         "manage_news",
         "comment_news",
+        "view_documents",
+        "add_documents",
+        "edit_documents",
+        "delete_documents",
         "view_files",
         "manage_files",
         "browse_repository",
@@ -92,6 +96,13 @@ async function seed() {
   await db.insert(enumerations).values([
     { type: "TimeEntryActivity", name: "Design", position: 1 },
     { type: "TimeEntryActivity", name: "Development", position: 2, isDefault: 1 },
+  ]);
+
+  console.log("Seeding document categories...");
+  await db.insert(enumerations).values([
+    { type: "DocumentCategory", name: "User documentation", position: 1 },
+    { type: "DocumentCategory", name: "Technical documentation", position: 2 },
+    { type: "DocumentCategory", name: "Other", position: 3, isDefault: 1 },
   ]);
 
   console.log("Seeding trackers...");

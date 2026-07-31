@@ -1,4 +1,4 @@
-export type AttachmentContainerType = "Issue" | "Message" | "News";
+export type AttachmentContainerType = "Issue" | "Message" | "News" | "Document";
 
 export interface Attachment {
   id: string;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
+import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
@@ -34,6 +35,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     if (!isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  } else if (attachment.containerType === "Document") {
+    const document = await new DrizzleDocumentRepository().findById(attachment.containerId);
+    if (!document) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const project = await new DrizzleProjectRepository().findById(document.projectId);
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const { actor } = await resolveActor(user, project.id);
+    if (!can({ permission: "view_documents", project: toAuthorizationProject(project), actor })) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else {

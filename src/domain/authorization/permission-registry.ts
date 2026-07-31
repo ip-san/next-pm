@@ -29,7 +29,10 @@ export type PermissionKey =
   | "view_news"
   | "manage_news"
   | "comment_news"
-  | "manage_documents"
+  | "view_documents"
+  | "add_documents"
+  | "edit_documents"
+  | "delete_documents"
   | "view_files"
   | "manage_files"
   | "browse_repository"
@@ -82,7 +85,10 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   view_news: { module: "news", readOnly: true },
   manage_news: { module: "news", readOnly: false },
   comment_news: { module: "news", readOnly: false },
-  manage_documents: { module: "documents", readOnly: false },
+  view_documents: { module: "documents", readOnly: true },
+  add_documents: { module: "documents", readOnly: false },
+  edit_documents: { module: "documents", readOnly: false },
+  delete_documents: { module: "documents", readOnly: false },
   view_files: { module: "files", readOnly: true },
   manage_files: { module: "files", readOnly: false },
   browse_repository: { module: "repository", readOnly: true },
