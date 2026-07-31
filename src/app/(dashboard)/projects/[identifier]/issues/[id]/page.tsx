@@ -82,10 +82,15 @@ export default async function IssueDetailPage({
     issueRepository.listByProject(issue.projectId),
     new DrizzleIssueRelationRepository().listForIssue(issue.id),
   ]);
-  const childIssues = projectIssues.filter((candidate) => candidate.parentId === issue.id);
-  const relatedIssues = await Promise.all(
-    relations.map(async (relation) => ({ relation, issue: await issueRepository.findById(otherIssueId(relation, issue.id)) })),
-  );
+  const visibilityRoles = issuesVisibilityRoles(actor);
+  const isVisibleToActor = (candidate: { isPrivate: boolean; authorId: string; assignedToId: string | null }) =>
+    isPrivateIssueVisible(candidate, user?.id ?? null, visibilityRoles);
+
+  const visibleParentIssue = parentIssue && isVisibleToActor(parentIssue) ? parentIssue : null;
+  const childIssues = projectIssues.filter((candidate) => candidate.parentId === issue.id && isVisibleToActor(candidate));
+  const relatedIssues = (
+    await Promise.all(relations.map(async (relation) => ({ relation, issue: await issueRepository.findById(otherIssueId(relation, issue.id)) })))
+  ).filter(({ issue: other }) => other && isVisibleToActor(other));
   const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const allowedStatusIds = allowedNewStatusIds(transitions, {
     trackerId: issue.trackerId,
@@ -103,11 +108,11 @@ export default async function IssueDetailPage({
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-gray-500">{tracker?.name}</p>
-          {parentIssue ? (
+          {visibleParentIssue ? (
             <p className="text-xs text-gray-500">
               親チケット:{" "}
-              <Link href={`/projects/${identifier}/issues/${parentIssue.id}`} className="underline">
-                {parentIssue.subject}
+              <Link href={`/projects/${identifier}/issues/${visibleParentIssue.id}`} className="underline">
+                {visibleParentIssue.subject}
               </Link>
             </p>
           ) : null}
