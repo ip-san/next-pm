@@ -66,6 +66,9 @@ export default async function ProjectIssuesPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{project.name} — チケット</h1>
         <div className="flex items-center gap-2">
+          <Link href={`/projects/${identifier}/calendar`} className="border rounded px-3 py-2 text-sm">
+            カレンダー
+          </Link>
           <a
             href={`/api/projects/${identifier}/issues/csv${statusFilter ? `?status_id=${statusFilter}` : ""}`}
             className="border rounded px-3 py-2 text-sm"
