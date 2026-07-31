@@ -1,0 +1,14 @@
+FROM node:22-slim AS base
+WORKDIR /app
+RUN corepack enable
+
+FROM base AS deps
+COPY package.json bun.lock ./
+RUN npx --yes bun@1.3.14 install --frozen-lockfile
+
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3001
+CMD ["node_modules/.bin/tsx", "worker/index.ts"]

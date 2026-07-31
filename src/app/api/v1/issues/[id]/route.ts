@@ -1,0 +1,136 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { can } from "@/domain/authorization/authorization-service";
+import { StaleIssueError } from "@/domain/issue/entity";
+import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
+import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
+import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { verifyCsrf } from "@/interface/http/csrf";
+
+async function resolveUser(request: Request) {
+  const viaApiKey = await currentUserFromAuthorizationHeader(request);
+  if (viaApiKey) return { user: viaApiKey, viaCookie: false };
+  const viaCookie = await currentUserFromCookies();
+  return { user: viaCookie, viaCookie: true };
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const issue = await new DrizzleIssueRepository().findById(id);
+  if (!issue) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const { user } = await resolveUser(request);
+  const project = await new DrizzleProjectRepository().findById(issue.projectId);
+  if (!project) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const journals = await new DrizzleJournalRepository().listForIssue(id);
+  return NextResponse.json({ issue, journals });
+}
+
+const updateIssueSchema = z.object({
+  lock_version: z.number().int(),
+  notes: z.string().default(""),
+  status_id: z.string().uuid().optional(),
+  priority_id: z.string().uuid().optional(),
+  subject: z.string().min(1).optional(),
+  description: z.string().optional(),
+  assigned_to_id: z.string().uuid().nullable().optional(),
+  fixed_version_id: z.string().uuid().nullable().optional(),
+  category_id: z.string().uuid().nullable().optional(),
+  is_private: z.boolean().optional(),
+  done_ratio: z.number().int().min(0).max(100).optional(),
+  estimated_hours: z.number().nullable().optional(),
+  start_date: z.string().nullable().optional(),
+  due_date: z.string().nullable().optional(),
+});
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { user, viaCookie } = await resolveUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (viaCookie && !(await verifyCsrf(request))) {
+    return NextResponse.json({ error: "csrf_check_failed" }, { status: 403 });
+  }
+
+  const existing = await new DrizzleIssueRepository().findById(id);
+  if (!existing) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const project = await new DrizzleProjectRepository().findById(existing.projectId);
+  if (!project) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const parsed = updateIssueSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
+  }
+
+  const { actor, roleIds } = await resolveActor(user, project.id);
+  const isAuthor = existing.authorId === user.id;
+  const isAssignee = existing.assignedToId === user.id;
+  const projectContext = toAuthorizationProject(project);
+  const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
+  const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
+  if (!canEditAny && !canEditOwn) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  try {
+    const issue = await updateIssue(
+      {
+        issueRepository: new DrizzleIssueRepository(),
+        journalRepository: new DrizzleJournalRepository(),
+        workflowRepository: new DrizzleWorkflowRepository(),
+      },
+      {
+        issueId: id,
+        expectedLockVersion: parsed.data.lock_version,
+        notes: parsed.data.notes,
+        actingUserId: user.id,
+        actorRoleIds: roleIds,
+        isAuthor,
+        isAssignee,
+        changes: {
+          statusId: parsed.data.status_id,
+          priorityId: parsed.data.priority_id,
+          subject: parsed.data.subject,
+          description: parsed.data.description,
+          assignedToId: parsed.data.assigned_to_id,
+          fixedVersionId: parsed.data.fixed_version_id,
+          categoryId: parsed.data.category_id,
+          isPrivate: parsed.data.is_private,
+          doneRatio: parsed.data.done_ratio,
+          estimatedHours: parsed.data.estimated_hours,
+          startDate: parsed.data.start_date,
+          dueDate: parsed.data.due_date,
+        },
+      },
+    );
+    return NextResponse.json({ issue });
+  } catch (error) {
+    if (error instanceof StaleIssueError) {
+      return NextResponse.json({ error: "stale_issue" }, { status: 409 });
+    }
+    if (error instanceof WorkflowTransitionDeniedError) {
+      return NextResponse.json({ error: "workflow_transition_denied" }, { status: 422 });
+    }
+    throw error;
+  }
+}

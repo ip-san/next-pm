@@ -1,0 +1,41 @@
+import { and, eq } from "drizzle-orm";
+import { db } from "@/infrastructure/db/client";
+import { memberRoles, members } from "@/infrastructure/db/schema/members";
+import type { Member } from "@/domain/member/entity";
+import type { MemberRepository } from "@/domain/member/repository";
+
+async function attachRoleIds(memberRows: (typeof members.$inferSelect)[]): Promise<Member[]> {
+  if (memberRows.length === 0) return [];
+  const result: Member[] = [];
+  for (const row of memberRows) {
+    const roleRows = await db
+      .select({ roleId: memberRoles.roleId })
+      .from(memberRoles)
+      .where(eq(memberRoles.memberId, row.id));
+    result.push({
+      id: row.id,
+      userId: row.userId,
+      projectId: row.projectId,
+      roleIds: roleRows.map((r) => r.roleId),
+    });
+  }
+  return result;
+}
+
+export class DrizzleMemberRepository implements MemberRepository {
+  async findByUserAndProject(userId: string, projectId: string): Promise<Member | null> {
+    const [row] = await db
+      .select()
+      .from(members)
+      .where(and(eq(members.userId, userId), eq(members.projectId, projectId)))
+      .limit(1);
+    if (!row) return null;
+    const [withRoles] = await attachRoleIds([row]);
+    return withRoles;
+  }
+
+  async listByProject(projectId: string): Promise<Member[]> {
+    const rows = await db.select().from(members).where(eq(members.projectId, projectId));
+    return attachRoleIds(rows);
+  }
+}
