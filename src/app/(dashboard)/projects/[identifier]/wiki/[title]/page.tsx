@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -26,8 +27,32 @@ export default async function WikiPageView({
   }
   const canEdit = can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor });
 
-  const wikiPage = await new DrizzleWikiPageRepository().findByTitle(project.id, title);
-  const current = wikiPage ? await new DrizzleWikiContentRepository().findCurrent(wikiPage.id) : null;
+  const wikiPageRepository = new DrizzleWikiPageRepository();
+  const wikiContentRepository = new DrizzleWikiContentRepository();
+  const wikiPage = await wikiPageRepository.findByTitle(project.id, title);
+  const current = wikiPage ? await wikiContentRepository.findCurrent(wikiPage.id) : null;
+
+  let renderedText = current?.text ?? "";
+  if (current && wikiPage) {
+    const allPages = await wikiPageRepository.listForProject(project.id);
+    const childPages = allPages.filter((page) => page.parentId === wikiPage.id).map((page) => ({ title: page.title }));
+    const textByTitle = new Map<string, string>();
+    for (const page of allPages) {
+      const version = await wikiContentRepository.findCurrent(page.id);
+      if (version) {
+        textByTitle.set(page.title, version.text);
+      }
+    }
+    renderedText = expandMacros(
+      current.text,
+      {
+        headings: extractHeadings(current.text),
+        childPages,
+        resolveInclude: (includeTitle) => textByTitle.get(includeTitle) ?? null,
+      },
+      new Set([title]),
+    );
+  }
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -42,7 +67,7 @@ export default async function WikiPageView({
 
       {current ? (
         <>
-          <p className="whitespace-pre-wrap text-sm">{current.text}</p>
+          <p className="whitespace-pre-wrap text-sm">{renderedText}</p>
           <p className="text-xs text-gray-500">
             バージョン {current.version} ·{" "}
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/history`} className="underline">
