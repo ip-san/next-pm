@@ -5,6 +5,7 @@ import { z } from "zod";
 import { customFieldFormatEnum } from "@/infrastructure/db/schema/custom-fields";
 import { enumerationTypeEnum } from "@/infrastructure/db/schema/enumerations";
 import { coerceCustomFieldValue } from "@/domain/custom-field/coerce";
+import { isPermissionRegistered } from "@/domain/authorization/permission-registry";
 import { generateSalt, hashPassword } from "@/domain/user/password";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
@@ -322,5 +323,50 @@ export async function createUserAction(
   }
 
   revalidatePath("/admin/users");
+  return { error: null };
+}
+
+const createRoleSchema = z.object({
+  name: z.string().min(1).max(30),
+  issuesVisibility: z.enum(["all", "default", "own"]).default("default"),
+  permissions: z.array(z.string()),
+});
+
+export async function createRoleAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = createRoleSchema.safeParse({
+    name: formData.get("name"),
+    issuesVisibility: formData.get("issuesVisibility") ?? "default",
+    permissions: formData.getAll("permissions"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const invalidPermission = parsed.data.permissions.find((p) => !isPermissionRegistered(p));
+  if (invalidPermission) {
+    return { error: `不明な権限が指定されました: ${invalidPermission}` };
+  }
+  const permissions = parsed.data.permissions.filter(isPermissionRegistered);
+
+  await new DrizzleRoleRepository().create({
+    name: parsed.data.name,
+    builtin: 0,
+    position: 0,
+    permissions,
+    issuesVisibility: parsed.data.issuesVisibility,
+    timeEntriesVisibility: "all",
+    usersVisibility: "all",
+    assignable: true,
+  });
+
+  revalidatePath("/admin/roles");
   return { error: null };
 }

@@ -19,6 +19,11 @@ function toDomain(row: typeof roles.$inferSelect): Role {
 }
 
 export class DrizzleRoleRepository implements RoleRepository {
+  async listAll(): Promise<Role[]> {
+    const rows = await db.select().from(roles);
+    return rows.map(toDomain);
+  }
+
   async findById(id: string): Promise<Role | null> {
     const [row] = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
     return row ? toDomain(row) : null;
@@ -45,5 +50,22 @@ export class DrizzleRoleRepository implements RoleRepository {
   async listAssignable(): Promise<Role[]> {
     const rows = await db.select().from(roles).where(eq(roles.assignable, true));
     return rows.map(toDomain);
+  }
+
+  async create(role: Omit<Role, "id">): Promise<Role> {
+    const [row] = await db
+      .insert(roles)
+      .values({
+        name: role.name,
+        builtin: role.builtin,
+        position: role.position,
+        permissions: role.permissions,
+        issuesVisibility: role.issuesVisibility,
+        timeEntriesVisibility: role.timeEntriesVisibility,
+        usersVisibility: role.usersVisibility,
+        assignable: role.assignable,
+      })
+      .returning();
+    return toDomain(row);
   }
 }
