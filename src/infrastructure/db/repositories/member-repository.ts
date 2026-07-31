@@ -23,6 +23,13 @@ async function attachRoleIds(memberRows: (typeof members.$inferSelect)[]): Promi
 }
 
 export class DrizzleMemberRepository implements MemberRepository {
+  async findById(memberId: string): Promise<Member | null> {
+    const [row] = await db.select().from(members).where(eq(members.id, memberId)).limit(1);
+    if (!row) return null;
+    const [withRoles] = await attachRoleIds([row]);
+    return withRoles;
+  }
+
   async findByUserAndProject(userId: string, projectId: string): Promise<Member | null> {
     const [row] = await db
       .select()
