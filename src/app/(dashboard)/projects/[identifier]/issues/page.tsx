@@ -81,6 +81,9 @@ export default async function ProjectIssuesPage({
           >
             CSV
           </a>
+          <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
+            CSV取り込み
+          </Link>
           <Link href={`/projects/${identifier}/issues/new`} className="bg-black text-white rounded px-3 py-2 text-sm">
             新しいチケット
           </Link>
