@@ -98,8 +98,9 @@ export async function POST(request: Request) {
   // everywhere else in this app.
   let projectId = parsed.data.project_id;
   let issueId = parsed.data.issue_id;
+  let issue = null;
   if (issueId) {
-    const issue = await new DrizzleIssueRepository().findById(issueId);
+    issue = await new DrizzleIssueRepository().findById(issueId);
     if (!issue) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
@@ -114,6 +115,12 @@ export async function POST(request: Request) {
   }
 
   const { actor } = await resolveActor(user, project.id);
+  // Checked before the permission gate, and returns the same not_found a nonexistent
+  // issue would — logging time against an issue implicitly confirms it exists, so a
+  // private issue the actor can't see must look identical to one that isn't there.
+  if (issue && !isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   if (!can({ permission: "log_time", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
