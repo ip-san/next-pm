@@ -50,7 +50,9 @@ function makeRepositories(overrides: {
   };
   const workflowRepository: WorkflowRepository = {
     listForTracker: mock(async () => (overrides.transitions as never) ?? []),
+    listForTrackerAndRole: mock(async () => (overrides.transitions as never) ?? []),
     create: mock(async (t) => ({ ...t, id: "transition-1" })),
+    replaceForTrackerAndRole: mock(async () => undefined),
   };
   return { issueRepository, journalRepository, workflowRepository };
 }
