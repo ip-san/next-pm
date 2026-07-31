@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { Commit, TreeEntry } from "@/domain/scm/entity";
+import type { BlameLine, Commit, TreeEntry } from "@/domain/scm/entity";
 import type { GitBrowser } from "@/domain/scm/git-browser";
+import { parseBlamePorcelain } from "@/domain/scm/parse-blame";
 import { validateRef, validateRepositoryPath } from "@/domain/scm/validate-path";
 
 const execFileAsync = promisify(execFile);
@@ -57,5 +58,18 @@ export class GitCliBrowser implements GitBrowser {
         const [hash, author, date, message] = entry.replace(/^\n/, "").split("\x1f");
         return { hash, author, date, message };
       });
+  }
+
+  async diff(rootPath: string, ref: string): Promise<string> {
+    validateRef(ref);
+    const { stdout } = await execFileAsync("git", ["-C", rootPath, "show", "--no-color", ref]);
+    return stdout;
+  }
+
+  async blame(rootPath: string, ref: string, path: string): Promise<BlameLine[]> {
+    validateRef(ref);
+    validateRepositoryPath(path);
+    const { stdout } = await execFileAsync("git", ["-C", rootPath, "blame", "--line-porcelain", ref, "--", path]);
+    return parseBlamePorcelain(stdout);
   }
 }

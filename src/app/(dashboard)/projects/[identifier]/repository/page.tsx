@@ -88,7 +88,15 @@ export default async function RepositoryPage({
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {fileContent !== null ? (
-        <pre className="text-xs font-mono border rounded p-3 overflow-x-auto whitespace-pre">{fileContent}</pre>
+        <>
+          <Link
+            href={`/projects/${identifier}/repository/blame?path=${encodeURIComponent(currentPath)}&ref=${encodeURIComponent(currentRef)}`}
+            className="underline text-sm self-start"
+          >
+            変更履歴を見る (blame)
+          </Link>
+          <pre className="text-xs font-mono border rounded p-3 overflow-x-auto whitespace-pre">{fileContent}</pre>
+        </>
       ) : (
         <ul className="flex flex-col gap-1 text-sm font-mono">
           {currentPath.length > 0 ? (
@@ -117,7 +125,10 @@ export default async function RepositoryPage({
           <ul className="flex flex-col gap-1 text-xs">
             {commits.map((commit) => (
               <li key={commit.hash} className="border-b pb-1">
-                <span className="font-mono">{commit.hash.slice(0, 8)}</span> {commit.message} — {commit.author}, {commit.date}
+                <Link href={`/projects/${identifier}/repository/revisions/${commit.hash}`} className="font-mono underline">
+                  {commit.hash.slice(0, 8)}
+                </Link>{" "}
+                {commit.message} — {commit.author}, {commit.date}
               </li>
             ))}
           </ul>

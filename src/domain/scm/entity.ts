@@ -17,3 +17,11 @@ export interface Commit {
   date: string;
   message: string;
 }
+
+export interface BlameLine {
+  lineNumber: number;
+  commitHash: string;
+  author: string;
+  date: string;
+  content: string;
+}
