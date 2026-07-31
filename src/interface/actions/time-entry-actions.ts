@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { logTime, InvalidTimeEntryError } from "@/application/time-entries/log-time";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export type LogTimeActionState = {
   error: string | null;
@@ -57,6 +58,9 @@ export async function logTimeAction(
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "log_time", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
+  }
+  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+    return { error: "チケットが見つかりません。" };
   }
 
   try {

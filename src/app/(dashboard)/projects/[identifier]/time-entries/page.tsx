@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export default async function ProjectTimeEntriesPage({
   params,
@@ -24,16 +25,25 @@ export default async function ProjectTimeEntriesPage({
     notFound();
   }
 
-  const [entries, activities] = await Promise.all([
+  const [allEntries, activities] = await Promise.all([
     new DrizzleTimeEntryRepository().listForProject(project.id),
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
   ]);
   const activityById = new Map(activities.map((a) => [a.id, a]));
 
-  const issueIds = [...new Set(entries.map((e) => e.issueId).filter((id): id is string => id !== null))];
+  const issueIds = [...new Set(allEntries.map((e) => e.issueId).filter((id): id is string => id !== null))];
   const issueRepository = new DrizzleIssueRepository();
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((i) => i !== null).map((i) => [i.id, i]));
+
+  // An entry against a private issue the viewer can't see must not leak that issue's
+  // subject (or even the fact that time was logged against it) — drop it entirely.
+  const visibilityRoles = issuesVisibilityRoles(actor);
+  const entries = allEntries.filter((entry) => {
+    if (!entry.issueId) return true;
+    const issue = issueById.get(entry.issueId);
+    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles);
+  });
 
   const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
 
