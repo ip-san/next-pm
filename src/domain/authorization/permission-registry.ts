@@ -12,6 +12,8 @@ export type PermissionKey =
   | "edit_own_issues"
   | "manage_issue_relations"
   | "manage_issue_categories"
+  | "add_issue_watchers"
+  | "delete_issue_watchers"
   | "view_time_entries"
   | "log_time"
   | "edit_time_entries"
@@ -64,6 +66,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_own_issues: { module: "issue_tracking", readOnly: false },
   manage_issue_relations: { module: "issue_tracking", readOnly: false },
   manage_issue_categories: { module: "issue_tracking", readOnly: false },
+  add_issue_watchers: { module: "issue_tracking", readOnly: false },
+  delete_issue_watchers: { module: "issue_tracking", readOnly: false },
 
   view_time_entries: { module: "time_tracking", readOnly: true },
   log_time: { module: "time_tracking", readOnly: false },

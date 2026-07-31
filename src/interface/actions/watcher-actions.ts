@@ -6,6 +6,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { toggleWatch } from "@/application/watchers/toggle-watch";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -53,6 +54,107 @@ export async function toggleIssueWatchAction(_prevState: ToggleWatchActionState,
   }
 
   await toggleWatch({ watcherRepository: new DrizzleWatcherRepository() }, "Issue", issue.id, user.id);
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues/${issue.id}`);
+  return { error: null };
+}
+
+export type WatcherActionState = {
+  error: string | null;
+};
+
+const addWatcherSchema = z.object({
+  issueId: z.string().uuid(),
+  projectIdentifier: z.string().min(1),
+  userId: z.string().uuid(),
+});
+
+// Mirrors Redmine's WatchersController#create: the actor needs add_issue_watchers, and the
+// target must be Principal.assignable_watchers — a project member, not an arbitrary user id.
+export async function addIssueWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
+  const parsed = addWatcherSchema.safeParse({
+    issueId: formData.get("issueId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    userId: formData.get("userId"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
+  if (!issue) {
+    return { error: "チケットが見つかりません。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(issue.projectId);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+    return { error: "チケットが見つかりません。" };
+  }
+
+  const targetMember = await new DrizzleMemberRepository().findByUserAndProject(parsed.data.userId, project.id);
+  if (!targetMember) {
+    return { error: "指定されたユーザーはこのプロジェクトのメンバーではありません。" };
+  }
+
+  await new DrizzleWatcherRepository().watch("Issue", issue.id, parsed.data.userId);
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues/${issue.id}`);
+  return { error: null };
+}
+
+const removeWatcherSchema = z.object({
+  issueId: z.string().uuid(),
+  projectIdentifier: z.string().min(1),
+  userId: z.string().uuid(),
+});
+
+export async function removeIssueWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
+  const parsed = removeWatcherSchema.safeParse({
+    issueId: formData.get("issueId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    userId: formData.get("userId"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
+  if (!issue) {
+    return { error: "チケットが見つかりません。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(issue.projectId);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+    return { error: "チケットが見つかりません。" };
+  }
+
+  await new DrizzleWatcherRepository().unwatch("Issue", issue.id, parsed.data.userId);
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues/${issue.id}`);
   return { error: null };

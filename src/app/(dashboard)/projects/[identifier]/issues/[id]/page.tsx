@@ -12,9 +12,11 @@ import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
@@ -25,6 +27,7 @@ import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueRelationForm } from "./issue-relation-form";
 import { LogTimeForm } from "./log-time-form";
 import { StatusUpdateForm } from "./status-update-form";
+import { WatcherManager } from "./watcher-manager";
 import { WatchToggleForm } from "./watch-toggle-form";
 
 export default async function IssueDetailPage({
@@ -75,6 +78,20 @@ export default async function IssueDetailPage({
   const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
   const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
   const canManageRelations = can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor });
+  const canAddWatchers = can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor });
+  const canDeleteWatchers = can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor });
+
+  const [watcherUserIds, members] = await Promise.all([
+    new DrizzleWatcherRepository().listWatcherUserIds("Issue", issue.id),
+    new DrizzleMemberRepository().listByProject(project.id),
+  ]);
+  const relevantUsers = await new DrizzleUserRepository().findByIds([...new Set([...watcherUserIds, ...members.map((m) => m.userId)])]);
+  const userLabelById = new Map(relevantUsers.map((u) => [u.id, `${u.lastname} ${u.firstname}`]));
+  const watcherList = watcherUserIds.map((id) => ({ id, label: userLabelById.get(id) ?? id }));
+  const watcherCandidates = members
+    .map((m) => m.userId)
+    .filter((userId) => !watcherUserIds.includes(userId))
+    .map((id) => ({ id, label: userLabelById.get(id) ?? id }));
 
   const issueRepository = new DrizzleIssueRepository();
   const [parentIssue, projectIssues, relations] = await Promise.all([
@@ -237,6 +254,19 @@ export default async function IssueDetailPage({
         </ul>
         {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} /> : null}
       </section>
+
+      {canAddWatchers || canDeleteWatchers || watcherList.length > 0 ? (
+        <section>
+          <WatcherManager
+            issueId={issue.id}
+            projectIdentifier={identifier}
+            watchers={watcherList}
+            candidates={canAddWatchers ? watcherCandidates : []}
+            canAdd={canAddWatchers}
+            canRemove={canDeleteWatchers}
+          />
+        </section>
+      ) : null}
     </main>
   );
 }

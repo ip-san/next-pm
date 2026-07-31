@@ -34,4 +34,12 @@ export class DrizzleWatcherRepository implements WatcherRepository {
       .where(and(eq(watchers.watchableType, watchableType), eq(watchers.userId, userId)));
     return rows.map((r) => r.watchableId);
   }
+
+  async listWatcherUserIds(watchableType: WatchableType, watchableId: string): Promise<string[]> {
+    const rows = await db
+      .select({ userId: watchers.userId })
+      .from(watchers)
+      .where(and(eq(watchers.watchableType, watchableType), eq(watchers.watchableId, watchableId)));
+    return rows.map((r) => r.userId);
+  }
 }
