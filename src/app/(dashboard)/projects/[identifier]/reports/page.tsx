@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
-import { aggregateIssueCounts, type ReportCounts } from "@/domain/report/issue-report";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { aggregateIssueCounts, totalCounts, type ReportCounts } from "@/domain/report/issue-report";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -13,22 +12,17 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 
 const NONE_LABEL = "(なし)";
 
 interface ReportRow {
   key: string | null;
   label: string;
-  link?: string;
   counts: ReportCounts;
 }
 
-function ReportTable({ title, rows }: { title: string; rows: ReportRow[] }) {
-  const total = rows.reduce(
-    (acc, row) => ({ open: acc.open + row.counts.open, closed: acc.closed + row.counts.closed, total: acc.total + row.counts.total }),
-    { open: 0, closed: 0, total: 0 },
-  );
+function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]; totals: ReportCounts }) {
   return (
     <div className="flex flex-col gap-1">
       <h2 className="font-semibold text-sm">{title}</h2>
@@ -55,9 +49,9 @@ function ReportTable({ title, rows }: { title: string; rows: ReportRow[] }) {
             ))}
             <tr className="font-medium">
               <td className="pr-4 py-0.5">合計</td>
-              <td className="pr-4 py-0.5 text-right">{total.open}</td>
-              <td className="pr-4 py-0.5 text-right">{total.closed}</td>
-              <td className="pr-4 py-0.5 text-right">{total.total}</td>
+              <td className="pr-4 py-0.5 text-right">{totals.open}</td>
+              <td className="pr-4 py-0.5 text-right">{totals.closed}</td>
+              <td className="pr-4 py-0.5 text-right">{totals.total}</td>
             </tr>
           </tbody>
         </table>
@@ -88,8 +82,7 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
     new DrizzleVersionRepository().listSharedWith(project.id),
     new DrizzleMemberRepository().listByProject(project.id),
   ]);
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor));
   const closedStatusIds = new Set(statuses.filter((s) => s.isClosed).map((s) => s.id));
 
   // Authors/assignees on the actual issues aren't necessarily project members (an admin can
@@ -101,14 +94,13 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
     if (issue.assignedToId) relevantUserIds.add(issue.assignedToId);
   }
   const relevantUsers = await new DrizzleUserRepository().findByIds([...relevantUserIds]);
-  const userById = new Map(relevantUsers.map((u) => [u.id, u]));
   const memberUsers = relevantUsers.filter((u) => members.some((m) => m.userId === u.id));
 
   function buildRows(
     keyOf: (issue: (typeof issues)[number]) => string | null,
     dimension: { id: string; label: string }[],
     includeNone: boolean,
-  ): ReportRow[] {
+  ): { rows: ReportRow[]; totals: ReportCounts } {
     const counts = aggregateIssueCounts(issues, closedStatusIds, keyOf);
     const rows: ReportRow[] = dimension
       .map((d) => ({ key: d.id, label: d.label, counts: counts.get(d.id) ?? { open: 0, closed: 0, total: 0 } }))
@@ -116,39 +108,29 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
     if (includeNone && counts.has(null)) {
       rows.push({ key: null, label: NONE_LABEL, counts: counts.get(null)! });
     }
-    return rows;
+    return { rows, totals: totalCounts(counts) };
   }
 
-  const trackerRows = buildRows(
-    (i) => i.trackerId,
-    trackers.map((t) => ({ id: t.id, label: t.name })),
-    false,
-  );
-  const priorityRows = buildRows(
-    (i) => i.priorityId,
-    priorities.map((p) => ({ id: p.id, label: p.name })),
-    false,
-  );
-  const categoryRows = buildRows(
-    (i) => i.categoryId,
-    categories.map((c) => ({ id: c.id, label: c.name })),
-    true,
-  );
-  const versionRows = buildRows(
-    (i) => i.fixedVersionId,
-    versions.map((v) => ({ id: v.id, label: v.name })),
-    true,
-  );
-  const assigneeRows = buildRows(
-    (i) => i.assignedToId,
-    memberUsers.map((u) => ({ id: u.id, label: `${u.lastname} ${u.firstname}` })),
-    true,
-  );
-  const authorRows = buildRows(
-    (i) => i.authorId,
-    [...userById.values()].map((u) => ({ id: u.id, label: `${u.lastname} ${u.firstname}` })),
-    false,
-  );
+  const overallTotals = totalCounts(aggregateIssueCounts(issues, closedStatusIds, () => null));
+
+  const breakdowns = [
+    { title: "トラッカー別", keyOf: (i: (typeof issues)[number]) => i.trackerId, dimension: trackers.map((t) => ({ id: t.id, label: t.name })), includeNone: false },
+    { title: "優先度別", keyOf: (i: (typeof issues)[number]) => i.priorityId, dimension: priorities.map((p) => ({ id: p.id, label: p.name })), includeNone: false },
+    {
+      title: "担当者別",
+      keyOf: (i: (typeof issues)[number]) => i.assignedToId,
+      dimension: memberUsers.map((u) => ({ id: u.id, label: `${u.lastname} ${u.firstname}` })),
+      includeNone: true,
+    },
+    {
+      title: "作成者別",
+      keyOf: (i: (typeof issues)[number]) => i.authorId,
+      dimension: relevantUsers.map((u) => ({ id: u.id, label: `${u.lastname} ${u.firstname}` })),
+      includeNone: false,
+    },
+    { title: "バージョン別", keyOf: (i: (typeof issues)[number]) => i.fixedVersionId, dimension: versions.map((v) => ({ id: v.id, label: v.name })), includeNone: true },
+    { title: "カテゴリ別", keyOf: (i: (typeof issues)[number]) => i.categoryId, dimension: categories.map((c) => ({ id: c.id, label: c.name })), includeNone: true },
+  ];
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -159,16 +141,13 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
         </Link>
       </div>
       <p className="text-sm text-gray-500">
-        全チケット {issues.length} 件（未対応 {issues.length - issues.filter((i) => closedStatusIds.has(i.statusId)).length} / 完了{" "}
-        {issues.filter((i) => closedStatusIds.has(i.statusId)).length}）
+        全チケット {overallTotals.total} 件（未対応 {overallTotals.open} / 完了 {overallTotals.closed}）
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <ReportTable title="トラッカー別" rows={trackerRows} />
-        <ReportTable title="優先度別" rows={priorityRows} />
-        <ReportTable title="担当者別" rows={assigneeRows} />
-        <ReportTable title="作成者別" rows={authorRows} />
-        <ReportTable title="バージョン別" rows={versionRows} />
-        <ReportTable title="カテゴリ別" rows={categoryRows} />
+        {breakdowns.map((breakdown) => {
+          const { rows, totals } = buildRows(breakdown.keyOf, breakdown.dimension, breakdown.includeNone);
+          return <ReportTable key={breakdown.title} title={breakdown.title} rows={rows} totals={totals} />;
+        })}
       </div>
     </main>
   );
