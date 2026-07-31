@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createProject } from "@/application/projects/create-project";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
 
 const AVAILABLE_MODULES = ["issue_tracking", "time_tracking", "wiki", "boards", "news", "documents", "files", "repository"] as const;
 
@@ -28,6 +29,11 @@ export async function createProjectAction(
   _prevState: CreateProjectActionState,
   formData: FormData,
 ): Promise<CreateProjectActionState> {
+  const user = await currentUserFromCookies();
+  if (!user?.isAdmin) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
   const parentIdRaw = formData.get("parentId");
   const parsed = createProjectSchema.safeParse({
     name: formData.get("name"),

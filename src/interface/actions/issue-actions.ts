@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
@@ -17,7 +18,7 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { createIssueFormSchema, type CreateIssueFormValues } from "./issue-schemas";
 
 export async function createIssueFormAction(
@@ -157,6 +158,9 @@ export async function updateIssueStatusAction(
   }
 
   const { actor, roleIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(existing, user.id, issuesVisibilityRoles(actor))) {
+    return { error: "チケットが見つかりません。" };
+  }
   const isAuthor = existing.authorId === user.id;
   const isAssignee = existing.assignedToId === user.id;
   const projectContext = toAuthorizationProject(project);
