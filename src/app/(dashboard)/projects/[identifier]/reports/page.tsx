@@ -32,23 +32,23 @@ function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]
         <table className="text-sm border-collapse w-full">
           <thead>
             <tr className="border-b text-left">
-              <th className="pr-4 py-0.5" />
-              <th className="pr-4 py-0.5 text-right">未対応</th>
-              <th className="pr-4 py-0.5 text-right">完了</th>
-              <th className="pr-4 py-0.5 text-right">合計</th>
+              <th scope="col" className="pr-4 py-0.5" />
+              <th scope="col" className="pr-4 py-0.5 text-right">未対応</th>
+              <th scope="col" className="pr-4 py-0.5 text-right">完了</th>
+              <th scope="col" className="pr-4 py-0.5 text-right">合計</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.key ?? "__none__"} className="border-b">
-                <td className="pr-4 py-0.5">{row.label}</td>
+                <th scope="row" className="pr-4 py-0.5 text-left font-normal">{row.label}</th>
                 <td className="pr-4 py-0.5 text-right">{row.counts.open}</td>
                 <td className="pr-4 py-0.5 text-right">{row.counts.closed}</td>
                 <td className="pr-4 py-0.5 text-right">{row.counts.total}</td>
               </tr>
             ))}
             <tr className="font-medium">
-              <td className="pr-4 py-0.5">合計</td>
+              <th scope="row" className="pr-4 py-0.5 text-left">合計</th>
               <td className="pr-4 py-0.5 text-right">{totals.open}</td>
               <td className="pr-4 py-0.5 text-right">{totals.closed}</td>
               <td className="pr-4 py-0.5 text-right">{totals.total}</td>
