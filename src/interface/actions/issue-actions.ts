@@ -9,7 +9,7 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
-import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -19,6 +19,7 @@ import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -42,7 +43,7 @@ export async function createIssueFormAction(
     return { ok: false, error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
@@ -99,26 +100,39 @@ export async function createIssueFormAction(
     estimatedHours = parsedHours;
   }
 
-  const issue = await createIssue(
-    { issueRepository: new DrizzleIssueRepository(), trackerRepository: new DrizzleTrackerRepository() },
-    {
-      projectId: parsed.data.projectId,
-      trackerId: parsed.data.trackerId,
-      priorityId: parsed.data.priorityId,
-      subject: parsed.data.subject,
-      description: parsed.data.description,
-      authorId: user.id,
-      assignedToId: assignee?.id ?? null,
-      assignedToType: assignee?.type ?? null,
-      parentId: parsed.data.parentId || null,
-      fixedVersionId: parsed.data.fixedVersionId || null,
-      categoryId: parsed.data.categoryId || null,
-      isPrivate: parsed.data.isPrivate,
-      estimatedHours,
-      startDate: parsed.data.startDate || null,
-      dueDate: parsed.data.dueDate || null,
-    },
-  );
+  let issue;
+  try {
+    issue = await createIssue(
+      {
+        issueRepository: new DrizzleIssueRepository(),
+        trackerRepository: new DrizzleTrackerRepository(),
+        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
+      },
+      {
+        projectId: parsed.data.projectId,
+        trackerId: parsed.data.trackerId,
+        priorityId: parsed.data.priorityId,
+        subject: parsed.data.subject,
+        description: parsed.data.description,
+        authorId: user.id,
+        assignedToId: assignee?.id ?? null,
+        assignedToType: assignee?.type ?? null,
+        parentId: parsed.data.parentId || null,
+        fixedVersionId: parsed.data.fixedVersionId || null,
+        categoryId: parsed.data.categoryId || null,
+        isPrivate: parsed.data.isPrivate,
+        estimatedHours,
+        startDate: parsed.data.startDate || null,
+        dueDate: parsed.data.dueDate || null,
+        actorRoleIds: roleIds,
+      },
+    );
+  } catch (error) {
+    if (error instanceof WorkflowRequiredFieldError) {
+      return { ok: false, error: "このステータスでは必須項目が未入力です。入力内容を確認してください。" };
+    }
+    throw error;
+  }
 
   const assigneeUserIds =
     issue.assignedToType === "group" && issue.assignedToId
@@ -214,6 +228,7 @@ export async function updateIssueStatusAction(
         issueRepository,
         journalRepository: new DrizzleJournalRepository(),
         workflowRepository: new DrizzleWorkflowRepository(),
+        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
       },
       {
         issueId: parsed.data.issueId,
@@ -232,6 +247,9 @@ export async function updateIssueStatusAction(
     }
     if (error instanceof WorkflowTransitionDeniedError) {
       return { error: "そのステータスには変更できません。" };
+    }
+    if (error instanceof WorkflowRequiredFieldError) {
+      return { error: "このステータスでは必須項目が未入力のため変更できません。編集画面から入力してください。" };
     }
     throw error;
   }

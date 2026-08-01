@@ -3,7 +3,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { CustomFieldValidationError, setIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -11,6 +11,7 @@ import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-r
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -127,6 +128,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         issueRepository: new DrizzleIssueRepository(),
         journalRepository: new DrizzleJournalRepository(),
         workflowRepository: new DrizzleWorkflowRepository(),
+        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
       },
       {
         issueId: id,
@@ -180,6 +182,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (error instanceof WorkflowTransitionDeniedError) {
       return NextResponse.json({ error: "workflow_transition_denied" }, { status: 422 });
+    }
+    if (error instanceof WorkflowRequiredFieldError) {
+      return NextResponse.json({ error: "workflow_required_field", field: error.fieldName }, { status: 422 });
     }
     throw error;
   }

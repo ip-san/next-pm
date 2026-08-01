@@ -13,6 +13,8 @@ import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/e
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { parseFieldPermissionEntries } from "@/domain/workflow/parse-field-permissions";
+import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 
@@ -131,6 +133,56 @@ export async function updateWorkflowAction(
   }
 
   await new DrizzleWorkflowRepository().replaceForTrackerAndRole(tracker.id, role.id, transitions);
+
+  revalidatePath("/admin/workflows");
+  return { error: null };
+}
+
+const updateFieldPermissionsSchema = z.object({
+  trackerId: z.string().uuid(),
+  roleId: z.string().uuid(),
+});
+
+export async function updateFieldPermissionsAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = updateFieldPermissionsSchema.safeParse({
+    trackerId: formData.get("trackerId"),
+    roleId: formData.get("roleId"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const [tracker, role, statuses] = await Promise.all([
+    new DrizzleTrackerRepository().findById(parsed.data.trackerId),
+    new DrizzleRoleRepository().findById(parsed.data.roleId),
+    new DrizzleIssueStatusRepository().listAll(),
+  ]);
+  if (!tracker || !role) {
+    return { error: "トラッカーまたはロールが見つかりません。" };
+  }
+
+  const entries: Array<[string, string]> = [];
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === "string") entries.push([key, value]);
+  }
+  const parsedPermissions = parseFieldPermissionEntries(entries, new Set(statuses.map((s) => s.id)));
+  if (!parsedPermissions.ok) {
+    return { error: parsedPermissions.error };
+  }
+
+  await new DrizzleWorkflowFieldPermissionRepository().replaceForTrackerAndRole(
+    tracker.id,
+    role.id,
+    parsedPermissions.permissions,
+  );
 
   revalidatePath("/admin/workflows");
   return { error: null };

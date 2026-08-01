@@ -4,12 +4,14 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { createIssue } from "@/application/issues/create-issue";
+import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -81,7 +83,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -125,26 +127,39 @@ export async function POST(request: Request) {
     }
   }
 
-  const issue = await createIssue(
-    { issueRepository: new DrizzleIssueRepository(), trackerRepository: new DrizzleTrackerRepository() },
-    {
-      projectId: parsed.data.project_id,
-      trackerId: parsed.data.tracker_id,
-      priorityId: parsed.data.priority_id,
-      subject: parsed.data.subject,
-      description: parsed.data.description,
-      authorId: user.id,
-      assignedToId: parsed.data.assigned_to_id,
-      assignedToType: parsed.data.assigned_to_id ? "user" : null,
-      parentId: parsed.data.parent_id,
-      fixedVersionId: parsed.data.fixed_version_id,
-      categoryId: parsed.data.category_id,
-      isPrivate: parsed.data.is_private,
-      estimatedHours: parsed.data.estimated_hours,
-      startDate: parsed.data.start_date,
-      dueDate: parsed.data.due_date,
-    },
-  );
+  let issue;
+  try {
+    issue = await createIssue(
+      {
+        issueRepository: new DrizzleIssueRepository(),
+        trackerRepository: new DrizzleTrackerRepository(),
+        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
+      },
+      {
+        projectId: parsed.data.project_id,
+        trackerId: parsed.data.tracker_id,
+        priorityId: parsed.data.priority_id,
+        subject: parsed.data.subject,
+        description: parsed.data.description,
+        authorId: user.id,
+        assignedToId: parsed.data.assigned_to_id,
+        assignedToType: parsed.data.assigned_to_id ? "user" : null,
+        parentId: parsed.data.parent_id,
+        fixedVersionId: parsed.data.fixed_version_id,
+        categoryId: parsed.data.category_id,
+        isPrivate: parsed.data.is_private,
+        estimatedHours: parsed.data.estimated_hours,
+        startDate: parsed.data.start_date,
+        dueDate: parsed.data.due_date,
+        actorRoleIds: roleIds,
+      },
+    );
+  } catch (error) {
+    if (error instanceof WorkflowRequiredFieldError) {
+      return NextResponse.json({ error: "workflow_required_field", field: error.fieldName }, { status: 422 });
+    }
+    throw error;
+  }
 
   const customValueRepository = new DrizzleCustomValueRepository();
   for (const { customFieldId, value } of coerced) {

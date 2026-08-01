@@ -5,11 +5,13 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { parseCsv } from "@/domain/csv/decode";
 import { createIssue } from "@/application/issues/create-issue";
+import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -50,7 +52,7 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
     return { error: "プロジェクトが見つかりません。", summary: null };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。", summary: null };
   }
@@ -78,6 +80,7 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
   const issueRepository = new DrizzleIssueRepository();
   const trackerRepository = new DrizzleTrackerRepository();
   const userRepository = new DrizzleUserRepository();
+  const workflowFieldPermissionRepository = new DrizzleWorkflowFieldPermissionRepository();
 
   function cell(row: string[], name: string): string {
     const index = columnIndex.get(name);
@@ -123,7 +126,7 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
 
     try {
       await createIssue(
-        { issueRepository, trackerRepository },
+        { issueRepository, trackerRepository, workflowFieldPermissionRepository },
         {
           projectId: project.id,
           trackerId: tracker.id,
@@ -140,10 +143,15 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
           estimatedHours: null,
           startDate: null,
           dueDate: null,
+          actorRoleIds: roleIds,
         },
       );
       created++;
     } catch (error) {
+      if (error instanceof WorkflowRequiredFieldError) {
+        rowErrors.push(`${rowNumber}行目: このステータスでは必須項目が未入力です。`);
+        continue;
+      }
       rowErrors.push(`${rowNumber}行目: ${error instanceof Error ? error.message : "作成に失敗しました。"}`);
     }
   }
