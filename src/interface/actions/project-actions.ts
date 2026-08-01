@@ -4,10 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { ArchiveBlockedError, archiveProject, unarchiveProject } from "@/application/projects/archive-project";
+import { closeProject, reopenProject } from "@/application/projects/close-project";
 import { createProject } from "@/application/projects/create-project";
 import { updateProject } from "@/application/projects/update-project";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { requireAdmin } from "@/interface/http/require-admin";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 const AVAILABLE_MODULES = ["issue_tracking", "time_tracking", "wiki", "boards", "news", "documents", "files", "repository"] as const;
@@ -115,5 +120,101 @@ export async function updateProjectSettingsAction(
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}`);
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/settings`);
+  return { error: null };
+}
+
+export type ProjectLifecycleActionState = {
+  error: string | null;
+};
+
+/** Shared close/reopen skeleton — both are the same permission check around a different use case. */
+async function runCloseOrReopen(
+  formData: FormData,
+  run: (repository: DrizzleProjectRepository, projectId: string) => Promise<void>,
+): Promise<ProjectLifecycleActionState> {
+  const identifier = formData.get("projectIdentifier");
+  if (typeof identifier !== "string" || identifier === "") {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const project = await projectRepository.findByIdentifier(identifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const user = await currentUserFromCookies();
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "close_project", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  await run(projectRepository, project.id);
+
+  revalidatePath(`/projects/${identifier}`);
+  return { error: null };
+}
+
+export async function closeProjectAction(
+  _prevState: ProjectLifecycleActionState,
+  formData: FormData,
+): Promise<ProjectLifecycleActionState> {
+  return runCloseOrReopen(formData, closeProject);
+}
+
+export async function reopenProjectAction(
+  _prevState: ProjectLifecycleActionState,
+  formData: FormData,
+): Promise<ProjectLifecycleActionState> {
+  return runCloseOrReopen(formData, reopenProject);
+}
+
+export async function archiveProjectAction(
+  _prevState: ProjectLifecycleActionState,
+  formData: FormData,
+): Promise<ProjectLifecycleActionState> {
+  // Admin-only like Redmine's require_admin — deliberately NOT an authorization-service
+  // check: `can` refuses everything on an archived project, which is exactly the state
+  // this action manages.
+  const denied = await requireAdmin();
+  if (denied) {
+    return { error: denied };
+  }
+
+  const projectId = formData.get("projectId");
+  if (typeof projectId !== "string" || projectId === "") {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  try {
+    await archiveProject(new DrizzleProjectRepository(), new DrizzleVersionRepository(), new DrizzleIssueRepository(), projectId);
+  } catch (error) {
+    if (error instanceof ArchiveBlockedError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath("/admin/projects");
+  return { error: null };
+}
+
+export async function unarchiveProjectAction(
+  _prevState: ProjectLifecycleActionState,
+  formData: FormData,
+): Promise<ProjectLifecycleActionState> {
+  const denied = await requireAdmin();
+  if (denied) {
+    return { error: denied };
+  }
+
+  const projectId = formData.get("projectId");
+  if (typeof projectId !== "string" || projectId === "") {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  await unarchiveProject(new DrizzleProjectRepository(), projectId);
+
+  revalidatePath("/admin/projects");
   return { error: null };
 }

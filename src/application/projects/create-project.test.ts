@@ -1,19 +1,14 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createProject } from "./create-project";
 import type { Project } from "@/domain/project/entity";
-import type { ProjectRepository } from "@/domain/project/repository";
+import { makeProjectRepositoryMock } from "@/domain/project/test-support";
 
-function makeRepository(overrides: Partial<ProjectRepository> = {}): ProjectRepository {
-  return {
+function makeRepository(overrides: Parameters<typeof makeProjectRepositoryMock>[0] = {}) {
+  return makeProjectRepositoryMock({
     findById: mock(async () => null),
-    findByIdentifier: mock(async () => null),
-    listAll: mock(async () => []),
-    listNestedSetNodes: mock(async () => []),
-    listDescendants: mock(async () => []),
     createUnderParent: mock(async (project) => ({ ...project, id: "new-id", lft: 1, rgt: 2 }) as Project),
-    updateSettings: mock(async (id, settings) => ({ id, lft: 1, rgt: 2, status: "active", parentId: null, position: 0, identifier: "", ...settings }) as Project),
     ...overrides,
-  };
+  });
 }
 
 describe("createProject", () => {
