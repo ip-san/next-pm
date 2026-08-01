@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { createIssueRelationAction, type IssueRelationActionState } from "@/interface/actions/issue-relation-actions";
+import { IssueAutocomplete } from "../issue-autocomplete";
 
 const initialState: IssueRelationActionState = { error: null };
 
@@ -34,11 +35,11 @@ export function IssueRelationForm({ projectIdentifier, issueId }: { projectIdent
           ))}
         </select>
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 min-w-64">
         <label htmlFor="targetIssueId" className="text-xs font-medium">
-          対象チケットID
+          対象チケット
         </label>
-        <input id="targetIssueId" name="targetIssueId" required className="border rounded px-2 py-1 text-sm" />
+        <IssueAutocomplete projectIdentifier={projectIdentifier} inputId="targetIssueId" inputName="targetIssueId" onSelect={() => {}} />
       </div>
       {state.error ? <p role="alert" className="text-xs text-red-600 w-full">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-1 text-sm disabled:opacity-50">

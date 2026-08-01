@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { createIssueFormAction } from "@/interface/actions/issue-actions";
 import { createIssueFormSchema, type CreateIssueFormValues } from "@/interface/actions/issue-schemas";
+import { IssueAutocomplete } from "../issue-autocomplete";
 import type { Tracker } from "@/domain/tracker/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
 import type { IssueCategory } from "@/domain/issue-category/entity";
@@ -34,6 +35,7 @@ export function NewIssueForm({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateIssueFormValues>({
     resolver: zodResolver(createIssueFormSchema),
@@ -157,9 +159,14 @@ export function NewIssueForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="parentId" className="text-sm font-medium">
-          親チケットID
+          親チケット
         </label>
-        <input id="parentId" {...register("parentId")} placeholder="任意" className="border rounded px-3 py-2" />
+        <IssueAutocomplete
+          projectIdentifier={identifier}
+          inputId="parentId"
+          inputName="parentId"
+          onSelect={(issueId) => setValue("parentId", issueId)}
+        />
         {errors.parentId ? <p className="text-sm text-red-600">{errors.parentId.message}</p> : null}
       </div>
 
