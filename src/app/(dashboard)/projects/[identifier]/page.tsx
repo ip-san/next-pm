@@ -33,6 +33,8 @@ export default async function ProjectPage({
     notFound();
   }
 
+  const canEditProject = can({ permission: "edit_project", project: toAuthorizationProject(project), actor });
+
   return (
     <main className="p-8 flex flex-col gap-4">
       <h1 className="text-xl font-semibold">{project.name}</h1>
@@ -45,6 +47,11 @@ export default async function ProjectPage({
         <Link href={`/projects/${identifier}/search`} className="underline">
           検索
         </Link>
+        {canEditProject ? (
+          <Link href={`/projects/${identifier}/settings`} className="underline">
+            設定
+          </Link>
+        ) : null}
       </nav>
       <p className="text-sm text-gray-600">{project.description}</p>
       <dl className="text-sm flex flex-col gap-1">

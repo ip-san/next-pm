@@ -1,10 +1,14 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { can } from "@/domain/authorization/authorization-service";
 import { createProject } from "@/application/projects/create-project";
+import { updateProject } from "@/application/projects/update-project";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 const AVAILABLE_MODULES = ["issue_tracking", "time_tracking", "wiki", "boards", "news", "documents", "files", "repository"] as const;
 
@@ -58,4 +62,58 @@ export async function createProjectAction(
   }
 
   redirect(`/projects/${identifier}`);
+}
+
+const updateProjectSettingsSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().default(""),
+  isPublic: z.coerce.boolean().default(false),
+  enabledModules: z.array(z.enum(AVAILABLE_MODULES)).default([]),
+  trackerIds: z.array(z.string().uuid()).default([]),
+});
+
+export type UpdateProjectSettingsActionState = {
+  error: string | null;
+};
+
+export async function updateProjectSettingsAction(
+  _prevState: UpdateProjectSettingsActionState,
+  formData: FormData,
+): Promise<UpdateProjectSettingsActionState> {
+  const parsed = updateProjectSettingsSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    name: formData.get("name"),
+    description: formData.get("description") ?? "",
+    isPublic: formData.get("isPublic") === "on",
+    enabledModules: formData.getAll("enabledModules"),
+    trackerIds: formData.getAll("trackerIds"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const user = await currentUserFromCookies();
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "edit_project", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  await updateProject(projectRepository, project.id, {
+    name: parsed.data.name,
+    description: parsed.data.description,
+    isPublic: parsed.data.isPublic,
+    enabledModules: parsed.data.enabledModules,
+    trackerIds: parsed.data.trackerIds,
+  });
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}`);
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/settings`);
+  return { error: null };
 }

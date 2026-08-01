@@ -11,6 +11,7 @@ function makeRepository(overrides: Partial<ProjectRepository> = {}): ProjectRepo
     listNestedSetNodes: mock(async () => []),
     listDescendants: mock(async () => []),
     createUnderParent: mock(async (project) => ({ ...project, id: "new-id", lft: 1, rgt: 2 }) as Project),
+    updateSettings: mock(async (id, settings) => ({ id, lft: 1, rgt: 2, status: "active", parentId: null, position: 0, identifier: "", ...settings }) as Project),
     ...overrides,
   };
 }

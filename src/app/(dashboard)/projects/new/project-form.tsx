@@ -4,19 +4,9 @@ import { useActionState } from "react";
 import { createProjectAction, type CreateProjectActionState } from "@/interface/actions/project-actions";
 import type { Project } from "@/domain/project/entity";
 import type { Tracker } from "@/domain/tracker/entity";
+import { MODULE_OPTIONS } from "../module-options";
 
 const initialState: CreateProjectActionState = { error: null };
-
-const MODULES = [
-  { key: "issue_tracking", label: "チケットトラッキング" },
-  { key: "time_tracking", label: "工数管理" },
-  { key: "wiki", label: "Wiki" },
-  { key: "boards", label: "フォーラム" },
-  { key: "news", label: "ニュース" },
-  { key: "documents", label: "ドキュメント" },
-  { key: "files", label: "ファイル" },
-  { key: "repository", label: "リポジトリ" },
-];
 
 export function ProjectForm({ projects, trackers }: { projects: Project[]; trackers: Tracker[] }) {
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
@@ -60,7 +50,7 @@ export function ProjectForm({ projects, trackers }: { projects: Project[]; track
       </label>
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">モジュール</legend>
-        {MODULES.map((module) => (
+        {MODULE_OPTIONS.map((module) => (
           <label key={module.key} className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

@@ -4,7 +4,7 @@ import { projects } from "@/infrastructure/db/schema/projects";
 import { enabledModules } from "@/infrastructure/db/schema/enabled-modules";
 import { projectTrackers } from "@/infrastructure/db/schema/trackers";
 import type { Project } from "@/domain/project/entity";
-import type { ProjectRepository } from "@/domain/project/repository";
+import type { ProjectRepository, ProjectSettingsUpdate } from "@/domain/project/repository";
 import { isWithinSubtree, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
 
 async function attachRelations(
@@ -128,6 +128,44 @@ export class DrizzleProjectRepository implements ProjectRepository {
         position: row.position,
         enabledModules: project.enabledModules,
         trackerIds: project.trackerIds,
+      };
+    });
+  }
+
+  async updateSettings(id: string, settings: ProjectSettingsUpdate): Promise<Project> {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(projects)
+        .set({ name: settings.name, description: settings.description, isPublic: settings.isPublic })
+        .where(eq(projects.id, id))
+        .returning();
+      if (!row) {
+        throw new Error(`Project ${id} not found`);
+      }
+
+      await tx.delete(enabledModules).where(eq(enabledModules.projectId, id));
+      if (settings.enabledModules.length > 0) {
+        await tx.insert(enabledModules).values(settings.enabledModules.map((name) => ({ projectId: id, name })));
+      }
+
+      await tx.delete(projectTrackers).where(eq(projectTrackers.projectId, id));
+      if (settings.trackerIds.length > 0) {
+        await tx.insert(projectTrackers).values(settings.trackerIds.map((trackerId) => ({ projectId: id, trackerId })));
+      }
+
+      return {
+        id: row.id,
+        name: row.name,
+        identifier: row.identifier,
+        description: row.description,
+        isPublic: row.isPublic,
+        status: row.status,
+        parentId: row.parentId,
+        lft: row.lft,
+        rgt: row.rgt,
+        position: row.position,
+        enabledModules: settings.enabledModules,
+        trackerIds: settings.trackerIds,
       };
     });
   }
