@@ -21,6 +21,7 @@ interface ReportRow {
   key: string | null;
   label: string;
   counts: ReportCounts;
+  href?: string;
 }
 
 function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]; totals: ReportCounts }) {
@@ -42,7 +43,9 @@ function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]
           <tbody>
             {rows.map((row) => (
               <tr key={row.key ?? "__none__"} className="border-b">
-                <th scope="row" className="pr-4 py-0.5 text-left font-normal">{row.label}</th>
+                <th scope="row" className="pr-4 py-0.5 text-left font-normal">
+                  {row.href ? <Link href={row.href} className="underline">{row.label}</Link> : row.label}
+                </th>
                 <td className="pr-4 py-0.5 text-right">{row.counts.open}</td>
                 <td className="pr-4 py-0.5 text-right">{row.counts.closed}</td>
                 <td className="pr-4 py-0.5 text-right">{row.counts.total}</td>
@@ -74,17 +77,36 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
     notFound();
   }
 
-  const [allIssues, statuses, trackers, priorities, categories, versions, members] = await Promise.all([
-    new DrizzleIssueRepository().listByProject(project.id),
+  const projectRepository = new DrizzleProjectRepository();
+  const issueRepository = new DrizzleIssueRepository();
+  const [allIssues, statuses, trackers, priorities, categories, versions, members, descendants] = await Promise.all([
+    issueRepository.listByProject(project.id),
     new DrizzleIssueStatusRepository().listAll(),
     new DrizzleTrackerRepository().listAll(),
     new DrizzleEnumerationRepository().listByType("IssuePriority"),
     new DrizzleIssueCategoryRepository().listByProject(project.id),
     new DrizzleVersionRepository().listSharedWith(project.id),
     new DrizzleMemberRepository().listByProject(project.id),
+    projectRepository.listDescendants(project.id),
   ]);
   const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor));
   const closedStatusIds = new Set(statuses.filter((s) => s.isClosed).map((s) => s.id));
+
+  // Subproject counts are issues actually IN each subproject, not this project's own issues
+  // rolled up — mirrors Redmine's Issue.by_subproject. Each subproject gets its own
+  // resolveActor/visibleIssueFilter since the actor's role (and therefore private-issue
+  // visibility) can differ per project, exactly like visiting that subproject directly would.
+  const visibleSubprojects: typeof descendants = [];
+  const subprojectIssues: typeof allIssues = [];
+  for (const subproject of descendants) {
+    const { actor: subActor } = await resolveActor(user, subproject.id);
+    if (!can({ permission: "view_issues", project: toAuthorizationProject(subproject), actor: subActor })) {
+      continue;
+    }
+    visibleSubprojects.push(subproject);
+    const subIssues = await issueRepository.listByProject(subproject.id);
+    subprojectIssues.push(...subIssues.filter(visibleIssueFilter(user?.id ?? null, subActor)));
+  }
 
   // Authors/assignees on the actual issues aren't necessarily project members (an admin can
   // author an issue without being added as one), so the user lookup is built from every id
@@ -133,6 +155,20 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
     { title: "カテゴリ別", keyOf: (i: (typeof issues)[number]) => i.categoryId, dimension: categories.map((c) => ({ id: c.id, label: c.name })), includeNone: true },
   ];
 
+  const allBreakdowns = breakdowns.map((breakdown) => ({ title: breakdown.title, ...buildRows(breakdown.keyOf, breakdown.dimension, breakdown.includeNone) }));
+  if (visibleSubprojects.length > 0) {
+    const subprojectCounts = aggregateIssueCounts(subprojectIssues, closedStatusIds, (i) => i.projectId);
+    const rows: ReportRow[] = visibleSubprojects
+      .map((sub) => ({
+        key: sub.id,
+        label: sub.name,
+        counts: subprojectCounts.get(sub.id) ?? { open: 0, closed: 0, total: 0 },
+        href: `/projects/${sub.identifier}/reports`,
+      }))
+      .filter((row) => row.counts.total > 0);
+    allBreakdowns.push({ title: "サブプロジェクト別", rows, totals: totalCounts(subprojectCounts) });
+  }
+
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -145,10 +181,9 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
         全チケット {overallTotals.total} 件（未対応 {overallTotals.open} / 完了 {overallTotals.closed}）
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {breakdowns.map((breakdown) => {
-          const { rows, totals } = buildRows(breakdown.keyOf, breakdown.dimension, breakdown.includeNone);
-          return <ReportTable key={breakdown.title} title={breakdown.title} rows={rows} totals={totals} />;
-        })}
+        {allBreakdowns.map((breakdown) => (
+          <ReportTable key={breakdown.title} title={breakdown.title} rows={breakdown.rows} totals={breakdown.totals} />
+        ))}
       </div>
     </main>
   );

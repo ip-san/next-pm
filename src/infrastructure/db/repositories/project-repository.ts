@@ -5,7 +5,7 @@ import { enabledModules } from "@/infrastructure/db/schema/enabled-modules";
 import { projectTrackers } from "@/infrastructure/db/schema/trackers";
 import type { Project } from "@/domain/project/entity";
 import type { ProjectRepository } from "@/domain/project/repository";
-import { planInsert, type NestedSetNode } from "@/domain/project/nested-set";
+import { isWithinSubtree, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
 
 async function attachRelations(
   rows: (typeof projects.$inferSelect)[],
@@ -60,6 +60,13 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async listNestedSetNodes(): Promise<NestedSetNode[]> {
     const rows = await db.select({ id: projects.id, lft: projects.lft, rgt: projects.rgt }).from(projects);
     return rows;
+  }
+
+  async listDescendants(projectId: string): Promise<Project[]> {
+    const all = await this.listAll();
+    const ancestor = all.find((p) => p.id === projectId);
+    if (!ancestor) return [];
+    return all.filter((p) => p.id !== projectId && isWithinSubtree(ancestor, p));
   }
 
   async createUnderParent(

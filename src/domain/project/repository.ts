@@ -6,6 +6,8 @@ export interface ProjectRepository {
   findByIdentifier(identifier: string): Promise<Project | null>;
   listAll(): Promise<Project[]>;
   listNestedSetNodes(): Promise<NestedSetNode[]>;
+  /** Every descendant subproject (not including `projectId` itself), via the lft/rgt nested set. */
+  listDescendants(projectId: string): Promise<Project[]>;
   /** Persists a new project as the rightmost child of `parentId` (or a new root if null). */
   createUnderParent(
     project: Omit<Project, "id" | "lft" | "rgt">,

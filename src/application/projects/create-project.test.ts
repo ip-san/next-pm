@@ -9,6 +9,7 @@ function makeRepository(overrides: Partial<ProjectRepository> = {}): ProjectRepo
     findByIdentifier: mock(async () => null),
     listAll: mock(async () => []),
     listNestedSetNodes: mock(async () => []),
+    listDescendants: mock(async () => []),
     createUnderParent: mock(async (project) => ({ ...project, id: "new-id", lft: 1, rgt: 2 }) as Project),
     ...overrides,
   };
