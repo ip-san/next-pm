@@ -38,87 +38,97 @@ function makeMemberRepository(overrides: Partial<MemberRepository> = {}): Member
     listByProject: mock(async () => []),
     listByGroup: mock(async () => []),
     create: mock(async (m) => ({ ...m, id: "new-member" }) as Member),
+    createMany: mock(async (ms: Omit<Member, "id">[]) => ms.map((m, i) => ({ ...m, id: `new-member-${i}` }) as Member)),
     delete: mock(async () => {}),
     deleteInherited: mock(async () => {}),
+    deleteManyInherited: mock(async () => {}),
     findInherited: mock(async () => null),
     ...overrides,
   };
 }
 
 describe("addGroupToProject", () => {
-  it("creates the group membership and one inherited row per group user", async () => {
-    const created: Omit<Member, "id">[] = [];
+  it("creates the group membership then one inherited row per group user in a single batch", async () => {
     const memberRepository = makeMemberRepository({
-      create: mock(async (m) => {
-        created.push(m);
-        return { ...m, id: created.length === 1 ? "group-member-1" : `inherited-${created.length}` } as Member;
-      }),
+      create: mock(async (m) => ({ ...m, id: "group-member-1" }) as Member),
     });
     const groupRepository = makeGroupRepository({ listUserIds: mock(async () => ["user-a", "user-b"]) });
 
     const result = await addGroupToProject({ groupRepository, memberRepository }, { groupId: "group-1", projectId: "proj-1", roleIds: ["role-1"] });
 
     expect(result.groupId).toBe("group-1");
-    expect(created).toHaveLength(3);
-    expect(created[0]).toMatchObject({ groupId: "group-1", userId: null, roleIds: ["role-1"] });
-    expect(created[1]).toMatchObject({ userId: "user-a", inheritedFromMemberId: "group-member-1", roleIds: ["role-1"] });
-    expect(created[2]).toMatchObject({ userId: "user-b", inheritedFromMemberId: "group-member-1", roleIds: ["role-1"] });
+    expect(memberRepository.createMany).toHaveBeenCalledWith([
+      { userId: "user-a", groupId: null, inheritedFromMemberId: "group-member-1", projectId: "proj-1", roleIds: ["role-1"] },
+      { userId: "user-b", groupId: null, inheritedFromMemberId: "group-member-1", projectId: "proj-1", roleIds: ["role-1"] },
+    ]);
+  });
+
+  it("skips the batch call when the group has no users", async () => {
+    const memberRepository = makeMemberRepository({ create: mock(async (m) => ({ ...m, id: "group-member-1" }) as Member) });
+    const groupRepository = makeGroupRepository({ listUserIds: mock(async () => []) });
+
+    await addGroupToProject({ groupRepository, memberRepository }, { groupId: "group-1", projectId: "proj-1", roleIds: ["role-1"] });
+
+    expect(memberRepository.createMany).not.toHaveBeenCalled();
   });
 });
 
 describe("addUserToGroup", () => {
-  it("materializes an inherited row in every project the group is a member of", async () => {
-    const created: Omit<Member, "id">[] = [];
+  it("materializes an inherited row in every project the group is a member of, in one batch", async () => {
     const memberRepository = makeMemberRepository({
       listByGroup: mock(async () => [
         makeMember({ id: "gm-1", groupId: "group-1", projectId: "proj-1", roleIds: ["role-1"] }),
         makeMember({ id: "gm-2", groupId: "group-1", projectId: "proj-2", roleIds: ["role-2"] }),
       ]),
-      create: mock(async (m) => {
-        created.push(m);
-        return { ...m, id: "new" } as Member;
-      }),
     });
     const groupRepository = makeGroupRepository();
 
     await addUserToGroup({ groupRepository, memberRepository }, "group-1", "user-a");
 
     expect(groupRepository.addUser).toHaveBeenCalledWith("group-1", "user-a");
-    expect(created).toEqual([
+    expect(memberRepository.createMany).toHaveBeenCalledWith([
       { userId: "user-a", groupId: null, inheritedFromMemberId: "gm-1", projectId: "proj-1", roleIds: ["role-1"] },
       { userId: "user-a", groupId: null, inheritedFromMemberId: "gm-2", projectId: "proj-2", roleIds: ["role-2"] },
     ]);
   });
 
   it("is idempotent when an inherited row already exists for a project", async () => {
-    const create = mock(async (m: Omit<Member, "id">) => ({ ...m, id: "new" }) as Member);
     const memberRepository = makeMemberRepository({
       listByGroup: mock(async () => [makeMember({ id: "gm-1", groupId: "group-1", projectId: "proj-1", roleIds: ["role-1"] })]),
       findInherited: mock(async () => makeMember({ id: "existing-inherited", userId: "user-a", inheritedFromMemberId: "gm-1" })),
-      create,
     });
     const groupRepository = makeGroupRepository();
 
     await addUserToGroup({ groupRepository, memberRepository }, "group-1", "user-a");
 
-    expect(create).not.toHaveBeenCalled();
+    expect(memberRepository.createMany).not.toHaveBeenCalled();
   });
 });
 
 describe("removeUserFromGroup", () => {
-  it("removes the inherited row for every project the group is a member of", async () => {
+  it("revokes access (batched) before removing the group_users row", async () => {
+    const calls: string[] = [];
     const memberRepository = makeMemberRepository({
       listByGroup: mock(async () => [
         makeMember({ id: "gm-1", groupId: "group-1", projectId: "proj-1" }),
         makeMember({ id: "gm-2", groupId: "group-1", projectId: "proj-2" }),
       ]),
+      deleteManyInherited: mock(async () => {
+        calls.push("deleteManyInherited");
+      }),
     });
-    const groupRepository = makeGroupRepository();
+    const groupRepository = makeGroupRepository({
+      removeUser: mock(async () => {
+        calls.push("removeUser");
+      }),
+    });
 
     await removeUserFromGroup({ groupRepository, memberRepository }, "group-1", "user-a");
 
-    expect(groupRepository.removeUser).toHaveBeenCalledWith("group-1", "user-a");
-    expect(memberRepository.deleteInherited).toHaveBeenCalledWith("gm-1", "user-a");
-    expect(memberRepository.deleteInherited).toHaveBeenCalledWith("gm-2", "user-a");
+    expect(memberRepository.deleteManyInherited).toHaveBeenCalledWith([
+      { groupMemberId: "gm-1", userId: "user-a" },
+      { groupMemberId: "gm-2", userId: "user-a" },
+    ]);
+    expect(calls).toEqual(["deleteManyInherited", "removeUser"]);
   });
 });

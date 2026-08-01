@@ -65,30 +65,41 @@ export class DrizzleMemberRepository implements MemberRepository {
   }
 
   async create(member: Omit<Member, "id">): Promise<Member> {
-    if ((member.userId === null) === (member.groupId === null)) {
-      throw new Error("A member row must have exactly one of userId/groupId set");
+    const [created] = await this.createMany([member]);
+    return created;
+  }
+
+  async createMany(membersToCreate: Omit<Member, "id">[]): Promise<Member[]> {
+    for (const member of membersToCreate) {
+      if ((member.userId === null) === (member.groupId === null)) {
+        throw new Error("A member row must have exactly one of userId/groupId set");
+      }
     }
     return db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(members)
-        .values({
-          userId: member.userId,
-          groupId: member.groupId,
-          inheritedFromMemberId: member.inheritedFromMemberId,
-          projectId: member.projectId,
-        })
-        .returning();
-      if (member.roleIds.length > 0) {
-        await tx.insert(memberRoles).values(member.roleIds.map((roleId) => ({ memberId: row.id, roleId })));
+      const created: Member[] = [];
+      for (const member of membersToCreate) {
+        const [row] = await tx
+          .insert(members)
+          .values({
+            userId: member.userId,
+            groupId: member.groupId,
+            inheritedFromMemberId: member.inheritedFromMemberId,
+            projectId: member.projectId,
+          })
+          .returning();
+        if (member.roleIds.length > 0) {
+          await tx.insert(memberRoles).values(member.roleIds.map((roleId) => ({ memberId: row.id, roleId })));
+        }
+        created.push({
+          id: row.id,
+          userId: row.userId,
+          groupId: row.groupId,
+          inheritedFromMemberId: row.inheritedFromMemberId,
+          projectId: row.projectId,
+          roleIds: member.roleIds,
+        });
       }
-      return {
-        id: row.id,
-        userId: row.userId,
-        groupId: row.groupId,
-        inheritedFromMemberId: row.inheritedFromMemberId,
-        projectId: row.projectId,
-        roleIds: member.roleIds,
-      };
+      return created;
     });
   }
 
@@ -98,6 +109,15 @@ export class DrizzleMemberRepository implements MemberRepository {
 
   async deleteInherited(groupMemberId: string, userId: string): Promise<void> {
     await db.delete(members).where(and(eq(members.inheritedFromMemberId, groupMemberId), eq(members.userId, userId)));
+  }
+
+  async deleteManyInherited(pairs: { groupMemberId: string; userId: string }[]): Promise<void> {
+    if (pairs.length === 0) return;
+    await db.transaction(async (tx) => {
+      for (const pair of pairs) {
+        await tx.delete(members).where(and(eq(members.inheritedFromMemberId, pair.groupMemberId), eq(members.userId, pair.userId)));
+      }
+    });
   }
 
   async findInherited(groupMemberId: string, userId: string): Promise<Member | null> {

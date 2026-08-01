@@ -25,14 +25,16 @@ export async function addGroupToProject(
   });
 
   const userIds = await repositories.groupRepository.listUserIds(input.groupId);
-  for (const userId of userIds) {
-    await repositories.memberRepository.create({
-      userId,
-      groupId: null,
-      inheritedFromMemberId: groupMember.id,
-      projectId: input.projectId,
-      roleIds: input.roleIds,
-    });
+  if (userIds.length > 0) {
+    await repositories.memberRepository.createMany(
+      userIds.map((userId) => ({
+        userId,
+        groupId: null,
+        inheritedFromMemberId: groupMember.id,
+        projectId: input.projectId,
+        roleIds: input.roleIds,
+      })),
+    );
   }
 
   return groupMember;
@@ -45,16 +47,14 @@ export async function addGroupToProject(
 export async function addUserToGroup(repositories: GroupMembershipRepositories, groupId: string, userId: string): Promise<void> {
   await repositories.groupRepository.addUser(groupId, userId);
   const groupMemberships = await repositories.memberRepository.listByGroup(groupId);
+  const toCreate: Omit<Member, "id">[] = [];
   for (const groupMember of groupMemberships) {
     const alreadyInherited = await repositories.memberRepository.findInherited(groupMember.id, userId);
     if (alreadyInherited) continue;
-    await repositories.memberRepository.create({
-      userId,
-      groupId: null,
-      inheritedFromMemberId: groupMember.id,
-      projectId: groupMember.projectId,
-      roleIds: groupMember.roleIds,
-    });
+    toCreate.push({ userId, groupId: null, inheritedFromMemberId: groupMember.id, projectId: groupMember.projectId, roleIds: groupMember.roleIds });
+  }
+  if (toCreate.length > 0) {
+    await repositories.memberRepository.createMany(toCreate);
   }
 }
 
@@ -63,9 +63,11 @@ export async function addUserToGroup(repositories: GroupMembershipRepositories, 
  * traced back to this group, mirroring Redmine's Group#user_removed.
  */
 export async function removeUserFromGroup(repositories: GroupMembershipRepositories, groupId: string, userId: string): Promise<void> {
-  await repositories.groupRepository.removeUser(groupId, userId);
+  // Revoke access before removing the group_users row: if the batched deletion below fails,
+  // the user is still recorded as a group member with their access intact — a safe, retryable
+  // state — rather than removed from the group while an inherited row (and the access it
+  // grants) lingers in some project.
   const groupMemberships = await repositories.memberRepository.listByGroup(groupId);
-  for (const groupMember of groupMemberships) {
-    await repositories.memberRepository.deleteInherited(groupMember.id, userId);
-  }
+  await repositories.memberRepository.deleteManyInherited(groupMemberships.map((groupMember) => ({ groupMemberId: groupMember.id, userId })));
+  await repositories.groupRepository.removeUser(groupId, userId);
 }

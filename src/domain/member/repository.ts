@@ -14,9 +14,13 @@ export interface MemberRepository {
   /** Group-principal rows (groupId = groupId) across every project the group is a member of. */
   listByGroup(groupId: string): Promise<Member[]>;
   create(member: Omit<Member, "id">): Promise<Member>;
+  /** Inserts every row in one transaction — all-or-nothing, unlike calling create() in a loop. */
+  createMany(members: Omit<Member, "id">[]): Promise<Member[]>;
   delete(memberId: string): Promise<void>;
   /** Deletes the inherited row materialized for `userId` from the group membership `groupMemberId`. */
   deleteInherited(groupMemberId: string, userId: string): Promise<void>;
+  /** Deletes every listed (groupMemberId, userId) inherited row in one transaction — all-or-nothing. */
+  deleteManyInherited(pairs: { groupMemberId: string; userId: string }[]): Promise<void>;
   /** The inherited row (if any) already materialized for `userId` from the group membership `groupMemberId`. */
   findInherited(groupMemberId: string, userId: string): Promise<Member | null>;
 }

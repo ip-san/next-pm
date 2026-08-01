@@ -17,7 +17,12 @@ export default async function GroupsPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">グループ</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">グループ</h1>
+        <Link href="/admin/users" className="underline text-sm">
+          ユーザー
+        </Link>
+      </div>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">

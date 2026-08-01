@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -18,7 +19,12 @@ export default async function UsersPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ユーザー</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">ユーザー</h1>
+        <Link href="/admin/groups" className="underline text-sm">
+          グループ
+        </Link>
+      </div>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
