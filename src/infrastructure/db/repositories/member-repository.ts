@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { memberRoles, members } from "@/infrastructure/db/schema/members";
 import type { Member } from "@/domain/member/entity";
@@ -15,6 +15,8 @@ async function attachRoleIds(memberRows: (typeof members.$inferSelect)[]): Promi
     result.push({
       id: row.id,
       userId: row.userId,
+      groupId: row.groupId,
+      inheritedFromMemberId: row.inheritedFromMemberId,
       projectId: row.projectId,
       roleIds: roleRows.map((r) => r.roleId),
     });
@@ -31,10 +33,21 @@ export class DrizzleMemberRepository implements MemberRepository {
   }
 
   async findByUserAndProject(userId: string, projectId: string): Promise<Member | null> {
+    const rows = await db
+      .select()
+      .from(members)
+      .where(and(eq(members.userId, userId), eq(members.projectId, projectId)));
+    if (rows.length === 0) return null;
+    const withRoles = await attachRoleIds(rows);
+    const roleIds = [...new Set(withRoles.flatMap((m) => m.roleIds))];
+    return { ...withRoles[0], roleIds };
+  }
+
+  async findDirectByUserAndProject(userId: string, projectId: string): Promise<Member | null> {
     const [row] = await db
       .select()
       .from(members)
-      .where(and(eq(members.userId, userId), eq(members.projectId, projectId)))
+      .where(and(eq(members.userId, userId), eq(members.projectId, projectId), isNull(members.inheritedFromMemberId)))
       .limit(1);
     if (!row) return null;
     const [withRoles] = await attachRoleIds([row]);
@@ -46,20 +59,55 @@ export class DrizzleMemberRepository implements MemberRepository {
     return attachRoleIds(rows);
   }
 
+  async listByGroup(groupId: string): Promise<Member[]> {
+    const rows = await db.select().from(members).where(eq(members.groupId, groupId));
+    return attachRoleIds(rows);
+  }
+
   async create(member: Omit<Member, "id">): Promise<Member> {
+    if ((member.userId === null) === (member.groupId === null)) {
+      throw new Error("A member row must have exactly one of userId/groupId set");
+    }
     return db.transaction(async (tx) => {
       const [row] = await tx
         .insert(members)
-        .values({ userId: member.userId, projectId: member.projectId })
+        .values({
+          userId: member.userId,
+          groupId: member.groupId,
+          inheritedFromMemberId: member.inheritedFromMemberId,
+          projectId: member.projectId,
+        })
         .returning();
       if (member.roleIds.length > 0) {
         await tx.insert(memberRoles).values(member.roleIds.map((roleId) => ({ memberId: row.id, roleId })));
       }
-      return { id: row.id, userId: row.userId, projectId: row.projectId, roleIds: member.roleIds };
+      return {
+        id: row.id,
+        userId: row.userId,
+        groupId: row.groupId,
+        inheritedFromMemberId: row.inheritedFromMemberId,
+        projectId: row.projectId,
+        roleIds: member.roleIds,
+      };
     });
   }
 
   async delete(memberId: string): Promise<void> {
     await db.delete(members).where(eq(members.id, memberId));
+  }
+
+  async deleteInherited(groupMemberId: string, userId: string): Promise<void> {
+    await db.delete(members).where(and(eq(members.inheritedFromMemberId, groupMemberId), eq(members.userId, userId)));
+  }
+
+  async findInherited(groupMemberId: string, userId: string): Promise<Member | null> {
+    const [row] = await db
+      .select()
+      .from(members)
+      .where(and(eq(members.inheritedFromMemberId, groupMemberId), eq(members.userId, userId)))
+      .limit(1);
+    if (!row) return null;
+    const [withRoles] = await attachRoleIds([row]);
+    return withRoles;
   }
 }

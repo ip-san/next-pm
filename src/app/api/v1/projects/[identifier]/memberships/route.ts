@@ -79,13 +79,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ide
   }
 
   const memberRepository = new DrizzleMemberRepository();
-  const existing = await memberRepository.findByUserAndProject(targetUser.id, project.id);
+  const existing = await memberRepository.findDirectByUserAndProject(targetUser.id, project.id);
   if (existing) {
     return NextResponse.json({ error: "already_a_member" }, { status: 422 });
   }
 
   const membership = await memberRepository.create({
     userId: targetUser.id,
+    groupId: null,
+    inheritedFromMemberId: null,
     projectId: project.id,
     roleIds: parsed.data.role_ids,
   });

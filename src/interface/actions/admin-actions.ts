@@ -14,19 +14,11 @@ import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/i
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
-import { currentUserFromCookies } from "@/interface/http/current-user";
+import { requireAdmin } from "@/interface/http/require-admin";
 
 export type AdminActionState = {
   error: string | null;
 };
-
-async function requireAdmin(): Promise<string | null> {
-  const user = await currentUserFromCookies();
-  if (!user?.isAdmin) {
-    return "この操作を行う権限がありません。";
-  }
-  return null;
-}
 
 const createIssueStatusSchema = z.object({
   name: z.string().min(1).max(30),

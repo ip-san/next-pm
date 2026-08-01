@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { memberUserIds } from "@/domain/member/entity";
 import { otherIssueId, relationLabelFor } from "@/application/issues/create-issue-relation";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
@@ -85,11 +86,11 @@ export default async function IssueDetailPage({
     new DrizzleWatcherRepository().listWatcherUserIds("Issue", issue.id),
     new DrizzleMemberRepository().listByProject(project.id),
   ]);
-  const relevantUsers = await new DrizzleUserRepository().findByIds([...new Set([...watcherUserIds, ...members.map((m) => m.userId)])]);
+  const projectMemberUserIds = memberUserIds(members);
+  const relevantUsers = await new DrizzleUserRepository().findByIds([...new Set([...watcherUserIds, ...projectMemberUserIds])]);
   const userLabelById = new Map(relevantUsers.map((u) => [u.id, `${u.lastname} ${u.firstname}`]));
   const watcherList = watcherUserIds.map((id) => ({ id, label: userLabelById.get(id) ?? id }));
-  const watcherCandidates = members
-    .map((m) => m.userId)
+  const watcherCandidates = projectMemberUserIds
     .filter((userId) => !watcherUserIds.includes(userId))
     .map((id) => ({ id, label: userLabelById.get(id) ?? id }));
 

@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { memberUserIds } from "@/domain/member/entity";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { AddGroupMemberForm } from "./add-group-member-form";
 import { AddMemberForm } from "./add-member-form";
 import { RemoveMemberButton } from "./remove-member-button";
 
@@ -26,13 +29,30 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
     notFound();
   }
 
-  const [members, roles] = await Promise.all([
+  const [members, roles, groups] = await Promise.all([
     new DrizzleMemberRepository().listByProject(project.id),
     new DrizzleRoleRepository().listAssignable(),
+    new DrizzleGroupRepository().listAll(),
   ]);
-  const users = await new DrizzleUserRepository().findByIds(members.map((m) => m.userId));
+  const users = await new DrizzleUserRepository().findByIds(memberUserIds(members));
   const userById = new Map(users.map((u) => [u.id, u]));
   const roleById = new Map(roles.map((r) => [r.id, r]));
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const memberById = new Map(members.map((m) => [m.id, m]));
+
+  function principalLabel(member: (typeof members)[number]): string {
+    if (member.groupId) {
+      return `👥 ${groupById.get(member.groupId)?.name ?? "?"}`;
+    }
+    const memberUser = member.userId ? userById.get(member.userId) : undefined;
+    const label = memberUser ? `${memberUser.login} (${memberUser.lastname} ${memberUser.firstname})` : "?";
+    if (member.inheritedFromMemberId) {
+      const via = memberById.get(member.inheritedFromMemberId);
+      const groupName = via?.groupId ? groupById.get(via.groupId)?.name : undefined;
+      return `${label}（${groupName ?? "グループ"}経由）`;
+    }
+    return label;
+  }
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -40,26 +60,21 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">ユーザー</th>
+            <th className="pr-4 py-1">ユーザー / グループ</th>
             <th className="pr-4 py-1">ロール</th>
             <th className="pr-4 py-1" />
           </tr>
         </thead>
         <tbody>
-          {members.map((member) => {
-            const memberUser = userById.get(member.userId);
-            return (
-              <tr key={member.id} className="border-b">
-                <td className="pr-4 py-1">{memberUser ? `${memberUser.login} (${memberUser.lastname} ${memberUser.firstname})` : "?"}</td>
-                <td className="pr-4 py-1">
-                  {member.roleIds.map((roleId) => roleById.get(roleId)?.name ?? "?").join(", ")}
-                </td>
-                <td className="pr-4 py-1">
-                  <RemoveMemberButton projectIdentifier={identifier} memberId={member.id} />
-                </td>
-              </tr>
-            );
-          })}
+          {members.map((member) => (
+            <tr key={member.id} className="border-b">
+              <td className="pr-4 py-1">{principalLabel(member)}</td>
+              <td className="pr-4 py-1">{member.roleIds.map((roleId) => roleById.get(roleId)?.name ?? "?").join(", ")}</td>
+              <td className="pr-4 py-1">
+                <RemoveMemberButton projectIdentifier={identifier} memberId={member.id} />
+              </td>
+            </tr>
+          ))}
           {members.length === 0 ? (
             <tr>
               <td colSpan={3} className="text-gray-400 py-2">
@@ -70,6 +85,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
         </tbody>
       </table>
       <AddMemberForm projectIdentifier={identifier} roles={roles} />
+      <AddGroupMemberForm projectIdentifier={identifier} groups={groups} roles={roles} />
     </main>
   );
 }

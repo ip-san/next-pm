@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { canDeleteMessage, canEditMessage } from "@/domain/message/authorization";
+import { memberUserIds } from "@/domain/member/entity";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { InvalidMessageError, LockedTopicError, postMessage } from "@/application/messages/post-message";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
@@ -79,7 +80,7 @@ export async function postMessageAction(_prevState: PostMessageActionState, form
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
     {
-      recipientGroups: [members.map((m) => m.userId)],
+      recipientGroups: [memberUserIds(members)],
       excludeUserId: user.id,
       subject: `[${project.name}] ${message.subject}`,
       body: message.content,

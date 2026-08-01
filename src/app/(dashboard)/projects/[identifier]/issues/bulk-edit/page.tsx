@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
@@ -73,7 +74,7 @@ export default async function BulkEditPage({
     new DrizzleEnumerationRepository().listByType("IssuePriority"),
     new DrizzleMemberRepository().listByProject(project.id),
   ]);
-  const memberUsers = await new DrizzleUserRepository().findByIds(members.map((m) => m.userId));
+  const memberUsers = await new DrizzleUserRepository().findByIds(memberUserIds(members));
 
   return (
     <main className="p-8 flex flex-col gap-6">

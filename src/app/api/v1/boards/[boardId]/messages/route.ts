@@ -3,6 +3,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { InvalidMessageError, LockedTopicError, postMessage } from "@/application/messages/post-message";
+import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -95,7 +96,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boa
   const members = await new DrizzleMemberRepository().listByProject(project.id);
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
-    { recipientGroups: [members.map((m) => m.userId)], excludeUserId: user.id, subject: `[${project.name}] ${message.subject}`, body: message.content },
+    { recipientGroups: [memberUserIds(members)], excludeUserId: user.id, subject: `[${project.name}] ${message.subject}`, body: message.content },
   );
 
   return NextResponse.json({ message }, { status: 201 });

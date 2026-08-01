@@ -5,6 +5,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
@@ -108,7 +109,7 @@ export async function createIssueFormAction(
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
     {
-      recipientGroups: [[issue.authorId, issue.assignedToId], members.map((m) => m.userId)],
+      recipientGroups: [[issue.authorId, issue.assignedToId], memberUserIds(members)],
       excludeUserId: user.id,
       subject: `[${project.name}] ${issue.subject}`,
       body: issue.description,

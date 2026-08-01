@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
@@ -26,7 +27,7 @@ export default async function NewIssuePage({
     new DrizzleVersionRepository().listSharedWith(project.id),
     new DrizzleMemberRepository().listByProject(project.id),
   ]);
-  const members = await new DrizzleUserRepository().findByIds(projectMembers.map((member) => member.userId));
+  const members = await new DrizzleUserRepository().findByIds(memberUserIds(projectMembers));
 
   return (
     <main className="p-8 flex flex-col gap-6">

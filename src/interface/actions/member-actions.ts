@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import type { Project } from "@/domain/project/entity";
+import { addGroupToProject } from "@/application/groups/group-membership";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -70,16 +72,66 @@ export async function addMemberAction(_prevState: MemberActionState, formData: F
   }
 
   const memberRepository = new DrizzleMemberRepository();
-  const alreadyMember = await memberRepository.findByUserAndProject(targetUser.id, guard.project.id);
+  const alreadyMember = await memberRepository.findDirectByUserAndProject(targetUser.id, guard.project.id);
   if (alreadyMember) {
     return { error: "既にこのプロジェクトのメンバーです。" };
   }
 
   await memberRepository.create({
     userId: targetUser.id,
+    groupId: null,
+    inheritedFromMemberId: null,
     projectId: guard.project.id,
     roleIds: parsed.data.roleIds,
   });
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/members`);
+  return { error: null };
+}
+
+const addGroupMemberSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  groupId: z.string().uuid(),
+  roleIds: z.array(z.string().uuid()),
+});
+
+export async function addGroupMemberAction(_prevState: MemberActionState, formData: FormData): Promise<MemberActionState> {
+  const parsed = addGroupMemberSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    groupId: formData.get("groupId"),
+    roleIds: formData.getAll("roleIds"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const guard = await requireManageMembers(parsed.data.projectIdentifier);
+  if (!guard.project) {
+    return { error: guard.error };
+  }
+
+  if (parsed.data.roleIds.length === 0) {
+    return { error: "ロールを1つ以上選択してください。" };
+  }
+
+  const groupRepository = new DrizzleGroupRepository();
+  const memberRepository = new DrizzleMemberRepository();
+  const [group, roles, existingGroupMemberships] = await Promise.all([
+    groupRepository.findById(parsed.data.groupId),
+    new DrizzleRoleRepository().findByIds(parsed.data.roleIds),
+    memberRepository.listByGroup(parsed.data.groupId),
+  ]);
+  if (!group) {
+    return { error: "指定されたグループが見つかりません。" };
+  }
+  if (roles.length !== parsed.data.roleIds.length) {
+    return { error: "存在しないロールが指定されました。" };
+  }
+  if (existingGroupMemberships.some((m) => m.projectId === guard.project.id)) {
+    return { error: "このグループは既にこのプロジェクトのメンバーです。" };
+  }
+
+  await addGroupToProject({ groupRepository, memberRepository }, { groupId: group.id, projectId: guard.project.id, roleIds: parsed.data.roleIds });
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/members`);
   return { error: null };

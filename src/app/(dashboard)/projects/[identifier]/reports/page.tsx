@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { memberUserIds } from "@/domain/member/entity";
 import { aggregateIssueCounts, totalCounts, type ReportCounts } from "@/domain/report/issue-report";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
@@ -88,7 +89,7 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
   // Authors/assignees on the actual issues aren't necessarily project members (an admin can
   // author an issue without being added as one), so the user lookup is built from every id
   // that actually appears on an issue, unioned with the member list — not members alone.
-  const relevantUserIds = new Set(members.map((m) => m.userId));
+  const relevantUserIds = new Set(memberUserIds(members));
   for (const issue of issues) {
     relevantUserIds.add(issue.authorId);
     if (issue.assignedToId) relevantUserIds.add(issue.assignedToId);
