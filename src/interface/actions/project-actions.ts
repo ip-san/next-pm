@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { copyProject } from "@/application/projects/copy-project";
 import { createProject } from "@/application/projects/create-project";
 import { updateProject } from "@/application/projects/update-project";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -59,6 +60,63 @@ export async function createProjectAction(
     identifier = project.identifier;
   } catch (error) {
     return { error: error instanceof Error ? error.message : "プロジェクトを作成できませんでした。" };
+  }
+
+  redirect(`/projects/${identifier}`);
+}
+
+const copyProjectSchema = z.object({
+  sourceProjectId: z.string().uuid(),
+  name: z.string().min(1),
+  identifier: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, "半角英数字・ハイフン・アンダースコアのみ使用できます"),
+  description: z.string().default(""),
+  isPublic: z.coerce.boolean().default(true),
+  parentId: z.string().uuid().nullable(),
+  enabledModules: z.array(z.enum(AVAILABLE_MODULES)).default([]),
+  trackerIds: z.array(z.string().uuid()).default([]),
+});
+
+export type CopyProjectActionState = {
+  error: string | null;
+};
+
+// Mirrors Redmine's ProjectsController#copy, which gates :copy on require_admin (a stricter
+// check than the add_project/manage_project permissions the rest of project creation uses
+// here) — so this uses the same isAdmin gate as createProjectAction/NewProjectPage rather
+// than resolveActor/can.
+export async function copyProjectAction(
+  _prevState: CopyProjectActionState,
+  formData: FormData,
+): Promise<CopyProjectActionState> {
+  const user = await currentUserFromCookies();
+  if (!user?.isAdmin) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  const parentIdRaw = formData.get("parentId");
+  const parsed = copyProjectSchema.safeParse({
+    sourceProjectId: formData.get("sourceProjectId"),
+    name: formData.get("name"),
+    identifier: formData.get("identifier"),
+    description: formData.get("description") ?? "",
+    isPublic: formData.get("isPublic") === "on",
+    parentId: parentIdRaw ? parentIdRaw : null,
+    enabledModules: formData.getAll("enabledModules"),
+    trackerIds: formData.getAll("trackerIds"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  let identifier: string;
+  try {
+    const project = await copyProject(new DrizzleProjectRepository(), parsed.data);
+    identifier = project.identifier;
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "プロジェクトをコピーできませんでした。" };
   }
 
   redirect(`/projects/${identifier}`);

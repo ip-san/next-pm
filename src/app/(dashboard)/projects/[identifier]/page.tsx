@@ -124,6 +124,11 @@ export default async function ProjectPage({
             設定
           </Link>
         ) : null}
+        {user?.isAdmin ? (
+          <Link href={`/projects/${identifier}/copy`} className="underline">
+            コピー
+          </Link>
+        ) : null}
       </nav>
       <p className="text-sm text-gray-600">{project.description}</p>
       <dl className="text-sm flex flex-col gap-1">
