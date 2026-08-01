@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 const NAV_LINKS: { module: string; path: string; label: string }[] = [
   { module: "issue_tracking", path: "issues", label: "チケット" },
@@ -21,6 +24,12 @@ export default async function ProjectPage({
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
+    notFound();
+  }
+
+  const user = await currentUserFromCookies();
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "view_project", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
 
