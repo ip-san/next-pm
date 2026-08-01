@@ -21,9 +21,14 @@ export default async function UsersPage() {
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">ユーザー</h1>
-        <Link href="/admin/groups" className="underline text-sm">
-          グループ
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/admin/groups" className="underline text-sm">
+            グループ
+          </Link>
+          <Link href="/admin/projects" className="underline text-sm">
+            プロジェクト
+          </Link>
+        </div>
       </div>
       <table className="text-sm border-collapse">
         <thead>

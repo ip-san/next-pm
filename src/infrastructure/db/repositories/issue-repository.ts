@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { issues } from "@/infrastructure/db/schema/issues";
 import { StaleIssueError, type Issue } from "@/domain/issue/entity";
@@ -128,5 +128,14 @@ export class DrizzleIssueRepository implements IssueRepository {
       )
       .orderBy(desc(issues.createdAt));
     return rows.map(toDomain);
+  }
+
+  async existsOutsideProjectsWithFixedVersion(versionIds: string[], projectIds: string[]): Promise<boolean> {
+    const [row] = await db
+      .select({ id: issues.id })
+      .from(issues)
+      .where(and(inArray(issues.fixedVersionId, versionIds), notInArray(issues.projectId, projectIds)))
+      .limit(1);
+    return row !== undefined;
   }
 }

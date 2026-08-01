@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
+import { isClosedProject } from "@/domain/project/entity";
 import { aggregateIssueCounts } from "@/domain/report/issue-report";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -14,6 +15,7 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { ProjectLifecycleActions } from "./project-lifecycle-actions";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -47,6 +49,7 @@ export default async function ProjectPage({
   }
 
   const canEditProject = can({ permission: "edit_project", project: toAuthorizationProject(project), actor });
+  const canCloseProject = can({ permission: "close_project", project: toAuthorizationProject(project), actor });
   const canViewIssues =
     project.enabledModules.includes("issue_tracking") &&
     can({ permission: "view_issues", project: toAuthorizationProject(project), actor });
@@ -110,6 +113,11 @@ export default async function ProjectPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name}</h1>
+      {isClosedProject(project) ? (
+        <p className="text-sm bg-amber-50 border border-amber-300 text-amber-800 rounded px-3 py-2">
+          このプロジェクトはクローズされているため、読み取り専用です。
+        </p>
+      ) : null}
       <nav className="flex gap-3 text-sm">
         {NAV_LINKS.filter((link) => project.enabledModules.includes(link.module)).map((link) => (
           <Link key={link.path} href={`/projects/${identifier}/${link.path}`} className="underline">
@@ -125,6 +133,7 @@ export default async function ProjectPage({
           </Link>
         ) : null}
       </nav>
+      {canCloseProject ? <ProjectLifecycleActions projectIdentifier={identifier} isClosed={isClosedProject(project)} /> : null}
       <p className="text-sm text-gray-600">{project.description}</p>
       <dl className="text-sm flex flex-col gap-1">
         <div>

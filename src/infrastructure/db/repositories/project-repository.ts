@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, inArray, lt } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { projects } from "@/infrastructure/db/schema/projects";
 import { enabledModules } from "@/infrastructure/db/schema/enabled-modules";
 import { projectTrackers } from "@/infrastructure/db/schema/trackers";
-import type { Project } from "@/domain/project/entity";
+import type { Project, ProjectStatus } from "@/domain/project/entity";
 import type { ProjectRepository, ProjectSettingsUpdate } from "@/domain/project/repository";
 import { isWithinSubtree, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
 
@@ -67,6 +67,22 @@ export class DrizzleProjectRepository implements ProjectRepository {
     const ancestor = all.find((p) => p.id === projectId);
     if (!ancestor) return [];
     return all.filter((p) => p.id !== projectId && isWithinSubtree(ancestor, p));
+  }
+
+  async listAncestors(projectId: string): Promise<Project[]> {
+    const [self] = await db.select({ lft: projects.lft, rgt: projects.rgt }).from(projects).where(eq(projects.id, projectId)).limit(1);
+    if (!self) return [];
+    const rows = await db
+      .select()
+      .from(projects)
+      .where(and(lt(projects.lft, self.lft), gt(projects.rgt, self.rgt)))
+      .orderBy(projects.lft);
+    return attachRelations(rows);
+  }
+
+  async updateStatusForIds(ids: string[], status: ProjectStatus): Promise<void> {
+    if (ids.length === 0) return;
+    await db.update(projects).set({ status }).where(inArray(projects.id, ids));
   }
 
   async createUnderParent(

@@ -39,4 +39,9 @@ export interface IssueRepository {
   update(id: string, expectedLockVersion: number, changes: IssueUpdate): Promise<Issue>;
   /** Full-text search over subject/description, scoped to one project. */
   search(projectId: string, query: string): Promise<Issue[]>;
+  /**
+   * Redmine's Project#archive guard: is any issue of a project OUTSIDE `projectIds`
+   * fixed to one of `versionIds`? Archiving would strand such an issue's target version.
+   */
+  existsOutsideProjectsWithFixedVersion(versionIds: string[], projectIds: string[]): Promise<boolean>;
 }

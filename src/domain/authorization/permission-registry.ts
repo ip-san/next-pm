@@ -54,7 +54,9 @@ interface PermissionDefinition {
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
   view_project: { module: null, readOnly: true },
   edit_project: { module: null, readOnly: false },
-  close_project: { module: null, readOnly: false },
+  // Declared `:read => true` in Redmine — it must survive the closed-project gate,
+  // otherwise a closed project could never be reopened.
+  close_project: { module: null, readOnly: true },
   select_project_modules: { module: null, readOnly: false },
   manage_members: { module: null, readOnly: false },
   manage_versions: { module: null, readOnly: false },

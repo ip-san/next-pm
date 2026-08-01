@@ -53,6 +53,16 @@ describe("authorization-service.can", () => {
     ).toBe(true);
   });
 
+  it("allows close_project on a closed project — reopening must stay possible", () => {
+    expect(
+      can({
+        permission: "close_project",
+        project: project({ isActive: false }),
+        actor: { kind: "admin" },
+      }),
+    ).toBe(true);
+  });
+
   it("denies a permission whose module is not enabled", () => {
     expect(
       can({

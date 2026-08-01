@@ -1,4 +1,4 @@
-import type { Project } from "./entity";
+import type { Project, ProjectStatus } from "./entity";
 import type { NestedSetNode } from "./nested-set";
 
 export interface ProjectSettingsUpdate {
@@ -16,6 +16,10 @@ export interface ProjectRepository {
   listNestedSetNodes(): Promise<NestedSetNode[]>;
   /** Every descendant subproject (not including `projectId` itself), via the lft/rgt nested set. */
   listDescendants(projectId: string): Promise<Project[]>;
+  /** Every ancestor (not including `projectId` itself), root first, via the lft/rgt nested set. */
+  listAncestors(projectId: string): Promise<Project[]>;
+  /** Bulk status transition for close/reopen/archive/unarchive plans (domain/project/lifecycle.ts). */
+  updateStatusForIds(ids: string[], status: ProjectStatus): Promise<void>;
   /** Persists a new project as the rightmost child of `parentId` (or a new root if null). */
   createUnderParent(
     project: Omit<Project, "id" | "lft" | "rgt">,

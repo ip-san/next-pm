@@ -24,3 +24,8 @@ export function isActiveProject(project: Pick<Project, "status">): boolean {
 export function isArchivedProject(project: Pick<Project, "status">): boolean {
   return project.status === "archived";
 }
+
+/** Redmine's Project#closed? */
+export function isClosedProject(project: Pick<Project, "status">): boolean {
+  return project.status === "closed";
+}
