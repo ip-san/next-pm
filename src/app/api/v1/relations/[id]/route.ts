@@ -43,8 +43,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (!can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor })) {

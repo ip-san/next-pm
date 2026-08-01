@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueUpdate } from "@/domain/issue/repository";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
@@ -55,7 +56,7 @@ export async function bulkUpdateIssuesAction(
     return { error: "プロジェクトが見つかりません。", message: null };
   }
 
-  const { actor, roleIds } = await resolveActor(user, project.id);
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = can({ permission: "edit_own_issues", project: projectContext, actor });
@@ -66,7 +67,16 @@ export async function bulkUpdateIssuesAction(
   const changes: IssueUpdate = {};
   if (parsed.data.statusId) changes.statusId = parsed.data.statusId;
   if (parsed.data.priorityId) changes.priorityId = parsed.data.priorityId;
-  if (parsed.data.assignedToId) changes.assignedToId = parsed.data.assignedToId === "__none__" ? null : parsed.data.assignedToId;
+  if (parsed.data.assignedToId) {
+    if (parsed.data.assignedToId === "__none__") {
+      changes.assignedToId = null;
+      changes.assignedToType = null;
+    } else {
+      const assignee = parseAssigneeValue(parsed.data.assignedToId);
+      changes.assignedToId = assignee?.id ?? null;
+      changes.assignedToType = assignee?.type ?? null;
+    }
+  }
   if (parsed.data.doneRatio.trim().length > 0) {
     const doneRatio = Number(parsed.data.doneRatio);
     if (!Number.isFinite(doneRatio) || doneRatio < 0 || doneRatio > 100) {
@@ -92,7 +102,7 @@ export async function bulkUpdateIssuesAction(
     if (
       !issue ||
       issue.projectId !== project.id ||
-      !isPrivateIssueVisible(issue, user.id, visibilityRoles) ||
+      !isPrivateIssueVisible(issue, user.id, userGroupIds, visibilityRoles) ||
       !(canEditAny || (canEditOwn && issue.authorId === user.id))
     ) {
       skipped++;
@@ -110,7 +120,10 @@ export async function bulkUpdateIssuesAction(
           actingUserId: user.id,
           actorRoleIds: roleIds,
           isAuthor: issue.authorId === user.id,
-          isAssignee: issue.assignedToId === user.id,
+          isAssignee:
+            issue.assignedToType === "group"
+              ? issue.assignedToId !== null && userGroupIds.includes(issue.assignedToId)
+              : issue.assignedToId === user.id,
         },
       );
       updated++;

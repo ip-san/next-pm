@@ -20,6 +20,7 @@ export interface SearchProjectInput {
   projectContext: ProjectAuthorizationContext;
   actor: AuthorizationActor;
   userId: string | null;
+  userGroupIds: string[];
   issueVisibilityRoles: { issuesVisibility: IssuesVisibility }[];
   query: string;
 }
@@ -40,7 +41,7 @@ export async function searchProject(repositories: SearchProjectRepositories, inp
 
   if (can({ permission: "view_issues", project: input.projectContext, actor: input.actor })) {
     const issues = await repositories.issueRepository.search(input.projectId, input.query);
-    const visibleIssues = issues.filter((issue) => isPrivateIssueVisible(issue, input.userId, input.issueVisibilityRoles));
+    const visibleIssues = issues.filter((issue) => isPrivateIssueVisible(issue, input.userId, input.userGroupIds, input.issueVisibilityRoles));
     results.push(...visibleIssues.map((issue) => ({ type: "issue" as const, id: issue.id, title: issue.subject, excerpt: issue.description })));
   }
 

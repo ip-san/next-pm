@@ -27,7 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -40,7 +40,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     new DrizzleTrackerRepository().listAll(),
   ]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 

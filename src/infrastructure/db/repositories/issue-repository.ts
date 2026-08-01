@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { issues } from "@/infrastructure/db/schema/issues";
 import { StaleIssueError, type Issue } from "@/domain/issue/entity";
@@ -25,6 +25,7 @@ function toDomain(row: typeof issues.$inferSelect): Issue {
     description: row.description,
     authorId: row.authorId,
     assignedToId: row.assignedToId,
+    assignedToType: row.assignedToType,
     parentId: row.parentId,
     fixedVersionId: row.fixedVersionId,
     categoryId: row.categoryId,
@@ -52,8 +53,13 @@ export class DrizzleIssueRepository implements IssueRepository {
     return rows.map(toDomain);
   }
 
-  async findByAssignee(userId: string): Promise<Issue[]> {
-    const rows = await db.select().from(issues).where(eq(issues.assignedToId, userId)).orderBy(desc(issues.createdAt));
+  async findByAssignee(userId: string, userGroupIds: string[]): Promise<Issue[]> {
+    const directCondition = and(eq(issues.assignedToId, userId), eq(issues.assignedToType, "user"));
+    const condition =
+      userGroupIds.length > 0
+        ? or(directCondition, and(eq(issues.assignedToType, "group"), inArray(issues.assignedToId, userGroupIds)))
+        : directCondition;
+    const rows = await db.select().from(issues).where(condition).orderBy(desc(issues.createdAt));
     return rows.map(toDomain);
   }
 
@@ -80,6 +86,7 @@ export class DrizzleIssueRepository implements IssueRepository {
         description: issue.description,
         authorId: issue.authorId,
         assignedToId: issue.assignedToId,
+        assignedToType: issue.assignedToType,
         parentId: issue.parentId,
         fixedVersionId: issue.fixedVersionId,
         categoryId: issue.categoryId,

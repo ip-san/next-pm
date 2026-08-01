@@ -36,4 +36,9 @@ export class DrizzleGroupRepository implements GroupRepository {
     const rows = await db.select({ userId: groupUsers.userId }).from(groupUsers).where(eq(groupUsers.groupId, groupId));
     return rows.map((row) => row.userId);
   }
+
+  async listGroupIdsForUser(userId: string): Promise<string[]> {
+    const rows = await db.select({ groupId: groupUsers.groupId }).from(groupUsers).where(eq(groupUsers.userId, userId));
+    return rows.map((row) => row.groupId);
+  }
 }

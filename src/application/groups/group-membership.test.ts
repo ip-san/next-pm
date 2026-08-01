@@ -14,6 +14,7 @@ function makeGroupRepository(overrides: Partial<GroupRepository> = {}): GroupRep
     addUser: mock(async () => {}),
     removeUser: mock(async () => {}),
     listUserIds: mock(async () => []),
+    listGroupIdsForUser: mock(async () => []),
     ...overrides,
   };
 }

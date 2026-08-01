@@ -8,6 +8,7 @@ export interface Issue {
   description: string;
   authorId: string;
   assignedToId: string | null;
+  assignedToType: "user" | "group" | null;
   parentId: string | null;
   fixedVersionId: string | null;
   categoryId: string | null;

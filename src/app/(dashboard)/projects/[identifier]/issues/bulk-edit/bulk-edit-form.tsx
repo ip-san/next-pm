@@ -5,6 +5,7 @@ import { bulkUpdateIssuesAction, type BulkEditActionState } from "@/interface/ac
 import type { IssueStatus } from "@/domain/issue-status/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
 import type { User } from "@/domain/user/entity";
+import type { Group } from "@/domain/group/entity";
 
 const initialState: BulkEditActionState = { error: null, message: null };
 
@@ -14,12 +15,14 @@ export function BulkEditForm({
   statuses,
   priorities,
   members,
+  groups,
 }: {
   projectIdentifier: string;
   issueIds: string[];
   statuses: IssueStatus[];
   priorities: Enumeration[];
   members: User[];
+  groups: Group[];
 }) {
   const [state, formAction, pending] = useActionState(bulkUpdateIssuesAction, initialState);
 
@@ -68,6 +71,11 @@ export function BulkEditForm({
           {members.map((member) => (
             <option key={member.id} value={member.id}>
               {member.lastname} {member.firstname}
+            </option>
+          ))}
+          {groups.map((group) => (
+            <option key={group.id} value={`group:${group.id}`}>
+              {group.name}（グループ）
             </option>
           ))}
         </select>

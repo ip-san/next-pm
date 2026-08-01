@@ -28,7 +28,7 @@ export default async function ProjectCalendarPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -49,7 +49,7 @@ export default async function ProjectCalendarPage({
     new DrizzleTrackerRepository().listAll(),
   ]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
 
   const issuesByDay = new Map<string, typeof visibleIssues>();
   for (const issue of visibleIssues) {

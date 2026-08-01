@@ -12,6 +12,7 @@ import type { Enumeration } from "@/domain/enumeration/entity";
 import type { IssueCategory } from "@/domain/issue-category/entity";
 import type { Version } from "@/domain/version/entity";
 import type { User } from "@/domain/user/entity";
+import type { Group } from "@/domain/group/entity";
 
 export function NewIssueForm({
   identifier,
@@ -19,6 +20,7 @@ export function NewIssueForm({
   trackers,
   priorities,
   members,
+  groups,
   categories,
   versions,
 }: {
@@ -27,6 +29,7 @@ export function NewIssueForm({
   trackers: Tracker[];
   priorities: Enumeration[];
   members: User[];
+  groups: Group[];
   categories: IssueCategory[];
   versions: Version[];
 }) {
@@ -122,6 +125,11 @@ export function NewIssueForm({
           {members.map((member) => (
             <option key={member.id} value={member.id}>
               {member.firstname} {member.lastname}
+            </option>
+          ))}
+          {groups.map((group) => (
+            <option key={group.id} value={`group:${group.id}`}>
+              {group.name}（グループ）
             </option>
           ))}
         </select>

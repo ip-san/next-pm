@@ -27,7 +27,7 @@ export default async function ProjectGanttPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -43,7 +43,7 @@ export default async function ProjectGanttPage({
     new DrizzleTrackerRepository().listAll(),
   ]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
   const rows = buildGanttRows(visibleIssues, window);
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 

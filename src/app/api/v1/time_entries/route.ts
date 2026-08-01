@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   const entries = allEntries.filter((entry) => {
     if (!entry.issueId) return true;
     const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles);
+    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
   });
 
   return NextResponse.json({ time_entries: entries });
@@ -114,11 +114,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   // Checked before the permission gate, and returns the same not_found a nonexistent
   // issue would — logging time against an issue implicitly confirms it exists, so a
   // private issue the actor can't see must look identical to one that isn't there.
-  if (issue && !isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  if (issue && !isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (!can({ permission: "log_time", project: toAuthorizationProject(project), actor })) {

@@ -28,7 +28,7 @@ export default async function ProjectIssuesPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor, roleIds } = await resolveActor(user, project.id);
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -57,7 +57,7 @@ export default async function ProjectIssuesPage({
     new DrizzleTrackerRepository().listAll(),
   ]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 

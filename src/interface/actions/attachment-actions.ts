@@ -54,14 +54,14 @@ export async function uploadIssueAttachmentAction(
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   const hasEditIssues = can({ permission: "edit_issues", project: projectContext, actor });
   const hasEditOwnIssues = can({ permission: "edit_own_issues", project: projectContext, actor });
   if (!hasEditIssues && !(hasEditOwnIssues && issue.authorId === user.id)) {
     return { error: "この操作を行う権限がありません。" };
   }
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
 
@@ -131,8 +131,8 @@ export async function deleteIssueAttachmentAction(
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
   const projectContext = toAuthorizationProject(project);

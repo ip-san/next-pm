@@ -13,6 +13,7 @@ function issue(overrides: Partial<Issue>): Issue {
     description: "",
     authorId: "user-1",
     assignedToId: null,
+    assignedToType: null,
     parentId: null,
     fixedVersionId: null,
     categoryId: null,

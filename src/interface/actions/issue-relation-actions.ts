@@ -54,9 +54,9 @@ export async function createIssueRelationAction(
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  if (!isPrivateIssueVisible(issue, user.id, visibilityRoles)) {
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, visibilityRoles)) {
     return { error: "チケットが見つかりません。" };
   }
   if (!can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor })) {
@@ -67,7 +67,7 @@ export async function createIssueRelationAction(
   // to it would both confirm its existence and let the actor manipulate a private issue
   // they can't see.
   const targetIssue = await issueRepository.findById(parsed.data.targetIssueId);
-  if (!targetIssue || !isPrivateIssueVisible(targetIssue, user.id, visibilityRoles)) {
+  if (!targetIssue || !isPrivateIssueVisible(targetIssue, user.id, userGroupIds, visibilityRoles)) {
     return { error: "対象のチケットが見つかりません。" };
   }
 
@@ -132,8 +132,8 @@ export async function deleteIssueRelationAction(
     return { error: "関連が見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
   if (!can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor })) {

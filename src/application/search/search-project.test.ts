@@ -31,6 +31,7 @@ function issue(overrides: Partial<Issue>): Issue {
     description: "",
     authorId: "author-1",
     assignedToId: null,
+    assignedToType: null,
     parentId: null,
     fixedVersionId: null,
     categoryId: null,
@@ -64,6 +65,7 @@ describe("searchProject", () => {
       projectContext: activeProject,
       actor: memberActor,
       userId: "user-1",
+      userGroupIds: [],
       issueVisibilityRoles: [managerRole],
       query: "   ",
     });
@@ -80,6 +82,7 @@ describe("searchProject", () => {
       projectContext: activeProject,
       actor: memberActor,
       userId: "user-1",
+      userGroupIds: [],
       issueVisibilityRoles: [managerRole],
       query: "bug",
     });
@@ -98,6 +101,7 @@ describe("searchProject", () => {
       projectContext: activeProject,
       actor: { kind: "member", roles: [roleWithoutAllVisibility] },
       userId: "user-1",
+      userGroupIds: [],
       issueVisibilityRoles: [roleWithoutAllVisibility],
       query: "bug",
     });
@@ -114,6 +118,7 @@ describe("searchProject", () => {
       projectContext: activeProject,
       actor: { kind: "member", roles: [viewOnlyIssuesRole] },
       userId: "user-1",
+      userGroupIds: [],
       issueVisibilityRoles: [viewOnlyIssuesRole],
       query: "announcement",
     });
@@ -133,6 +138,7 @@ describe("searchProject", () => {
       projectContext: activeProject,
       actor: memberActor,
       userId: "user-1",
+      userGroupIds: [],
       issueVisibilityRoles: [managerRole],
       query: "x",
     });

@@ -3,6 +3,7 @@ import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/a
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssuesVisibility } from "@/domain/role/entity";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 
@@ -10,6 +11,8 @@ export interface ResolvedActor {
   actor: AuthorizationActor;
   /** Role ids to feed into workflow transition checks — mirrors Issue#roles_for_workflow. */
   roleIds: string[];
+  /** Group ids `user` belongs to — feeds `visibleIssueFilter`/`isPrivateIssueVisible` for group-assigned private issues. Empty for anonymous. */
+  userGroupIds: string[];
 }
 
 export function toAuthorizationProject(project: {
@@ -31,22 +34,24 @@ export async function resolveActor(user: User | null, projectId: string): Promis
 
   if (!user) {
     const anonymous = await roleRepository.findBuiltinAnonymous();
-    return { actor: { kind: "anonymous", role: anonymous }, roleIds: [anonymous.id] };
+    return { actor: { kind: "anonymous", role: anonymous }, roleIds: [anonymous.id], userGroupIds: [] };
   }
+
+  const userGroupIds = await new DrizzleGroupRepository().listGroupIdsForUser(user.id);
 
   if (user.isAdmin) {
     const allRoles = await roleRepository.listAssignable();
-    return { actor: { kind: "admin" }, roleIds: allRoles.map((r) => r.id) };
+    return { actor: { kind: "admin" }, roleIds: allRoles.map((r) => r.id), userGroupIds };
   }
 
   const member = await new DrizzleMemberRepository().findByUserAndProject(user.id, projectId);
   if (member) {
     const roles = await roleRepository.findByIds(member.roleIds);
-    return { actor: { kind: "member", roles }, roleIds: roles.map((r) => r.id) };
+    return { actor: { kind: "member", roles }, roleIds: roles.map((r) => r.id), userGroupIds };
   }
 
   const nonMember = await roleRepository.findBuiltinNonMember();
-  return { actor: { kind: "non_member", role: nonMember }, roleIds: [nonMember.id] };
+  return { actor: { kind: "non_member", role: nonMember }, roleIds: [nonMember.id], userGroupIds };
 }
 
 /**
@@ -76,7 +81,8 @@ export function issuesVisibilityRoles(actor: AuthorizationActor): { issuesVisibi
 export function visibleIssueFilter(
   userId: string | null,
   actor: AuthorizationActor,
-): (issue: Pick<Issue, "isPrivate" | "authorId" | "assignedToId">) => boolean {
+  userGroupIds: string[],
+): (issue: Pick<Issue, "isPrivate" | "authorId" | "assignedToId" | "assignedToType">) => boolean {
   const roles = issuesVisibilityRoles(actor);
-  return (issue) => isPrivateIssueVisible(issue, userId, roles);
+  return (issue) => isPrivateIssueVisible(issue, userId, userGroupIds, roles);
 }

@@ -36,13 +36,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   // Mirrors Redmine raising RecordNotFound for an invisible issue rather than 403 —
   // doesn't confirm to an unauthorized caller that a given private issue id exists.
-  if (!isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -96,11 +96,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
   }
 
-  const { actor, roleIds } = await resolveActor(user, project.id);
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   const isAuthor = existing.authorId === user.id;
-  const isAssignee = existing.assignedToId === user.id;
+  const isAssignee =
+    existing.assignedToType === "group"
+      ? existing.assignedToId !== null && userGroupIds.includes(existing.assignedToId)
+      : existing.assignedToId === user.id;
   const projectContext = toAuthorizationProject(project);
-  if (!isPrivateIssueVisible(existing, user.id, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
@@ -139,6 +142,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           subject: parsed.data.subject,
           description: parsed.data.description,
           assignedToId: parsed.data.assigned_to_id,
+          assignedToType: parsed.data.assigned_to_id === undefined ? undefined : parsed.data.assigned_to_id ? "user" : null,
           fixedVersionId: parsed.data.fixed_version_id,
           categoryId: parsed.data.category_id,
           isPrivate: parsed.data.is_private,

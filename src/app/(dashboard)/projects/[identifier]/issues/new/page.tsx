@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -37,6 +38,8 @@ export default async function NewIssuePage({
     new DrizzleMemberRepository().listByProject(project.id),
   ]);
   const members = await new DrizzleUserRepository().findByIds(memberUserIds(projectMembers));
+  const projectGroupIds = new Set(projectMembers.flatMap((member) => (member.groupId ? [member.groupId] : [])));
+  const groups = (await new DrizzleGroupRepository().listAll()).filter((group) => projectGroupIds.has(group.id));
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -54,6 +57,7 @@ export default async function NewIssuePage({
           trackers={trackers}
           priorities={priorities}
           members={members}
+          groups={groups}
           categories={categories}
           versions={versions}
         />

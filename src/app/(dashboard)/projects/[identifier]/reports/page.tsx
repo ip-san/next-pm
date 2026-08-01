@@ -72,7 +72,7 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -89,7 +89,7 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
     new DrizzleMemberRepository().listByProject(project.id),
     projectRepository.listDescendants(project.id),
   ]);
-  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor));
+  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds));
   const closedStatusIds = new Set(statuses.filter((s) => s.isClosed).map((s) => s.id));
 
   // Subproject counts are issues actually IN each subproject, not this project's own issues
@@ -99,13 +99,13 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
   const visibleSubprojects: typeof descendants = [];
   const subprojectIssues: typeof allIssues = [];
   for (const subproject of descendants) {
-    const { actor: subActor } = await resolveActor(user, subproject.id);
+    const { actor: subActor, userGroupIds: subUserGroupIds } = await resolveActor(user, subproject.id);
     if (!can({ permission: "view_issues", project: toAuthorizationProject(subproject), actor: subActor })) {
       continue;
     }
     visibleSubprojects.push(subproject);
     const subIssues = await issueRepository.listByProject(subproject.id);
-    subprojectIssues.push(...subIssues.filter(visibleIssueFilter(user?.id ?? null, subActor)));
+    subprojectIssues.push(...subIssues.filter(visibleIssueFilter(user?.id ?? null, subActor, subUserGroupIds)));
   }
 
   // Authors/assignees on the actual issues aren't necessarily project members (an admin can

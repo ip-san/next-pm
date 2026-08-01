@@ -45,11 +45,11 @@ export async function toggleIssueWatchAction(_prevState: ToggleWatchActionState,
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
   }
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
 
@@ -96,11 +96,11 @@ export async function addIssueWatcherAction(_prevState: WatcherActionState, form
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
   }
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
 
@@ -146,11 +146,11 @@ export async function removeIssueWatcherAction(_prevState: WatcherActionState, f
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
   }
-  if (!isPrivateIssueVisible(issue, user.id, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
 

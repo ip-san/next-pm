@@ -30,11 +30,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    const { actor } = await resolveActor(user, project.id);
+    const { actor, userGroupIds } = await resolveActor(user, project.id);
     if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (!isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor))) {
+    if (!isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else if (attachment.containerType === "Document") {

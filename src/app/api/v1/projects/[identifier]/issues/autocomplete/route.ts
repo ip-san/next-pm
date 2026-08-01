@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const matches = await new DrizzleIssueRepository().search(project.id, query);
-  const visible = matches.filter(visibleIssueFilter(user?.id ?? null, actor)).slice(0, RESULT_LIMIT);
+  const visible = matches.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds)).slice(0, RESULT_LIMIT);
 
   return NextResponse.json({ results: visible.map((issue) => ({ id: issue.id, subject: issue.subject })) });
 }

@@ -30,7 +30,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -41,7 +41,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
     new DrizzleIssueRepository().listByProject(project.id),
     new DrizzleIssueStatusRepository().listAll(),
   ]);
-  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor));
+  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds));
   const statusById = new Map(statuses.map((status) => [status.id, status]));
 
   return (

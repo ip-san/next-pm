@@ -7,6 +7,7 @@ export interface IssueUpdate {
   subject?: string;
   description?: string;
   assignedToId?: string | null;
+  assignedToType?: "user" | "group" | null;
   fixedVersionId?: string | null;
   categoryId?: string | null;
   isPrivate?: boolean;
@@ -19,8 +20,12 @@ export interface IssueUpdate {
 export interface IssueRepository {
   findById(id: string): Promise<Issue | null>;
   listByProject(projectId: string, predicates?: CompiledPredicate[]): Promise<Issue[]>;
-  /** Across every project — callers must filter by per-project visibility themselves. */
-  findByAssignee(userId: string): Promise<Issue[]>;
+  /**
+   * Across every project — callers must filter by per-project visibility themselves.
+   * Matches issues assigned directly to `userId` or to any group in `userGroupIds`
+   * (mirrors Redmine's Issue.assigned_to_condition, which resolves Principal membership).
+   */
+  findByAssignee(userId: string, userGroupIds: string[]): Promise<Issue[]>;
   /** Across every project — callers must filter by per-project visibility themselves. */
   findByAuthor(userId: string): Promise<Issue[]>;
   /** Across every project — callers must filter by per-project visibility themselves. */

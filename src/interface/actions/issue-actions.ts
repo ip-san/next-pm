@@ -3,12 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { updateIssue, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
@@ -40,7 +42,7 @@ export async function createIssueFormAction(
     return { ok: false, error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
@@ -50,8 +52,15 @@ export async function createIssueFormAction(
   }
 
   const members = await new DrizzleMemberRepository().listByProject(project.id);
-  if (parsed.data.assignedToId && !members.some((member) => member.userId === parsed.data.assignedToId)) {
-    return { ok: false, error: "担当者が見つかりません。" };
+  const assignee = parseAssigneeValue(parsed.data.assignedToId);
+  if (assignee) {
+    const isValidAssignee =
+      assignee.type === "user"
+        ? members.some((member) => member.userId === assignee.id)
+        : members.some((member) => member.groupId === assignee.id);
+    if (!isValidAssignee) {
+      return { ok: false, error: "担当者が見つかりません。" };
+    }
   }
 
   if (parsed.data.categoryId) {
@@ -75,7 +84,7 @@ export async function createIssueFormAction(
     if (
       !parentIssue ||
       parentIssue.projectId !== project.id ||
-      !isPrivateIssueVisible(parentIssue, user.id, issuesVisibilityRoles(actor))
+      !isPrivateIssueVisible(parentIssue, user.id, userGroupIds, issuesVisibilityRoles(actor))
     ) {
       return { ok: false, error: "親チケットが見つかりません。" };
     }
@@ -99,7 +108,8 @@ export async function createIssueFormAction(
       subject: parsed.data.subject,
       description: parsed.data.description,
       authorId: user.id,
-      assignedToId: parsed.data.assignedToId || null,
+      assignedToId: assignee?.id ?? null,
+      assignedToType: assignee?.type ?? null,
       parentId: parsed.data.parentId || null,
       fixedVersionId: parsed.data.fixedVersionId || null,
       categoryId: parsed.data.categoryId || null,
@@ -110,10 +120,15 @@ export async function createIssueFormAction(
     },
   );
 
+  const assigneeUserIds =
+    issue.assignedToType === "group" && issue.assignedToId
+      ? await new DrizzleGroupRepository().listUserIds(issue.assignedToId)
+      : [issue.assignedToId];
+
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
     {
-      recipientGroups: [[issue.authorId, issue.assignedToId], memberUserIds(members)],
+      recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(members)],
       excludeUserId: user.id,
       subject: `[${project.name}] ${issue.subject}`,
       body: issue.description,
@@ -166,12 +181,15 @@ export async function updateIssueStatusAction(
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor, roleIds } = await resolveActor(user, project.id);
-  if (!isPrivateIssueVisible(existing, user.id, issuesVisibilityRoles(actor))) {
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
   const isAuthor = existing.authorId === user.id;
-  const isAssignee = existing.assignedToId === user.id;
+  const isAssignee =
+    existing.assignedToType === "group"
+      ? existing.assignedToId !== null && userGroupIds.includes(existing.assignedToId)
+      : existing.assignedToId === user.id;
   const projectContext = toAuthorizationProject(project);
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });

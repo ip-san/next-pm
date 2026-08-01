@@ -20,7 +20,7 @@ export default async function ProjectTimeEntriesPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -42,7 +42,7 @@ export default async function ProjectTimeEntriesPage({
   const entries = allEntries.filter((entry) => {
     if (!entry.issueId) return true;
     const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles);
+    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
   });
 
   const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);

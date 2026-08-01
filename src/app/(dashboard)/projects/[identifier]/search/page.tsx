@@ -29,7 +29,7 @@ export default async function SearchPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
 
   const results = await searchProject(
     {
@@ -43,6 +43,7 @@ export default async function SearchPage({
       projectContext: toAuthorizationProject(project),
       actor,
       userId: user?.id ?? null,
+      userGroupIds,
       issueVisibilityRoles: issuesVisibilityRoles(actor),
       query,
     },

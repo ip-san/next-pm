@@ -21,7 +21,7 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -31,7 +31,7 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
     new DrizzleIssueRepository().listByProject(project.id),
     new DrizzleIssueStatusRepository().listAll(),
   ]);
-  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor));
+  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds));
   const statusById = new Map(statuses.map((status) => [status.id, status]));
 
   const openVersions = versions

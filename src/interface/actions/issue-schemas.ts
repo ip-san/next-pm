@@ -14,7 +14,8 @@ export const createIssueFormSchema = z.object({
   priorityId: z.string().uuid(),
   subject: z.string().min(1, "件名を入力してください。"),
   description: z.string(),
-  assignedToId: z.string().uuid().or(z.literal("")),
+  /** A bare uuid (user) or "group:<uuid>" (group) — the "group:" prefix is stripped and validated server-side, since zod has no way to express "uuid, optionally prefixed" cleanly. */
+  assignedToId: z.string(),
   categoryId: z.string().uuid().or(z.literal("")),
   fixedVersionId: z.string().uuid().or(z.literal("")),
   parentId: z.string().uuid().or(z.literal("")),

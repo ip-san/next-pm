@@ -56,10 +56,10 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const { actor, roleIds } = await resolveActor(user, project.id);
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   if (
     !can({ permission: "view_issues", project: toAuthorizationProject(project), actor }) ||
-    !isPrivateIssueVisible(issue, user?.id ?? null, issuesVisibilityRoles(actor))
+    !isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))
   ) {
     notFound();
   }
@@ -100,7 +100,7 @@ export default async function IssueDetailPage({
     issueRepository.listByProject(issue.projectId),
     new DrizzleIssueRelationRepository().listForIssue(issue.id),
   ]);
-  const isVisibleToActor = visibleIssueFilter(user?.id ?? null, actor);
+  const isVisibleToActor = visibleIssueFilter(user?.id ?? null, actor, userGroupIds);
 
   const visibleParentIssue = parentIssue && isVisibleToActor(parentIssue) ? parentIssue : null;
   const childIssues = projectIssues.filter((candidate) => candidate.parentId === issue.id && isVisibleToActor(candidate));

@@ -25,14 +25,14 @@ async function loadVisibleIssue(id: string, userId: string | null, request: Requ
   if (!project) return { error: NextResponse.json({ error: "not_found" }, { status: 404 }) } as const;
 
   const { user } = await resolveUser(request);
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return { error: NextResponse.json({ error: "not_found" }, { status: 404 }) } as const;
   }
-  if (!isPrivateIssueVisible(issue, userId, issuesVisibilityRoles(actor))) {
+  if (!isPrivateIssueVisible(issue, userId, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: NextResponse.json({ error: "not_found" }, { status: 404 }) } as const;
   }
-  return { issue, project, actor } as const;
+  return { issue, project, actor, userGroupIds } as const;
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   for (const relation of allRelations) {
     const otherId = relation.issueFromId === loaded.issue.id ? relation.issueToId : relation.issueFromId;
     const other = await issueRepository.findById(otherId);
-    if (other && isPrivateIssueVisible(other, user?.id ?? null, visibilityRoles)) {
+    if (other && isPrivateIssueVisible(other, user?.id ?? null, loaded.userGroupIds, visibilityRoles)) {
       relations.push(relation);
     }
   }
@@ -92,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Target issue must be independently visible — otherwise the relation would confirm its
   // existence and let this actor attach to it regardless of their own visibility scope.
   const targetIssue = await new DrizzleIssueRepository().findById(parsed.data.issue_to_id);
-  if (!targetIssue || !isPrivateIssueVisible(targetIssue, user.id, issuesVisibilityRoles(loaded.actor))) {
+  if (!targetIssue || !isPrivateIssueVisible(targetIssue, user.id, loaded.userGroupIds, issuesVisibilityRoles(loaded.actor))) {
     return NextResponse.json({ error: "invalid_issue_to_id" }, { status: 422 });
   }
 

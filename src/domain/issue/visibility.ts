@@ -14,15 +14,19 @@ import type { Issue } from "./entity";
  * only "all" differs.
  */
 export function isPrivateIssueVisible(
-  issue: Pick<Issue, "isPrivate" | "authorId" | "assignedToId">,
+  issue: Pick<Issue, "isPrivate" | "authorId" | "assignedToId" | "assignedToType">,
   userId: string | null,
+  userGroupIds: string[],
   roles: { issuesVisibility: IssuesVisibility }[],
 ): boolean {
   if (!issue.isPrivate) return true;
   if (!userId) return false; // anonymous visitors never see private issues
 
-  const isAuthorOrAssignee = issue.authorId === userId || issue.assignedToId === userId;
-  if (isAuthorOrAssignee) return true;
+  const isAuthor = issue.authorId === userId;
+  const isDirectAssignee = issue.assignedToType !== "group" && issue.assignedToId === userId;
+  const isGroupAssignee =
+    issue.assignedToType === "group" && issue.assignedToId !== null && userGroupIds.includes(issue.assignedToId);
+  if (isAuthor || isDirectAssignee || isGroupAssignee) return true;
 
   return roles.some((role) => role.issuesVisibility === "all");
 }

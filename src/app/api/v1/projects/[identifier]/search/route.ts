@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const user = await resolveUser(request);
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
 
   const results = await searchProject(
     {
@@ -43,6 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       projectContext: toAuthorizationProject(project),
       actor,
       userId: user?.id ?? null,
+      userGroupIds,
       issueVisibilityRoles: issuesVisibilityRoles(actor),
       query,
     },

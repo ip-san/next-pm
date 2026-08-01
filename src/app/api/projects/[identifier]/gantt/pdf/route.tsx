@@ -32,7 +32,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -43,7 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   const [allIssues, trackers] = await Promise.all([new DrizzleIssueRepository().listByProject(project.id), new DrizzleTrackerRepository().listAll()]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
   const ganttRows = buildGanttRows(visibleIssues, window);
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -52,8 +53,9 @@ export default async function MyPage() {
   }
 
   const issueRepository = new DrizzleIssueRepository();
+  const userGroupIds = await new DrizzleGroupRepository().listGroupIdsForUser(user.id);
   const [assigned, reported, watchedIds] = await Promise.all([
-    issueRepository.findByAssignee(user.id),
+    issueRepository.findByAssignee(user.id, userGroupIds),
     issueRepository.findByAuthor(user.id),
     new DrizzleWatcherRepository().listWatchedIds("Issue", user.id),
   ]);
@@ -70,11 +72,11 @@ export default async function MyPage() {
     [...projectIds].map(async (projectId) => {
       const project = await projectRepository.findById(projectId);
       if (!project) return;
-      const { actor } = await resolveActor(user, projectId);
+      const { actor, userGroupIds: actorGroupIds } = await resolveActor(user, projectId);
       if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) return;
       visibleProjectIds.add(projectId);
       projectIdentifierById.set(projectId, project.identifier);
-      issueFilters.set(projectId, visibleIssueFilter(user.id, actor));
+      issueFilters.set(projectId, visibleIssueFilter(user.id, actor, actorGroupIds));
     }),
   );
 

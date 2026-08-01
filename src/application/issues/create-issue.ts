@@ -10,6 +10,7 @@ export interface CreateIssueInput {
   description: string;
   authorId: string;
   assignedToId: string | null;
+  assignedToType: "user" | "group" | null;
   parentId: string | null;
   fixedVersionId: string | null;
   categoryId: string | null;
@@ -37,6 +38,7 @@ export async function createIssue(
     description: input.description,
     authorId: input.authorId,
     assignedToId: input.assignedToId,
+    assignedToType: input.assignedToType,
     parentId: input.parentId,
     fixedVersionId: input.fixedVersionId,
     categoryId: input.categoryId,

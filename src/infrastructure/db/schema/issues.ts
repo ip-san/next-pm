@@ -26,7 +26,9 @@ export const issues = pgTable("issues", {
   authorId: uuid("author_id")
     .notNull()
     .references(() => users.id),
-  assignedToId: uuid("assigned_to_id").references(() => users.id),
+  /** Principal id: a user id when assignedToType is "user", a group id when "group". No FK — the referenced table is polymorphic. */
+  assignedToId: uuid("assigned_to_id"),
+  assignedToType: text("assigned_to_type", { enum: ["user", "group"] }),
   /** Adjacency-list subtask tree (not a nested set) — matches the plan's simplification of Redmine's issue side. */
   parentId: uuid("parent_id").references((): AnyPgColumn => issues.id, { onDelete: "set null" }),
   fixedVersionId: uuid("fixed_version_id").references(() => versions.id, { onDelete: "set null" }),

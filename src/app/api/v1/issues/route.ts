@@ -34,14 +34,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const visibilityRoles = issuesVisibilityRoles(actor);
   const allIssues = await new DrizzleIssueRepository().listByProject(project.id);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles));
+  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
   return NextResponse.json({ issues });
 }
 
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     if (
       !parentIssue ||
       parentIssue.projectId !== project.id ||
-      !isPrivateIssueVisible(parentIssue, user.id, issuesVisibilityRoles(actor))
+      !isPrivateIssueVisible(parentIssue, user.id, userGroupIds, issuesVisibilityRoles(actor))
     ) {
       return NextResponse.json({ error: "invalid_parent_id" }, { status: 422 });
     }
@@ -135,6 +135,7 @@ export async function POST(request: Request) {
       description: parsed.data.description,
       authorId: user.id,
       assignedToId: parsed.data.assigned_to_id,
+      assignedToType: parsed.data.assigned_to_id ? "user" : null,
       parentId: parsed.data.parent_id,
       fixedVersionId: parsed.data.fixed_version_id,
       categoryId: parsed.data.category_id,

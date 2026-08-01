@@ -3,6 +3,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -36,7 +37,7 @@ export default async function BulkEditPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -56,7 +57,7 @@ export default async function BulkEditPage({
   const issues = candidateIssues.filter(
     (issue) =>
       issue.projectId === project.id &&
-      isPrivateIssueVisible(issue, user?.id ?? null, visibilityRoles) &&
+      isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles) &&
       (canEditAny || (canEditOwn && issue.authorId === user?.id)),
   );
 
@@ -75,6 +76,8 @@ export default async function BulkEditPage({
     new DrizzleMemberRepository().listByProject(project.id),
   ]);
   const memberUsers = await new DrizzleUserRepository().findByIds(memberUserIds(members));
+  const projectGroupIds = new Set(members.flatMap((member) => (member.groupId ? [member.groupId] : [])));
+  const groups = (await new DrizzleGroupRepository().listAll()).filter((group) => projectGroupIds.has(group.id));
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -92,6 +95,7 @@ export default async function BulkEditPage({
         statuses={statuses}
         priorities={priorities}
         members={memberUsers}
+        groups={groups}
       />
     </main>
   );
