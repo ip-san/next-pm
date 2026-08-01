@@ -81,6 +81,7 @@ export function NewIssueForm({
             </option>
           ))}
         </select>
+        {errors.trackerId ? <p className="text-sm text-red-600">{errors.trackerId.message}</p> : null}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -94,6 +95,7 @@ export function NewIssueForm({
             </option>
           ))}
         </select>
+        {errors.priorityId ? <p className="text-sm text-red-600">{errors.priorityId.message}</p> : null}
       </div>
 
       <div className="flex flex-col gap-1">

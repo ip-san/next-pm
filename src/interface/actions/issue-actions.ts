@@ -45,6 +45,10 @@ export async function createIssueFormAction(
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
 
+  if (!project.trackerIds.includes(parsed.data.trackerId)) {
+    return { ok: false, error: "トラッカーが見つかりません。" };
+  }
+
   const members = await new DrizzleMemberRepository().listByProject(project.id);
   if (parsed.data.assignedToId && !members.some((member) => member.userId === parsed.data.assignedToId)) {
     return { ok: false, error: "担当者が見つかりません。" };
