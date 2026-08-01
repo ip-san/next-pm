@@ -52,6 +52,10 @@ export class DrizzleRoleRepository implements RoleRepository {
     return rows.map(toDomain);
   }
 
+  async updatePermissions(roleId: string, permissions: Role["permissions"]): Promise<void> {
+    await db.update(roles).set({ permissions }).where(eq(roles.id, roleId));
+  }
+
   async create(role: Omit<Role, "id">): Promise<Role> {
     const [row] = await db
       .insert(roles)

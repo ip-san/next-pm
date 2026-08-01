@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isMemberRole } from "@/domain/role/entity";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -17,7 +18,12 @@ export default async function RolesPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ロール</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">ロール</h1>
+        <Link href="/admin/roles/permissions" className="text-sm underline">
+          権限マトリクスを編集
+        </Link>
+      </div>
       <ul className="flex flex-col gap-2 text-sm">
         {roles.map((role) => (
           <li key={role.id} className="border rounded p-3">

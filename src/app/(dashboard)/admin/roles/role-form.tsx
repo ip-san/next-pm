@@ -2,31 +2,9 @@
 
 import { useActionState } from "react";
 import { createRoleAction, type AdminActionState } from "@/interface/actions/admin-actions";
-import { PERMISSION_REGISTRY } from "@/domain/authorization/permission-registry";
+import { MODULE_LABEL, PERMISSIONS_BY_MODULE } from "./permission-labels";
 
 const initialState: AdminActionState = { error: null };
-
-const MODULE_LABEL: Record<string, string> = {
-  core: "プロジェクト",
-  issue_tracking: "チケット管理",
-  time_tracking: "工数管理",
-  wiki: "Wiki",
-  boards: "フォーラム",
-  news: "ニュース",
-  documents: "ドキュメント",
-  files: "ファイル",
-  repository: "リポジトリ",
-};
-
-const PERMISSIONS_BY_MODULE = Object.entries(PERMISSION_REGISTRY).reduce<Record<string, string[]>>(
-  (acc, [key, def]) => {
-    const moduleKey = def.module ?? "core";
-    acc[moduleKey] = acc[moduleKey] ?? [];
-    acc[moduleKey].push(key);
-    return acc;
-  },
-  {},
-);
 
 export function RoleForm() {
   const [state, formAction, pending] = useActionState(createRoleAction, initialState);
