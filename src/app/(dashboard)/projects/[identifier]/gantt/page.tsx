@@ -60,6 +60,9 @@ export default async function ProjectGanttPage({
           <Link href={`/projects/${identifier}/issues`} className="underline">
             チケット一覧
           </Link>
+          <a href={`/api/projects/${identifier}/gantt/pdf?year=${year}&month=${month}`} className="underline">
+            PDF
+          </a>
           <Link href={`/projects/${identifier}/gantt?year=${next.year}&month=${next.month}`} className="underline">
             次月 »
           </Link>
