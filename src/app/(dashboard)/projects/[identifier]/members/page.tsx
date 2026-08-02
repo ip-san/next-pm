@@ -8,6 +8,7 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { ProjectSettingsTabs } from "../../project-settings-tabs";
 import { AddGroupMemberForm } from "./add-group-member-form";
 import { AddMemberForm } from "./add-member-form";
 import { RemoveMemberButton } from "./remove-member-button";
@@ -24,10 +25,12 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  const canManageMembers = can({ permission: "manage_members", project: toAuthorizationProject(project), actor });
+  const projectContext = toAuthorizationProject(project);
+  const canManageMembers = can({ permission: "manage_members", project: projectContext, actor });
   if (!canManageMembers) {
     notFound();
   }
+  const hasIssueTracking = project.enabledModules.includes("issue_tracking");
 
   const [members, roles, groups] = await Promise.all([
     new DrizzleMemberRepository().listByProject(project.id),
@@ -57,6 +60,16 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name} — メンバー</h1>
+      <ProjectSettingsTabs
+        identifier={identifier}
+        active="members"
+        visibleTabs={{
+          settings: can({ permission: "edit_project", project: projectContext, actor }),
+          members: true,
+          versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
+          issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+        }}
+      />
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">

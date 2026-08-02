@@ -4,6 +4,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { ProjectSettingsTabs } from "../../project-settings-tabs";
 import { ProjectSettingsForm } from "./project-settings-form";
 
 export const dynamic = "force-dynamic";
@@ -17,15 +18,27 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_project", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "edit_project", project: projectContext, actor })) {
     notFound();
   }
 
   const trackers = await new DrizzleTrackerRepository().listAll();
+  const hasIssueTracking = project.enabledModules.includes("issue_tracking");
 
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name} — 設定</h1>
+      <ProjectSettingsTabs
+        identifier={identifier}
+        active="settings"
+        visibleTabs={{
+          settings: true,
+          members: can({ permission: "manage_members", project: projectContext, actor }),
+          versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
+          issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+        }}
+      />
       <ProjectSettingsForm project={project} trackers={trackers} />
     </main>
   );

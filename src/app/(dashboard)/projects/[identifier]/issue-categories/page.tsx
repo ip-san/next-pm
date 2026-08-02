@@ -8,6 +8,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { ProjectSettingsTabs } from "../../project-settings-tabs";
 import { IssueCategoryCreateForm } from "./issue-category-create-form";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "manage_issue_categories", project: projectContext, actor })) {
     notFound();
   }
 
@@ -36,6 +38,16 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name} — チケットカテゴリ</h1>
+      <ProjectSettingsTabs
+        identifier={identifier}
+        active="issueCategories"
+        visibleTabs={{
+          settings: can({ permission: "edit_project", project: projectContext, actor }),
+          members: can({ permission: "manage_members", project: projectContext, actor }),
+          versions: can({ permission: "view_issues", project: projectContext, actor }),
+          issueCategories: true,
+        }}
+      />
 
       <table className="text-sm w-full">
         <thead>

@@ -8,6 +8,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { ProjectSettingsTabs } from "../../project-settings-tabs";
 import { VersionCreateForm } from "./version-create-form";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +32,12 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
 
   const user = await currentUserFromCookies();
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "view_issues", project: projectContext, actor })) {
     notFound();
   }
-  const canManageVersions = can({ permission: "manage_versions", project: toAuthorizationProject(project), actor });
+  const canManageVersions = can({ permission: "manage_versions", project: projectContext, actor });
+  const hasIssueTracking = project.enabledModules.includes("issue_tracking");
 
   const [versions, allIssues, statuses] = await Promise.all([
     new DrizzleVersionRepository().listByProject(project.id),
@@ -52,6 +55,16 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
           ロードマップを見る
         </Link>
       </div>
+      <ProjectSettingsTabs
+        identifier={identifier}
+        active="versions"
+        visibleTabs={{
+          settings: can({ permission: "edit_project", project: projectContext, actor }),
+          members: can({ permission: "manage_members", project: projectContext, actor }),
+          versions: true,
+          issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+        }}
+      />
 
       <table className="text-sm w-full">
         <thead>
