@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { wikiContentVersions, wikiPages } from "@/infrastructure/db/schema/wiki";
 import type { WikiContentVersion, WikiPage } from "@/domain/wiki/entity";
-import type { WikiContentRepository, WikiPageRepository, WikiSearchHit } from "@/domain/wiki/repository";
+import type { WikiContentRepository, WikiPageRepository, WikiSearchHit, WikiVersionWithPage } from "@/domain/wiki/repository";
 
 function pageToDomain(row: typeof wikiPages.$inferSelect): WikiPage {
   return {
@@ -134,5 +134,16 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
         },
       };
     });
+  }
+
+  /** Every version of every page in the project — activity feed (unlike `search`, not just the current version). */
+  async listByProject(projectId: string): Promise<WikiVersionWithPage[]> {
+    const rows = await db
+      .select({ version: wikiContentVersions, page: wikiPages })
+      .from(wikiContentVersions)
+      .innerJoin(wikiPages, eq(wikiPages.id, wikiContentVersions.pageId))
+      .where(eq(wikiPages.projectId, projectId))
+      .orderBy(desc(wikiContentVersions.createdAt));
+    return rows.map((row) => ({ page: pageToDomain(row.page), version: versionToDomain(row.version) }));
   }
 }

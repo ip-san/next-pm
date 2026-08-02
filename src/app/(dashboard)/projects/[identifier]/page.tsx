@@ -111,6 +111,9 @@ export default async function ProjectPage({
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name}</h1>
       <nav className="flex gap-3 text-sm">
+        <Link href={`/projects/${identifier}/activity`} className="underline">
+          アクティビティ
+        </Link>
         {NAV_LINKS.filter((link) => project.enabledModules.includes(link.module)).map((link) => (
           <Link key={link.path} href={`/projects/${identifier}/${link.path}`} className="underline">
             {link.label}

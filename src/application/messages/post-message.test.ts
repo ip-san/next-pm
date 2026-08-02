@@ -7,6 +7,7 @@ function makeRepo(overrides: Partial<MessageRepository> = {}): MessageRepository
   return {
     findById: mock(async () => null),
     listTopicsByBoard: mock(async () => []),
+    listByProject: mock(async () => []),
     listReplies: mock(async () => []),
     create: mock(async (message) => ({ ...message, id: "msg-1", repliesCount: 0, createdAt: new Date() }) as Message),
     update: mock(async (id, changes) => ({ id, boardId: "board-1", parentId: null, authorId: "u1", subject: "s", content: "c", locked: false, sticky: false, repliesCount: 0, createdAt: new Date(), ...changes }) as Message),

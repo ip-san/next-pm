@@ -22,6 +22,7 @@ function makeRepositories(
   });
   const journalRepository: JournalRepository = {
     listForIssue: mock(async () => []),
+    listByProject: mock(async () => []),
     create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date() })),
   };
   const workflowRepository: WorkflowRepository = {

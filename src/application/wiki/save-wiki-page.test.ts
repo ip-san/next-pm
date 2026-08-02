@@ -15,6 +15,7 @@ function makeRepos(existingPage: WikiPage | null, existingVersion: WikiContentVe
     listVersions: mock(async () => (existingVersion ? [existingVersion] : [])),
     createVersion: mock(async (v) => ({ ...v, id: "version-1", createdAt: new Date() })),
     search: mock(async () => []),
+    listByProject: mock(async () => []),
   };
   return { wikiPageRepository, wikiContentRepository };
 }

@@ -35,6 +35,16 @@ export class DrizzleMessageRepository implements MessageRepository {
     return rows.map(toDomain);
   }
 
+  async listByProject(projectId: string): Promise<Message[]> {
+    const rows = await db
+      .select({ message: messages })
+      .from(messages)
+      .innerJoin(boards, eq(boards.id, messages.boardId))
+      .where(eq(boards.projectId, projectId))
+      .orderBy(messages.createdAt);
+    return rows.map((row) => toDomain(row.message));
+  }
+
   async listReplies(parentId: string): Promise<Message[]> {
     const rows = await db.select().from(messages).where(eq(messages.parentId, parentId)).orderBy(messages.createdAt);
     return rows.map(toDomain);
