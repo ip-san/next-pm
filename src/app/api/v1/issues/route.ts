@@ -10,6 +10,7 @@ import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/c
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
@@ -110,6 +111,13 @@ export async function POST(request: Request) {
     const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
     if (!sharedVersions.some((version) => version.id === parsed.data.fixed_version_id)) {
       return NextResponse.json({ error: "invalid_fixed_version" }, { status: 422 });
+    }
+  }
+
+  if (parsed.data.assigned_to_id) {
+    const assignee = await new DrizzleUserRepository().findById(parsed.data.assigned_to_id);
+    if (!assignee) {
+      return NextResponse.json({ error: "invalid_assigned_to_id" }, { status: 422 });
     }
   }
 
