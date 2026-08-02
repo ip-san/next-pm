@@ -15,6 +15,11 @@ export class DrizzleGroupRepository implements GroupRepository {
     return row ? { id: row.id, name: row.name } : null;
   }
 
+  async rename(id: string, name: string): Promise<Group> {
+    const [row] = await db.update(groups).set({ name }).where(eq(groups.id, id)).returning();
+    return { id: row.id, name: row.name };
+  }
+
   async listAll(): Promise<Group[]> {
     const rows = await db.select().from(groups).orderBy(groups.name);
     return rows.map((row) => ({ id: row.id, name: row.name }));

@@ -9,6 +9,7 @@ function makeGroupRepository(overrides: Partial<GroupRepository> = {}): GroupRep
   return {
     create: mock(async (name: string) => ({ id: "group-1", name }) as Group),
     findById: mock(async () => null),
+    rename: mock(async (id: string, name: string) => ({ id, name }) as Group),
     listAll: mock(async () => []),
     delete: mock(async () => {}),
     addUser: mock(async () => {}),
