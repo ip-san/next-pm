@@ -47,6 +47,9 @@ export default async function ProjectPage({
   }
 
   const canEditProject = can({ permission: "edit_project", project: toAuthorizationProject(project), actor });
+  const canManageIssueCategories =
+    project.enabledModules.includes("issue_tracking") &&
+    can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor });
   const canViewIssues =
     project.enabledModules.includes("issue_tracking") &&
     can({ permission: "view_issues", project: toAuthorizationProject(project), actor });
@@ -122,6 +125,11 @@ export default async function ProjectPage({
         <Link href={`/projects/${identifier}/search`} className="underline">
           検索
         </Link>
+        {canManageIssueCategories ? (
+          <Link href={`/projects/${identifier}/issue-categories`} className="underline">
+            カテゴリ
+          </Link>
+        ) : null}
         {canEditProject ? (
           <Link href={`/projects/${identifier}/settings`} className="underline">
             設定
