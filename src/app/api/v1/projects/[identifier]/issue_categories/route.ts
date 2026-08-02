@@ -3,6 +3,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -62,6 +63,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ ide
   const parsed = createIssueCategorySchema.safeParse((await request.json().catch(() => null))?.issueCategory);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
+  }
+
+  // assignedToId is a real FK to users — an unvalidated bad id would otherwise reach the
+  // insert and fail as an unhandled 500 (foreign key violation) instead of a clean 422.
+  if (parsed.data.assigned_to_id !== null) {
+    const assignee = await new DrizzleUserRepository().findById(parsed.data.assigned_to_id);
+    if (!assignee) {
+      return NextResponse.json({ error: "invalid_assigned_to_id" }, { status: 422 });
+    }
   }
 
   const issueCategory = await new DrizzleIssueCategoryRepository().create({

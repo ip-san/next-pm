@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const parsed = addUserSchema.safeParse((await request.json().catch(() => null))?.user);
+  const parsed = addUserSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
   }

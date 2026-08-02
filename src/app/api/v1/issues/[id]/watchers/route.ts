@@ -59,7 +59,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const parsed = addWatcherSchema.safeParse((await request.json().catch(() => null))?.watcher);
+  const parsed = addWatcherSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
   }

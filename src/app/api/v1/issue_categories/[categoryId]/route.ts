@@ -3,6 +3,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -37,10 +38,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ cate
   return NextResponse.json({ issueCategory: loaded.category });
 }
 
-const updateIssueCategorySchema = z.object({
-  name: z.string().min(1).max(30).optional(),
-  assigned_to_id: z.string().uuid().nullable().optional(),
-});
+const updateIssueCategorySchema = z
+  .object({
+    name: z.string().min(1).max(30).optional(),
+    assigned_to_id: z.string().uuid().nullable().optional(),
+  })
+  // An entirely empty body has nothing for Drizzle's `.set()` to apply — it throws
+  // "No values to set" instead of a clean 422 if let through.
+  .refine((value) => value.name !== undefined || value.assigned_to_id !== undefined, { message: "at least one field is required" });
 
 export async function PUT(request: Request, { params }: { params: Promise<{ categoryId: string }> }) {
   const { categoryId } = await params;
@@ -58,6 +63,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ cate
   const parsed = updateIssueCategorySchema.safeParse((await request.json().catch(() => null))?.issueCategory);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
+  }
+
+  // Same FK-safety concern as create: an unvalidated bad id reaches the update as an
+  // unhandled 500 (foreign key violation) rather than a clean 422.
+  if (parsed.data.assigned_to_id) {
+    const assignee = await new DrizzleUserRepository().findById(parsed.data.assigned_to_id);
+    if (!assignee) {
+      return NextResponse.json({ error: "invalid_assigned_to_id" }, { status: 422 });
+    }
   }
 
   await loaded.categoryRepository.update(categoryId, { name: parsed.data.name, assignedToId: parsed.data.assigned_to_id });
