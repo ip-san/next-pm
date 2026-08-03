@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const user = await currentUserFromCookies();
 
-  if (attachment.containerType === "Issue") {
+  if (attachment.containerType === "Issue" && attachment.containerId) {
     const issue = await new DrizzleIssueRepository().findById(attachment.containerId);
     if (!issue) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -37,7 +37,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-  } else if (attachment.containerType === "Document") {
+  } else if (attachment.containerType === "Document" && attachment.containerId) {
     const document = await new DrizzleDocumentRepository().findById(attachment.containerId);
     if (!document) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

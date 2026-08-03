@@ -5,6 +5,8 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { createIssue } from "@/application/issues/create-issue";
 import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
+import { InvalidUploadTokenError, redeemUploadToken } from "@/application/attachments/upload-token";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -63,6 +65,7 @@ const createIssueSchema = z.object({
   start_date: z.string().nullable().default(null),
   due_date: z.string().nullable().default(null),
   custom_field_values: z.record(z.string(), z.string()).default({}),
+  uploads: z.array(z.object({ token: z.string() })).default([]),
 });
 
 export async function POST(request: Request) {
@@ -174,5 +177,23 @@ export async function POST(request: Request) {
     await customValueRepository.set(customFieldId, "Issue", issue.id, value);
   }
 
-  return NextResponse.json({ issue }, { status: 201 });
+  // Mirrors Redmine's Attachment.attach_files: a token that doesn't redeem (unknown, already
+  // used, belongs to someone else, expired) doesn't fail issue creation — it's just reported
+  // back as not attached, the same "some attachments failed" tolerance Redmine shows as a
+  // flash warning rather than a validation error.
+  const failedUploads: string[] = [];
+  const attachmentRepository = new DrizzleAttachmentRepository();
+  for (const upload of parsed.data.uploads) {
+    try {
+      await redeemUploadToken({ attachmentRepository }, { token: upload.token, uploaderId: user.id, containerType: "Issue", containerId: issue.id });
+    } catch (error) {
+      if (error instanceof InvalidUploadTokenError) {
+        failedUploads.push(upload.token);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return NextResponse.json(failedUploads.length > 0 ? { issue, failed_uploads: failedUploads } : { issue }, { status: 201 });
 }

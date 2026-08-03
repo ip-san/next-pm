@@ -210,7 +210,7 @@ export async function deleteDocumentAttachmentAction(
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
-  if (!attachment || attachment.containerType !== "Document") {
+  if (!attachment || attachment.containerType !== "Document" || !attachment.containerId) {
     return { error: "添付ファイルが見つかりません。" };
   }
 

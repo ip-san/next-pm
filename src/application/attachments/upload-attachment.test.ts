@@ -15,6 +15,7 @@ function makeRepos(overrides: { storage?: Partial<AttachmentStorage> } = {}) {
     listByContainer: mock(async () => []),
     findById: mock(async () => null),
     create: mock(async (attachment) => ({ ...attachment, id: "att-1", createdAt: new Date() }) as Attachment),
+    attachToContainer: mock(async () => {}),
     delete: mock(async () => {}),
   };
   return { attachmentRepository, attachmentStorage };

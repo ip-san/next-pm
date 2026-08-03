@@ -117,7 +117,7 @@ export async function deleteIssueAttachmentAction(
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
-  if (!attachment || attachment.containerType !== "Issue") {
+  if (!attachment || attachment.containerType !== "Issue" || !attachment.containerId) {
     return { error: "添付ファイルが見つかりません。" };
   }
 

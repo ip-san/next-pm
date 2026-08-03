@@ -4,6 +4,8 @@ export interface AttachmentRepository {
   listByContainer(containerType: AttachmentContainerType, containerId: string): Promise<Attachment[]>;
   findById(id: string): Promise<Attachment | null>;
   create(attachment: Omit<Attachment, "id" | "createdAt">): Promise<Attachment>;
+  /** Redeems a pending upload: attaches a container-less attachment to a real container. */
+  attachToContainer(id: string, containerType: AttachmentContainerType, containerId: string): Promise<void>;
   delete(id: string): Promise<void>;
 }
 

@@ -1,4 +1,5 @@
 import type { Attachment, AttachmentContainerType } from "@/domain/attachment/entity";
+import { computeDigest } from "@/domain/attachment/digest";
 import type { AttachmentRepository, AttachmentStorage } from "@/domain/attachment/repository";
 import { validateAttachmentInput } from "@/domain/attachment/validate";
 
@@ -32,5 +33,6 @@ export async function uploadAttachment(
     storageKey,
     contentType: input.contentType || "application/octet-stream",
     fileSize: input.data.byteLength,
+    digest: computeDigest(input.data),
   });
 }
