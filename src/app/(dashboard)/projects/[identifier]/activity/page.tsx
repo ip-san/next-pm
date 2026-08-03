@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ACTIVITY_EVENT_GROUPS, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
+import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -45,24 +45,6 @@ function parseDateParam(value: string | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function urlFor(identifier: string, event: ActivityEvent): string {
-  switch (event.type) {
-    case "issue_created":
-    case "issue_updated":
-      return `/projects/${identifier}/issues/${event.id}`;
-    case "news":
-      return `/projects/${identifier}/news/${event.id}`;
-    case "message":
-      return `/projects/${identifier}/boards`;
-    case "wiki_edit":
-      return `/projects/${identifier}/wiki/${encodeURIComponent(event.id)}`;
-    case "document":
-      return `/projects/${identifier}/documents/${event.id}`;
-    case "time_entry":
-      return `/projects/${identifier}/time-entries`;
-  }
 }
 
 export default async function ProjectActivityPage({
@@ -143,7 +125,12 @@ export default async function ProjectActivityPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — アクティビティ</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">{project.name} — アクティビティ</h1>
+        <a href={`/api/projects/${identifier}/activity/atom`} className="text-sm underline">
+          Atom
+        </a>
+      </div>
 
       <form className="flex flex-wrap gap-4 items-center text-sm">
         {ACTIVITY_EVENT_GROUPS.map((group) => (
@@ -189,7 +176,7 @@ export default async function ProjectActivityPage({
                       <span>{event.occurredAt.toISOString()}</span>
                       {event.authorId ? <span>{authorById.get(event.authorId) ?? "?"}</span> : null}
                     </div>
-                    <Link href={urlFor(identifier, event)} className="font-medium underline block">
+                    <Link href={activityEventPath(identifier, event)} className="font-medium underline block">
                       {event.title}
                     </Link>
                     {event.excerpt ? <p className="text-gray-600 line-clamp-2">{event.excerpt}</p> : null}
