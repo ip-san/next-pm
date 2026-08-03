@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { DeleteWikiAttachmentButton } from "./delete-wiki-attachment-button";
+import { WikiAttachmentUploadForm } from "./wiki-attachment-upload-form";
 
 export default async function WikiPageView({
   params,
@@ -31,6 +34,7 @@ export default async function WikiPageView({
   const wikiContentRepository = new DrizzleWikiContentRepository();
   const wikiPage = await wikiPageRepository.findByTitle(project.id, title);
   const current = wikiPage ? await wikiContentRepository.findCurrent(wikiPage.id) : null;
+  const attachments = wikiPage ? await new DrizzleAttachmentRepository().listByContainer("WikiPage", wikiPage.id) : [];
 
   let renderedText = current?.text ?? "";
   if (current && wikiPage) {
@@ -74,6 +78,26 @@ export default async function WikiPageView({
               履歴を見る
             </Link>
           </p>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="font-medium text-sm">添付ファイル</h2>
+            <ul className="flex flex-col gap-1 text-sm">
+              {attachments.map((attachment) => (
+                <li key={attachment.id} className="flex items-center gap-2">
+                  <a href={`/api/attachments/${attachment.id}`} className="underline">
+                    {attachment.filename}
+                  </a>
+                  {canEdit ? (
+                    <DeleteWikiAttachmentButton projectIdentifier={identifier} title={title} attachmentId={attachment.id} />
+                  ) : null}
+                </li>
+              ))}
+              {attachments.length === 0 ? <li className="text-gray-400 text-xs">添付ファイルはありません。</li> : null}
+            </ul>
+            {canEdit && wikiPage ? (
+              <WikiAttachmentUploadForm pageId={wikiPage.id} projectIdentifier={identifier} title={title} />
+            ) : null}
+          </section>
         </>
       ) : (
         <p className="text-sm text-gray-500">

@@ -1,11 +1,16 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { InvalidAttachmentError } from "@/domain/attachment/validate";
+import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -64,4 +69,135 @@ export async function saveWikiPageAction(
   );
 
   redirect(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
+}
+
+export type UploadWikiAttachmentActionState = {
+  error: string | null;
+};
+
+const uploadWikiAttachmentSchema = z.object({
+  pageId: z.string().uuid(),
+  projectIdentifier: z.string().min(1),
+  title: z.string().min(1),
+  file: z.instanceof(File),
+});
+
+// Mirrors Redmine's acts_as_attachable default for WikiPage: attaching a file requires the same
+// edit_wiki_pages permission as editing the page's text (no separate "manage wiki attachments"
+// permission is modeled here, same simplification already used for issue notes elsewhere).
+export async function uploadWikiAttachmentAction(
+  _prevState: UploadWikiAttachmentActionState,
+  formData: FormData,
+): Promise<UploadWikiAttachmentActionState> {
+  const parsed = uploadWikiAttachmentSchema.safeParse({
+    pageId: formData.get("pageId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    title: formData.get("title"),
+    file: formData.get("file"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+  if (parsed.data.file.size === 0) {
+    return { error: "ファイルを選択してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const wikiPage = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
+  if (!wikiPage) {
+    return { error: "Wikiページが見つかりません。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
+  try {
+    await uploadAttachment(
+      { attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+      {
+        containerType: "WikiPage",
+        containerId: wikiPage.id,
+        authorId: user.id,
+        filename: parsed.data.file.name,
+        contentType: parsed.data.file.type,
+        data: buffer,
+      },
+    );
+  } catch (error) {
+    if (error instanceof InvalidAttachmentError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
+  return { error: null };
+}
+
+export type DeleteWikiAttachmentActionState = {
+  error: string | null;
+};
+
+const deleteWikiAttachmentSchema = z.object({
+  attachmentId: z.string().uuid(),
+  projectIdentifier: z.string().min(1),
+  title: z.string().min(1),
+});
+
+export async function deleteWikiAttachmentAction(
+  _prevState: DeleteWikiAttachmentActionState,
+  formData: FormData,
+): Promise<DeleteWikiAttachmentActionState> {
+  const parsed = deleteWikiAttachmentSchema.safeParse({
+    attachmentId: formData.get("attachmentId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    title: formData.get("title"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const attachmentRepository = new DrizzleAttachmentRepository();
+  const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
+  if (!attachment || attachment.containerType !== "WikiPage" || !attachment.containerId) {
+    return { error: "添付ファイルが見つかりません。" };
+  }
+
+  const wikiPage = await new DrizzleWikiPageRepository().findById(attachment.containerId);
+  if (!wikiPage) {
+    return { error: "Wikiページが見つかりません。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  await attachmentRepository.delete(attachment.id);
+  await new FsAttachmentStore().delete(attachment.storageKey);
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
+  return { error: null };
 }

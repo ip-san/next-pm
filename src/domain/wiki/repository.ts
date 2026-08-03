@@ -2,6 +2,7 @@ import type { WikiContentVersion, WikiPage } from "./entity";
 
 export interface WikiPageRepository {
   listForProject(projectId: string): Promise<WikiPage[]>;
+  findById(id: string): Promise<WikiPage | null>;
   findByTitle(projectId: string, title: string): Promise<WikiPage | null>;
   create(page: Omit<WikiPage, "id">): Promise<WikiPage>;
 }

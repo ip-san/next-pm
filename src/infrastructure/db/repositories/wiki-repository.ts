@@ -32,6 +32,11 @@ export class DrizzleWikiPageRepository implements WikiPageRepository {
     return rows.map(pageToDomain);
   }
 
+  async findById(id: string): Promise<WikiPage | null> {
+    const [row] = await db.select().from(wikiPages).where(eq(wikiPages.id, id)).limit(1);
+    return row ? pageToDomain(row) : null;
+  }
+
   async findByTitle(projectId: string, title: string): Promise<WikiPage | null> {
     const [row] = await db
       .select()

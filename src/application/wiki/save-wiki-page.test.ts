@@ -6,6 +6,7 @@ import type { WikiContentRepository, WikiPageRepository } from "@/domain/wiki/re
 function makeRepos(existingPage: WikiPage | null, existingVersion: WikiContentVersion | null) {
   const wikiPageRepository: WikiPageRepository = {
     listForProject: mock(async () => (existingPage ? [existingPage] : [])),
+    findById: mock(async () => existingPage),
     findByTitle: mock(async () => existingPage),
     create: mock(async (p) => ({ ...p, id: "page-1" })),
   };

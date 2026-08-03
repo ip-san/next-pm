@@ -5,6 +5,7 @@ import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/at
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -48,6 +49,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
     const { actor } = await resolveActor(user, project.id);
     if (!can({ permission: "view_documents", project: toAuthorizationProject(project), actor })) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  } else if (attachment.containerType === "WikiPage" && attachment.containerId) {
+    const wikiPage = await new DrizzleWikiPageRepository().findById(attachment.containerId);
+    if (!wikiPage) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const { actor } = await resolveActor(user, project.id);
+    if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else {
