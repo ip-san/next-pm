@@ -21,6 +21,7 @@ export type PermissionKey =
   | "view_wiki_pages"
   | "edit_wiki_pages"
   | "manage_wiki"
+  | "export_wiki_pages"
   | "manage_boards"
   | "view_messages"
   | "add_messages"
@@ -77,6 +78,7 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   view_wiki_pages: { module: "wiki", readOnly: true },
   edit_wiki_pages: { module: "wiki", readOnly: false },
   manage_wiki: { module: "wiki", readOnly: false },
+  export_wiki_pages: { module: "wiki", readOnly: true },
 
   manage_boards: { module: "boards", readOnly: false },
   view_messages: { module: "boards", readOnly: true },

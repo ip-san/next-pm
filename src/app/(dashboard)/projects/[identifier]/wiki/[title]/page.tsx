@@ -29,6 +29,7 @@ export default async function WikiPageView({
     notFound();
   }
   const canEdit = can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor });
+  const canExport = can({ permission: "export_wiki_pages", project: toAuthorizationProject(project), actor });
 
   const wikiPageRepository = new DrizzleWikiPageRepository();
   const wikiContentRepository = new DrizzleWikiContentRepository();
@@ -62,11 +63,23 @@ export default async function WikiPageView({
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{title}</h1>
-        {canEdit ? (
-          <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/edit`} className="bg-black text-white rounded px-3 py-2 text-sm">
-            編集
-          </Link>
-        ) : null}
+        <div className="flex items-center gap-3">
+          {canExport ? (
+            <>
+              <a href={`/api/projects/${identifier}/wiki/export/html`} className="text-sm underline">
+                HTML
+              </a>
+              <a href={`/api/projects/${identifier}/wiki/export/pdf`} className="text-sm underline">
+                PDF
+              </a>
+            </>
+          ) : null}
+          {canEdit ? (
+            <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/edit`} className="bg-black text-white rounded px-3 py-2 text-sm">
+              編集
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {current ? (
