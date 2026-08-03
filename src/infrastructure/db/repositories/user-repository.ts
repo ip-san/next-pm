@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { users } from "@/infrastructure/db/schema/users";
 import type { User } from "@/domain/user/entity";
@@ -44,6 +44,18 @@ export class DrizzleUserRepository implements UserRepository {
 
   async findByApiKey(apiKey: string): Promise<User | null> {
     const [row] = await db.select().from(users).where(eq(users.apiKey, apiKey)).limit(1);
+    return row ? toDomain(row) : null;
+  }
+
+  async findByMail(mail: string): Promise<User | null> {
+    // Exact case-insensitive equality, not a LIKE pattern match — mail comes from parsed email
+    // headers in the mail-handler path, and a sender address containing "%"/"_" must never be
+    // treated as a wildcard against other users' addresses.
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(sql`lower(${users.mail}) = lower(${mail})`)
+      .limit(1);
     return row ? toDomain(row) : null;
   }
 

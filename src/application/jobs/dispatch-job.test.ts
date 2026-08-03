@@ -44,6 +44,7 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByMail: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -58,6 +59,7 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByMail: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -72,6 +74,7 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByMail: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -86,6 +89,7 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByMail: mock(async () => null),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await expect(dispatchJob({ mailer, userRepository }, makeJob({ jobType: "unknown" }))).rejects.toThrow(UnknownJobTypeError);

@@ -19,6 +19,12 @@ export interface IssueUpdate {
 
 export interface IssueRepository {
   findById(id: string): Promise<Issue | null>;
+  /**
+   * Matches issues whose id starts with `prefix` (hex, no dashes) — the mail handler's reply
+   * detection uses this against the app's own "#eb0b2d1a" display shorthand, since issues here
+   * have no sequential number the way Redmine's do.
+   */
+  findByIdPrefix(prefix: string): Promise<Issue[]>;
   listByProject(projectId: string, predicates?: CompiledPredicate[]): Promise<Issue[]>;
   /**
    * Across every project — callers must filter by per-project visibility themselves.

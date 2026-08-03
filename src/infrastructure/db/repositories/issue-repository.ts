@@ -46,6 +46,18 @@ export class DrizzleIssueRepository implements IssueRepository {
     return row ? toDomain(row) : null;
   }
 
+  async findByIdPrefix(prefix: string): Promise<Issue[]> {
+    // The UUID's first 8 characters never include a hyphen (the first group is 8 hex chars),
+    // so this matches the app's own "#eb0b2d1a" display shorthand (issue.id.slice(0, 8)) exactly.
+    // Bound as a query parameter, not string-interpolated — safe even though callers only ever
+    // pass a regex-validated hex prefix today.
+    const rows = await db
+      .select()
+      .from(issues)
+      .where(sql`${issues.id}::text like ${prefix.toLowerCase() + "%"}`);
+    return rows.map(toDomain);
+  }
+
   async listByProject(projectId: string, predicates: CompiledPredicate[] = []): Promise<Issue[]> {
     const extraCondition = toDrizzleCondition(predicates, ISSUE_FILTER_COLUMNS);
     const condition = extraCondition ? and(eq(issues.projectId, projectId), extraCondition) : eq(issues.projectId, projectId);

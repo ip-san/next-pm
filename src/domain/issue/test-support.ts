@@ -33,6 +33,7 @@ export function makeIssue(overrides: Partial<Issue> = {}): Issue {
 export function makeIssueRepositoryMock(overrides: Partial<IssueRepository> = {}): IssueRepository {
   return {
     findById: mock(async () => null),
+    findByIdPrefix: mock(async () => []),
     listByProject: mock(async () => []),
     findByAssignee: mock(async () => []),
     findByAuthor: mock(async () => []),

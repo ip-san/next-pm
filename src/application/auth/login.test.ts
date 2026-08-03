@@ -29,6 +29,7 @@ function repoWith(user: User | null): UserRepository {
     findById: mock(async () => user),
     findByIds: mock(async () => (user ? [user] : [])),
     findByApiKey: mock(async () => user),
+    findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
   };
 }
