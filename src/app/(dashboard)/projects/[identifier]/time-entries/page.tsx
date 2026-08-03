@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
@@ -49,9 +50,14 @@ export default async function ProjectTimeEntriesPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">
-        {project.name} — 工数（合計 {totalHours}h）
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">
+          {project.name} — 工数（合計 {totalHours}h）
+        </h1>
+        <Link href={`/projects/${identifier}/time-entries/report`} className="text-sm underline">
+          レポートを見る
+        </Link>
+      </div>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
