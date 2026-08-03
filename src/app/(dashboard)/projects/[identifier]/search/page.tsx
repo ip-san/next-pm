@@ -71,7 +71,12 @@ export default async function SearchPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">検索</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">検索</h1>
+        <Link href={`/search?q=${encodeURIComponent(query)}`} className="text-sm underline">
+          全プロジェクトから検索
+        </Link>
+      </div>
       <form className="flex gap-2 max-w-md">
         <input name="q" defaultValue={query} placeholder="検索語" className="border rounded px-3 py-2 text-sm flex-1" />
         <button type="submit" className="bg-black text-white rounded px-3 py-2 text-sm">
