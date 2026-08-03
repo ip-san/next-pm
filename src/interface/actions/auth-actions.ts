@@ -3,9 +3,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { loadLdapConfigFromEnv } from "@/domain/ldap/config";
 import { login } from "@/application/auth/login";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { createSessionToken } from "@/infrastructure/auth/session-token";
+import { LdaptsAuthenticator } from "@/infrastructure/ldap/ldapts-authenticator";
 
 const loginSchema = z.object({
   login: z.string().min(1),
@@ -30,7 +32,12 @@ export async function loginAction(
     return { error: "ログインIDとパスワードを入力してください。" };
   }
 
-  const result = await login(new DrizzleUserRepository(), parsed.data.login, parsed.data.password);
+  const ldapConfig = loadLdapConfigFromEnv(process.env);
+  const result = await login(
+    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: ldapConfig ? new LdaptsAuthenticator(ldapConfig) : null },
+    parsed.data.login,
+    parsed.data.password,
+  );
   if (!result.ok) {
     return { error: "ログインIDまたはパスワードが正しくありません。" };
   }

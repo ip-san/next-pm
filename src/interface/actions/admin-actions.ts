@@ -355,6 +355,7 @@ export async function createUserAction(
       passwordHash: hashPassword(parsed.data.password, salt),
       mustChangePassword: true,
       apiKey: null,
+      authSource: null,
     });
   } catch (error) {
     // The mail column also carries a unique constraint (checked only at insert time,

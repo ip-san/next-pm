@@ -17,6 +17,7 @@ function toDomain(row: typeof users.$inferSelect): User {
     passwordSalt: row.passwordSalt,
     mustChangePassword: row.mustChangePassword,
     apiKey: row.apiKey,
+    authSource: row.authSource,
   };
 }
 
@@ -73,6 +74,7 @@ export class DrizzleUserRepository implements UserRepository {
         passwordSalt: user.passwordSalt,
         mustChangePassword: user.mustChangePassword,
         apiKey: user.apiKey,
+        authSource: user.authSource,
       })
       .returning();
     return toDomain(row);

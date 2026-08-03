@@ -18,6 +18,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     passwordSalt: "",
     mustChangePassword: false,
     apiKey: null,
+    authSource: null,
     ...overrides,
   };
 }

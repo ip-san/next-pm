@@ -12,6 +12,8 @@ export interface User {
   passwordSalt: string;
   mustChangePassword: boolean;
   apiKey: string | null;
+  /** Null for a locally-authenticated user; "ldap" delegates password checks to LDAP on every login. */
+  authSource: "ldap" | null;
 }
 
 export function isActiveUser(user: Pick<User, "status">): boolean {

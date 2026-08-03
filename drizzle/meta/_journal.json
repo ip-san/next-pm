@@ -127,6 +127,13 @@
       "when": 1785736501480,
       "tag": "0017_careless_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785752753762,
+      "tag": "0018_closed_steel_serpent",
+      "breakpoints": true
     }
   ]
 }
