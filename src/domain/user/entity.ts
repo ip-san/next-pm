@@ -12,6 +12,8 @@ export interface User {
   passwordSalt: string;
   mustChangePassword: boolean;
   apiKey: string | null;
+  /** Separate from apiKey — scoped to feed URLs only, so a leaked feed link can't grant full API access. */
+  atomKey: string | null;
   /** Null for a locally-authenticated user; "ldap" delegates password checks to LDAP on every login. */
   authSource: "ldap" | null;
 }

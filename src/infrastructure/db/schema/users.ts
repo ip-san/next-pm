@@ -19,6 +19,12 @@ export const users = pgTable("users", {
   passwordSalt: text("password_salt").notNull(),
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   apiKey: text("api_key").unique(),
+  /**
+   * A separate token from apiKey, deliberately — this one gets embedded in feed URLs (query
+   * strings end up in server logs, browser history, proxy caches), so a leak of it must only
+   * expose read-only feed content, never the full REST API access apiKey grants.
+   */
+  atomKey: text("atom_key").unique(),
   /** Null for a locally-authenticated user; "ldap" delegates password checks to LDAP on every login. */
   authSource: text("auth_source", { enum: ["ldap"] }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

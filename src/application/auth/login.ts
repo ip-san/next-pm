@@ -62,6 +62,7 @@ export async function login(repositories: LoginRepositories, loginName: string, 
     passwordSalt: "",
     mustChangePassword: false,
     apiKey: null,
+    atomKey: null,
     authSource: "ldap",
   });
   return { ok: true, user: created };

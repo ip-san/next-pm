@@ -79,6 +79,7 @@ export async function POST(request: Request) {
       passwordHash: hashPassword(parsed.data.password, salt),
       mustChangePassword: true,
       apiKey: null,
+      atomKey: null,
       authSource: null,
     });
     return NextResponse.json({ user: toJson(created) }, { status: 201 });

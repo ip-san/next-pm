@@ -25,12 +25,12 @@ async function resolveUser(request: Request, url: URL) {
 
   // Mirrors Redmine's atom_key (accept_atom_auth): a feed reader can't carry a session cookie
   // or set custom headers, so it authenticates via a token embedded in the feed URL itself.
-  // Reuses the existing per-user API key rather than introducing a separate atom/RSS token —
-  // this app doesn't yet model that distinction, and the API key already serves the same
-  // "bearer credential embeddable in a URL/config" role.
+  // Deliberately NOT the general apiKey — query strings end up in server logs, browser
+  // history, and proxy caches, so a leak here must only expose read-only feed content, never
+  // the full REST API access apiKey grants. atomKey is a separate, narrowly-scoped token.
   const key = url.searchParams.get("key");
   if (!key) return null;
-  return new DrizzleUserRepository().findByApiKey(key);
+  return new DrizzleUserRepository().findByAtomKey(key);
 }
 
 // Mirrors ActivitiesController#index format.atom. Scope: always the last 30 days across every
@@ -93,6 +93,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   return new NextResponse(xml, {
     status: 200,
-    headers: { "Content-Type": "application/atom+xml; charset=utf-8" },
+    headers: {
+      "Content-Type": "application/atom+xml; charset=utf-8",
+      // The feed URL carries the reader's atomKey in its query string — never send it as a
+      // Referer header if a feed reader follows a link out from this response.
+      "Referrer-Policy": "no-referrer",
+    },
   });
 }

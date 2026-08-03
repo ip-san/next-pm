@@ -19,6 +19,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     passwordHash: hashPassword("s3cret-pass", salt),
     mustChangePassword: false,
     apiKey: null,
+    atomKey: null,
     authSource: null,
     ...overrides,
   };
@@ -31,8 +32,10 @@ function repoWith(user: User | null): UserRepository {
     findById: mock(async () => user),
     findByIds: mock(async () => (user ? [user] : [])),
     findByApiKey: mock(async () => user),
+    findByAtomKey: mock(async () => user),
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
+    setAtomKey: mock(async () => {}),
   };
 }
 

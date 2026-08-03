@@ -17,6 +17,7 @@ function toDomain(row: typeof users.$inferSelect): User {
     passwordSalt: row.passwordSalt,
     mustChangePassword: row.mustChangePassword,
     apiKey: row.apiKey,
+    atomKey: row.atomKey,
     authSource: row.authSource,
   };
 }
@@ -48,6 +49,11 @@ export class DrizzleUserRepository implements UserRepository {
     return row ? toDomain(row) : null;
   }
 
+  async findByAtomKey(atomKey: string): Promise<User | null> {
+    const [row] = await db.select().from(users).where(eq(users.atomKey, atomKey)).limit(1);
+    return row ? toDomain(row) : null;
+  }
+
   async findByMail(mail: string): Promise<User | null> {
     // Exact case-insensitive equality, not a LIKE pattern match — mail comes from parsed email
     // headers in the mail-handler path, and a sender address containing "%"/"_" must never be
@@ -74,9 +80,14 @@ export class DrizzleUserRepository implements UserRepository {
         passwordSalt: user.passwordSalt,
         mustChangePassword: user.mustChangePassword,
         apiKey: user.apiKey,
+        atomKey: user.atomKey,
         authSource: user.authSource,
       })
       .returning();
     return toDomain(row);
+  }
+
+  async setAtomKey(userId: string, atomKey: string): Promise<void> {
+    await db.update(users).set({ atomKey }).where(eq(users.id, userId));
   }
 }

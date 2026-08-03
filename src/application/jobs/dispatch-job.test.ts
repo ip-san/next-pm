@@ -18,6 +18,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     passwordSalt: "",
     mustChangePassword: false,
     apiKey: null,
+    atomKey: null,
     authSource: null,
     ...overrides,
   };
@@ -45,7 +46,9 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
+      setAtomKey: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -60,7 +63,9 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
+      setAtomKey: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -75,7 +80,9 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
+      setAtomKey: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -90,7 +97,9 @@ describe("dispatchJob", () => {
       findByIds: mock(async () => []),
       findByLogin: mock(async () => null),
       findByApiKey: mock(async () => null),
+      findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
+      setAtomKey: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await expect(dispatchJob({ mailer, userRepository }, makeJob({ jobType: "unknown" }))).rejects.toThrow(UnknownJobTypeError);

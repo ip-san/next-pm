@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
+import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
@@ -65,6 +66,7 @@ export default async function ProjectActivityPage({
 
   const user = await currentUserFromCookies();
   const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const atomKey = user ? await getOrCreateAtomKey(new DrizzleUserRepository(), user.id) : null;
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -127,7 +129,10 @@ export default async function ProjectActivityPage({
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{project.name} — アクティビティ</h1>
-        <a href={`/api/projects/${identifier}/activity/atom`} className="text-sm underline">
+        <a
+          href={`/api/projects/${identifier}/activity/atom${atomKey ? `?key=${atomKey}` : ""}`}
+          className="text-sm underline"
+        >
           Atom
         </a>
       </div>

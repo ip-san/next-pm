@@ -355,6 +355,7 @@ export async function createUserAction(
       passwordHash: hashPassword(parsed.data.password, salt),
       mustChangePassword: true,
       apiKey: null,
+      atomKey: null,
       authSource: null,
     });
   } catch (error) {

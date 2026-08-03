@@ -134,6 +134,13 @@
       "when": 1785752753762,
       "tag": "0018_closed_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785769440558,
+      "tag": "0019_lying_lady_mastermind",
+      "breakpoints": true
     }
   ]
 }
