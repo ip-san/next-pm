@@ -84,6 +84,12 @@ export default async function ProjectIssuesPage({
           >
             CSV
           </a>
+          <a
+            href={`/api/projects/${identifier}/issues/pdf${statusFilter ? `?status_id=${statusFilter}` : ""}`}
+            className="border rounded px-3 py-2 text-sm"
+          >
+            PDF
+          </a>
           <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
             CSV取り込み
           </Link>
