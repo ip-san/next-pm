@@ -5,7 +5,15 @@ import { importIssuesCsvAction, type ImportIssuesActionState } from "@/interface
 
 const initialState: ImportIssuesActionState = { error: null, summary: null };
 
-export function ImportForm({ projectIdentifier }: { projectIdentifier: string }) {
+export function ImportForm({
+  projectIdentifier,
+  canManageCategories,
+  canManageVersions,
+}: {
+  projectIdentifier: string;
+  canManageCategories: boolean;
+  canManageVersions: boolean;
+}) {
   const [state, formAction, pending] = useActionState(importIssuesCsvAction, initialState);
 
   return (
@@ -17,6 +25,18 @@ export function ImportForm({ projectIdentifier }: { projectIdentifier: string })
         </label>
         <input id="file" name="file" type="file" accept=".csv,text/csv" required className="border rounded px-3 py-2 text-sm" />
       </div>
+      {canManageCategories ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="createCategories" />
+          存在しないカテゴリを作成する
+        </label>
+      ) : null}
+      {canManageVersions ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="createVersions" />
+          存在しないバージョンを作成する
+        </label>
+      ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
         {pending ? "取り込み中…" : "取り込み"}
       </button>

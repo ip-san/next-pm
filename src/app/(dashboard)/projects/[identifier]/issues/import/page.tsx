@@ -15,9 +15,12 @@ export default async function ImportIssuesPage({ params }: { params: Promise<{ i
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "add_issues", project: projectContext, actor })) {
     notFound();
   }
+  const canManageCategories = can({ permission: "manage_issue_categories", project: projectContext, actor });
+  const canManageVersions = can({ permission: "manage_versions", project: projectContext, actor });
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -30,10 +33,12 @@ export default async function ImportIssuesPage({ params }: { params: Promise<{ i
       <p className="text-sm text-gray-600">
         1行目をヘッダー行として扱います。列名: <code className="font-mono">subject</code>（必須）,{" "}
         <code className="font-mono">tracker</code>, <code className="font-mono">priority</code>,{" "}
-        <code className="font-mono">description</code>, <code className="font-mono">assignee</code>
-        （ログインID）。tracker・priorityは名称一致で解決され、省略時は既定値を使用します。
+        <code className="font-mono">description</code>, <code className="font-mono">assignee</code>（ログインID）,{" "}
+        <code className="font-mono">category</code>, <code className="font-mono">fixed_version</code>,{" "}
+        <code className="font-mono">is_private</code>。tracker・priority・category・fixed_versionは名称一致で解決され、
+        tracker・priorityは省略時に既定値を使用します。
       </p>
-      <ImportForm projectIdentifier={identifier} />
+      <ImportForm projectIdentifier={identifier} canManageCategories={canManageCategories} canManageVersions={canManageVersions} />
     </main>
   );
 }
