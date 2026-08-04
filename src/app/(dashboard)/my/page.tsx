@@ -89,7 +89,12 @@ export default async function MyPage() {
 
   return (
     <main className="p-8 flex flex-col gap-8 max-w-3xl">
-      <h1 className="text-xl font-semibold">マイページ</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">マイページ</h1>
+        <Link href="/my/account" className="text-sm underline">
+          アカウント設定
+        </Link>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <IssueList title="担当しているチケット" issues={visibleOnly(assigned)} projectIdentifierById={projectIdentifierById} statusNameById={statusNameById} />
         <IssueList title="登録したチケット" issues={visibleOnly(reported)} projectIdentifierById={projectIdentifierById} statusNameById={statusNameById} />

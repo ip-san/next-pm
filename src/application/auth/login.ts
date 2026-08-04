@@ -1,11 +1,12 @@
-import { isActiveUser } from "@/domain/user/entity";
+import { isActiveUser, isTwofaActive } from "@/domain/user/entity";
 import { verifyPassword } from "@/domain/user/password";
 import type { UserRepository } from "@/domain/user/repository";
 import type { User } from "@/domain/user/entity";
 import type { LdapAuthenticator } from "@/domain/ldap/authenticator";
 
 export type LoginResult =
-  | { ok: true; user: User }
+  | { ok: true; twofaRequired: false; user: User }
+  | { ok: true; twofaRequired: true; user: User }
   | { ok: false; reason: "invalid_credentials" | "account_not_active" };
 
 export interface LoginRepositories {
@@ -35,7 +36,7 @@ export async function login(repositories: LoginRepositories, loginName: string, 
     if (!isActiveUser(user)) {
       return { ok: false, reason: "account_not_active" };
     }
-    return { ok: true, user };
+    return isTwofaActive(user) ? { ok: true, twofaRequired: true, user } : { ok: true, twofaRequired: false, user };
   }
 
   if (!repositories.ldapAuthenticator) {
@@ -68,5 +69,5 @@ export async function login(repositories: LoginRepositories, loginName: string, 
     twofaTotpKey: null,
     twofaTotpLastUsedStep: null,
   });
-  return { ok: true, user: created };
+  return { ok: true, twofaRequired: false, user: created };
 }

@@ -57,7 +57,13 @@ describe("login use case", () => {
   it("succeeds with correct credentials on an active account", async () => {
     const user = makeUser();
     const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass");
-    expect(result).toEqual({ ok: true, user });
+    expect(result).toEqual({ ok: true, twofaRequired: false, user });
+  });
+
+  it("reports twofaRequired for a user with an active TOTP pairing", async () => {
+    const user = makeUser({ twofaScheme: "totp", twofaTotpKey: "encrypted", twofaTotpLastUsedStep: 5 });
+    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass");
+    expect(result).toEqual({ ok: true, twofaRequired: true, user });
   });
 
   it("rejects a wrong password", async () => {
@@ -83,7 +89,7 @@ describe("login use case", () => {
         authenticate: mock(async () => ({ firstname: "Alice", lastname: "Doe", mail: "alice@example.com" })),
       });
       const result = await login({ userRepository: repoWith(user), ldapAuthenticator }, "alice", "directory-password");
-      expect(result).toEqual({ ok: true, user });
+      expect(result).toEqual({ ok: true, twofaRequired: false, user });
       expect(ldapAuthenticator.authenticate).toHaveBeenCalledWith("alice", "directory-password");
     });
 
