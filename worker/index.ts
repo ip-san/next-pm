@@ -1,8 +1,11 @@
 import * as Sentry from "@sentry/node";
 import { dispatchJob } from "@/application/jobs/dispatch-job";
+import { loadSmtpConfigFromEnv } from "@/domain/mailer/smtp-config";
+import type { Mailer } from "@/domain/mailer/port";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { ConsoleMailer } from "@/infrastructure/mail/console-mailer";
+import { NodemailerMailer } from "@/infrastructure/mail/nodemailer-mailer";
 import { startHealthServer } from "./health-server";
 
 Sentry.init({
@@ -17,7 +20,8 @@ const RETRY_DELAY_MS = 30000;
 
 const jobRepository = new DrizzleJobRepository();
 const userRepository = new DrizzleUserRepository();
-const mailer = new ConsoleMailer();
+const smtpConfig = loadSmtpConfigFromEnv(process.env);
+const mailer: Mailer = smtpConfig ? new NodemailerMailer(smtpConfig) : new ConsoleMailer();
 
 /** Drains the queue until it's empty — the outer loop's sleep only kicks in once there's nothing left to claim. */
 async function drainOnce() {
