@@ -81,6 +81,9 @@ export async function POST(request: Request) {
       apiKey: null,
       atomKey: null,
       authSource: null,
+      twofaScheme: null,
+      twofaTotpKey: null,
+      twofaTotpLastUsedStep: null,
     });
     return NextResponse.json({ user: toJson(created) }, { status: 201 });
   } catch (error) {

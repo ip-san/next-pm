@@ -357,6 +357,9 @@ export async function createUserAction(
       apiKey: null,
       atomKey: null,
       authSource: null,
+      twofaScheme: null,
+      twofaTotpKey: null,
+      twofaTotpLastUsedStep: null,
     });
   } catch (error) {
     // The mail column also carries a unique constraint (checked only at insert time,

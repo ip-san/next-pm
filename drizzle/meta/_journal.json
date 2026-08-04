@@ -141,6 +141,13 @@
       "when": 1785769440558,
       "tag": "0019_lying_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785835224232,
+      "tag": "0020_special_puff_adder",
+      "breakpoints": true
     }
   ]
 }

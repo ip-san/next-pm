@@ -64,6 +64,9 @@ export async function login(repositories: LoginRepositories, loginName: string, 
     apiKey: null,
     atomKey: null,
     authSource: "ldap",
+    twofaScheme: null,
+    twofaTotpKey: null,
+    twofaTotpLastUsedStep: null,
   });
   return { ok: true, user: created };
 }

@@ -19,6 +19,9 @@ function toDomain(row: typeof users.$inferSelect): User {
     apiKey: row.apiKey,
     atomKey: row.atomKey,
     authSource: row.authSource,
+    twofaScheme: row.twofaScheme,
+    twofaTotpKey: row.twofaTotpKey,
+    twofaTotpLastUsedStep: row.twofaTotpLastUsedStep,
   };
 }
 
@@ -82,6 +85,9 @@ export class DrizzleUserRepository implements UserRepository {
         apiKey: user.apiKey,
         atomKey: user.atomKey,
         authSource: user.authSource,
+        twofaScheme: user.twofaScheme,
+        twofaTotpKey: user.twofaTotpKey,
+        twofaTotpLastUsedStep: user.twofaTotpLastUsedStep,
       })
       .returning();
     return toDomain(row);
@@ -89,5 +95,27 @@ export class DrizzleUserRepository implements UserRepository {
 
   async setAtomKey(userId: string, atomKey: string): Promise<void> {
     await db.update(users).set({ atomKey }).where(eq(users.id, userId));
+  }
+
+  async setTotpPairing(userId: string, encryptedKey: string): Promise<void> {
+    await db.update(users).set({ twofaTotpKey: encryptedKey }).where(eq(users.id, userId));
+  }
+
+  async confirmTotpPairing(userId: string, lastUsedStep: number): Promise<void> {
+    await db
+      .update(users)
+      .set({ twofaScheme: "totp", twofaTotpLastUsedStep: lastUsedStep })
+      .where(eq(users.id, userId));
+  }
+
+  async updateTwofaLastUsedStep(userId: string, step: number): Promise<void> {
+    await db.update(users).set({ twofaTotpLastUsedStep: step }).where(eq(users.id, userId));
+  }
+
+  async clearTwofa(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ twofaScheme: null, twofaTotpKey: null, twofaTotpLastUsedStep: null })
+      .where(eq(users.id, userId));
   }
 }

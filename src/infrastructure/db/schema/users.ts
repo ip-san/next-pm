@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const userStatusEnum = ["active", "registered", "locked"] as const;
 
@@ -27,6 +27,17 @@ export const users = pgTable("users", {
   atomKey: text("atom_key").unique(),
   /** Null for a locally-authenticated user; "ldap" delegates password checks to LDAP on every login. */
   authSource: text("auth_source", { enum: ["ldap"] }),
+  /** Null until a pairing is confirmed — see application/twofa/pairing.ts. Only "totp" exists for now. */
+  twofaScheme: text("twofa_scheme", { enum: ["totp"] }),
+  /**
+   * AES-256-GCM ciphertext of the base32 TOTP secret (domain/crypto/symmetric.ts), never
+   * plaintext — unlike Redmine, which silently stores this column in plaintext if its
+   * database_cipher_key setting is left unconfigured. Set as soon as pairing starts (before
+   * twofaScheme is set), so an unconfirmed pairing attempt still occupies this column.
+   */
+  twofaTotpKey: text("twofa_totp_key"),
+  /** Anti-replay floor — the TOTP step number last accepted for this user. Null before first use. */
+  twofaTotpLastUsedStep: integer("twofa_totp_last_used_step"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -18,6 +18,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     apiKey: null,
     atomKey: null,
     authSource: null,
+    twofaScheme: null,
+    twofaTotpKey: null,
+    twofaTotpLastUsedStep: null,
     ...overrides,
   };
 }
@@ -33,6 +36,10 @@ function repoWith(user: User | null): UserRepository {
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
     setAtomKey: mock(async () => {}),
+    setTotpPairing: mock(async () => {}),
+    confirmTotpPairing: mock(async () => {}),
+    updateTwofaLastUsedStep: mock(async () => {}),
+    clearTwofa: mock(async () => {}),
   };
 }
 

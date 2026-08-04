@@ -20,6 +20,9 @@ function makeUser(overrides: Partial<User> = {}): User {
     apiKey: null,
     atomKey: null,
     authSource: null,
+    twofaScheme: null,
+    twofaTotpKey: null,
+    twofaTotpLastUsedStep: null,
     ...overrides,
   };
 }
@@ -49,6 +52,10 @@ describe("dispatchJob", () => {
       findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
       setAtomKey: mock(async () => {}),
+      setTotpPairing: mock(async () => {}),
+      confirmTotpPairing: mock(async () => {}),
+      updateTwofaLastUsedStep: mock(async () => {}),
+      clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -66,6 +73,10 @@ describe("dispatchJob", () => {
       findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
       setAtomKey: mock(async () => {}),
+      setTotpPairing: mock(async () => {}),
+      confirmTotpPairing: mock(async () => {}),
+      updateTwofaLastUsedStep: mock(async () => {}),
+      clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -83,6 +94,10 @@ describe("dispatchJob", () => {
       findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
       setAtomKey: mock(async () => {}),
+      setTotpPairing: mock(async () => {}),
+      confirmTotpPairing: mock(async () => {}),
+      updateTwofaLastUsedStep: mock(async () => {}),
+      clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
@@ -100,6 +115,10 @@ describe("dispatchJob", () => {
       findByAtomKey: mock(async () => null),
       findByMail: mock(async () => null),
       setAtomKey: mock(async () => {}),
+      setTotpPairing: mock(async () => {}),
+      confirmTotpPairing: mock(async () => {}),
+      updateTwofaLastUsedStep: mock(async () => {}),
+      clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
     };
     await expect(dispatchJob({ mailer, userRepository }, makeJob({ jobType: "unknown" }))).rejects.toThrow(UnknownJobTypeError);
