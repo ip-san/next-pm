@@ -72,6 +72,9 @@ export default async function WikiPageView({
               <a href={`/api/projects/${identifier}/wiki/export/pdf`} className="text-sm underline">
                 PDF
               </a>
+              <a href={`/api/projects/${identifier}/wiki/export/zip`} className="text-sm underline">
+                ZIP
+              </a>
             </>
           ) : null}
           {canEdit ? (
