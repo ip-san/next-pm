@@ -41,7 +41,10 @@ export class GitCliBrowser implements GitBrowser {
 
   async log(rootPath: string, ref: string, limit: number): Promise<Commit[]> {
     validateRef(ref);
-    const format = "%H%x1f%an%x1f%ad%x1f%s%x1e";
+    // %B (full raw body: subject + blank line + body), not %s (subject only) — commit-message
+    // keyword scanning (domain/scm/keyword-scan.ts) needs the whole message, since "fixes #..."
+    // commonly sits in the body rather than the subject line.
+    const format = "%H%x1f%an%x1f%ae%x1f%ad%x1f%B%x1e";
     const { stdout } = await execFileAsync("git", [
       "-C",
       rootPath,
@@ -55,8 +58,8 @@ export class GitCliBrowser implements GitBrowser {
       .split("\x1e")
       .filter((entry) => entry.trim().length > 0)
       .map((entry) => {
-        const [hash, author, date, message] = entry.replace(/^\n/, "").split("\x1f");
-        return { hash, author, date, message };
+        const [hash, author, authorEmail, date, message] = entry.replace(/^\n/, "").split("\x1f");
+        return { hash, author, authorEmail, date, message: message.trimEnd() };
       });
   }
 

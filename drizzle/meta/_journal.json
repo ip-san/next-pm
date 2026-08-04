@@ -148,6 +148,13 @@
       "when": 1785835224232,
       "tag": "0020_special_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785860175875,
+      "tag": "0021_fuzzy_mentor",
+      "breakpoints": true
     }
   ]
 }

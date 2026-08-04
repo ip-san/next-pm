@@ -8,6 +8,7 @@ import { GitCliBrowser } from "@/infrastructure/scm/git-cli-browser";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { ConnectRepositoryForm } from "./connect-repository-form";
+import { SyncRepositoryButton } from "./sync-repository-button";
 
 export const dynamic = "force-dynamic";
 
@@ -121,14 +122,17 @@ export default async function RepositoryPage({
 
       {canViewChangesets ? (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">最近のコミット</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium">最近のコミット</h2>
+            {canManage ? <SyncRepositoryButton projectIdentifier={identifier} /> : null}
+          </div>
           <ul className="flex flex-col gap-1 text-xs">
             {commits.map((commit) => (
               <li key={commit.hash} className="border-b pb-1">
                 <Link href={`/projects/${identifier}/repository/revisions/${commit.hash}`} className="font-mono underline">
                   {commit.hash.slice(0, 8)}
                 </Link>{" "}
-                {commit.message} — {commit.author}, {commit.date}
+                {commit.message.split("\n")[0]} — {commit.author}, {commit.date}
               </li>
             ))}
           </ul>

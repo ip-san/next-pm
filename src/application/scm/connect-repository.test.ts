@@ -30,7 +30,7 @@ describe("connectRepository", () => {
   });
 
   it("rejects connecting a second repository to the same project", async () => {
-    const existing: ScmRepository = { id: "repo-0", projectId: "proj-1", rootPath: "/existing" };
+    const existing: ScmRepository = { id: "repo-0", projectId: "proj-1", rootPath: "/existing", createdAt: new Date() };
     const scmRepositoryRepository = makeRepo(existing);
     await expect(connectRepository({ scmRepositoryRepository }, baseInput)).rejects.toThrow(InvalidRepositoryError);
     expect(scmRepositoryRepository.create).not.toHaveBeenCalled();
