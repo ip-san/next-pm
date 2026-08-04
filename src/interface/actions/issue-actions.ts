@@ -5,7 +5,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { StaleIssueError } from "@/domain/issue/entity";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { filterMembersVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
@@ -17,6 +17,7 @@ import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repos
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
@@ -139,10 +140,21 @@ export async function createIssueFormAction(
       ? await new DrizzleGroupRepository().listUserIds(issue.assignedToId)
       : [issue.assignedToId];
 
+  // Mirrors Issue#notified_users' `notified.reject! {|user| !visible?(user)}` — a private
+  // issue must not be mailed to project members who can't see it. Author/assignees are
+  // always visible to themselves, so only the "notify every member" group is filtered.
+  const rolesById = new Map(
+    (await new DrizzleRoleRepository().findByIds([...new Set(members.flatMap((m) => m.roleIds))])).map((role) => [
+      role.id,
+      role,
+    ]),
+  );
+  const notifiableMembers = filterMembersVisibleToPrivateIssue(issue, members, rolesById);
+
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
     {
-      recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(members)],
+      recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers)],
       excludeUserId: user.id,
       subject: `[${project.name}] ${issue.subject}`,
       body: issue.description,

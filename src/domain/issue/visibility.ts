@@ -1,3 +1,4 @@
+import type { Member } from "@/domain/member/entity";
 import type { IssuesVisibility } from "@/domain/role/entity";
 import type { Issue } from "./entity";
 
@@ -29,4 +30,25 @@ export function isPrivateIssueVisible(
   if (isAuthor || isDirectAssignee || isGroupAssignee) return true;
 
   return roles.some((role) => role.issuesVisibility === "all");
+}
+
+/**
+ * Faithful port of Issue#notified_users' `notified.reject! {|user| !visible?(user)}` step,
+ * restricted to the "notify every project member" candidate group — author/assignee are
+ * always visible to themselves by construction, so callers should union this result with
+ * those ids separately rather than pass them through here.
+ *
+ * Only the private-issue-visibility half of `visible?` is checked (a project member has
+ * already passed `view_issues` to appear in the member list at all). A global admin who is
+ * also a restricted-role project member is not special-cased to bypass this — unlike the
+ * leak this guards against, that only costs them one missed notification email, not a
+ * disclosure, so it's left as a simplification rather than plumbed through here.
+ */
+export function filterMembersVisibleToPrivateIssue<M extends Pick<Member, "userId" | "roleIds">>(
+  issue: Pick<Issue, "isPrivate">,
+  members: M[],
+  rolesById: Map<string, { issuesVisibility: IssuesVisibility }>,
+): M[] {
+  if (!issue.isPrivate) return members;
+  return members.filter((member) => member.roleIds.some((roleId) => rolesById.get(roleId)?.issuesVisibility === "all"));
 }

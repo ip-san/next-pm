@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isPrivateIssueVisible } from "./visibility";
+import { filterMembersVisibleToPrivateIssue, isPrivateIssueVisible } from "./visibility";
 
 const privateIssue = { isPrivate: true, authorId: "author-1", assignedToId: "assignee-1", assignedToType: "user" as const };
 const publicIssue = { isPrivate: false, authorId: "author-1", assignedToId: "assignee-1", assignedToType: "user" as const };
@@ -54,5 +54,32 @@ describe("isPrivateIssueVisible", () => {
 
   it("does not treat a matching user id as the group assignee when assignedToType is 'group'", () => {
     expect(isPrivateIssueVisible(privateGroupAssigned, "group-1", [], [{ issuesVisibility: "own" }])).toBe(false);
+  });
+});
+
+describe("filterMembersVisibleToPrivateIssue", () => {
+  const rolesById = new Map([
+    ["role-all", { issuesVisibility: "all" as const }],
+    ["role-default", { issuesVisibility: "default" as const }],
+    ["role-own", { issuesVisibility: "own" as const }],
+  ]);
+  const members = [
+    { userId: "user-all", roleIds: ["role-all"] },
+    { userId: "user-default", roleIds: ["role-default"] },
+    { userId: "user-multi", roleIds: ["role-own", "role-all"] },
+  ];
+
+  it("returns every member unchanged when the issue is not private", () => {
+    expect(filterMembersVisibleToPrivateIssue(publicIssue, members, rolesById)).toEqual(members);
+  });
+
+  it("keeps only members holding a role with issuesVisibility 'all' when the issue is private", () => {
+    const visible = filterMembersVisibleToPrivateIssue(privateIssue, members, rolesById);
+    expect(visible.map((m) => m.userId)).toEqual(["user-all", "user-multi"]);
+  });
+
+  it("drops a member whose role id isn't found in the map", () => {
+    const visible = filterMembersVisibleToPrivateIssue(privateIssue, [{ userId: "user-unknown", roleIds: ["missing"] }], rolesById);
+    expect(visible).toEqual([]);
   });
 });
