@@ -319,6 +319,25 @@ describe("syncChangesets", () => {
     expect(result).toEqual({ ingested: 1, fixed: 0, timeLogged: 0 });
   });
 
+  it("does not log time when logtimeEnabled is false, even with a matching committer and @Nh", async () => {
+    const issue = makeIssue({ id: "eb0b2d1a-0000-0000-0000-000000000000", projectId: "proj-1", statusId: OPEN_STATUS.id });
+    const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
+    const timeEntryRepository = makeTimeEntryRepository();
+    const repositories: SyncChangesetsRepositories = {
+      gitBrowser: makeGitBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
+      changesetRepository: makeChangesetRepository(),
+      issueRepository,
+      issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
+      timeEntryRepository,
+      enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      userRepository: makeUserRepository(COMMITTER),
+    };
+
+    const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50, DEFAULT_KEYWORD_SCAN_OPTIONS, false);
+    expect(result.timeLogged).toBe(0);
+    expect(timeEntryRepository.create).not.toHaveBeenCalled();
+  });
+
   it("uses the default keyword scan options unless overridden", () => {
     expect(DEFAULT_KEYWORD_SCAN_OPTIONS.refKeywords).toContain("refs");
     expect(DEFAULT_KEYWORD_SCAN_OPTIONS.fixKeywords).toContain("fixes");

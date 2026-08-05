@@ -5,12 +5,14 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { connectRepository, InvalidRepositoryError } from "@/application/scm/connect-repository";
 import { syncChangesets } from "@/application/scm/sync-changesets";
+import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { GitCliBrowser } from "@/infrastructure/scm/git-cli-browser";
@@ -108,6 +110,8 @@ export async function syncRepositoryAction(
     return { error: "このプロジェクトにはリポジトリが設定されていません。", summary: null };
   }
 
+  const { keywordScanOptions, logtimeEnabled } = await loadCommitKeywordSettings(new DrizzleSettingsRepository());
+
   const result = await syncChangesets(
     {
       gitBrowser: new GitCliBrowser(),
@@ -121,6 +125,8 @@ export async function syncRepositoryAction(
     scmRepository,
     "HEAD",
     200,
+    keywordScanOptions,
+    logtimeEnabled,
   );
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/repository`);

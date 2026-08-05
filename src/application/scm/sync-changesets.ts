@@ -8,6 +8,7 @@ import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, ScmRepository } from "@/domain/scm/entity";
 import type { GitBrowser } from "@/domain/scm/git-browser";
 import { scanCommitMessage, type KeywordScanOptions } from "@/domain/scm/keyword-scan";
+import { resolveCommitKeywordSettings } from "@/domain/settings/commit-keywords";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
@@ -23,18 +24,16 @@ export interface SyncChangesetsRepositories {
 }
 
 /**
- * Deliberate simplification of Redmine's fully admin-configurable commit_ref_keywords /
- * commit_update_keywords settings — next-pm has no general application-settings page yet (a
- * separate, larger candidate feature on its own). refKeywords matches Redmine's own out-of-the-
- * box default; fixKeywords hardcodes the "fixes,closes" rule Redmine's own documentation uses
- * as its example (vanilla Redmine actually ships commit_update_keywords empty by default, so
- * this is slightly more opinionated than a truly fresh Redmine install, but matches what nearly
- * every real deployment configures).
+ * Fallback used when no settings row exists yet (fresh install) — see
+ * domain/settings/commit-keywords.ts, which is now the source of truth for the persisted,
+ * admin-configurable version of these same values (mirrors Redmine's commit_ref_keywords /
+ * commit_update_keywords). refKeywords matches Redmine's own out-of-the-box default;
+ * fixKeywords hardcodes the "fixes,closes" rule Redmine's own documentation uses as its example
+ * (vanilla Redmine actually ships commit_update_keywords empty by default, so this is slightly
+ * more opinionated than a truly fresh Redmine install, but matches what nearly every real
+ * deployment configures).
  */
-export const DEFAULT_KEYWORD_SCAN_OPTIONS: KeywordScanOptions = {
-  refKeywords: ["refs", "references"],
-  fixKeywords: ["fixes", "closes", "fix", "close"],
-};
+export const DEFAULT_KEYWORD_SCAN_OPTIONS: KeywordScanOptions = resolveCommitKeywordSettings({}).keywordScanOptions;
 
 export interface SyncChangesetsResult {
   ingested: number;
@@ -122,6 +121,7 @@ export async function syncChangesets(
   ref: string,
   limit: number,
   keywordScanOptions: KeywordScanOptions = DEFAULT_KEYWORD_SCAN_OPTIONS,
+  logtimeEnabled: boolean = true,
 ): Promise<SyncChangesetsResult> {
   const commits = await repositories.gitBrowser.log(scmRepository.rootPath, ref, limit);
 
@@ -164,7 +164,12 @@ export async function syncChangesets(
       if (match.action === "fix" && (await applyFixAction(repositories, issue))) {
         fixed++;
       }
-      if (match.hours !== null && committerUser && (await applyTimeLog(repositories, issue, changeset, match.hours, committerUser.id))) {
+      if (
+        logtimeEnabled &&
+        match.hours !== null &&
+        committerUser &&
+        (await applyTimeLog(repositories, issue, changeset, match.hours, committerUser.id))
+      ) {
         timeLogged++;
       }
     }
