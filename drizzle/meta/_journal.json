@@ -169,6 +169,13 @@
       "when": 1785936960314,
       "tag": "0023_fancy_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785943139966,
+      "tag": "0024_serious_giant_man",
+      "breakpoints": true
     }
   ]
 }
