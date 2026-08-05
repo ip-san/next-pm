@@ -6,15 +6,15 @@ import type { IssueRepository } from "@/domain/issue/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, ScmRepository } from "@/domain/scm/entity";
-import type { GitBrowser } from "@/domain/scm/git-browser";
 import { scanCommitMessage, type KeywordScanOptions } from "@/domain/scm/keyword-scan";
+import type { ScmBrowser } from "@/domain/scm/scm-browser";
 import { resolveCommitKeywordSettings } from "@/domain/settings/commit-keywords";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 
 export interface SyncChangesetsRepositories {
-  gitBrowser: GitBrowser;
+  scmBrowser: ScmBrowser;
   changesetRepository: ChangesetRepository;
   issueRepository: IssueRepository;
   issueStatusRepository: IssueStatusRepository;
@@ -123,7 +123,7 @@ export async function syncChangesets(
   keywordScanOptions: KeywordScanOptions = DEFAULT_KEYWORD_SCAN_OPTIONS,
   logtimeEnabled: boolean = true,
 ): Promise<SyncChangesetsResult> {
-  const commits = await repositories.gitBrowser.log(scmRepository.rootPath, ref, limit);
+  const commits = await repositories.scmBrowser.log(scmRepository.rootPath, ref, limit);
 
   let ingested = 0;
   let fixed = 0;

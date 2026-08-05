@@ -4,7 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { InvalidRefError, InvalidRepositoryPathError } from "@/domain/scm/validate-path";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
-import { GitCliBrowser } from "@/infrastructure/scm/git-cli-browser";
+import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -40,10 +40,11 @@ export default async function BlamePage({
     notFound();
   }
 
-  let lines: Awaited<ReturnType<GitCliBrowser["blame"]>> = [];
+  const browser = scmBrowserFor(scmRepository.vendor);
+  let lines: Awaited<ReturnType<typeof browser.blame>> = [];
   let error: string | null = null;
   try {
-    lines = await new GitCliBrowser().blame(scmRepository.rootPath, currentRef, currentPath);
+    lines = await browser.blame(scmRepository.rootPath, currentRef, currentPath);
   } catch (blameError) {
     error = blameError instanceof InvalidRefError || blameError instanceof InvalidRepositoryPathError ? blameError.message : "対象が見つかりません。";
   }

@@ -1,0 +1,1 @@
+ALTER TABLE "scm_repositories" ADD COLUMN "vendor" text DEFAULT 'git' NOT NULL;

@@ -4,7 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { InvalidRefError, InvalidRepositoryPathError } from "@/domain/scm/validate-path";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
-import { GitCliBrowser } from "@/infrastructure/scm/git-cli-browser";
+import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { ConnectRepositoryForm } from "./connect-repository-form";
@@ -50,7 +50,7 @@ export default async function RepositoryPage({
     );
   }
 
-  const browser = new GitCliBrowser();
+  const browser = scmBrowserFor(scmRepository.vendor);
   let entries: Awaited<ReturnType<typeof browser.listTree>> = [];
   let commits: Awaited<ReturnType<typeof browser.log>> = [];
   let fileContent: string | null = null;

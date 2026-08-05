@@ -4,7 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { InvalidRefError } from "@/domain/scm/validate-path";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
-import { GitCliBrowser } from "@/infrastructure/scm/git-cli-browser";
+import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -40,7 +40,7 @@ export default async function RevisionDiffPage({ params }: { params: Promise<{ i
   let diff: string | null = null;
   let error: string | null = null;
   try {
-    diff = await new GitCliBrowser().diff(scmRepository.rootPath, hash);
+    diff = await scmBrowserFor(scmRepository.vendor).diff(scmRepository.rootPath, hash);
   } catch (diffError) {
     error = diffError instanceof InvalidRefError ? diffError.message : "リビジョンが見つかりません。";
   }

@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { BlameLine, Commit, TreeEntry } from "@/domain/scm/entity";
-import type { GitBrowser } from "@/domain/scm/git-browser";
 import { parseBlamePorcelain } from "@/domain/scm/parse-blame";
+import type { ScmBrowser } from "@/domain/scm/scm-browser";
 import { validateRef, validateRepositoryPath } from "@/domain/scm/validate-path";
 
 const execFileAsync = promisify(execFile);
@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile);
  * pathspec filter, and `HEAD:path` is a single object argument, not a pathspec — adding `--`
  * silently makes it match nothing rather than erroring.
  */
-export class GitCliBrowser implements GitBrowser {
+export class GitCliBrowser implements ScmBrowser {
   async listTree(rootPath: string, ref: string, path: string): Promise<TreeEntry[]> {
     validateRef(ref);
     validateRepositoryPath(path);

@@ -15,7 +15,7 @@ import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { GitCliBrowser } from "@/infrastructure/scm/git-cli-browser";
+import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -25,6 +25,7 @@ export type ConnectRepositoryActionState = {
 
 const connectRepositorySchema = z.object({
   projectIdentifier: z.string().min(1),
+  vendor: z.enum(["git", "subversion", "mercurial"]),
   rootPath: z.string().min(1),
 });
 
@@ -34,6 +35,7 @@ export async function connectRepositoryAction(
 ): Promise<ConnectRepositoryActionState> {
   const parsed = connectRepositorySchema.safeParse({
     projectIdentifier: formData.get("projectIdentifier"),
+    vendor: formData.get("vendor"),
     rootPath: formData.get("rootPath"),
   });
   if (!parsed.success) {
@@ -58,7 +60,7 @@ export async function connectRepositoryAction(
   try {
     await connectRepository(
       { scmRepositoryRepository: new DrizzleScmRepositoryRepository() },
-      { projectId: project.id, rootPath: parsed.data.rootPath },
+      { projectId: project.id, vendor: parsed.data.vendor, rootPath: parsed.data.rootPath },
     );
   } catch (error) {
     if (error instanceof InvalidRepositoryError) {
@@ -114,7 +116,7 @@ export async function syncRepositoryAction(
 
   const result = await syncChangesets(
     {
-      gitBrowser: new GitCliBrowser(),
+      scmBrowser: scmBrowserFor(scmRepository.vendor),
       changesetRepository: new DrizzleChangesetRepository(),
       issueRepository: new DrizzleIssueRepository(),
       issueStatusRepository: new DrizzleIssueStatusRepository(),

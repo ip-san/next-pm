@@ -1,7 +1,15 @@
+/** Mirrors the subset of Redmine's Repository subclasses (Repository::Subversion/Mercurial/Git — CVS/Bazaar/Filesystem out of scope) that have a real adapter — see infrastructure/scm/browser-for-vendor.ts. */
+export type ScmVendor = "git" | "subversion" | "mercurial";
+
 export interface ScmRepository {
   id: string;
   projectId: string;
-  /** Absolute path to the repository's working copy on disk — server-controlled, never client input. */
+  vendor: ScmVendor;
+  /**
+   * Server-controlled, never client input. For git/mercurial, an absolute filesystem path to
+   * the repository. For subversion, a repository URL (file://, http://, https://, svn://, or
+   * svn+ssh://) — Subversion is centralized, so browsing it never needs a local checkout.
+   */
   rootPath: string;
   /** Commits committed before this are ingested but never trigger fix/time-log actions — see schema/scm-repositories.ts. */
   createdAt: Date;

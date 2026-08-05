@@ -8,6 +8,8 @@ export const scmRepositories = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    /** "git" | "subversion" | "mercurial" — see domain/scm/entity.ts's ScmVendor. Defaults to "git" so existing rows need no backfill. */
+    vendor: text("vendor").notNull().default("git"),
     /** Absolute path to the repository's working copy — set by an admin, never derived from request input. */
     rootPath: text("root_path").notNull(),
     /**

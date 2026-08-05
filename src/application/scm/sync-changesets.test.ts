@@ -8,20 +8,20 @@ import type { IssueStatus } from "@/domain/issue-status/entity";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, Commit, ScmRepository } from "@/domain/scm/entity";
-import type { GitBrowser } from "@/domain/scm/git-browser";
+import type { ScmBrowser } from "@/domain/scm/scm-browser";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 
 function makeScmRepository(overrides: Partial<ScmRepository> = {}): ScmRepository {
-  return { id: "repo-1", projectId: "proj-1", rootPath: "/repos/example", createdAt: new Date("2020-01-01"), ...overrides };
+  return { id: "repo-1", projectId: "proj-1", vendor: "git", rootPath: "/repos/example", createdAt: new Date("2020-01-01"), ...overrides };
 }
 
 function makeCommit(overrides: Partial<Commit> = {}): Commit {
   return { hash: "h1", author: "Alice", authorEmail: "alice@example.com", date: "2024-06-01 10:00:00 +0000", message: "A commit", ...overrides };
 }
 
-function makeGitBrowser(commits: Commit[]): GitBrowser {
+function makeScmBrowser(commits: Commit[]): ScmBrowser {
   return {
     listTree: mock(async () => []),
     readFile: mock(async () => ""),
@@ -127,7 +127,7 @@ describe("syncChangesets", () => {
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const changesetRepository = makeChangesetRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "refs #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "refs #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository,
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -149,7 +149,7 @@ describe("syncChangesets", () => {
       update: mock(async (id, lockVersion, changes) => ({ ...issue, ...changes, lockVersion: lockVersion + 1 })),
     });
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "fixes #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "fixes #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository: makeChangesetRepository(),
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -167,7 +167,7 @@ describe("syncChangesets", () => {
     const issue = makeIssue({ id: "eb0b2d1a-0000-0000-0000-000000000000", projectId: "proj-1", statusId: CLOSED_STATUS.id });
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "fixes #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "fixes #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository: makeChangesetRepository(),
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -186,7 +186,7 @@ describe("syncChangesets", () => {
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const timeEntryRepository = makeTimeEntryRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository: makeChangesetRepository(),
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -207,7 +207,7 @@ describe("syncChangesets", () => {
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const timeEntryRepository = makeTimeEntryRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository: makeChangesetRepository(),
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -226,7 +226,7 @@ describe("syncChangesets", () => {
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const changesetRepository = makeChangesetRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "fixes #eb0b2d1a @2h", date: "2019-01-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "fixes #eb0b2d1a @2h", date: "2019-01-01 10:00:00 +0000" })]),
       changesetRepository,
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -247,7 +247,7 @@ describe("syncChangesets", () => {
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const changesetRepository = makeChangesetRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "fixes #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "fixes #eb0b2d1a", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository,
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -263,7 +263,7 @@ describe("syncChangesets", () => {
   it("does not re-ingest a commit whose revision is already stored (idempotent)", async () => {
     const changesetRepository = makeChangesetRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ hash: "h1", message: "no refs here" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ hash: "h1", message: "no refs here" })]),
       changesetRepository,
       issueRepository: makeIssueRepositoryMock(),
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -283,7 +283,7 @@ describe("syncChangesets", () => {
     const changesetRepository = makeChangesetRepository();
     const issueRepository = makeIssueRepositoryMock();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "just a regular commit" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "just a regular commit" })]),
       changesetRepository,
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -307,7 +307,7 @@ describe("syncChangesets", () => {
       }),
     });
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "fixes #eb0b2d1a" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "fixes #eb0b2d1a" })]),
       changesetRepository: makeChangesetRepository(),
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
@@ -325,7 +325,7 @@ describe("syncChangesets", () => {
     const issueRepository = makeIssueRepositoryMock({ findByIdPrefix: mock(async () => [issue]) });
     const timeEntryRepository = makeTimeEntryRepository();
     const repositories: SyncChangesetsRepositories = {
-      gitBrowser: makeGitBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
+      scmBrowser: makeScmBrowser([makeCommit({ message: "refs #eb0b2d1a @2h", date: "2024-06-01 10:00:00 +0000" })]),
       changesetRepository: makeChangesetRepository(),
       issueRepository,
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
