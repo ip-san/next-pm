@@ -20,6 +20,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -265,6 +266,33 @@ export async function updateIssueStatusAction(
     }
     throw error;
   }
+
+  // Mirrors Issue#notified_users for an update event: author, assignee(s), watchers, and
+  // every project member (private-visibility filtered) — same recipient formula as creation,
+  // just missing watchers there too until now since an issue has none yet at creation time.
+  const assigneeUserIds =
+    existing.assignedToType === "group" && existing.assignedToId
+      ? await new DrizzleGroupRepository().listUserIds(existing.assignedToId)
+      : [existing.assignedToId];
+  const members = await new DrizzleMemberRepository().listByProject(project.id);
+  const rolesById = new Map(
+    (await new DrizzleRoleRepository().findByIds([...new Set(members.flatMap((m) => m.roleIds))])).map((role) => [
+      role.id,
+      role,
+    ]),
+  );
+  const notifiableMembers = filterMembersVisibleToPrivateIssue(existing, members, rolesById);
+  const watcherUserIds = await new DrizzleWatcherRepository().listWatcherUserIds("Issue", existing.id);
+
+  await enqueueNotification(
+    { jobRepository: new DrizzleJobRepository() },
+    {
+      recipientGroups: [[existing.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), watcherUserIds],
+      excludeUserId: user.id,
+      subject: `[${project.name}] ${existing.subject}`,
+      body: parsed.data.notes.trim().length > 0 ? parsed.data.notes : "ステータスが更新されました。",
+    },
+  );
 
   revalidatePath(`/projects/${project.identifier}/issues/${parsed.data.issueId}`);
   return { error: null };

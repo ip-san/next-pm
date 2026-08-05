@@ -9,6 +9,7 @@ import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repos
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -93,10 +94,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ boa
     throw error;
   }
 
+  const topicId = parsed.data.parent_id ?? message.id;
   const members = await new DrizzleMemberRepository().listByProject(project.id);
+  const watcherUserIds = await new DrizzleWatcherRepository().listWatcherUserIds("Message", topicId);
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
-    { recipientGroups: [memberUserIds(members)], excludeUserId: user.id, subject: `[${project.name}] ${message.subject}`, body: message.content },
+    {
+      recipientGroups: [memberUserIds(members), watcherUserIds],
+      excludeUserId: user.id,
+      subject: `[${project.name}] ${message.subject}`,
+      body: message.content,
+    },
   );
 
   return NextResponse.json({ message }, { status: 201 });
