@@ -28,4 +28,11 @@ describe("toggleWatch", () => {
     expect(watcherRepository.unwatch).toHaveBeenCalledWith("Issue", "issue-1", "user-1");
     expect(watcherRepository.watch).not.toHaveBeenCalled();
   });
+
+  it("works for non-issue watchable types (News, Message, WikiPage)", async () => {
+    const watcherRepository = makeRepo(false);
+    const result = await toggleWatch({ watcherRepository }, "News", "news-1", "user-1");
+    expect(result.watching).toBe(true);
+    expect(watcherRepository.watch).toHaveBeenCalledWith("News", "news-1", "user-1");
+  });
 });

@@ -4,11 +4,13 @@ import { can } from "@/domain/authorization/authorization-service";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { DeleteWikiAttachmentButton } from "./delete-wiki-attachment-button";
 import { WikiAttachmentUploadForm } from "./wiki-attachment-upload-form";
+import { WikiWatchToggleForm } from "./wiki-watch-toggle-form";
 
 export default async function WikiPageView({
   params,
@@ -36,6 +38,8 @@ export default async function WikiPageView({
   const wikiPage = await wikiPageRepository.findByTitle(project.id, title);
   const current = wikiPage ? await wikiContentRepository.findCurrent(wikiPage.id) : null;
   const attachments = wikiPage ? await new DrizzleAttachmentRepository().listByContainer("WikiPage", wikiPage.id) : [];
+  const isWatching =
+    user && wikiPage ? await new DrizzleWatcherRepository().isWatching("WikiPage", wikiPage.id, user.id) : false;
 
   let renderedText = current?.text ?? "";
   if (current && wikiPage) {
@@ -64,6 +68,9 @@ export default async function WikiPageView({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{title}</h1>
         <div className="flex items-center gap-3">
+          {user && wikiPage ? (
+            <WikiWatchToggleForm pageId={wikiPage.id} title={title} projectIdentifier={identifier} isWatching={isWatching} />
+          ) : null}
           {canExport ? (
             <>
               <a href={`/api/projects/${identifier}/wiki/export/html`} className="text-sm underline">

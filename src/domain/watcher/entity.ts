@@ -1,4 +1,4 @@
-export type WatchableType = "Issue";
+export type WatchableType = "Issue" | "News" | "Message" | "WikiPage";
 
 export interface Watcher {
   id: string;
