@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { activityEventPath } from "@/domain/activity/entity";
 import { buildAtomFeed } from "@/domain/atom/build-feed";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
+import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
@@ -61,6 +63,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       wikiContentRepository: new DrizzleWikiContentRepository(),
       documentRepository: new DrizzleDocumentRepository(),
       timeEntryRepository: new DrizzleTimeEntryRepository(),
+      scmRepositoryRepository: new DrizzleScmRepositoryRepository(),
+      changesetRepository: new DrizzleChangesetRepository(),
     },
     {
       projectId: project.id,

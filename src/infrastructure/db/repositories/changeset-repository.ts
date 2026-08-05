@@ -54,4 +54,13 @@ export class DrizzleChangesetRepository implements ChangesetRepository {
       .orderBy(desc(changesets.committedOn));
     return rows.map((row) => toDomain(row.changeset));
   }
+
+  async listByScmRepository(scmRepositoryId: string): Promise<Changeset[]> {
+    const rows = await db
+      .select()
+      .from(changesets)
+      .where(eq(changesets.scmRepositoryId, scmRepositoryId))
+      .orderBy(desc(changesets.committedOn));
+    return rows.map(toDomain);
+  }
 }

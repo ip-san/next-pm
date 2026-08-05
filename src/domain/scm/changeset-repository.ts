@@ -6,4 +6,5 @@ export interface ChangesetRepository {
   /** No-op if the pair is already linked — mirrors the unique constraint on (changesetId, issueId). */
   linkIssue(changesetId: string, issueId: string): Promise<void>;
   listForIssue(issueId: string): Promise<Changeset[]>;
+  listByScmRepository(scmRepositoryId: string): Promise<Changeset[]>;
 }

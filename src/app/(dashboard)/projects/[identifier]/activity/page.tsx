@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
 import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
+import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
@@ -26,6 +28,7 @@ const GROUP_LABEL: Record<ActivityEventGroup, string> = {
   wiki_edit: "Wiki",
   document: "ドキュメント",
   time_entry: "工数",
+  changeset: "リポジトリ",
 };
 
 const TYPE_LABEL: Record<ActivityEvent["type"], string> = {
@@ -36,6 +39,7 @@ const TYPE_LABEL: Record<ActivityEvent["type"], string> = {
   wiki_edit: "Wiki編集",
   document: "ドキュメント",
   time_entry: "工数",
+  changeset: "コミット",
 };
 
 function formatDate(date: Date): string {
@@ -91,6 +95,8 @@ export default async function ProjectActivityPage({
       wikiContentRepository: new DrizzleWikiContentRepository(),
       documentRepository: new DrizzleDocumentRepository(),
       timeEntryRepository: new DrizzleTimeEntryRepository(),
+      scmRepositoryRepository: new DrizzleScmRepositoryRepository(),
+      changesetRepository: new DrizzleChangesetRepository(),
     },
     {
       projectId: project.id,

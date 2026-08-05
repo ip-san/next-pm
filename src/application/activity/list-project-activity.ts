@@ -8,6 +8,8 @@ import type { JournalRepository } from "@/domain/journal/repository";
 import type { MessageRepository } from "@/domain/message/repository";
 import type { NewsRepository } from "@/domain/news/repository";
 import type { IssuesVisibility } from "@/domain/role/entity";
+import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
+import type { ScmRepositoryRepository } from "@/domain/scm/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { WikiContentRepository } from "@/domain/wiki/repository";
 
@@ -19,6 +21,8 @@ export interface ListProjectActivityRepositories {
   wikiContentRepository: WikiContentRepository;
   documentRepository: DocumentRepository;
   timeEntryRepository: TimeEntryRepository;
+  scmRepositoryRepository: ScmRepositoryRepository;
+  changesetRepository: ChangesetRepository;
 }
 
 export interface ListProjectActivityInput {
@@ -132,6 +136,24 @@ export async function listProjectActivity(
       const linkedIssue = entry.issueId ? linkedIssueById.get(entry.issueId) : undefined;
       if (entry.issueId && linkedIssue && !isPrivateIssueVisible(linkedIssue, input.userId, input.userGroupIds, input.issueVisibilityRoles)) continue;
       events.push({ type: "time_entry", id: entry.id, authorId: entry.userId, title: `${entry.hours}h`, excerpt: entry.comments, occurredAt: entry.createdAt });
+    }
+  }
+
+  if (wantsGroup("changeset") && can({ permission: "view_changesets", project: input.projectContext, actor: input.actor })) {
+    const scmRepository = await repositories.scmRepositoryRepository.findByProject(input.projectId);
+    if (scmRepository) {
+      const changesets = await repositories.changesetRepository.listByScmRepository(scmRepository.id);
+      for (const changeset of changesets) {
+        if (!inRange(changeset.committedOn, input.from, input.to)) continue;
+        events.push({
+          type: "changeset",
+          id: changeset.revision,
+          authorId: null,
+          title: changeset.comments.split("\n")[0] || changeset.revision.slice(0, 8),
+          excerpt: `${changeset.committerIdentity} — ${changeset.revision.slice(0, 8)}`,
+          occurredAt: changeset.committedOn,
+        });
+      }
     }
   }
 

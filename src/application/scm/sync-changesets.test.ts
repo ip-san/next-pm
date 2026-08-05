@@ -49,6 +49,7 @@ function makeChangesetRepository(): ChangesetRepository {
     listForIssue: mock(async (issueId) =>
       links.filter((l) => l.issueId === issueId).map((l) => [...store.values()].find((c) => c.id === l.changesetId)!),
     ),
+    listByScmRepository: mock(async (scmRepositoryId) => [...store.values()].filter((c) => c.scmRepositoryId === scmRepositoryId)),
   };
 }
 

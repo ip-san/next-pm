@@ -9,7 +9,7 @@ const activeProject: ProjectAuthorizationContext = {
   isArchived: false,
   isActive: true,
   isPublic: true,
-  enabledModules: ["issue_tracking", "wiki", "news", "boards", "documents", "time_tracking"],
+  enabledModules: ["issue_tracking", "wiki", "news", "boards", "documents", "time_tracking", "repository"],
 };
 
 const managerRole: Role = {
@@ -17,7 +17,7 @@ const managerRole: Role = {
   name: "Manager",
   builtin: 0,
   position: 1,
-  permissions: ["view_issues", "view_wiki_pages", "view_news", "view_messages", "view_documents", "view_time_entries"],
+  permissions: ["view_issues", "view_wiki_pages", "view_news", "view_messages", "view_documents", "view_time_entries", "view_changesets"],
   issuesVisibility: "all",
   timeEntriesVisibility: "all",
   usersVisibility: "all",
@@ -74,6 +74,19 @@ function timeEntry(overrides: Partial<import("@/domain/time-entry/entity").TimeE
   };
 }
 
+function changeset(overrides: Partial<import("@/domain/scm/entity").Changeset> = {}): import("@/domain/scm/entity").Changeset {
+  return {
+    id: "changeset-1",
+    scmRepositoryId: "repo-1",
+    revision: "abcdef1234567890",
+    committerIdentity: "Alice <alice@example.com>",
+    committedOn: inside,
+    comments: "Fix login bug\n\nLonger body.",
+    createdAt: inside,
+    ...overrides,
+  };
+}
+
 function journal(overrides: Partial<Journal>): Journal {
   return {
     id: "journal-1",
@@ -96,6 +109,8 @@ function makeRepositories(overrides: Partial<ListProjectActivityRepositories> = 
     wikiContentRepository: { listByProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["wikiContentRepository"],
     documentRepository: { listByProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["documentRepository"],
     timeEntryRepository: { listForProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["timeEntryRepository"],
+    scmRepositoryRepository: { findByProject: mock(async () => null) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+    changesetRepository: { listByScmRepository: mock(async () => []) } as unknown as ListProjectActivityRepositories["changesetRepository"],
     ...overrides,
   };
 }
@@ -262,5 +277,43 @@ describe("listProjectActivity", () => {
       baseInput({ actor: { kind: "member", roles: [roleWithoutAllVisibility] }, issueVisibilityRoles: [roleWithoutAllVisibility] }),
     );
     expect(events).toEqual([]);
+  });
+
+  it("includes a changeset within the date range, using its first comment line as the title", async () => {
+    const repositories = makeRepositories({
+      scmRepositoryRepository: { findByProject: mock(async () => ({ id: "repo-1", projectId: "project-1", rootPath: "/repos/x", createdAt: outside })) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+      changesetRepository: { listByScmRepository: mock(async () => [changeset({ createdAt: inside })]) } as unknown as ListProjectActivityRepositories["changesetRepository"],
+    });
+    const events = await listProjectActivity(repositories, baseInput());
+    expect(events).toEqual([
+      {
+        type: "changeset",
+        id: "abcdef1234567890",
+        authorId: null,
+        title: "Fix login bug",
+        excerpt: "Alice <alice@example.com> — abcdef12",
+        occurredAt: inside,
+      },
+    ]);
+  });
+
+  it("returns no changeset events when the project has no connected repository", async () => {
+    const repositories = makeRepositories({
+      changesetRepository: { listByScmRepository: mock(async () => [changeset({ createdAt: inside })]) } as unknown as ListProjectActivityRepositories["changesetRepository"],
+    });
+    const events = await listProjectActivity(repositories, baseInput());
+    expect(events).toEqual([]);
+    expect(repositories.changesetRepository.listByScmRepository).not.toHaveBeenCalled();
+  });
+
+  it("skips the changeset group when the actor lacks view_changesets", async () => {
+    const noRepositoryRole: Role = { ...managerRole, permissions: managerRole.permissions.filter((p) => p !== "view_changesets") };
+    const repositories = makeRepositories({
+      scmRepositoryRepository: { findByProject: mock(async () => ({ id: "repo-1", projectId: "project-1", rootPath: "/repos/x", createdAt: outside })) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+      changesetRepository: { listByScmRepository: mock(async () => [changeset({ createdAt: inside })]) } as unknown as ListProjectActivityRepositories["changesetRepository"],
+    });
+    const events = await listProjectActivity(repositories, baseInput({ actor: { kind: "member", roles: [noRepositoryRole] } }));
+    expect(events).toEqual([]);
+    expect(repositories.scmRepositoryRepository.findByProject).not.toHaveBeenCalled();
   });
 });
