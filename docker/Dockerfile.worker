@@ -11,4 +11,4 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 EXPOSE 3001
-CMD ["node_modules/.bin/tsx", "worker/index.ts"]
+CMD ["node_modules/.bin/tsx", "--env-file-if-exists=.env.local", "worker/index.ts"]

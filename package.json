@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker": "tsx watch worker/index.ts",
+    "worker": "tsx watch --env-file-if-exists=.env.local worker/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx src/infrastructure/db/seed.ts"
+    "db:seed": "tsx --env-file-if-exists=.env.local src/infrastructure/db/seed.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
