@@ -4,20 +4,17 @@
 
 テーブル定義の正本は`src/infrastructure/db/schema/*.ts`、TypeScript側の型定義の正本は`src/domain/*/entity.ts`です。この文書はその両者を突き合わせた要約であり、詳細は各ソースファイルを参照してください。
 
-## 表記上の注意: 「閉じたDB enum」と「開いたtext」
+## 表記上の注意: 列挙値はどれもDB側では強制されていない
 
-Drizzleスキーマ上、同じ「文字列の列挙」でも2種類の実装がある:
+Drizzleスキーマ上、`text(name, { enum: [...] })`という書き方をしている列(`projects.status`/`users.status`/`custom_fields.fieldFormat`/`issue_relations.relationType`/`jobs.status`/`queries.visibility`/`workflow_field_permissions.rule`など)と、ただの`text()`に`.$type<...>()`だけを付けた列(`versions.status`/`versions.sharing`/`scm_repositories.vendor`/`attachments.containerType`/`watchers.watchableType`/`journals.journalizedType`/`custom_values.customizedType`/`roles.issuesVisibility`など)が混在していますが、**この違いはTypeScript側の型注釈があるかどうかだけ**——Drizzleの`{ enum: [...] }`オプションはPostgresのネイティブENUM型や`CHECK`制約を一切生成せず、生成されるDDLはどちらもただの`text`列です(実際に`drizzle/*.sql`の全マイグレーションを検索しても`CREATE TYPE`/`CHECK`は1件も出てこない)。つまり**「不正な値をDBが拒否する」という保証はこのどちらの書き方にも無く**、両者の違いはコンパイル時にTypeScriptがどこまで値を絞り込めるかだけです。
 
-- **DB enumで制約**: `issue_statuses`/`projects.status`/`users.status`/`custom_fields.fieldFormat`/`issue_relations.relationType`/`jobs.status`/`queries.visibility`/`workflow_field_permissions.rule` など。不正な値はDB側で拒否される。
-- **プレーンな`text()`+TypeScript側の union型のみ**: `versions.status`/`versions.sharing`/`scm_repositories.vendor`/`attachments.containerType`/`watchers.watchableType`/`journals.journalizedType`/`custom_values.customizedType`。多くは「ポリモーフィックな判別子」または「将来値が増える可能性がある」列で、意図的にDB制約を緩めている。
-
-以下のER図では両者を区別せず列挙していますが、コードを読む際はこの違いを意識してください。
+これと対照的に、**外部キー(FK)による参照整合性は実際にDBが強制する**——例えば`issues.statusId`が存在しない`issue_statuses.id`を指すことはPostgres自身が拒否する。「列挙値の妥当性」と「参照整合性」を混同しないよう、以下のER図やその注記を読む際は区別してください。
 
 ## 1. プロジェクト構造・権限
 
 ```mermaid
 erDiagram
-    PROJECT ||--o{ PROJECT : "サブプロジェクト(nested set: lft/rgt、DB制約なし・アプリ側で維持)"
+    PROJECT ||--o{ PROJECT : "サブプロジェクト(parentIdはON DELETE RESTRICT。<br/>lft/rgtの並び自体はDB制約ではなくアプリ側で維持)"
     PROJECT ||--o{ MEMBER : has
     PROJECT ||--o{ ENABLED_MODULE : "有効なモジュール(1行1モジュール名)"
     PROJECT }o--o{ TRACKER : "使用するトラッカー(project_trackers)"
@@ -31,7 +28,7 @@ erDiagram
 
     ROLE {
         jsonb permissions "PermissionKey[](約30種)"
-        int builtin "0=通常/1=非メンバー/2=ゲスト"
+        int builtin "0=通常/1=非メンバー/2=匿名(未ログイン、Redmineの'Anonymous')"
         string issuesVisibility "all/default/own"
         string timeEntriesVisibility "all/own"
         string usersVisibility "all/members_of_visible_projects"
@@ -46,7 +43,7 @@ erDiagram
 - `Project.enabledModules`/`trackerIds`はエンティティ上のフィールドだが、実体は列ではなく`enabled_modules`テーブルと`project_trackers`中間テーブルからの集約(リポジトリ層が組み立てる)。
 - `Member`⇔`Role`は多対多(`member_roles`)。複数ロールを持つ場合、権限は**いずれか一つが許可すればよい**というOR判定(詳細は[`authorization.md`](authorization.md))。
 - グループをプロジェクトメンバーに追加すると、そのグループの各ユーザーに対応する**継承済み`Member`行**が1件ずつ生成される(`inheritedFromMemberId`が元のグループ行を指す) — Redmineの`MemberRole#add_role_to_group_users`相当(`application/groups/group-membership.ts`)。
-- `Project`の階層は`lft`/`rgt`によるネステッドセットだが、**DBレベルの制約は無く、アプリ側(`domain/project/nested-set.ts`)が維持する**。**`Issue`の親子はネステッドセットではなく単純な隣接リスト**(`parentId`のみ) — 意図的な設計簡略化。
+- `Project`の階層は`lft`/`rgt`によるネステッドセット。`parentId`自体はFKとして存在し(`ON DELETE RESTRICT`——子プロジェクトが残ったまま親を削除しようとするとDBが拒否する)、一方で`lft`/`rgt`という並び順の整合性そのものはDBが検証するものではなくアプリ側(`domain/project/nested-set.ts`)が維持する。**`Issue`の親子はネステッドセットではなく単純な隣接リスト**(`parentId`のみ、`ON DELETE SET NULL`) — 意図的な設計簡略化。
 
 ## 2. 課題管理
 
@@ -58,6 +55,8 @@ erDiagram
     TRACKER ||--o{ WORKFLOW_FIELD_PERMISSION : "フィールドの必須/読取専用ルール"
     ISSUE_STATUS ||--o{ WORKFLOW_TRANSITION : "遷移元/遷移先"
     ISSUE_STATUS ||--o{ ISSUE : "現在のステータス"
+    ROLE ||--o{ WORKFLOW_TRANSITION : "遷移ルールはtracker×status×roleで<br/>スコープされる(roleが無いと成立しない)"
+    ROLE ||--o{ WORKFLOW_FIELD_PERMISSION : "同様にroleでスコープ"
 
     ISSUE ||--o{ ISSUE : "親子(隣接リスト、parentIdのみ、ON DELETE SET NULL)"
     ISSUE ||--o{ ISSUE_RELATION : "関連(relates/duplicates/blocks/precedes/copied_to)"
@@ -68,7 +67,7 @@ erDiagram
     ISSUE ||--o{ WATCHER : "ウォッチされる(疑似ポリモーフィック)"
     ISSUE }o--o| VERSION : "対象バージョン"
     ISSUE }o--o| ISSUE_CATEGORY : "カテゴリ"
-    ISSUE ||--o{ TIME_ENTRY : "工数記録(issueIdはnullable)"
+    ISSUE o|--o{ TIME_ENTRY : "工数記録(issueIdはnullable)"
     ISSUE ||--o{ CUSTOM_VALUE : "カスタムフィールド値(customizedTypeは現状'Issue'のみ)"
 
     ISSUE {
@@ -91,7 +90,7 @@ erDiagram
 
 - ステータス遷移(`WorkflowTransition`)・フィールド必須/読取専用(`WorkflowFieldPermission`)の判定ロジックの詳細は[`issue-workflow.md`](issue-workflow.md)。
 - `Journal`はコメント本体(`notes`)と属性変更ログ(`JournalDetail`)の両方を1テーブルで表現 — `notes`があればコメント、`details`があれば属性変更(両方持つことも、どちらも空(=journal自体を作らない)もあり得る)。`journalizedType`列自体はDB上ただの`text`(疑似ポリモーフィック)だが、**現状書き込まれるのは`"Issue"`のみ**。
-- `Watcher`は`watchableType`(`"Issue" | "News" | "Message" | "WikiPage"`)による疑似ポリモーフィック関連 — 4種すべて実際にウォッチ機能から書き込まれる(Issue/News/Messageは確認済み、WikiPageも型定義上ワイヤリング済み)。
+- `Watcher`は`watchableType`(`"Issue" | "News" | "Message" | "WikiPage"`)による疑似ポリモーフィック関連 — 4種すべて実際にウォッチ機能から書き込まれることを確認済み(Issue/News/Message/WikiPageいずれも、ページ側のトグルボタンから対応するServer Actionまで実際に配線されている)。
 - `CustomValue.customizedType`も同じ疑似ポリモーフィック構造だが、リポジトリ層のメソッドシグネチャが型引数として`"Issue"`のみをハードコードしており、**実質的にIssue専用**(将来他の型へ拡張する余地は残しつつ、現状は使っていない)。
 - `Reaction`(Redmineの👍リアクション相当)は**next-pmに存在しない** — テーブルもエンティティも無い。
 
@@ -102,7 +101,7 @@ erDiagram
     PROJECT ||--o{ WIKI_PAGE : has
     WIKI_PAGE ||--o{ WIKI_PAGE : "親子(階層表示用、ON DELETE SET NULL)"
     WIKI_PAGE ||--o{ WIKI_CONTENT_VERSION : "版歴(現在の本文も含む)"
-    WIKI_PAGE }o--o{ WATCHER : "ウォッチされる"
+    WIKI_PAGE ||--o{ WATCHER : "ウォッチされる"
 
     WIKI_PAGE {
         string title "projectId内でunique"
@@ -125,11 +124,11 @@ erDiagram
     PROJECT ||--o{ BOARD : has
     BOARD ||--o{ MESSAGE : has
     MESSAGE ||--o{ MESSAGE : "トピック/返信(parentIdのみ、ON DELETE CASCADE — 親削除で返信も消える)"
-    MESSAGE }o--o{ WATCHER : "ウォッチされる(トピックのみ)"
+    MESSAGE ||--o{ WATCHER : "ウォッチされる(トピックのみ)"
 
     PROJECT ||--o{ NEWS : has
     NEWS ||--o{ NEWS_COMMENT : has
-    NEWS }o--o{ WATCHER : "ウォッチされる"
+    NEWS ||--o{ WATCHER : "ウォッチされる"
 
     MESSAGE {
         bool locked
@@ -138,15 +137,15 @@ erDiagram
     }
 ```
 
-- `Message`はトピックと返信を同一テーブル・同一モデルで表現(`parentId`が`null`ならトピック)。トピック削除は`ON DELETE CASCADE`で配下の返信も道連れに消える。
-- News・フォーラムの投稿は現状**通知(メール)を一切送らない**(詳細は[`notifications-and-jobs.md`](notifications-and-jobs.md)) — Redmine本家との既知のギャップ。
+- `Message`はトピックと返信を同一テーブル・同一モデルで表現(`parentId`が`null`ならトピック)。トピック削除は`ON DELETE CASCADE`で配下の返信も道連れに消える。フォーラムへの投稿(トピック作成・返信)はプロジェクトメンバー+トピックのウォッチャーへ通知メールを送る。
+- **Newsの投稿・コメントだけは現状通知(メール)を一切送らない**(フォーラムは送る、Newsだけが送らない——詳細は[`notifications-and-jobs.md`](notifications-and-jobs.md)) — Redmine本家との既知のギャップ。
 
 ## 5. 工数管理・列挙値
 
 ```mermaid
 erDiagram
     PROJECT ||--o{ TIME_ENTRY : has
-    ISSUE ||--o{ TIME_ENTRY : "紐づく課題(nullable、ON DELETE SET NULL)"
+    ISSUE o|--o{ TIME_ENTRY : "紐づく課題(nullable、ON DELETE SET NULL)"
     USER ||--o{ TIME_ENTRY : "作業者(userId)・記録者(authorId、両者は別人でありうる)"
     ENUMERATION ||--o{ TIME_ENTRY : "作業分類(activityId)"
     ENUMERATION ||--o{ ISSUE : "優先度(priorityId)"
@@ -219,6 +218,8 @@ erDiagram
     USER ||--o{ QUERY : "保存済みクエリ"
     QUERY }o--o{ ROLE : "公開範囲(visibility='roles'の時のみ意味を持つ)"
     USER ||--o{ ATTACHMENT : "アップロード者"
+    PROJECT ||--o{ DOCUMENT : has
+    ENUMERATION ||--o{ DOCUMENT : "カテゴリ(DocumentCategory型のEnumeration行)"
 
     MY_PAGE_LAYOUT {
         jsonb layout "{top, left, right}: MyPageBlockType[]"
@@ -233,13 +234,17 @@ erDiagram
         text storageKey "実ファイルを指す唯一のキー"
         text digest "SHA-256"
     }
+    DOCUMENT {
+        text title
+        text description
+    }
 ```
 
 - `MyPageLayout`はマイページのブロック配置(詳細は本README脇の機能一覧のみ、設計判断としての解説は無し——実装は素直なCRUD)。`top`/`left`/`right`という固定3カラムに、ブロック種別の配列を保持する。
 - 2FA(TOTP)は`users`テーブルに直接カラムを持つ(`twofaScheme`/`twofaTotpKey`/`twofaTotpLastUsedStep`) — 秘密鍵はAES-256-GCMで暗号化して保存(Redmine本家は暗号鍵未設定時に平文保存へフォールバックするが、next-pmはこの経路を持たない)。
 - `Settings`テーブルは`(name, value)`のフラットなキー・バリューのみ — Redmineの`Setting`が持つシリアライズ形式/フォーマットカタログは持たない、意図的な簡略化。
 - `Job`テーブル(`jobs`)は通知等の非同期処理キュー — 詳細は[`notifications-and-jobs.md`](notifications-and-jobs.md)。
-- `Attachment`の`containerType`はIssue/Document/WikiPage/Newsが実際に書き込まれることを確認済み(Messageは型定義上あるが実配線は要確認)。
+- `Attachment`の`containerType`は型定義上`"Issue" | "Message" | "News" | "Document" | "WikiPage"`の5種を持つが、**実際に書き込まれ・ダウンロード認可も実装されているのはIssue/Document/WikiPageの3種のみ**——Message/Newsへの添付は書き込み経路もダウンロード認可の分岐も無く、実質未配線(型だけ広く、機能はまだ追いついていない状態)。
 
 ## 計算結果であって永続化されないモデル
 

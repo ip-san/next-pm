@@ -65,7 +65,7 @@ flowchart LR
     end
 ```
 
-- **書き込みは例外なくServer Action → application層のユースケース関数**という経路を通る。
+- **書き込みの大半はServer Action → application層のユースケース関数**という経路を通るが、**「例外なく」ではない**——ウォッチャーの追加/削除(`watcher-actions.ts`の`addIssueWatcherAction`/`removeIssueWatcherAction`。同じファイル内の`toggleIssueWatchAction`はapplication層の`toggleWatch()`を正しく経由しており、ファイル内で一貫していない)、クエリ保存(`query-actions.ts`)、管理画面からのステータス/トラッカー/カスタムフィールド/ロール作成(`admin-actions.ts`)、グループ作成/削除(`group-actions.ts`)、課題カテゴリ作成(`issue-category-actions.ts`)は、Server Actionが対応するDrizzleリポジトリを直接呼んでおり、application層を経由しない——「単純なCRUDはSever Actionから直接」という次善の判断がこちらにも及んでいる。
 - **1画面ぶんの単純な詳細表示**(例: 課題詳細ページ)は、application層を経由せずページ(Server Component)がリポジトリ・ドメイン純関数を直接呼ぶことが多い——「単一エンティティ+その周辺情報をそのまま並べるだけ」の読み取りは薄いページ実装で済ませる、という次善の判断。
 - **複数のリポジトリを横断して合成する読み取り**(アクティビティフィード、検索、マイページ、管理設定画面)は`application/`配下に専用の関数を置く——artisan-pmの「Serviceを必ず経由する」ほど厳格ではないが、「非自明な集約ロジックはapplication層に置く」という一貫性は保たれている。
 
@@ -89,6 +89,9 @@ sequenceDiagram
     A->>Repo: findById(issueId) / findById(projectId)
     A->>A: isPrivateIssueVisible() で非公開課題の可視性チェック
     A->>A: can({permission: "edit_issues"}) OR<br/>(本人 AND can({permission: "edit_own_issues"}))
+    opt fixedVersionIdが送信されている
+        A->>Repo: listSharedWith(projectId) で<br/>共有されたバージョンか検証
+    end
     A->>Use: updateIssue(repos, input)
     Use->>Use: before = issueRepository.findById(id)(再取得)
     Use->>WF: listForTracker(...) — ステータス変更がある場合のみ
@@ -127,7 +130,8 @@ Livewireに相当する「部分HTML差分更新」という制約がNext.jsに�
 | 課題CSVエクスポート | `app/api/projects/[identifier]/issues/csv/route.ts` |
 | 課題PDFエクスポート | `app/api/projects/[identifier]/issues/pdf/route.tsx`(`@react-pdf/renderer`) |
 | ガントチャートPDF | `app/api/projects/[identifier]/gantt/pdf/route.tsx`(HTML版と同じレイアウト計算を共有) |
-| Wikiエクスポート(HTML/PDF/ZIP) | `app/api/projects/[identifier]/wiki/export/{html,pdf,zip}/route.ts` |
+| Wikiエクスポート(HTML/ZIP) | `app/api/projects/[identifier]/wiki/export/{html,zip}/route.ts` |
+| Wikiエクスポート(PDF) | `app/api/projects/[identifier]/wiki/export/pdf/route.tsx`(`@react-pdf/renderer`) |
 | 受信メール処理(課題の自動作成・返信) | `app/api/mail_handler/route.ts` |
 
 - `activity/atom/route.ts`だけは認証方式がさらに特殊——CookieかAPIキーに加えて、クエリ文字列に埋め込む専用の`atomKey`トークンも受け付ける(フィードリーダーはCookieもカスタムヘッダも送れないため)。一般のAPIキーとは意図的に別のトークンにしてあり、クエリ文字列がログ/ブラウザ履歴/Refererに漏れても影響範囲をフィード閲覧のみに限定している。`Referrer-Policy: no-referrer`も同じ理由でセットされる。

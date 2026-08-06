@@ -23,10 +23,10 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Field["各対象フィールドについて"] --> HasRule{"操作者が持つ全ロールの<br/>いずれかにルール行があるか"}
-    HasRule -->|"1件もなし"| Free["制約なし(自由編集可)<br/>— ロールに1件でもルールが<br/>無ければ広い方が勝つ"]
-    HasRule -->|"複数ロールで<br/>ルールが競合"| Stricter["より厳しい方(required)が優先"]
-    HasRule -->|"一致"| Apply["そのルールを適用"]
+    Field["各対象フィールドについて"] --> AllHaveRule{"操作者が持つ<br/>全てのロールに、<br/>このフィールドのルール行があるか"}
+    AllHaveRule -->|"1つでも欠けている<br/>(0件を含む)"| Free["制約なし(自由編集可)<br/>— 全ロールが揃って<br/>初めて制約が効く"]
+    AllHaveRule -->|"揃っている、かつ<br/>値が食い違う"| Stricter["より厳しい方(required)が優先"]
+    AllHaveRule -->|"揃っている、かつ<br/>値が一致"| Apply["そのルールを適用"]
     Apply --> Readonly{"rule = readonly?"}
     Readonly -->|Yes| Strip["変更差分から<br/>該当フィールドを黙って除外<br/>(エラーにはしない)"]
     Apply --> Required{"rule = required?"}
@@ -34,6 +34,8 @@ flowchart TD
     Blank -->|"空"| Throw["WorkflowRequiredFieldError<br/>— DB更新自体を呼ぶ前に例外"]
     Blank -->|"空でない"| OK["そのまま反映"]
 ```
+
+「全てのロールに」がここでの肝——`field-permission-rules.ts`の実装は`perRole.size < roleIds.size`(ルールを持つロール数が、保有ロール総数より少ない)なら即座にそのフィールドを制約対象から外す。複数ロールを持つ操作者のうち1つでもそのフィールドのルールを持たないロールがあれば、他のロールがどれだけ厳しいルールを持っていても無効——「広い方が勝つ」とは「1つでもルールが欠けていれば無制約になる」という意味であり、「1つでもルールがあれば適用される」という意味ではない。
 
 ## 更新処理全体の適用順序
 

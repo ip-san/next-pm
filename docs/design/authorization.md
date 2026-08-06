@@ -43,7 +43,7 @@ flowchart TD
     Member -->|なし| NonMember["kind: 'non_member'<br/>role: 組込Non-memberロール"]
 ```
 
-- `admin`の`roleIds`はダミーではなく**全ロールのid一覧**を持つ — ワークフロー遷移判定(`allowedNewStatusIds`)が`roleIds.includes(t.roleId)`という形でロールIDの集合と突き合わせる作りのため、管理者もどのロールの遷移ルールでも通過できるようにする目的。
+- `admin`の`roleIds`はダミーではなく`roleRepository.listAssignable()`(`assignable = true`の行のみ)から組み立てる — ワークフロー遷移判定(`allowedNewStatusIds`)が`roleIds.includes(t.roleId)`という形でロールIDの集合と突き合わせる作りのため、管理者もどのロールの遷移ルールでも通過できるようにする目的。**現状は「全ロール」と実質同義**(`assignable`列を`false`にするコードパスがどこにも無く、シード/作成アクション双方が常に`true`のまま作る)だが、これは実装上の偶然であって仕様上の保証ではない——将来`assignable=false`を使う機能が入れば、この2つは食い違いうる。
 - `issuesVisibilityRoles(actor)`は`can()`とは別の小さなヘルパーで、`isPrivateIssueVisible`(下記)に渡す「ロールが持つ`issuesVisibility`設定の一覧」を返す。管理者には`{issuesVisibility: "all"}`という合成ロールを返す — 呼び出し側全部で`actor.kind === "admin"`を特別扱いしなくて済むようにするため。
 
 ## 非公開課題の可視性(`issuesVisibility`)

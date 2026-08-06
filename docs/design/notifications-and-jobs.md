@@ -86,9 +86,9 @@ sequenceDiagram
 
     loop 5秒ごと(POLL_INTERVAL_MS)
         W->>Repo: claimNext()
-        Repo->>DB: BEGIN; SELECT ... WHERE status='pending'<br/>AND available_at &lt;= now()<br/>ORDER BY created_at LIMIT 1<br/>FOR UPDATE SKIP LOCKED
+        Repo->>DB: トランザクション開始<br/>SELECT ... WHERE status='pending'<br/>AND available_atがnow()以前<br/>ORDER BY created_at LIMIT 1<br/>FOR UPDATE SKIP LOCKED
         DB-->>Repo: 対象行(または無し)
-        Repo->>DB: UPDATE status='processing'; COMMIT
+        Repo->>DB: UPDATE status='processing' → コミット
         alt 取得できた
             W->>D: dispatchJob({mailer, userRepository}, job)
             D->>D: job.jobType で分岐(現状 "notify" のみ、他は UnknownJobTypeError)
@@ -129,7 +129,7 @@ flowchart LR
 `src`・`worker`配下を"cron"/"autofetch"/"prune"/"sweep"/"scheduler"等で全文検索した結果、**next-pmには時刻トリガーで動く処理が一つも無い**ことを確認済み。具体的には:
 
 - SCMリポジトリの自動フェッチ(Redmineの`autofetch_changesets`)に相当する定期実行は無い——「リポジトリを同期」ボタンを押した瞬間にServer Action内で**同期的に**changeset取り込みが走るのみ(ジョブテーブルを経由しない)。
-- 期限切れの一時アップロード(添付ファイル)の掃除も、専用のcron/rakeタスクではなく「アップロードトークンを引き換えようとした瞬間に、ついでに古いものを消す」という遅延実行(`application/attachments/upload-token.ts`のコメントに明記)。
+- 期限切れの一時アップロード(添付ファイル)には**掃除の仕組み自体が無い**——`application/attachments/upload-token.ts`のコード上のコメントはRedmineの`Attachment.prune`を引き合いに出しているが、実際にコードがしているのは「そのトークンを引き換えようとした瞬間、24時間を過ぎていれば引き換え自体を拒否する」という期限チェックのみ(`redeemUploadToken`)——`AttachmentRepository.delete()`はどこからも呼ばれておらず、期限切れの行やストレージ上の実ファイルは**削除されずに残り続ける**。同期的な遅延実行ですらなく、単なる「無期限に溜まる」状態。
 - ウォッチのプルーニング、Webhook配信なども同様に**存在しない**(Webhook機能自体がnext-pmに無い)。
 
 この「非同期処理はnotifyジョブ1種類・時刻トリガーは一切無し」という構成は、将来SCM自動フェッチや添付ファイルの定期GCを追加する際に、既存の`jobs`テーブル+ワーカーへ新しい`jobType`を足すだけでは済まない(時刻トリガー自体の仕組みが無い)ことを意味する——新機能として別途スケジューラ(cronプロセス、または`pg_cron`等)を導入する必要がある。
