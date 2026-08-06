@@ -41,7 +41,8 @@ async function drainOnce() {
 }
 
 async function main() {
-  startHealthServer();
+  const healthPort = Number(process.env.WORKER_HEALTH_PORT) || 3001;
+  startHealthServer(healthPort);
   for (;;) {
     try {
       await drainOnce();

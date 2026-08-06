@@ -56,6 +56,8 @@ Server Action/Route Handlerは通知を`jobs`テーブルに積むだけで、�
 bun run worker
 ```
 
+workerはヘルスチェック用のHTTPサーバー(`/healthz`)もポート3001で立てる——他のローカルサービス(Docker Desktopなど)がそのポートを既に使っている場合は`WORKER_HEALTH_PORT`で変更する。
+
 ### リポジトリのブラウジング(SCM連携)を試すには
 
 next-pmはGit/Subversion/Mercurialのいずれも、対応するCLIバイナリ(`git`/`svn`/`hg`)をシェルアウトして操作する——専用のライブラリやプラグインではなく、サーバーに実際にそのバイナリがインストールされている必要がある。接続するリポジトリはサーバー上の絶対パス(Git/Mercurial)またはURL(Subversion、`file://`/`http(s)://`/`svn(+ssh)://`)で指定する。
