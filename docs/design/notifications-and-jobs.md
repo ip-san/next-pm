@@ -11,6 +11,9 @@ flowchart TB
         IssueUpdate["issue-actions.ts<br/>updateIssueStatusAction"]
         MsgPost["message-actions.ts<br/>postMessageAction"]
         MsgApi["api/v1/boards/.../messages<br/>POST"]
+        WikiSave["wiki-actions.ts<br/>saveWikiPageAction"]
+        NewsCreate["news-actions.ts<br/>createNewsAction"]
+        NewsComment["news-actions.ts<br/>addNewsCommentAction"]
     end
 
     subgraph EnqueueLayer["application/jobs"]
@@ -30,7 +33,7 @@ flowchart TB
 
     Mailer["Mailer<br/>(SMTP_HOST未設定ならConsoleMailerへfallback)"]
 
-    IssueCreate & IssueUpdate & MsgPost & MsgApi --> Enqueue
+    IssueCreate & IssueUpdate & MsgPost & MsgApi & WikiSave & NewsCreate & NewsComment --> Enqueue
     Enqueue --> Union
     Union -->|"受信者が1人以上"| Jobs
     Union -.->|"0人なら何もしない"| X["(何も起きない)"]
@@ -42,7 +45,7 @@ flowchart TB
     Dispatch -->|失敗| Retry["markFailed<br/>(30秒後に再試行、最大5回)"]
 ```
 
-## `enqueueNotification`の呼び出し箇所は現状4か所のみ
+## `enqueueNotification`の呼び出し箇所
 
 | # | 発生源 | 通知先(unionされるグループ) | 除外 |
 |---|---|---|---|
@@ -50,11 +53,13 @@ flowchart TB
 | 2 | `issue-actions.ts` `updateIssueStatusAction` (ステータス更新/コメント追加) | `[作成者+担当者, 非公開可視性フィルタ済みの全メンバー, ウォッチャー]` | 更新者自身 |
 | 3 | `message-actions.ts` `postMessageAction` (フォーラム投稿、Web UI) | `[全メンバー, トピックのウォッチャー]` | 投稿者自身 |
 | 4 | `api/v1/boards/[boardId]/messages` POST (フォーラム投稿、REST API) | #3と同一 | 投稿者自身 |
+| 5 | `wiki-actions.ts` `saveWikiPageAction` (Wiki編集・作成) | `[view_wiki_pages権限を持つ全メンバー, そのページのウォッチャー]` | 編集者自身 |
+| 6 | `news-actions.ts` `createNewsAction` (News投稿) | `[view_news権限を持つ全メンバー]` | 投稿者自身 |
+| 7 | `news-actions.ts` `addNewsCommentAction` (Newsコメント) | `[News投稿者, view_news権限を持つ全メンバー, そのNewsのウォッチャー]` | コメント投稿者自身 |
 
-- 課題作成(#1)にはウォッチャーが含まれない——作成直後にはまだ誰もウォッチしていないため。
+- 課題作成(#1)とNews投稿(#6)にはウォッチャーが含まれない——作成直後にはまだ誰もウォッチしていないため。
 - 非公開課題向けの可視性フィルタ(`filterMembersVisibleToPrivateIssue`)はRedmineの`Issue#notified_users`の`reject! {|user| !visible?(user)}`を移植したもの——詳細は[`authorization.md`](authorization.md)の可視性節。
-
-**Wiki編集とNews投稿は、現状メールを一切送らない**——`enqueueNotification`の呼び出しがコード上どこにも無いことを確認済み。Redmine本家はこの両方をメール通知するため、これは意図的な簡略化というより**未実装のギャップ**として扱うべき。
+- Wiki/News(#5〜#7)は非公開課題のような特別な可視性ルールを持たないが、モジュール自体が無効化されたロール(またはそもそも`view_wiki_pages`/`view_news`を持たないロール)のメンバーにまで送るのは望ましくないため、`domain/member/entity.ts`の`filterMembersWithPermission()`(汎用の権限フィルタ、#1/#2の`rolesById`パターンを一般化したもの)で絞り込んでいる。フォーラム投稿(#3/#4)は対照的に**フィルタなしで全メンバーに送る**——これは既存の簡略化で、Wiki/News追加時にも変更していない。
 
 ## 受信者解決(`unionRecipients`)
 

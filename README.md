@@ -7,7 +7,7 @@ next-pmは[Redmine](https://www.redmine.org/) — オープンソースのプロ
 
 ## 実装済みの機能
 
-課題管理(トラッカー・ステータス・ワークフロー・フィールド必須/読取専用ルール・カスタムフィールド・関連・ウォッチャー)、ガントチャートとカレンダー、Wiki(版歴・マクロ・ページ名変更時のリダイレクト付き)、フォーラム、News、工数管理、複数種のSCMリポジトリ(Git/Subversion/Mercurial)のブラウジング/差分/blame閲覧とコミットメッセージ経由のチケット自動更新(`fixes #id`等)、保存済みクエリ、プロジェクト階層、ロールベースの権限、LDAP認証、二要素認証(TOTP+バックアップコード)、メール通知(課題の作成/更新、フォーラム投稿——Wiki編集とNews投稿は未通知)、REST API v1、PDF/CSV/ZIPエクスポート(課題・Wiki・ガント)、プロジェクト横断のアクティビティフィード・検索・Atomフィード、ブロック式にカスタマイズ可能なマイページ、管理画面からの一部アプリケーション設定変更。各機能がRedmine本家とどこまで一致しているかは`../artisan-pm/docs/parity-checklist.md`を参照。
+課題管理(トラッカー・ステータス・ワークフロー・フィールド必須/読取専用ルール・カスタムフィールド・関連・ウォッチャー)、ガントチャートとカレンダー、Wiki(版歴・マクロ・ページ名変更時のリダイレクト付き)、フォーラム、News、工数管理、複数種のSCMリポジトリ(Git/Subversion/Mercurial)のブラウジング/差分/blame閲覧とコミットメッセージ経由のチケット自動更新(`fixes #id`等)、保存済みクエリ、プロジェクト階層、ロールベースの権限、LDAP認証、二要素認証(TOTP+バックアップコード)、メール通知(課題の作成/更新、フォーラム投稿、Wiki編集、News投稿/コメント)、REST API v1、PDF/CSV/ZIPエクスポート(課題・Wiki・ガント)、プロジェクト横断のアクティビティフィード・検索・Atomフィード、ブロック式にカスタマイズ可能なマイページ、管理画面からの一部アプリケーション設定変更。各機能がRedmine本家とどこまで一致しているかは`../artisan-pm/docs/parity-checklist.md`を参照。
 
 ## 技術スタック
 
@@ -93,7 +93,7 @@ worker/              # 通知ジョブを処理する別プロセス(ポーリ�
 - **認可判定は`can()`一関数に集約されている**。`domain/authorization/authorization-service.ts`がRedmineの`Project#allows_to?` → `User#allowed_to?` → `Role#allowed_to?`の判定順序をそのまま1つの純関数に落とし込んでおり、ページ・Server Action・Route Handlerはこれを呼ぶだけでロール解決ロジックを自前で持たない(詳細は[`docs/design/authorization.md`](docs/design/authorization.md))。
 - **中央集権的な認証ミドルウェアは意図的に置いていない**。`src/proxy.ts`(Next.js 16の`middleware.ts`改称後の姿)はCSRFトークンcookieの発行のみを行い、ログイン強制は各ページ/Server Action/Route Handlerがその場で`currentUserFromCookies()`を呼んで判断する——共通ガードが無い分、新しい保護対象ページを追加するたびに認証チェックの書き忘れが無いか意識する必要がある。
 - **「疑似ポリモーフィック」な列は、DB制約より将来の拡張性を優先している**。`watchers.watchableType`・`journals.journalizedType`・`custom_values.customizedType`・`attachments.containerType`・`scm_repositories.vendor`はいずれもDBレベルのenum制約を持たない`text`列で、TypeScript側の閉じたunion型だけが正——「今はIssueだけ」「今はgit/subversion/mercurialだけ」という値の集合を、後から型を書き換えるだけで広げられるようにするための選択(詳細は[`docs/design/domain-model.md`](docs/design/domain-model.md)の表記注意)。
-- **通知は意図的にシンプル**。Redmineの`mail_notification`ティア(all/selected/only_my_events/...)や`Setting.notified_events`によるイベント単位のオプトインは実装していない——候補者プールをunionしてから一括フィルタする、という1本道のロジックのみ(詳細は[`docs/design/notifications-and-jobs.md`](docs/design/notifications-and-jobs.md))。Wiki編集・News投稿はこの通知パイプライン自体に接続されておらず、現状メールが送られない。
+- **通知は意図的にシンプル**。Redmineの`mail_notification`ティア(all/selected/only_my_events/...)や`Setting.notified_events`によるイベント単位のオプトインは実装していない——候補者プールをunionしてから一括フィルタする、という1本道のロジックのみ(詳細は[`docs/design/notifications-and-jobs.md`](docs/design/notifications-and-jobs.md))。
 - **時刻トリガーの非同期処理(cron相当)は一つも存在しない**。SCMの自動フェッチも添付ファイルの定期GCも、next-pmでは「ユーザー操作の瞬間に同期的に行う」か「次にそのデータに触れた瞬間についでに行う」遅延実行のどちらかで済ませている——本当のスケジューラが必要な機能を追加する際は、`worker/`のポーリングループに`jobType`を足すだけでは実現できないことに注意。
 - **マイページのブロック並べ替えはドラッグ&ドロップではなくボタン操作**。Redmine本家(および姉妹Laravel実装)はマウス専用のドラッグ&ドロップだが、next-pmは上下/列移動をそれぞれ独立したフォームのボタンにしている——キーボード操作でも欠けなく完結する。
 - **SCMアダプタはRedmineの「サブクラス」ではなく、1つのport(`ScmBrowser`)+vendorごとの実装クラス**。`git`/`svn`/`hg`いずれも同じ`listTree`/`readFile`/`log`/`diff`/`blame`インターフェースを実装し、`infrastructure/scm/browser-for-vendor.ts`が`ScmRepository.vendor`の値に応じて実装を選ぶ——呼び出し側(ページ・ユースケース関数)はどのVCSかを意識しない。

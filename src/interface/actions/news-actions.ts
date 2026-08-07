@@ -4,12 +4,26 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { addNewsComment, InvalidNewsCommentError } from "@/application/news/add-news-comment";
 import { createNews, InvalidNewsError } from "@/application/news/create-news";
+import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleNewsCommentRepository, DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+
+async function notifiableMemberIds(projectId: string, permission: "view_news") {
+  const members = await new DrizzleMemberRepository().listByProject(projectId);
+  const rolesById = new Map(
+    (await new DrizzleRoleRepository().findByIds([...new Set(members.flatMap((m) => m.roleIds))])).map((role) => [role.id, role]),
+  );
+  return memberUserIds(filterMembersWithPermission(members, rolesById, permission));
+}
 
 export type CreateNewsActionState = {
   error: string | null;
@@ -63,6 +77,16 @@ export async function createNewsAction(_prevState: CreateNewsActionState, formDa
     }
     throw error;
   }
+
+  await enqueueNotification(
+    { jobRepository: new DrizzleJobRepository() },
+    {
+      recipientGroups: [await notifiableMemberIds(project.id, "view_news")],
+      excludeUserId: user.id,
+      subject: `[${project.name}] ${created.title}`,
+      body: created.description,
+    },
+  );
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/news`);
   redirect(`/projects/${parsed.data.projectIdentifier}/news/${created.id}`);
@@ -152,8 +176,9 @@ export async function addNewsCommentAction(_prevState: AddNewsCommentActionState
     return { error: "この操作を行う権限がありません。" };
   }
 
+  let comment;
   try {
-    await addNewsComment({ newsCommentRepository: new DrizzleNewsCommentRepository() }, {
+    comment = await addNewsComment({ newsCommentRepository: new DrizzleNewsCommentRepository() }, {
       newsId: newsItem.id,
       authorId: user.id,
       content: parsed.data.content,
@@ -164,6 +189,17 @@ export async function addNewsCommentAction(_prevState: AddNewsCommentActionState
     }
     throw error;
   }
+
+  const watcherUserIds = await new DrizzleWatcherRepository().listWatcherUserIds("News", newsItem.id);
+  await enqueueNotification(
+    { jobRepository: new DrizzleJobRepository() },
+    {
+      recipientGroups: [[newsItem.authorId], await notifiableMemberIds(project.id, "view_news"), watcherUserIds],
+      excludeUserId: user.id,
+      subject: `[${project.name}] ${newsItem.title}`,
+      body: comment.content,
+    },
+  );
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/news/${newsItem.id}`);
   return { error: null };

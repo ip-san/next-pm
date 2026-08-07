@@ -5,11 +5,17 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
+import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
+import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { WikiPageNotFoundError, WikiTitleConflictError, renameWikiPage } from "@/application/wiki/rename-wiki-page";
 import { saveWikiPage } from "@/application/wiki/save-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
+import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import {
   DrizzleWikiContentRepository,
   DrizzleWikiPageRepository,
@@ -61,7 +67,7 @@ export async function saveWikiPageAction(
     return { error: "この操作を行う権限がありません。" };
   }
 
-  await saveWikiPage(
+  const { page } = await saveWikiPage(
     { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
     {
       projectId: parsed.data.projectId,
@@ -70,6 +76,22 @@ export async function saveWikiPageAction(
       comments: parsed.data.comments,
       authorId: user.id,
       parentId: null,
+    },
+  );
+
+  const members = await new DrizzleMemberRepository().listByProject(project.id);
+  const rolesById = new Map(
+    (await new DrizzleRoleRepository().findByIds([...new Set(members.flatMap((m) => m.roleIds))])).map((role) => [role.id, role]),
+  );
+  const notifiableMembers = filterMembersWithPermission(members, rolesById, "view_wiki_pages");
+  const watcherUserIds = await new DrizzleWatcherRepository().listWatcherUserIds("WikiPage", page.id);
+  await enqueueNotification(
+    { jobRepository: new DrizzleJobRepository() },
+    {
+      recipientGroups: [memberUserIds(notifiableMembers), watcherUserIds],
+      excludeUserId: user.id,
+      subject: `[${project.name}] ${page.title}`,
+      body: parsed.data.text,
     },
   );
 
