@@ -10,6 +10,7 @@ import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -161,7 +162,11 @@ export async function uploadDocumentAttachmentAction(
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
   try {
     await uploadAttachment(
-      { attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+      {
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
       {
         containerType: "Document",
         containerId: document.id,

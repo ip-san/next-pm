@@ -3,6 +3,7 @@ import { createPendingUpload, InvalidUploadTokenError, redeemUploadToken } from 
 import { attachmentToken, type Attachment } from "@/domain/attachment/entity";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import type { AttachmentRepository, AttachmentStorage } from "@/domain/attachment/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 const VALID_DIGEST = "a".repeat(64);
@@ -37,7 +38,11 @@ function makeRepos(overrides: { attachment?: Attachment | null } = {}) {
     attachToContainer: mock(async () => {}),
     delete: mock(async () => {}),
   };
-  return { attachmentRepository, attachmentStorage };
+  const settingsRepository: SettingsRepository = {
+    getAll: mock(async () => ({})),
+    setMany: mock(async () => {}),
+  };
+  return { attachmentRepository, attachmentStorage, settingsRepository };
 }
 
 describe("createPendingUpload", () => {

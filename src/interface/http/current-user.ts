@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import type { User } from "@/domain/user/entity";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { verifySessionToken } from "@/infrastructure/auth/session-token";
 
@@ -28,6 +30,9 @@ export async function currentUserFromCookies(): Promise<User | null> {
 export async function currentUserFromAuthorizationHeader(request: Request): Promise<User | null> {
   const header = request.headers.get("authorization");
   if (!header) return null;
+
+  const { restApiEnabled } = resolveGeneralSettings(await new DrizzleSettingsRepository().getAll());
+  if (!restApiEnabled) return null;
 
   const userRepository = new DrizzleUserRepository();
 

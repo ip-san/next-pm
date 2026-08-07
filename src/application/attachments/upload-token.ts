@@ -2,6 +2,8 @@ import type { Attachment, AttachmentContainerType } from "@/domain/attachment/en
 import { computeDigest } from "@/domain/attachment/digest";
 import type { AttachmentRepository, AttachmentStorage } from "@/domain/attachment/repository";
 import { validateAttachmentInput } from "@/domain/attachment/validate";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import type { SettingsRepository } from "@/domain/settings/repository";
 
 export class InvalidUploadTokenError extends Error {}
 
@@ -24,10 +26,11 @@ export interface CreatePendingUploadInput {
  * a token (id.digest) redeemed later when the caller creates/updates the thing it belongs to.
  */
 export async function createPendingUpload(
-  repositories: { attachmentRepository: AttachmentRepository; attachmentStorage: AttachmentStorage },
+  repositories: { attachmentRepository: AttachmentRepository; attachmentStorage: AttachmentStorage; settingsRepository: SettingsRepository },
   input: CreatePendingUploadInput,
 ): Promise<Attachment> {
-  validateAttachmentInput(input.filename, input.data.byteLength);
+  const { attachmentMaxSizeBytes } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
+  validateAttachmentInput(input.filename, input.data.byteLength, attachmentMaxSizeBytes);
 
   const storageKey = await repositories.attachmentStorage.save(input.data);
 

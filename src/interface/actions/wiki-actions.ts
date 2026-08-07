@@ -15,6 +15,7 @@ import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repos
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import {
   DrizzleWikiContentRepository,
@@ -152,7 +153,11 @@ export async function uploadWikiAttachmentAction(
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
   try {
     await uploadAttachment(
-      { attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+      {
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
       {
         containerType: "WikiPage",
         containerId: wikiPage.id,

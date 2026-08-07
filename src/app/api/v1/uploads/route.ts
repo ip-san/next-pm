@@ -3,6 +3,7 @@ import { attachmentToken } from "@/domain/attachment/entity";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { createPendingUpload } from "@/application/attachments/upload-token";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -43,7 +44,11 @@ export async function POST(request: Request) {
 
   try {
     const attachment = await createPendingUpload(
-      { attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+      {
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
       { authorId: user.id, filename, contentType, data },
     );
     return NextResponse.json({ upload: { id: attachment.id, token: attachmentToken(attachment) } }, { status: 201 });

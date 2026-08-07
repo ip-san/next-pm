@@ -3,8 +3,9 @@ import { uploadAttachment } from "./upload-attachment";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import type { Attachment } from "@/domain/attachment/entity";
 import type { AttachmentRepository, AttachmentStorage } from "@/domain/attachment/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 
-function makeRepos(overrides: { storage?: Partial<AttachmentStorage> } = {}) {
+function makeRepos(overrides: { storage?: Partial<AttachmentStorage>; settings?: Record<string, string> } = {}) {
   const attachmentStorage: AttachmentStorage = {
     save: mock(async () => "generated-key"),
     read: mock(async () => Buffer.from("")),
@@ -18,7 +19,11 @@ function makeRepos(overrides: { storage?: Partial<AttachmentStorage> } = {}) {
     attachToContainer: mock(async () => {}),
     delete: mock(async () => {}),
   };
-  return { attachmentRepository, attachmentStorage };
+  const settingsRepository: SettingsRepository = {
+    getAll: mock(async () => overrides.settings ?? {}),
+    setMany: mock(async () => {}),
+  };
+  return { attachmentRepository, attachmentStorage, settingsRepository };
 }
 
 const baseInput = {
@@ -49,5 +54,11 @@ describe("uploadAttachment", () => {
     const repos = makeRepos();
     const attachment = await uploadAttachment(repos, { ...baseInput, contentType: "" });
     expect(attachment.contentType).toBe("application/octet-stream");
+  });
+
+  it("honors an admin-configured attachment_max_size setting instead of the hardcoded default", async () => {
+    const repos = makeRepos({ settings: { attachment_max_size: "1" } }); // 1 KB
+    await expect(uploadAttachment(repos, { ...baseInput, data: Buffer.alloc(2048) })).rejects.toThrow(InvalidAttachmentError);
+    expect(repos.attachmentStorage.save).not.toHaveBeenCalled();
   });
 });
