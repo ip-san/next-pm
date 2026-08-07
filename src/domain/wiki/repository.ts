@@ -1,10 +1,23 @@
-import type { WikiContentVersion, WikiPage } from "./entity";
+import type { WikiContentVersion, WikiPage, WikiRedirect } from "./entity";
 
 export interface WikiPageRepository {
   listForProject(projectId: string): Promise<WikiPage[]>;
   findById(id: string): Promise<WikiPage | null>;
   findByTitle(projectId: string, title: string): Promise<WikiPage | null>;
   create(page: Omit<WikiPage, "id">): Promise<WikiPage>;
+  rename(id: string, newTitle: string): Promise<WikiPage>;
+}
+
+export interface WikiRedirectRepository {
+  findByTitle(projectId: string, title: string): Promise<WikiRedirect | null>;
+  /**
+   * Repoints every redirect that targeted `oldTarget` to `newTarget` instead, so a lookup
+   * never needs to follow more than one hop. A row that would become self-referential in the
+   * process (its own title equals the new target) is deleted instead of updated.
+   */
+  retarget(projectId: string, oldTarget: string, newTarget: string): Promise<void>;
+  deleteByTitle(projectId: string, title: string): Promise<void>;
+  create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect>;
 }
 
 export interface WikiSearchHit {

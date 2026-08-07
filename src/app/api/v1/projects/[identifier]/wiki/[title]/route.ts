@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
+import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import {
+  DrizzleWikiContentRepository,
+  DrizzleWikiPageRepository,
+  DrizzleWikiRedirectRepository,
+} from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -27,10 +32,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const wikiPage = await new DrizzleWikiPageRepository().findByTitle(project.id, title);
-  if (!wikiPage) {
+  const resolved = await resolveWikiPage(
+    { wikiPageRepository: new DrizzleWikiPageRepository(), wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
+    project.id,
+    title,
+  );
+  if (!resolved) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  if (resolved.redirected) {
+    return NextResponse.redirect(new URL(`/api/v1/projects/${identifier}/wiki/${encodeURIComponent(resolved.page.title)}`, request.url));
+  }
+  const wikiPage = resolved.page;
   const current = await new DrizzleWikiContentRepository().findCurrent(wikiPage.id);
   if (!current) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

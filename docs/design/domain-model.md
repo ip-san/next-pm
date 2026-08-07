@@ -99,6 +99,7 @@ erDiagram
 ```mermaid
 erDiagram
     PROJECT ||--o{ WIKI_PAGE : has
+    PROJECT ||--o{ WIKI_REDIRECT : has
     WIKI_PAGE ||--o{ WIKI_PAGE : "親子(階層表示用、ON DELETE SET NULL)"
     WIKI_PAGE ||--o{ WIKI_CONTENT_VERSION : "版歴(現在の本文も含む)"
     WIKI_PAGE ||--o{ WATCHER : "ウォッチされる"
@@ -112,10 +113,14 @@ erDiagram
         text text
         text comments
     }
+    WIKI_REDIRECT {
+        string title "旧タイトル。(projectId, title)でunique"
+        string redirectsToTitle "現在のタイトル"
+    }
 ```
 
 - Redmineは「現在の本文(`WikiContent`)」と「版歴(`WikiContentVersion`)」を別テーブルに分けるが、next-pmは**版歴テーブル1本のみ**——「現在の本文」は「そのページの最大version行」として都度導出する、意図的な簡略化。
-- **リダイレクト(`WikiRedirect`)に相当する仕組みは無い** — ページ名を変更すると旧タイトルでのアクセスは単純に404になる(Redmine本家との既知のギャップ)。
+- **リダイレクト(`WikiRedirect`)**: Redmineの`wiki_id`/`redirects_to_wiki_id`ペアを、next-pmに`wikis`テーブルが無い(`projectId`で直接キーイングしている)ことに合わせて`projectId`/`redirectsToTitle`に圧縮した設計。ページ名変更のたびに(1)そのタイトルを指していた既存のリダイレクトを新タイトル宛てに張り替え(自己参照になる場合は削除)、(2)新タイトルと衝突する古いリダイレクトを削除、(3)旧タイトル→新タイトルの新規リダイレクトを作成——の3手順を踏むことで、リダイレクトが常に最新タイトルを直接指す1ホップの状態を保ち、チェイン(A→B→C)もループ検出も不要にしている(Redmineの`WikiPage#handle_rename_or_move`と同じ設計)。
 
 ## 4. フォーラム・News
 

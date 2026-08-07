@@ -1,8 +1,13 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import {
+  DrizzleWikiContentRepository,
+  DrizzleWikiPageRepository,
+  DrizzleWikiRedirectRepository,
+} from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -25,10 +30,18 @@ export default async function WikiHistoryPage({
     notFound();
   }
 
-  const wikiPage = await new DrizzleWikiPageRepository().findByTitle(project.id, title);
-  if (!wikiPage) {
+  const resolved = await resolveWikiPage(
+    { wikiPageRepository: new DrizzleWikiPageRepository(), wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
+    project.id,
+    title,
+  );
+  if (!resolved) {
     notFound();
   }
+  if (resolved.redirected) {
+    redirect(`/projects/${identifier}/wiki/${encodeURIComponent(resolved.page.title)}/history`);
+  }
+  const wikiPage = resolved.page;
   const versions = await new DrizzleWikiContentRepository().listVersions(wikiPage.id);
 
   return (

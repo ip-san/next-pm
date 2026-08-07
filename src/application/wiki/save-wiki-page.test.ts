@@ -9,6 +9,7 @@ function makeRepos(existingPage: WikiPage | null, existingVersion: WikiContentVe
     findById: mock(async () => existingPage),
     findByTitle: mock(async () => existingPage),
     create: mock(async (p) => ({ ...p, id: "page-1" })),
+    rename: mock(async (id, newTitle) => ({ ...(existingPage as WikiPage), id, title: newTitle })),
   };
   const wikiContentRepository: WikiContentRepository = {
     findCurrent: mock(async () => existingVersion),

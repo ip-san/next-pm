@@ -1,11 +1,16 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
+import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
-import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import {
+  DrizzleWikiContentRepository,
+  DrizzleWikiPageRepository,
+  DrizzleWikiRedirectRepository,
+} from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { DeleteWikiAttachmentButton } from "./delete-wiki-attachment-button";
@@ -35,7 +40,15 @@ export default async function WikiPageView({
 
   const wikiPageRepository = new DrizzleWikiPageRepository();
   const wikiContentRepository = new DrizzleWikiContentRepository();
-  const wikiPage = await wikiPageRepository.findByTitle(project.id, title);
+  const resolved = await resolveWikiPage(
+    { wikiPageRepository, wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
+    project.id,
+    title,
+  );
+  if (resolved?.redirected) {
+    redirect(`/projects/${identifier}/wiki/${encodeURIComponent(resolved.page.title)}`);
+  }
+  const wikiPage = resolved?.page ?? null;
   const current = wikiPage ? await wikiContentRepository.findCurrent(wikiPage.id) : null;
   const attachments = wikiPage ? await new DrizzleAttachmentRepository().listByContainer("WikiPage", wikiPage.id) : [];
   const isWatching =
@@ -83,6 +96,11 @@ export default async function WikiPageView({
                 ZIP
               </a>
             </>
+          ) : null}
+          {canEdit && wikiPage ? (
+            <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/rename`} className="text-sm underline">
+              名前を変更
+            </Link>
           ) : null}
           {canEdit ? (
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/edit`} className="bg-black text-white rounded px-3 py-2 text-sm">

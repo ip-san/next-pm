@@ -1,8 +1,14 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
-import { wikiContentVersions, wikiPages } from "@/infrastructure/db/schema/wiki";
-import type { WikiContentVersion, WikiPage } from "@/domain/wiki/entity";
-import type { WikiContentRepository, WikiPageRepository, WikiSearchHit, WikiVersionWithPage } from "@/domain/wiki/repository";
+import { wikiContentVersions, wikiPages, wikiRedirects } from "@/infrastructure/db/schema/wiki";
+import type { WikiContentVersion, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
+import type {
+  WikiContentRepository,
+  WikiPageRepository,
+  WikiRedirectRepository,
+  WikiSearchHit,
+  WikiVersionWithPage,
+} from "@/domain/wiki/repository";
 
 function pageToDomain(row: typeof wikiPages.$inferSelect): WikiPage {
   return {
@@ -11,6 +17,16 @@ function pageToDomain(row: typeof wikiPages.$inferSelect): WikiPage {
     title: row.title,
     parentId: row.parentId,
     isProtected: row.isProtected,
+  };
+}
+
+function redirectToDomain(row: typeof wikiRedirects.$inferSelect): WikiRedirect {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    redirectsToTitle: row.redirectsToTitle,
+    createdAt: row.createdAt,
   };
 }
 
@@ -52,6 +68,48 @@ export class DrizzleWikiPageRepository implements WikiPageRepository {
       .values({ projectId: page.projectId, title: page.title, parentId: page.parentId, isProtected: page.isProtected })
       .returning();
     return pageToDomain(row);
+  }
+
+  async rename(id: string, newTitle: string): Promise<WikiPage> {
+    const [row] = await db.update(wikiPages).set({ title: newTitle }).where(eq(wikiPages.id, id)).returning();
+    return pageToDomain(row);
+  }
+}
+
+export class DrizzleWikiRedirectRepository implements WikiRedirectRepository {
+  async findByTitle(projectId: string, title: string): Promise<WikiRedirect | null> {
+    const [row] = await db
+      .select()
+      .from(wikiRedirects)
+      .where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.title, title)))
+      .limit(1);
+    return row ? redirectToDomain(row) : null;
+  }
+
+  async retarget(projectId: string, oldTarget: string, newTarget: string): Promise<void> {
+    const rows = await db
+      .select()
+      .from(wikiRedirects)
+      .where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.redirectsToTitle, oldTarget)));
+    for (const row of rows) {
+      if (row.title === newTarget) {
+        await db.delete(wikiRedirects).where(eq(wikiRedirects.id, row.id));
+      } else {
+        await db.update(wikiRedirects).set({ redirectsToTitle: newTarget }).where(eq(wikiRedirects.id, row.id));
+      }
+    }
+  }
+
+  async deleteByTitle(projectId: string, title: string): Promise<void> {
+    await db.delete(wikiRedirects).where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.title, title)));
+  }
+
+  async create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect> {
+    const [row] = await db
+      .insert(wikiRedirects)
+      .values({ projectId: entry.projectId, title: entry.title, redirectsToTitle: entry.redirectsToTitle })
+      .returning();
+    return redirectToDomain(row);
   }
 }
 

@@ -176,6 +176,13 @@
       "when": 1785943139966,
       "tag": "0024_serious_giant_man",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786083716499,
+      "tag": "0025_white_spectrum",
+      "breakpoints": true
     }
   ]
 }

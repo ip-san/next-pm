@@ -6,10 +6,15 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
+import { WikiPageNotFoundError, WikiTitleConflictError, renameWikiPage } from "@/application/wiki/rename-wiki-page";
 import { saveWikiPage } from "@/application/wiki/save-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import {
+  DrizzleWikiContentRepository,
+  DrizzleWikiPageRepository,
+  DrizzleWikiRedirectRepository,
+} from "@/infrastructure/db/repositories/wiki-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -200,4 +205,68 @@ export async function deleteWikiAttachmentAction(
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
   return { error: null };
+}
+
+export type RenameWikiPageActionState = {
+  error: string | null;
+};
+
+const renameWikiPageSchema = z.object({
+  pageId: z.string().uuid(),
+  projectIdentifier: z.string().min(1),
+  newTitle: z.string().min(1, "タイトルを入力してください。"),
+  keepRedirect: z.literal("on").optional(),
+});
+
+export async function renameWikiPageAction(
+  _prevState: RenameWikiPageActionState,
+  formData: FormData,
+): Promise<RenameWikiPageActionState> {
+  const parsed = renameWikiPageSchema.safeParse({
+    pageId: formData.get("pageId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    newTitle: formData.get("newTitle"),
+    keepRedirect: formData.get("keepRedirect") ?? undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const wikiPage = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
+  if (!wikiPage) {
+    return { error: "Wikiページが見つかりません。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  let renamed;
+  try {
+    renamed = await renameWikiPage(
+      { wikiPageRepository: new DrizzleWikiPageRepository(), wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
+      { pageId: parsed.data.pageId, newTitle: parsed.data.newTitle, keepRedirect: parsed.data.keepRedirect === "on" },
+    );
+  } catch (error) {
+    if (error instanceof WikiTitleConflictError) {
+      return { error: `「${parsed.data.newTitle}」という名前のページは既に存在します。` };
+    }
+    if (error instanceof WikiPageNotFoundError) {
+      return { error: "Wikiページが見つかりません。" };
+    }
+    throw error;
+  }
+
+  redirect(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(renamed.title)}`);
 }
