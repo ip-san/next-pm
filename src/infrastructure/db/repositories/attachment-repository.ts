@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { attachments } from "@/infrastructure/db/schema/attachments";
 import type { Attachment, AttachmentContainerType } from "@/domain/attachment/entity";
@@ -57,5 +57,13 @@ export class DrizzleAttachmentRepository implements AttachmentRepository {
 
   async delete(id: string): Promise<void> {
     await db.delete(attachments).where(eq(attachments.id, id));
+  }
+
+  async listPendingOlderThan(cutoff: Date): Promise<Attachment[]> {
+    const rows = await db
+      .select()
+      .from(attachments)
+      .where(and(isNull(attachments.containerType), lt(attachments.createdAt, cutoff)));
+    return rows.map(toDomain);
   }
 }

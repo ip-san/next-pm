@@ -126,4 +126,4 @@ Redmineとの対応で意識しておくべき外部依存の違い:
 - Redmineの「IMAPポーリングでの受信メール取り込み」に相当する仕組みが、next-pmでは**HTTP Webhook**(`app/api/mail_handler/route.ts`、共有シークレット認証)に置き換わっている——ポーリングではなく、メール側のインフラ(例: SendGrid Inbound Parse等)からのプッシュを受ける形。
 - SCMは「プラグインによるアダプタ追加」ではなく、`domain/scm/scm-browser.ts`というポートに対する実装クラス(`infrastructure/scm/*-cli-browser.ts`)を`vendor`列の値に応じて選ぶだけ——実行時のプラグイン読み込み機構自体が無い(next-pmにはRedmineのようなプラグインシステムがまだ無い)。
 - Webhook配信機能(Redmine本家には無いが、姉妹Laravel実装は持つ)は**next-pmには無い**。通知はメールのみ。
-- スケジュール実行(cron)は一切無い——SCM自動フェッチも添付ファイルの定期GCもウォッチのプルーニングも、next-pmには存在しない(詳細は`notifications-and-jobs.md`)。
+- スケジュール実行(cron)は一切無い——SCM自動フェッチもウォッチのプルーニングも、next-pmには存在しない。添付ファイルのGCは存在するが、cronではなく次の新規アップロード時に行われる遅延実行(詳細は`notifications-and-jobs.md`)。

@@ -1,16 +1,18 @@
-import type { Attachment, AttachmentContainerType } from "@/domain/attachment/entity";
 import { computeDigest } from "@/domain/attachment/digest";
+import type { Attachment, AttachmentContainerType } from "@/domain/attachment/entity";
+import { PENDING_UPLOAD_EXPIRY_MS } from "@/domain/attachment/pending-upload";
 import type { AttachmentRepository, AttachmentStorage } from "@/domain/attachment/repository";
 import { validateAttachmentInput } from "@/domain/attachment/validate";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import { prunePendingUploads } from "@/application/attachments/prune-pending-uploads";
 
 export class InvalidUploadTokenError extends Error {}
 
-// Mirrors Redmine's Attachment.prune (floating uploads older than 1 day are garbage-collected),
-// but enforced synchronously at redemption time instead of via a separate cron/rake task —
-// this codebase has no scheduled-job runner that fits a delete-after-N-hours sweep yet.
-const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
+// Rejects an expired token synchronously as defense in depth for the window before the next
+// createPendingUpload's lazy sweep runs (see prune-pending-uploads.ts) — the actual row/file
+// deletion happens there, not here.
+const TOKEN_EXPIRY_MS = PENDING_UPLOAD_EXPIRY_MS;
 
 const TOKEN_PATTERN = /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.([0-9a-f]{64})$/;
 
@@ -29,6 +31,8 @@ export async function createPendingUpload(
   repositories: { attachmentRepository: AttachmentRepository; attachmentStorage: AttachmentStorage; settingsRepository: SettingsRepository },
   input: CreatePendingUploadInput,
 ): Promise<Attachment> {
+  await prunePendingUploads(repositories);
+
   const { attachmentMaxSizeBytes } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
   validateAttachmentInput(input.filename, input.data.byteLength, attachmentMaxSizeBytes);
 

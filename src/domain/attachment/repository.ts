@@ -7,6 +7,8 @@ export interface AttachmentRepository {
   /** Redeems a pending upload: attaches a container-less attachment to a real container. */
   attachToContainer(id: string, containerType: AttachmentContainerType, containerId: string): Promise<void>;
   delete(id: string): Promise<void>;
+  /** Pending (container-less) uploads never redeemed before `cutoff` — candidates for pruning. */
+  listPendingOlderThan(cutoff: Date): Promise<Attachment[]>;
 }
 
 /** Storage port — infrastructure implements this; domain/application never touch the filesystem directly. */

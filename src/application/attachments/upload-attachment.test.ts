@@ -18,6 +18,7 @@ function makeRepos(overrides: { storage?: Partial<AttachmentStorage>; settings?:
     create: mock(async (attachment) => ({ ...attachment, id: "att-1", createdAt: new Date() }) as Attachment),
     attachToContainer: mock(async () => {}),
     delete: mock(async () => {}),
+    listPendingOlderThan: mock(async () => []),
   };
   const settingsRepository: SettingsRepository = {
     getAll: mock(async () => overrides.settings ?? {}),

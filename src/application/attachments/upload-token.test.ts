@@ -37,6 +37,7 @@ function makeRepos(overrides: { attachment?: Attachment | null } = {}) {
     create: mock(async (a) => ({ ...a, id: NIL_UUID, createdAt: new Date() }) as Attachment),
     attachToContainer: mock(async () => {}),
     delete: mock(async () => {}),
+    listPendingOlderThan: mock(async () => []),
   };
   const settingsRepository: SettingsRepository = {
     getAll: mock(async () => ({})),
