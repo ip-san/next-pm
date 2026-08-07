@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "worker": "tsx watch --env-file-if-exists=.env.local worker/index.ts",
-    "db:generate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs generate",
-    "db:migrate": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs migrate",
+    "db:generate": "node --env-file-if-exists=.env.local node_modules/.bin/drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=.env.local node_modules/.bin/drizzle-kit migrate",
     "db:seed": "tsx --env-file-if-exists=.env.local src/infrastructure/db/seed.ts"
   },
   "dependencies": {
