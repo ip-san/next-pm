@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { loginAction, type LoginActionState } from "@/interface/actions/auth-actions";
 
 const initialState: LoginActionState = { error: null };
@@ -47,6 +48,9 @@ export function LoginForm() {
       >
         {pending ? "ログイン中…" : "ログイン"}
       </button>
+      <Link href="/account/lost_password" className="text-sm underline self-start">
+        パスワードをお忘れですか？
+      </Link>
     </form>
   );
 }
