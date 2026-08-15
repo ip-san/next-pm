@@ -6,6 +6,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { toggleReaction } from "@/application/reactions/toggle-reaction";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -17,18 +18,18 @@ export type ToggleReactionActionState = {
 
 const toggleJournalReactionSchema = z.object({
   journalId: z.string().uuid(),
-  issueId: z.string().uuid(),
-  projectIdentifier: z.string().min(1),
 });
 
+// The journal's own issue is the only source of truth for what's being authorized — issueId
+// is never taken from the client, since a form field just claiming "this journal belongs to
+// an issue you can see" would let a reaction be forged onto a journal on a completely
+// different (possibly private, possibly inaccessible) issue.
 export async function toggleJournalReactionAction(
   _prevState: ToggleReactionActionState,
   formData: FormData,
 ): Promise<ToggleReactionActionState> {
   const parsed = toggleJournalReactionSchema.safeParse({
     journalId: formData.get("journalId"),
-    issueId: formData.get("issueId"),
-    projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -39,7 +40,12 @@ export async function toggleJournalReactionAction(
     return { error: "ログインしてください。" };
   }
 
-  const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
+  const journal = await new DrizzleJournalRepository().findById(parsed.data.journalId);
+  if (!journal) {
+    return { error: "コメントが見つかりません。" };
+  }
+
+  const issue = await new DrizzleIssueRepository().findById(journal.journalizedId);
   if (!issue) {
     return { error: "チケットが見つかりません。" };
   }
@@ -57,8 +63,8 @@ export async function toggleJournalReactionAction(
     return { error: "チケットが見つかりません。" };
   }
 
-  await toggleReaction({ reactionRepository: new DrizzleReactionRepository() }, "Journal", parsed.data.journalId, user.id);
+  await toggleReaction({ reactionRepository: new DrizzleReactionRepository() }, "Journal", journal.id, user.id);
 
-  revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues/${parsed.data.issueId}`);
+  revalidatePath(`/projects/${project.identifier}/issues/${issue.id}`);
   return { error: null };
 }

@@ -7,14 +7,10 @@ const initialState: ToggleReactionActionState = { error: null };
 
 export function ReactionButton({
   journalId,
-  issueId,
-  projectIdentifier,
   count,
   reacted,
 }: {
   journalId: string;
-  issueId: string;
-  projectIdentifier: string;
   count: number;
   reacted: boolean;
 }) {
@@ -23,8 +19,6 @@ export function ReactionButton({
   return (
     <form action={formAction} className="inline-flex items-center gap-1">
       <input type="hidden" name="journalId" value={journalId} />
-      <input type="hidden" name="issueId" value={issueId} />
-      <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <button
         type="submit"
         disabled={pending}

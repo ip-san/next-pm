@@ -40,6 +40,13 @@ async function withDetails(rows: (typeof journals.$inferSelect)[]): Promise<Jour
 }
 
 export class DrizzleJournalRepository implements JournalRepository {
+  async findById(id: string): Promise<Journal | null> {
+    const [row] = await db.select().from(journals).where(eq(journals.id, id)).limit(1);
+    if (!row) return null;
+    const [journal] = await withDetails([row]);
+    return journal;
+  }
+
   async listForIssue(issueId: string): Promise<Journal[]> {
     const rows = await db
       .select()

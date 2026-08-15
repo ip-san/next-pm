@@ -185,13 +185,7 @@ export default async function IssueDetailPage({
                   </p>
                 ))}
                 {user ? (
-                  <ReactionButton
-                    journalId={journal.id}
-                    issueId={issue.id}
-                    projectIdentifier={identifier}
-                    count={reaction.count}
-                    reacted={reaction.reacted}
-                  />
+                  <ReactionButton journalId={journal.id} count={reaction.count} reacted={reaction.reacted} />
                 ) : reaction.count > 0 ? (
                   <span className="text-xs rounded-full border px-2 py-0.5 self-start">👍 {reaction.count}</span>
                 ) : null}
