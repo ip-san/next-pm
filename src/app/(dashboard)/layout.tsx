@@ -12,6 +12,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/my" className="font-semibold">
             next-pm
           </Link>
+          <Link href="/projects" className="hover:underline">
+            プロジェクト
+          </Link>
           <Link href="/search" className="hover:underline">
             検索
           </Link>

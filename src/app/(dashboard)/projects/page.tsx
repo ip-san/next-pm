@@ -1,0 +1,47 @@
+import Link from "next/link";
+import { can } from "@/domain/authorization/authorization-service";
+import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { currentUserFromCookies } from "@/interface/http/current-user";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+
+// Always needs a live DB read with no per-request caching benefit — opt out of static
+// prerendering so `next build` doesn't try to reach Postgres at build time.
+export const dynamic = "force-dynamic";
+
+export default async function ProjectsIndexPage() {
+  const user = await currentUserFromCookies();
+  const allProjects = await new DrizzleProjectRepository().listAll();
+
+  // Mirrors Project.visible_condition (public, or the actor is a member/admin) — same
+  // per-project can({permission: "view_project"}) check the admin index and REST API's
+  // GET /projects already use, so an anonymous or non-admin visitor sees exactly the set
+  // they're entitled to and nothing more.
+  const visible = [];
+  for (const project of allProjects) {
+    const { actor } = await resolveActor(user, project.id);
+    if (can({ permission: "view_project", project: toAuthorizationProject(project), actor })) {
+      visible.push(project);
+    }
+  }
+  const projectById = new Map(visible.map((project) => [project.id, project]));
+
+  return (
+    <main className="p-8 flex flex-col gap-6">
+      <h1 className="text-xl font-semibold">プロジェクト</h1>
+      <ul className="flex flex-col gap-2 text-sm">
+        {visible.map((project) => (
+          <li key={project.id} className="border rounded p-3">
+            <Link href={`/projects/${project.identifier}`} className="font-medium hover:underline">
+              {project.name}
+            </Link>
+            {project.parentId ? (
+              <span className="text-xs text-gray-500 ml-2">親: {projectById.get(project.parentId)?.name ?? "-"}</span>
+            ) : null}
+            {project.description ? <p className="text-xs text-gray-500 mt-1">{project.description}</p> : null}
+          </li>
+        ))}
+        {visible.length === 0 ? <li className="text-gray-400">参照できるプロジェクトがありません。</li> : null}
+      </ul>
+    </main>
+  );
+}
