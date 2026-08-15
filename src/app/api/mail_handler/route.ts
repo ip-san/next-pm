@@ -16,7 +16,9 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -126,6 +128,8 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         issueStatusRepository: new DrizzleIssueStatusRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
+        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+        watcherRepository: new DrizzleWatcherRepository(),
       },
       {
         issueId: existing.id,
@@ -190,6 +194,8 @@ async function handleCreate(sender: User, projectIdentifier: string, subject: st
         issueRepository: new DrizzleIssueRepository(),
         trackerRepository: new DrizzleTrackerRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
+        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+        watcherRepository: new DrizzleWatcherRepository(),
       },
       {
         projectId: project.id,

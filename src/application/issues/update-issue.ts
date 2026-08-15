@@ -5,7 +5,10 @@ import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import type { UserPreferencesRepository } from "@/domain/user-preferences/repository";
+import type { WatcherRepository } from "@/domain/watcher/repository";
 import { isFieldBlank } from "@/domain/workflow/blank";
+import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { readOnlyAttributeNames, requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import { canTransitionTo } from "@/domain/workflow/transition-rules";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
@@ -44,6 +47,8 @@ export async function updateIssue(
     workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
     issueStatusRepository: IssueStatusRepository;
     settingsRepository: SettingsRepository;
+    userPreferencesRepository: UserPreferencesRepository;
+    watcherRepository: WatcherRepository;
   },
   input: UpdateIssueInput,
 ): Promise<Issue> {
@@ -125,6 +130,14 @@ export async function updateIssue(
       notes: input.notes,
       details,
     });
+    // Mirrors Redmine's issue_contributed_to trigger — firing on any recorded change, not
+    // just notes, since a plain field edit shows up in the issue's history the same as a
+    // comment does.
+    await applyAutoWatch(repositories, "issue_contributed_to", "Issue", input.issueId, input.actingUserId);
+  }
+
+  if (after.assignedToId && after.assignedToType === "user" && after.assignedToId !== before.assignedToId) {
+    await applyAutoWatch(repositories, "issue_assigned_to_me", "Issue", input.issueId, after.assignedToId);
   }
 
   return after;

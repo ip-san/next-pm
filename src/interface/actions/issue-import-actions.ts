@@ -11,8 +11,10 @@ import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -109,6 +111,8 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
   const issueCategoryRepository = new DrizzleIssueCategoryRepository();
   const versionRepository = new DrizzleVersionRepository();
   const workflowFieldPermissionRepository = new DrizzleWorkflowFieldPermissionRepository();
+  const userPreferencesRepository = new DrizzleUserPreferencesRepository();
+  const watcherRepository = new DrizzleWatcherRepository();
 
   function cell(row: string[], name: string): string {
     const index = columnIndex.get(name);
@@ -194,7 +198,7 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
 
     try {
       await createIssue(
-        { issueRepository, trackerRepository, workflowFieldPermissionRepository },
+        { issueRepository, trackerRepository, workflowFieldPermissionRepository, userPreferencesRepository, watcherRepository },
         {
           projectId: project.id,
           trackerId: tracker.id,

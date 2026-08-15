@@ -21,6 +21,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
@@ -111,6 +112,8 @@ export async function createIssueFormAction(
         issueRepository: new DrizzleIssueRepository(),
         trackerRepository: new DrizzleTrackerRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
+        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+        watcherRepository: new DrizzleWatcherRepository(),
       },
       {
         projectId: parsed.data.projectId,
@@ -246,6 +249,8 @@ export async function updateIssueStatusAction(
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         issueStatusRepository: new DrizzleIssueStatusRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
+        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+        watcherRepository: new DrizzleWatcherRepository(),
       },
       {
         issueId: parsed.data.issueId,

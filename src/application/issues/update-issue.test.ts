@@ -7,6 +7,9 @@ import type { IssueStatus } from "@/domain/issue-status/entity";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import type { UserPreferences } from "@/domain/user-preferences/entity";
+import type { UserPreferencesRepository } from "@/domain/user-preferences/repository";
+import type { WatcherRepository } from "@/domain/watcher/repository";
 import type { WorkflowFieldPermission } from "@/domain/workflow/entity";
 import type { WorkflowFieldPermissionRepository, WorkflowRepository } from "@/domain/workflow/repository";
 
@@ -17,6 +20,7 @@ function makeRepositories(
     fieldPermissions?: WorkflowFieldPermission[];
     statuses?: IssueStatus[];
     settings?: Record<string, string>;
+    userPreferences?: UserPreferences | null;
   } = {},
 ) {
   const issue = overrides.issue ?? makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
@@ -26,6 +30,7 @@ function makeRepositories(
     update: mock(async (_id, _lockVersion, changes) => ({ ...issue, ...changes, lockVersion: issue.lockVersion + 1 })),
   });
   const journalRepository: JournalRepository = {
+    findById: mock(async () => null),
     listForIssue: mock(async () => []),
     listByProject: mock(async () => []),
     create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date() })),
@@ -51,6 +56,17 @@ function makeRepositories(
     getAll: mock(async () => overrides.settings ?? {}),
     setMany: mock(async () => undefined),
   };
+  const userPreferencesRepository: UserPreferencesRepository = {
+    findByUserId: mock(async () => overrides.userPreferences ?? null),
+    upsert: mock(async () => undefined),
+  };
+  const watcherRepository = {
+    isWatching: mock(async () => false),
+    watch: mock(async () => undefined),
+    unwatch: mock(async () => undefined),
+    listWatchedIds: mock(async () => [] as string[]),
+    listWatcherUserIds: mock(async () => [] as string[]),
+  } satisfies WatcherRepository;
   return {
     issueRepository,
     journalRepository,
@@ -58,6 +74,8 @@ function makeRepositories(
     workflowFieldPermissionRepository,
     issueStatusRepository,
     settingsRepository,
+    userPreferencesRepository,
+    watcherRepository,
   };
 }
 
@@ -340,5 +358,83 @@ describe("updateIssue", () => {
       isAssignee: false,
     });
     expect(result.doneRatio).toBe(40);
+  });
+
+  it("auto-watches for the acting user when a journal is recorded (issue_contributed_to)", async () => {
+    const repos = makeRepositories();
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "New subject" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(repos.watcherRepository.watch).toHaveBeenCalledWith("Issue", "issue-1", "user-1");
+  });
+
+  it("does not auto-watch when nothing changed and there are no notes (no journal recorded)", async () => {
+    const repos = makeRepositories();
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(repos.watcherRepository.watch).not.toHaveBeenCalled();
+  });
+
+  it("auto-watches the newly assigned user (issue_assigned_to_me) when assignedToId changes", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: null, assignedToType: null });
+    const repos = makeRepositories({ issue });
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { assignedToId: "user-2", assignedToType: "user" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(repos.watcherRepository.watch).toHaveBeenCalledWith("Issue", "issue-1", "user-2");
+  });
+
+  it("does not auto-watch on reassignment to a group", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: null, assignedToType: null });
+    const repos = makeRepositories({ issue });
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { assignedToId: "group-1", assignedToType: "group" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(repos.watcherRepository.watch).not.toHaveBeenCalledWith("Issue", "issue-1", "group-1");
+  });
+
+  it("does not re-trigger issue_assigned_to_me when assignedToId is unchanged", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: "user-2", assignedToType: "user" });
+    const repos = makeRepositories({ issue });
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "New subject", assignedToId: "user-2", assignedToType: "user" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(repos.watcherRepository.watch).not.toHaveBeenCalledWith("Issue", "issue-1", "user-2");
   });
 });

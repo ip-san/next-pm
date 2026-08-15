@@ -1,10 +1,13 @@
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
 import type { TrackerRepository } from "@/domain/tracker/repository";
+import type { UserPreferencesRepository } from "@/domain/user-preferences/repository";
+import type { WatcherRepository } from "@/domain/watcher/repository";
 import { isFieldBlank } from "@/domain/workflow/blank";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
 import { requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import type { WorkflowFieldPermissionRepository } from "@/domain/workflow/repository";
+import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { WorkflowRequiredFieldError } from "./update-issue";
 
 export interface CreateIssueInput {
@@ -32,6 +35,8 @@ export async function createIssue(
     issueRepository: IssueRepository;
     trackerRepository: TrackerRepository;
     workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
+    userPreferencesRepository: UserPreferencesRepository;
+    watcherRepository: WatcherRepository;
   },
   input: CreateIssueInput,
 ): Promise<Issue> {
@@ -67,7 +72,7 @@ export async function createIssue(
     }
   }
 
-  return repositories.issueRepository.create({
+  const issue = await repositories.issueRepository.create({
     projectId: input.projectId,
     trackerId: input.trackerId,
     statusId: tracker.defaultStatusId,
@@ -86,4 +91,11 @@ export async function createIssue(
     startDate: input.startDate,
     dueDate: input.dueDate,
   });
+
+  await applyAutoWatch(repositories, "issue_created", "Issue", issue.id, issue.authorId);
+  if (issue.assignedToId && issue.assignedToType === "user") {
+    await applyAutoWatch(repositories, "issue_assigned_to_me", "Issue", issue.id, issue.assignedToId);
+  }
+
+  return issue;
 }

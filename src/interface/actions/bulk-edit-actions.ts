@@ -12,6 +12,8 @@ import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/i
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
+import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -97,6 +99,8 @@ export async function bulkUpdateIssuesAction(
   const workflowFieldPermissionRepository = new DrizzleWorkflowFieldPermissionRepository();
   const issueStatusRepository = new DrizzleIssueStatusRepository();
   const settingsRepository = new DrizzleSettingsRepository();
+  const userPreferencesRepository = new DrizzleUserPreferencesRepository();
+  const watcherRepository = new DrizzleWatcherRepository();
   const visibilityRoles = issuesVisibilityRoles(actor);
 
   let updated = 0;
@@ -117,7 +121,16 @@ export async function bulkUpdateIssuesAction(
 
     try {
       await updateIssue(
-        { issueRepository, journalRepository, workflowRepository, workflowFieldPermissionRepository, issueStatusRepository, settingsRepository },
+        {
+          issueRepository,
+          journalRepository,
+          workflowRepository,
+          workflowFieldPermissionRepository,
+          issueStatusRepository,
+          settingsRepository,
+          userPreferencesRepository,
+          watcherRepository,
+        },
         {
           issueId: issue.id,
           expectedLockVersion: issue.lockVersion,
