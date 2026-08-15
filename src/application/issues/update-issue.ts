@@ -2,6 +2,9 @@ import { diffIssueChanges } from "@/domain/journal/diff-issue";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import { isFieldBlank } from "@/domain/workflow/blank";
 import { readOnlyAttributeNames, requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import { canTransitionTo } from "@/domain/workflow/transition-rules";
@@ -39,6 +42,8 @@ export async function updateIssue(
     journalRepository: JournalRepository;
     workflowRepository: WorkflowRepository;
     workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
+    issueStatusRepository: IssueStatusRepository;
+    settingsRepository: SettingsRepository;
   },
   input: UpdateIssueInput,
 ): Promise<Issue> {
@@ -78,6 +83,21 @@ export async function updateIssue(
   const changes = { ...input.changes };
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     delete changes[field];
+  }
+
+  // Mirrors Redmine's Issue#update_done_ratio_from_issue_status, which only runs when
+  // Setting.issue_done_ratio == 'issue_status' — the same status-derived done_ratio the
+  // SCM commit-hook path (sync-changesets.ts) already applies unconditionally. Applied after
+  // the read-only stripping above since this is a model-level side effect of the status
+  // change itself, not a field the actor is directly setting.
+  if (changes.statusId && changes.statusId !== before.statusId) {
+    const { issueDoneRatio } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
+    if (issueDoneRatio === "issue_status") {
+      const targetStatus = await repositories.issueStatusRepository.findById(changes.statusId);
+      if (targetStatus?.defaultDoneRatio != null) {
+        changes.doneRatio = targetStatus.defaultDoneRatio;
+      }
+    }
   }
 
   // A field key can be present in `changes` with value `undefined` (every REST PATCH field is

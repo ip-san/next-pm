@@ -71,6 +71,76 @@ describe("createIssueRelation", () => {
       createIssueRelation(repos, { issueFromId: "issue-a", issueToId: "issue-b", relationType: "relates", delay: null }),
     ).rejects.toThrow(InvalidRelationError);
   });
+
+  it("rejects relating a parent issue to its own subtask", async () => {
+    const repos = makeRepos({
+      "issue-a": makeIssue({ id: "issue-a", parentId: null }),
+      "issue-b": makeIssue({ id: "issue-b", parentId: "issue-a" }),
+    });
+    await expect(
+      createIssueRelation(repos, { issueFromId: "issue-a", issueToId: "issue-b", relationType: "relates", delay: null }),
+    ).rejects.toThrow(InvalidRelationError);
+  });
+
+  it("rejects relating a subtask to its own ancestor regardless of which side is passed as issue_to", async () => {
+    const repos = makeRepos({
+      "issue-a": makeIssue({ id: "issue-a", parentId: null }),
+      "issue-b": makeIssue({ id: "issue-b", parentId: "issue-a" }),
+    });
+    await expect(
+      createIssueRelation(repos, { issueFromId: "issue-b", issueToId: "issue-a", relationType: "relates", delay: null }),
+    ).rejects.toThrow(InvalidRelationError);
+  });
+
+  it("allows relating two issues that are not in an ancestor/descendant relationship", async () => {
+    const repos = makeRepos({
+      "issue-a": makeIssue({ id: "issue-a", parentId: "issue-parent" }),
+      "issue-b": makeIssue({ id: "issue-b", parentId: "issue-parent" }),
+    });
+    const relation = await createIssueRelation(repos, { issueFromId: "issue-a", issueToId: "issue-b", relationType: "relates", delay: null });
+    expect(relation.relationType).toBe("relates");
+  });
+
+  it("rejects a 'blocks' relation that would close a cycle with an existing 'precedes' chain", async () => {
+    // issue-a precedes issue-b (existing); relating issue-b blocks issue-a would let issue-a
+    // reach itself via a -> b (precedes) -> a (blocks).
+    const existing: IssueRelation = { id: "r1", issueFromId: "issue-a", issueToId: "issue-b", relationType: "precedes", delay: 0 };
+    const repos = makeRepos(
+      { "issue-a": makeIssue({ id: "issue-a" }), "issue-b": makeIssue({ id: "issue-b" }) },
+      [existing],
+    );
+    await expect(
+      createIssueRelation(repos, { issueFromId: "issue-b", issueToId: "issue-a", relationType: "blocks", delay: null }),
+    ).rejects.toThrow(InvalidRelationError);
+  });
+
+  it("allows a non-circular 'precedes' relation extending an existing chain", async () => {
+    const existing: IssueRelation = { id: "r1", issueFromId: "issue-a", issueToId: "issue-b", relationType: "precedes", delay: 0 };
+    const repos = makeRepos(
+      {
+        "issue-a": makeIssue({ id: "issue-a" }),
+        "issue-b": makeIssue({ id: "issue-b" }),
+        "issue-c": makeIssue({ id: "issue-c" }),
+      },
+      [existing],
+    );
+    const relation = await createIssueRelation(repos, { issueFromId: "issue-b", issueToId: "issue-c", relationType: "precedes", delay: null });
+    expect(relation.relationType).toBe("precedes");
+  });
+
+  it("does not apply the circular-dependency check to non-dependent relation types like 'relates'", async () => {
+    // issue-b precedes issue-a exists; a "relates" between issue-a and issue-b would be
+    // circular if the dependent-type check ran against it (it would reach back to
+    // issue-a from issue-b via the existing precedes edge), but "relates" isn't a
+    // dependent type, so the check must not apply and creation must succeed.
+    const existing: IssueRelation = { id: "r1", issueFromId: "issue-b", issueToId: "issue-a", relationType: "precedes", delay: 0 };
+    const repos = makeRepos(
+      { "issue-a": makeIssue({ id: "issue-a" }), "issue-b": makeIssue({ id: "issue-b" }) },
+      [existing],
+    );
+    const relation = await createIssueRelation(repos, { issueFromId: "issue-a", issueToId: "issue-b", relationType: "relates", delay: null });
+    expect(relation.relationType).toBe("relates");
+  });
 });
 
 describe("otherIssueId", () => {

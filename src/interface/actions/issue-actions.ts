@@ -13,11 +13,13 @@ import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError 
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
@@ -242,6 +244,8 @@ export async function updateIssueStatusAction(
         journalRepository: new DrizzleJournalRepository(),
         workflowRepository: new DrizzleWorkflowRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         issueId: parsed.data.issueId,

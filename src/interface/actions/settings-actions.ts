@@ -5,6 +5,7 @@ import { z } from "zod";
 import { updateCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { updateGeneralSettings } from "@/application/settings/general-settings";
 import { parseKeywordList } from "@/domain/settings/commit-keywords";
+import { ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 
@@ -54,6 +55,7 @@ const updateGeneralSettingsSchema = z.object({
   timelogAccept0Hours: z.coerce.boolean().default(false),
   repositoryLogDisplayLimit: z.coerce.number().int().positive("正の整数を入力してください。"),
   crossProjectIssueRelations: z.coerce.boolean().default(false),
+  issueDoneRatio: z.enum(ISSUE_DONE_RATIO_VALUES).default("issue_field"),
 });
 
 export async function updateGeneralSettingsAction(
@@ -73,6 +75,7 @@ export async function updateGeneralSettingsAction(
     timelogAccept0Hours: formData.get("timelogAccept0Hours") === "on",
     repositoryLogDisplayLimit: formData.get("repositoryLogDisplayLimit"),
     crossProjectIssueRelations: formData.get("crossProjectIssueRelations") === "on",
+    issueDoneRatio: formData.get("issueDoneRatio"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -86,6 +89,7 @@ export async function updateGeneralSettingsAction(
     timelogAccept0Hours: parsed.data.timelogAccept0Hours,
     repositoryLogDisplayLimit: parsed.data.repositoryLogDisplayLimit,
     crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
+    issueDoneRatio: parsed.data.issueDoneRatio,
   });
 
   revalidatePath("/admin/settings");

@@ -1,4 +1,4 @@
-import { resolveGeneralSettings, type GeneralSettings } from "@/domain/settings/general-settings";
+import { resolveGeneralSettings, type GeneralSettings, type IssueDoneRatioMode } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
 
 export async function loadGeneralSettings(settingsRepository: SettingsRepository): Promise<GeneralSettings> {
@@ -14,6 +14,7 @@ export interface UpdateGeneralSettingsInput {
   timelogAccept0Hours: boolean;
   repositoryLogDisplayLimit: number;
   crossProjectIssueRelations: boolean;
+  issueDoneRatio: IssueDoneRatioMode;
 }
 
 export async function updateGeneralSettings(
@@ -28,5 +29,6 @@ export async function updateGeneralSettings(
     timelog_accept_0_hours: input.timelogAccept0Hours ? "1" : "0",
     repository_log_display_limit: String(Math.round(input.repositoryLogDisplayLimit)),
     cross_project_issue_relations: input.crossProjectIssueRelations ? "1" : "0",
+    issue_done_ratio: input.issueDoneRatio,
   });
 }

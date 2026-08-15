@@ -11,6 +11,7 @@ describe("resolveGeneralSettings", () => {
     expect(settings.timelogAccept0Hours).toBe(false);
     expect(settings.repositoryLogDisplayLimit).toBe(10);
     expect(settings.crossProjectIssueRelations).toBe(false);
+    expect(settings.issueDoneRatio).toBe("issue_field");
   });
 
   it("applies a persisted attachment_max_size override (stored in KB)", () => {
@@ -54,5 +55,15 @@ describe("resolveGeneralSettings", () => {
     expect(settings.feedsLimit).toBe(25);
     expect(settings.activityDaysDefault).toBe(30);
     expect(settings.repositoryLogDisplayLimit).toBe(10);
+  });
+
+  it("applies a persisted issue_done_ratio=issue_status override", () => {
+    const settings = resolveGeneralSettings({ issue_done_ratio: "issue_status" });
+    expect(settings.issueDoneRatio).toBe("issue_status");
+  });
+
+  it("falls back to issue_field for an invalid issue_done_ratio value", () => {
+    const settings = resolveGeneralSettings({ issue_done_ratio: "bogus" });
+    expect(settings.issueDoneRatio).toBe("issue_field");
   });
 });

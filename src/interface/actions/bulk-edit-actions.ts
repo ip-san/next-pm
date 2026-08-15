@@ -8,8 +8,10 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueUpdate } from "@/domain/issue/repository";
 import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -93,6 +95,8 @@ export async function bulkUpdateIssuesAction(
   const journalRepository = new DrizzleJournalRepository();
   const workflowRepository = new DrizzleWorkflowRepository();
   const workflowFieldPermissionRepository = new DrizzleWorkflowFieldPermissionRepository();
+  const issueStatusRepository = new DrizzleIssueStatusRepository();
+  const settingsRepository = new DrizzleSettingsRepository();
   const visibilityRoles = issuesVisibilityRoles(actor);
 
   let updated = 0;
@@ -113,7 +117,7 @@ export async function bulkUpdateIssuesAction(
 
     try {
       await updateIssue(
-        { issueRepository, journalRepository, workflowRepository, workflowFieldPermissionRepository },
+        { issueRepository, journalRepository, workflowRepository, workflowFieldPermissionRepository, issueStatusRepository, settingsRepository },
         {
           issueId: issue.id,
           expectedLockVersion: issue.lockVersion,

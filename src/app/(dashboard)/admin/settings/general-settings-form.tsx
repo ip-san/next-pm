@@ -67,6 +67,13 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         <input type="checkbox" name="crossProjectIssueRelations" defaultChecked={settings.crossProjectIssueRelations} />
         異なるプロジェクトのチケット同士を関連付けられるようにする
       </label>
+      <label className="flex flex-col gap-1 text-sm">
+        進捗率の算出方法
+        <select name="issueDoneRatio" defaultValue={settings.issueDoneRatio} className="border rounded px-2 py-1">
+          <option value="issue_field">チケットごとに入力する</option>
+          <option value="issue_status">チケットのステータスから算出する</option>
+        </select>
+      </label>
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">

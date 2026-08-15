@@ -3,7 +3,10 @@ import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError 
 import type { Issue } from "@/domain/issue/entity";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
+import type { IssueStatus } from "@/domain/issue-status/entity";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { JournalRepository } from "@/domain/journal/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import type { WorkflowFieldPermission } from "@/domain/workflow/entity";
 import type { WorkflowFieldPermissionRepository, WorkflowRepository } from "@/domain/workflow/repository";
 
@@ -12,6 +15,8 @@ function makeRepositories(
     issue?: Issue | null;
     transitions?: Parameters<WorkflowRepository["listForTracker"]>[0] extends never ? never : unknown[];
     fieldPermissions?: WorkflowFieldPermission[];
+    statuses?: IssueStatus[];
+    settings?: Record<string, string>;
   } = {},
 ) {
   const issue = overrides.issue ?? makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
@@ -36,7 +41,24 @@ function makeRepositories(
     listForTrackerAndRole: mock(async () => overrides.fieldPermissions ?? []),
     replaceForTrackerAndRole: mock(async () => undefined),
   };
-  return { issueRepository, journalRepository, workflowRepository, workflowFieldPermissionRepository };
+  const statuses = overrides.statuses ?? [];
+  const issueStatusRepository: IssueStatusRepository = {
+    findById: mock(async (id) => statuses.find((s) => s.id === id) ?? null),
+    listAll: mock(async () => statuses),
+    create: mock(async (s) => ({ ...s, id: "status-1" })),
+  };
+  const settingsRepository: SettingsRepository = {
+    getAll: mock(async () => overrides.settings ?? {}),
+    setMany: mock(async () => undefined),
+  };
+  return {
+    issueRepository,
+    journalRepository,
+    workflowRepository,
+    workflowFieldPermissionRepository,
+    issueStatusRepository,
+    settingsRepository,
+  };
 }
 
 function fieldPermission(overrides: Partial<WorkflowFieldPermission>): WorkflowFieldPermission {
@@ -250,5 +272,73 @@ describe("updateIssue", () => {
         isAssignee: false,
       }),
     ).rejects.toThrow(WorkflowRequiredFieldError);
+  });
+
+  it("leaves done_ratio untouched on a status change when issue_done_ratio is issue_field (the default)", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", doneRatio: 20 });
+    const repos = makeRepositories({
+      issue,
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+      statuses: [{ id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 1 }],
+    });
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(result.doneRatio).toBe(20);
+  });
+
+  it("derives done_ratio from the target status's defaultDoneRatio when issue_done_ratio is issue_status", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", doneRatio: 20 });
+    const repos = makeRepositories({
+      issue,
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+      statuses: [{ id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 1 }],
+      settings: { issue_done_ratio: "issue_status" },
+    });
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(result.doneRatio).toBe(100);
+  });
+
+  it("does not override an explicit done_ratio change in the same request when a status without a defaultDoneRatio is targeted", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", doneRatio: 20 });
+    const repos = makeRepositories({
+      issue,
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "in-progress", author: false, assignee: false },
+      ],
+      statuses: [{ id: "in-progress", name: "In Progress", description: "", isClosed: false, defaultDoneRatio: null, position: 1 }],
+      settings: { issue_done_ratio: "issue_status" },
+    });
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { statusId: "in-progress", doneRatio: 40 },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(result.doneRatio).toBe(40);
   });
 });

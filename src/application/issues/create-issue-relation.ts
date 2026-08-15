@@ -1,3 +1,4 @@
+import type { RelationType } from "@/domain/issue-relation/entity";
 import { normalizeRelation, type RelationInput } from "@/domain/issue-relation/normalize";
 import type { IssueRelation } from "@/domain/issue-relation/entity";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
@@ -9,12 +10,53 @@ export class InvalidRelationError extends Error {}
 
 export type CreateIssueRelationInput = RelationInput;
 
+/** Mirrors IssueRelation::TYPES that participate in Redmine's circular_dependency check. */
+const DEPENDENT_TYPES: RelationType[] = ["blocks", "precedes"];
+
 /**
- * Mirrors IssueRelation#validate_issue_relation, minus the circular_dependency and
- * ancestor/descendant checks — those require walking the full relation/subtask graph,
- * which is a deliberate simplification for now (same spirit as the adjacency-list-only
- * subtask model noted elsewhere: correctness for the common case, not the full graph).
- * The cross-project check mirrors Setting.cross_project_issue_relations.
+ * True if `targetId` is reachable from `startId` by following existing "blocks"/"precedes"
+ * edges forward (issue_from -> issue_to) — i.e. adding a new startId -> targetId edge of one
+ * of those types would close a cycle. Mirrors IssueRelation#validate_issue_relation's
+ * circular_dependency check (Issue#all_dependent_issues), restricted to direct relation
+ * edges — it does not additionally walk the subtask tree the way Redmine's own
+ * all_dependent_issues does.
+ */
+async function isReachable(issueRelationRepository: IssueRelationRepository, startId: string, targetId: string): Promise<boolean> {
+  const visited = new Set<string>([startId]);
+  const queue = [startId];
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    const relations = await issueRelationRepository.listForIssue(current);
+    for (const relation of relations) {
+      if (relation.issueFromId !== current || !DEPENDENT_TYPES.includes(relation.relationType)) continue;
+      if (relation.issueToId === targetId) return true;
+      if (!visited.has(relation.issueToId)) {
+        visited.add(relation.issueToId);
+        queue.push(relation.issueToId);
+      }
+    }
+  }
+  return false;
+}
+
+/** True if `ancestorId` is a parentId-chain ancestor of `descendantId`. */
+async function isAncestorOf(issueRepository: IssueRepository, ancestorId: string, descendantId: string): Promise<boolean> {
+  const visited = new Set<string>();
+  let currentId: string | null = descendantId;
+  while (currentId) {
+    const current = await issueRepository.findById(currentId);
+    if (!current?.parentId) return false;
+    if (current.parentId === ancestorId) return true;
+    if (visited.has(current.parentId)) return false;
+    visited.add(current.parentId);
+    currentId = current.parentId;
+  }
+  return false;
+}
+
+/**
+ * Mirrors IssueRelation#validate_issue_relation. The cross-project check mirrors
+ * Setting.cross_project_issue_relations.
  */
 export async function createIssueRelation(
   repositories: { issueRelationRepository: IssueRelationRepository; issueRepository: IssueRepository; settingsRepository: SettingsRepository },
@@ -36,7 +78,18 @@ export async function createIssueRelation(
     throw new InvalidRelationError("異なるプロジェクトのチケットは関連付けられません。");
   }
 
+  if ((await isAncestorOf(repositories.issueRepository, from.id, to.id)) || (await isAncestorOf(repositories.issueRepository, to.id, from.id))) {
+    throw new InvalidRelationError("親子関係にあるチケット同士は関連付けられません。");
+  }
+
   const normalized = normalizeRelation(input);
+
+  if (DEPENDENT_TYPES.includes(normalized.relationType)) {
+    if (await isReachable(repositories.issueRelationRepository, normalized.issueToId, normalized.issueFromId)) {
+      throw new InvalidRelationError("循環した関連は作成できません。");
+    }
+  }
+
   const existing = await repositories.issueRelationRepository.listForIssue(normalized.issueFromId);
   const isDuplicate = existing.some(
     (relation) => relation.issueFromId === normalized.issueFromId && relation.issueToId === normalized.issueToId,
