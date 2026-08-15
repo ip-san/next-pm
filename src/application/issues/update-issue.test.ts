@@ -537,3 +537,237 @@ describe("updateIssue", () => {
     expect(result.statusId).toBe("closed");
   });
 });
+
+const NEW: IssueStatus = { id: "new", name: "New", description: "", isClosed: false, defaultDoneRatio: null, position: 0 };
+const CLOSED: IssueStatus = { id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: null, position: 1 };
+
+/**
+ * Multi-issue repository set for the close-duplicates cascade tests below — the shared
+ * makeRepositories() above always resolves findById to a single fixed issue, which can't
+ * represent a cascade touching several distinct issues at once.
+ */
+function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRelation[]; transitions?: unknown[] }) {
+  const issuesById = new Map(options.issues.map((i) => [i.id, i]));
+  const journalEntries: { journalizedId: string; userId: string; details: unknown[] }[] = [];
+
+  const issueRepository = makeIssueRepositoryMock({
+    findById: mock(async (id: string) => issuesById.get(id) ?? null),
+    findByIds: mock(async (ids: string[]) => ids.map((id) => issuesById.get(id)).filter((i): i is Issue => !!i)),
+    update: mock(async (id: string, _lockVersion: number, changes) => {
+      const current = issuesById.get(id);
+      if (!current) throw new Error("not found");
+      const updated = { ...current, ...changes, lockVersion: current.lockVersion + 1 } as Issue;
+      issuesById.set(id, updated);
+      return updated;
+    }),
+  });
+  const journalRepository: JournalRepository = {
+    findById: mock(async () => null),
+    listForIssue: mock(async () => []),
+    listByProject: mock(async () => []),
+    create: mock(async (j) => {
+      journalEntries.push({ journalizedId: j.journalizedId, userId: j.userId, details: j.details });
+      return { ...j, id: `journal-${journalEntries.length}`, createdAt: new Date() };
+    }),
+  };
+  const workflowRepository: WorkflowRepository = {
+    listForTracker: mock(async () => (options.transitions as never) ?? []),
+    listForTrackerAndRole: mock(async () => (options.transitions as never) ?? []),
+    create: mock(async (t) => ({ ...t, id: "transition-1" })),
+    replaceForTrackerAndRole: mock(async () => undefined),
+  };
+  const workflowFieldPermissionRepository: WorkflowFieldPermissionRepository = {
+    listForTracker: mock(async () => []),
+    listForTrackerAndRole: mock(async () => []),
+    replaceForTrackerAndRole: mock(async () => undefined),
+  };
+  const statuses = [NEW, CLOSED];
+  const issueStatusRepository: IssueStatusRepository = {
+    findById: mock(async (id) => statuses.find((s) => s.id === id) ?? null),
+    listAll: mock(async () => statuses),
+    create: mock(async (s) => ({ ...s, id: "status-1" })),
+  };
+  const issueRelationRepository: IssueRelationRepository = {
+    listForIssue: mock(async (issueId: string) => options.relations.filter((r) => r.issueFromId === issueId || r.issueToId === issueId)),
+    findById: mock(async (id) => options.relations.find((r) => r.id === id) ?? null),
+    create: mock(async (r) => ({ ...r, id: "relation-new" })),
+    delete: mock(async () => undefined),
+  };
+  const settingsRepository: SettingsRepository = {
+    getAll: mock(async () => ({})),
+    setMany: mock(async () => undefined),
+  };
+  const userPreferencesRepository: UserPreferencesRepository = {
+    findByUserId: mock(async () => null),
+    upsert: mock(async () => undefined),
+  };
+  const watcherRepository = {
+    isWatching: mock(async () => false),
+    watch: mock(async () => undefined),
+    unwatch: mock(async () => undefined),
+    listWatchedIds: mock(async () => [] as string[]),
+    listWatcherUserIds: mock(async () => [] as string[]),
+  } satisfies WatcherRepository;
+
+  return {
+    repos: {
+      issueRepository,
+      journalRepository,
+      workflowRepository,
+      workflowFieldPermissionRepository,
+      issueStatusRepository,
+      issueRelationRepository,
+      settingsRepository,
+      userPreferencesRepository,
+      watcherRepository,
+    },
+    issuesById,
+    journalEntries,
+  };
+}
+
+function cascadeIssue(overrides: Partial<Issue> & { id: string }): Issue {
+  return makeIssue({ statusId: "new", priorityId: "normal", ...overrides });
+}
+
+describe("updateIssue — close duplicates cascade", () => {
+  it("closes a duplicate when the canonical issue closes, with a journal entry attributed to the acting user", async () => {
+    const { repos, issuesById, journalEntries } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical" }), cascadeIssue({ id: "dup" })],
+      // dup duplicates canonical: canonical row points from the duplicate to what it duplicates.
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("closed");
+    const dupJournal = journalEntries.find((j) => j.journalizedId === "dup");
+    expect(dupJournal?.userId).toBe("user-1");
+  });
+
+  it("cascades through a chain of duplicates", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "a" }), cascadeIssue({ id: "b" }), cascadeIssue({ id: "c" })],
+      // b duplicates a, c duplicates b.
+      relations: [
+        { id: "rel-1", issueFromId: "b", issueToId: "a", relationType: "duplicates", delay: null },
+        { id: "rel-2", issueFromId: "c", issueToId: "b", relationType: "duplicates", delay: null },
+      ],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "a",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("b")?.statusId).toBe("closed");
+    expect(issuesById.get("c")?.statusId).toBe("closed");
+  });
+
+  it("leaves an already-closed duplicate untouched", async () => {
+    const { repos, issuesById, journalEntries } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical" }), cascadeIssue({ id: "dup", statusId: "closed" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(journalEntries.find((j) => j.journalizedId === "dup")).toBeUndefined();
+    expect(issuesById.get("dup")?.lockVersion).toBe(0);
+  });
+
+  it("closes a duplicate even though it is blocked by an open issue (bypasses the blocked check, matching Redmine's validation-skipping update_attribute)", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical" }), cascadeIssue({ id: "dup" }), cascadeIssue({ id: "blocker" })],
+      relations: [
+        { id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null },
+        { id: "rel-2", issueFromId: "blocker", issueToId: "dup", relationType: "blocks", delay: null },
+      ],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("closed");
+  });
+
+  it("closes a duplicate even with no workflow transition rule allowing it on the duplicate's own tracker (bypasses the transition check)", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      // dup is on tracker-2, which has no transition rule at all — only tracker-1 (canonical's
+      // tracker) does. A non-cascade close of dup would be rejected by canTransitionTo.
+      issues: [cascadeIssue({ id: "canonical", trackerId: "tracker-1" }), cascadeIssue({ id: "dup", trackerId: "tracker-2" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("closed");
+  });
+
+  it("does not cascade when the update doesn't actually reach a closed status", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical" }), cascadeIssue({ id: "dup" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { subject: "Renamed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("new");
+  });
+});

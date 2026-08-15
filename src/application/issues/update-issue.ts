@@ -47,26 +47,98 @@ export interface UpdateIssueInput {
   isAssignee: boolean;
 }
 
-export async function updateIssue(
-  repositories: {
-    issueRepository: IssueRepository;
-    journalRepository: JournalRepository;
-    workflowRepository: WorkflowRepository;
-    workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
-    issueStatusRepository: IssueStatusRepository;
-    issueRelationRepository: IssueRelationRepository;
-    settingsRepository: SettingsRepository;
-    userPreferencesRepository: UserPreferencesRepository;
-    watcherRepository: WatcherRepository;
-  },
+export interface UpdateIssueRepositories {
+  issueRepository: IssueRepository;
+  journalRepository: JournalRepository;
+  workflowRepository: WorkflowRepository;
+  workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
+  issueStatusRepository: IssueStatusRepository;
+  issueRelationRepository: IssueRelationRepository;
+  settingsRepository: SettingsRepository;
+  userPreferencesRepository: UserPreferencesRepository;
+  watcherRepository: WatcherRepository;
+}
+
+export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<Issue> {
+  const after = await applyIssueUpdate(repositories, input, { skipTransitionCheck: false, skipBlockedCheck: false });
+
+  // Mirrors Redmine's Issue#close_duplicates, invoked from after_save whenever the status
+  // just became closed: every issue that duplicates this one is closed too, cascading through
+  // chains of duplicates. Uses update_attribute in Redmine — validations are bypassed for the
+  // cascade, which is why closeDuplicate below skips the transition/blocked checks but still
+  // goes through applyIssueUpdate for the journal entry, done_ratio derivation, and auto-watch.
+  if (input.changes.statusId && after.statusId === input.changes.statusId) {
+    const targetStatus = await repositories.issueStatusRepository.findById(after.statusId);
+    if (targetStatus?.isClosed) {
+      await closeDuplicates(repositories, input.issueId, after.statusId, input.actingUserId, input.actorRoleIds, new Set([input.issueId]));
+    }
+  }
+
+  return after;
+}
+
+/**
+ * Closes every issue that duplicates `issueId` (relationType "duplicates", issueToId ===
+ * issueId — the canonical row points from the duplicate to the issue it duplicates), then
+ * recurses into each of those for chained duplicates. `visited` guards against cycles and
+ * re-visiting a branch through a different path in a diamond-shaped duplicate graph.
+ */
+async function closeDuplicates(
+  repositories: UpdateIssueRepositories,
+  issueId: string,
+  closedStatusId: string,
+  actingUserId: string,
+  actorRoleIds: string[],
+  visited: Set<string>,
+): Promise<void> {
+  const relations = await repositories.issueRelationRepository.listForIssue(issueId);
+  const duplicateIds = relations.filter((r) => r.relationType === "duplicates" && r.issueToId === issueId).map((r) => r.issueFromId);
+
+  for (const duplicateId of duplicateIds) {
+    if (visited.has(duplicateId)) continue;
+    visited.add(duplicateId);
+
+    const duplicate = await repositories.issueRepository.findById(duplicateId);
+    if (!duplicate) continue;
+    const currentStatus = await repositories.issueStatusRepository.findById(duplicate.statusId);
+    if (currentStatus?.isClosed) continue; // already closed — mirrors `next if duplicate.closed?`
+
+    try {
+      await applyIssueUpdate(
+        repositories,
+        {
+          issueId: duplicateId,
+          expectedLockVersion: duplicate.lockVersion,
+          changes: { statusId: closedStatusId },
+          notes: "",
+          actingUserId,
+          actorRoleIds,
+          isAuthor: duplicate.authorId === actingUserId,
+          isAssignee: duplicate.assignedToId === actingUserId,
+        },
+        { skipTransitionCheck: true, skipBlockedCheck: true },
+      );
+    } catch {
+      // A per-duplicate failure (e.g. a required field this cascade can't fill in) must not
+      // abort the primary close that triggered this cascade — leave this branch untouched.
+      continue;
+    }
+
+    await closeDuplicates(repositories, duplicateId, closedStatusId, actingUserId, actorRoleIds, visited);
+  }
+}
+
+async function applyIssueUpdate(
+  repositories: UpdateIssueRepositories,
   input: UpdateIssueInput,
+  options: { skipTransitionCheck: boolean; skipBlockedCheck: boolean },
 ): Promise<Issue> {
   const before = await repositories.issueRepository.findById(input.issueId);
   if (!before) {
     throw new Error(`Issue ${input.issueId} not found`);
   }
 
-  if (input.changes.statusId && input.changes.statusId !== before.statusId) {
+  if (!options.skipTransitionCheck && input.changes.statusId && input.changes.statusId !== before.statusId) {
     const transitions = await repositories.workflowRepository.listForTracker(before.trackerId);
     const allowed = canTransitionTo(
       transitions,
@@ -104,8 +176,9 @@ export async function updateIssue(
 
     // Mirrors Redmine's Issue#validate_issue: `blocked?` — a "blocks" relation pointing at
     // this issue whose blocker isn't closed yet — prevents closing regardless of who's
-    // making the change or what workflow transitions allow.
-    if (targetStatus?.isClosed) {
+    // making the change or what workflow transitions allow. Skipped for the close-duplicates
+    // cascade, matching Redmine's update_attribute bypassing validations there too.
+    if (!options.skipBlockedCheck && targetStatus?.isClosed) {
       const relations = await repositories.issueRelationRepository.listForIssue(input.issueId);
       const blockerIds = relations.filter((r) => r.relationType === "blocks" && r.issueToId === input.issueId).map((r) => r.issueFromId);
       if (blockerIds.length > 0) {
