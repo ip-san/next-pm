@@ -198,13 +198,30 @@ export async function changePasswordAction(
   return { error: null, ok: true };
 }
 
-/** Resolves the origin (scheme + host) of the incoming request, for building an absolute link
- *  to embed in a mailed notification — a background job has no request context of its own by
- *  the time it actually sends the mail, so the origin must be captured here instead. */
+const TRUSTED_LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+/**
+ * Resolves the origin (scheme + host) embedded in the mailed password-reset link — a
+ * background job has no request context of its own by the time it actually sends the mail, so
+ * this must be captured here instead. The incoming request's Host header is NOT trustworthy
+ * for this: a client can send an arbitrary Host, and blindly embedding it would let an
+ * attacker poison the reset link a victim reads in their inbox (classic Host header injection
+ * into a security-sensitive email) with a domain the attacker controls, harvesting the token
+ * once the victim clicks it. So the Host header is only trusted when it's a loopback address
+ * (local dev with no APP_URL configured); anything else requires APP_URL to be set explicitly.
+ * Refusing outright rather than falling back to an unvalidated Host keeps a misconfigured
+ * production deployment from silently mailing a poisoned link instead of failing loudly.
+ */
 async function resolveAppOrigin(): Promise<string> {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL;
+  }
   const headerList = await headers();
   const host = headerList.get("host") ?? "localhost:3000";
-  const proto = headerList.get("x-forwarded-proto") ?? (process.env.NODE_ENV === "production" ? "https" : "http");
+  if (!TRUSTED_LOOPBACK_HOST.test(host)) {
+    throw new Error("APP_URL must be set to send password-reset emails from a non-localhost host.");
+  }
+  const proto = headerList.get("x-forwarded-proto") ?? "http";
   return `${proto}://${host}`;
 }
 
