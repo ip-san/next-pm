@@ -1,0 +1,1 @@
+ALTER TABLE "custom_fields" ADD COLUMN "customized_type" text DEFAULT 'Issue' NOT NULL;

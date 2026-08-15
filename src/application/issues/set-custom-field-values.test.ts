@@ -8,6 +8,7 @@ function makeField(overrides: Partial<CustomField> = {}): CustomField {
   return {
     id: "field-1",
     name: "Severity",
+    customizedType: "Issue",
     fieldFormat: "list",
     isRequired: false,
     defaultValue: null,
@@ -22,6 +23,7 @@ function makeRepos(fields: CustomField[]) {
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => fields),
     listForTracker: mock(async () => fields),
+    listForCustomizedType: mock(async () => fields),
     findById: mock(async () => fields[0] ?? null),
     create: mock(async (f) => ({ ...f, id: "new-field" })),
   };

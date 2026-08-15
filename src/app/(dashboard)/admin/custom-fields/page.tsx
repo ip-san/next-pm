@@ -17,6 +17,11 @@ const FORMAT_LABEL: Record<string, string> = {
   list: "リスト",
 };
 
+const CUSTOMIZED_TYPE_LABEL: Record<string, string> = {
+  Issue: "チケット",
+  Project: "プロジェクト",
+};
+
 export default async function CustomFieldsPage() {
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
@@ -36,12 +41,17 @@ export default async function CustomFieldsPage() {
         {fields.map((field) => (
           <li key={field.id} className="border rounded p-3">
             <p className="font-medium">
-              {field.name} <span className="text-xs text-gray-500">({FORMAT_LABEL[field.fieldFormat]})</span>
+              {field.name}{" "}
+              <span className="text-xs text-gray-500">
+                ({CUSTOMIZED_TYPE_LABEL[field.customizedType]} / {FORMAT_LABEL[field.fieldFormat]})
+              </span>
               {field.isRequired ? <span className="text-xs text-red-600"> 必須</span> : null}
             </p>
-            <p className="text-xs text-gray-500">
-              トラッカー: {field.trackerIds.map((id) => trackerById.get(id)?.name ?? "?").join(", ") || "(なし)"}
-            </p>
+            {field.customizedType === "Issue" ? (
+              <p className="text-xs text-gray-500">
+                トラッカー: {field.trackerIds.map((id) => trackerById.get(id)?.name ?? "?").join(", ") || "(なし)"}
+              </p>
+            ) : null}
             {field.fieldFormat === "list" ? (
               <p className="text-xs text-gray-500">選択肢: {field.possibleValues.join(", ")}</p>
             ) : null}

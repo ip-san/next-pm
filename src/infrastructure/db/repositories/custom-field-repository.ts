@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { customFields, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
-import type { CustomField } from "@/domain/custom-field/entity";
+import type { CustomField, CustomizedType } from "@/domain/custom-field/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 
 async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Promise<CustomField[]> {
@@ -14,6 +14,7 @@ async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Pro
     result.push({
       id: row.id,
       name: row.name,
+      customizedType: row.customizedType as CustomizedType,
       fieldFormat: row.fieldFormat,
       isRequired: row.isRequired,
       defaultValue: row.defaultValue,
@@ -47,11 +48,17 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository {
     return attachTrackerIds(rows.map((r) => r.field));
   }
 
+  async listForCustomizedType(customizedType: CustomizedType): Promise<CustomField[]> {
+    const rows = await db.select().from(customFields).where(eq(customFields.customizedType, customizedType));
+    return attachTrackerIds(rows);
+  }
+
   async create(field: Omit<CustomField, "id">): Promise<CustomField> {
     const [row] = await db
       .insert(customFields)
       .values({
         name: field.name,
+        customizedType: field.customizedType,
         fieldFormat: field.fieldFormat,
         isRequired: field.isRequired,
         defaultValue: field.defaultValue,

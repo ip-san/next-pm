@@ -8,7 +8,7 @@ export const customValues = pgTable(
     customFieldId: uuid("custom_field_id")
       .notNull()
       .references(() => customFields.id, { onDelete: "cascade" }),
-    /** Polymorphic target discriminator (Issue today) — same caveat as journals.journalizedType. */
+    /** Polymorphic target discriminator — same shape as journals.journalizedType. */
     customizedType: text("customized_type").notNull(),
     customizedId: uuid("customized_id").notNull(),
     value: text("value"),

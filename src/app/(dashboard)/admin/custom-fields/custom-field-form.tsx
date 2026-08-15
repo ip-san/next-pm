@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createCustomFieldAction, type AdminActionState } from "@/interface/actions/admin-actions";
 import type { Tracker } from "@/domain/tracker/entity";
+import type { CustomizedType } from "@/domain/custom-field/entity";
 
 const initialState: AdminActionState = { error: null };
 
@@ -16,8 +17,14 @@ const FORMAT_OPTIONS = [
   { value: "list", label: "リスト" },
 ] as const;
 
+const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
+  { value: "Issue", label: "チケット" },
+  { value: "Project", label: "プロジェクト" },
+];
+
 export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
   const [state, formAction, pending] = useActionState(createCustomFieldAction, initialState);
+  const [customizedType, setCustomizedType] = useState<CustomizedType>("Issue");
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-md border-t pt-4">
@@ -26,6 +33,26 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
           名称
         </label>
         <input id="name" name="name" required maxLength={30} className="border rounded px-3 py-2" />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="customizedType" className="text-sm font-medium">
+          対象
+        </label>
+        <select
+          id="customizedType"
+          name="customizedType"
+          required
+          className="border rounded px-3 py-2"
+          value={customizedType}
+          onChange={(event) => setCustomizedType(event.target.value as CustomizedType)}
+        >
+          {CUSTOMIZED_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -60,7 +87,7 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
         必須項目
       </label>
 
-      <fieldset className="flex flex-col gap-1">
+      <fieldset className="flex flex-col gap-1" hidden={customizedType !== "Issue"}>
         <legend className="text-sm font-medium">対象トラッカー</legend>
         {trackers.map((tracker) => (
           <label key={tracker.id} className="flex items-center gap-2 text-sm">

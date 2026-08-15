@@ -6,7 +6,10 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { copyProject } from "@/application/projects/copy-project";
 import { createProject } from "@/application/projects/create-project";
+import { CustomFieldValidationError, setProjectCustomFieldValues } from "@/application/projects/set-project-custom-field-values";
 import { updateProject } from "@/application/projects/update-project";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -129,6 +132,7 @@ const updateProjectSettingsSchema = z.object({
   isPublic: z.coerce.boolean().default(false),
   enabledModules: z.array(z.enum(AVAILABLE_MODULES)).default([]),
   trackerIds: z.array(z.string().uuid()).default([]),
+  customFieldIds: z.array(z.string().uuid()).default([]),
 });
 
 export type UpdateProjectSettingsActionState = {
@@ -146,6 +150,7 @@ export async function updateProjectSettingsAction(
     isPublic: formData.get("isPublic") === "on",
     enabledModules: formData.getAll("enabledModules"),
     trackerIds: formData.getAll("trackerIds"),
+    customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -170,6 +175,24 @@ export async function updateProjectSettingsAction(
     enabledModules: parsed.data.enabledModules,
     trackerIds: parsed.data.trackerIds,
   });
+
+  if (parsed.data.customFieldIds.length > 0) {
+    const rawValues = Object.fromEntries(
+      parsed.data.customFieldIds.map((fieldId) => [fieldId, (formData.get(`customField_${fieldId}`) ?? "").toString()]),
+    );
+    try {
+      await setProjectCustomFieldValues(
+        { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+        project.id,
+        rawValues,
+      );
+    } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+      }
+      throw error;
+    }
+  }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}`);
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/settings`);

@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -23,8 +25,13 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
     notFound();
   }
 
-  const trackers = await new DrizzleTrackerRepository().listAll();
+  const [trackers, customFields, customValues] = await Promise.all([
+    new DrizzleTrackerRepository().listAll(),
+    new DrizzleCustomFieldRepository().listForCustomizedType("Project"),
+    new DrizzleCustomValueRepository().listForCustomized("Project", project.id),
+  ]);
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
+  const customValueByFieldId = Object.fromEntries(customValues.map((cv) => [cv.customFieldId, cv.value]));
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -39,7 +46,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
         }}
       />
-      <ProjectSettingsForm project={project} trackers={trackers} />
+      <ProjectSettingsForm project={project} trackers={trackers} customFields={customFields} customValueByFieldId={customValueByFieldId} />
     </main>
   );
 }

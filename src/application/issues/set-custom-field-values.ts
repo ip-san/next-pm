@@ -1,13 +1,9 @@
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
+import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
 
-export class CustomFieldValidationError extends Error {
-  constructor(public readonly fieldErrors: Record<string, string>) {
-    super("One or more custom field values are invalid");
-    this.name = "CustomFieldValidationError";
-  }
-}
+export { CustomFieldValidationError };
 
 /**
  * Validates and persists `rawValues` (customFieldId -> raw string input) against the

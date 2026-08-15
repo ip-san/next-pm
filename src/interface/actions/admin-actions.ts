@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { customFieldFormatEnum } from "@/infrastructure/db/schema/custom-fields";
+import { customFieldFormatEnum, customizedTypeEnum } from "@/infrastructure/db/schema/custom-fields";
 import { enumerationTypeEnum } from "@/infrastructure/db/schema/enumerations";
 import { coerceCustomFieldValue } from "@/domain/custom-field/coerce";
 import { isPermissionRegistered } from "@/domain/authorization/permission-registry";
@@ -232,6 +232,7 @@ export async function createEnumerationAction(
 
 const createCustomFieldSchema = z.object({
   name: z.string().min(1).max(30),
+  customizedType: z.enum(customizedTypeEnum),
   fieldFormat: z.enum(customFieldFormatEnum),
   possibleValues: z.string().default(""),
   defaultValue: z.string().default(""),
@@ -250,6 +251,7 @@ export async function createCustomFieldAction(
 
   const parsed = createCustomFieldSchema.safeParse({
     name: formData.get("name"),
+    customizedType: formData.get("customizedType"),
     fieldFormat: formData.get("fieldFormat"),
     possibleValues: formData.get("possibleValues") ?? "",
     defaultValue: formData.get("defaultValue") ?? "",
@@ -260,12 +262,15 @@ export async function createCustomFieldAction(
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
   }
 
-  if (parsed.data.trackerIds.length === 0) {
+  // Only Issue custom fields have a tracker concept — Project custom fields apply to every
+  // project (mirrors Redmine's ProjectCustomField, which has no custom_fields_trackers row).
+  if (parsed.data.customizedType === "Issue" && parsed.data.trackerIds.length === 0) {
     return { error: "対象トラッカーを1つ以上選択してください。" };
   }
+  const trackerIds = parsed.data.customizedType === "Issue" ? parsed.data.trackerIds : [];
 
-  const trackers = await new DrizzleTrackerRepository().findByIds(parsed.data.trackerIds);
-  if (trackers.length !== parsed.data.trackerIds.length) {
+  const trackers = await new DrizzleTrackerRepository().findByIds(trackerIds);
+  if (trackers.length !== trackerIds.length) {
     return { error: "存在しないトラッカーが指定されました。" };
   }
 
@@ -294,12 +299,13 @@ export async function createCustomFieldAction(
 
   await new DrizzleCustomFieldRepository().create({
     name: parsed.data.name,
+    customizedType: parsed.data.customizedType,
     fieldFormat: parsed.data.fieldFormat,
     isRequired: parsed.data.isRequired,
     defaultValue,
     possibleValues,
     position: 0,
-    trackerIds: parsed.data.trackerIds,
+    trackerIds,
   });
 
   revalidatePath("/admin/custom-fields");
