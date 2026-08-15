@@ -123,6 +123,7 @@ export async function syncRepositoryAction(
       timeEntryRepository: new DrizzleTimeEntryRepository(),
       enumerationRepository: new DrizzleEnumerationRepository(),
       userRepository: new DrizzleUserRepository(),
+      settingsRepository: new DrizzleSettingsRepository(),
     },
     scmRepository,
     "HEAD",

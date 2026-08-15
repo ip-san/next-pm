@@ -26,6 +26,47 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         <input type="checkbox" name="restApiEnabled" defaultChecked={settings.restApiEnabled} />
         REST APIを有効にする
       </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Atomフィードの最大件数
+        <input
+          type="number"
+          name="feedsLimit"
+          min="1"
+          step="1"
+          defaultValue={settings.feedsLimit}
+          className="border rounded px-2 py-1"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        アクティビティのデフォルト表示日数
+        <input
+          type="number"
+          name="activityDaysDefault"
+          min="1"
+          step="1"
+          defaultValue={settings.activityDaysDefault}
+          className="border rounded px-2 py-1"
+        />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="timelogAccept0Hours" defaultChecked={settings.timelogAccept0Hours} />
+        作業時間の記録で0時間を許可する
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        リポジトリのコミット履歴表示件数
+        <input
+          type="number"
+          name="repositoryLogDisplayLimit"
+          min="1"
+          step="1"
+          defaultValue={settings.repositoryLogDisplayLimit}
+          className="border rounded px-2 py-1"
+        />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="crossProjectIssueRelations" defaultChecked={settings.crossProjectIssueRelations} />
+        異なるプロジェクトのチケット同士を関連付けられるようにする
+      </label>
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">

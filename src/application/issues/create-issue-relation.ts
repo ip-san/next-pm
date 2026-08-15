@@ -2,6 +2,8 @@ import { normalizeRelation, type RelationInput } from "@/domain/issue-relation/n
 import type { IssueRelation } from "@/domain/issue-relation/entity";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
 import type { IssueRepository } from "@/domain/issue/repository";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import type { SettingsRepository } from "@/domain/settings/repository";
 
 export class InvalidRelationError extends Error {}
 
@@ -12,9 +14,10 @@ export type CreateIssueRelationInput = RelationInput;
  * ancestor/descendant checks — those require walking the full relation/subtask graph,
  * which is a deliberate simplification for now (same spirit as the adjacency-list-only
  * subtask model noted elsewhere: correctness for the common case, not the full graph).
+ * The cross-project check mirrors Setting.cross_project_issue_relations.
  */
 export async function createIssueRelation(
-  repositories: { issueRelationRepository: IssueRelationRepository; issueRepository: IssueRepository },
+  repositories: { issueRelationRepository: IssueRelationRepository; issueRepository: IssueRepository; settingsRepository: SettingsRepository },
   input: CreateIssueRelationInput,
 ): Promise<IssueRelation> {
   if (input.issueFromId === input.issueToId) {
@@ -28,7 +31,8 @@ export async function createIssueRelation(
   if (!from || !to) {
     throw new InvalidRelationError("関連付け先のチケットが見つかりません。");
   }
-  if (from.projectId !== to.projectId) {
+  const { crossProjectIssueRelations } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
+  if (from.projectId !== to.projectId && !crossProjectIssueRelations) {
     throw new InvalidRelationError("異なるプロジェクトのチケットは関連付けられません。");
   }
 

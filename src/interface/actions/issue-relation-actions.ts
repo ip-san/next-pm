@@ -8,6 +8,7 @@ import { createIssueRelation, InvalidRelationError } from "@/application/issues/
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -78,7 +79,11 @@ export async function createIssueRelationAction(
 
   try {
     await createIssueRelation(
-      { issueRelationRepository: new DrizzleIssueRelationRepository(), issueRepository },
+      {
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
+        issueRepository,
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
       { issueFromId: issue.id, issueToId: parsed.data.targetIssueId, relationType: parsed.data.relationType, delay },
     );
   } catch (error) {

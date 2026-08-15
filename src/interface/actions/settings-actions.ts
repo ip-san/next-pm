@@ -49,6 +49,11 @@ export async function updateCommitKeywordSettingsAction(
 const updateGeneralSettingsSchema = z.object({
   attachmentMaxSizeMb: z.coerce.number().positive("正の数を入力してください。"),
   restApiEnabled: z.coerce.boolean().default(false),
+  feedsLimit: z.coerce.number().int().positive("正の整数を入力してください。"),
+  activityDaysDefault: z.coerce.number().int().positive("正の整数を入力してください。"),
+  timelogAccept0Hours: z.coerce.boolean().default(false),
+  repositoryLogDisplayLimit: z.coerce.number().int().positive("正の整数を入力してください。"),
+  crossProjectIssueRelations: z.coerce.boolean().default(false),
 });
 
 export async function updateGeneralSettingsAction(
@@ -63,6 +68,11 @@ export async function updateGeneralSettingsAction(
   const parsed = updateGeneralSettingsSchema.safeParse({
     attachmentMaxSizeMb: formData.get("attachmentMaxSizeMb"),
     restApiEnabled: formData.get("restApiEnabled") === "on",
+    feedsLimit: formData.get("feedsLimit"),
+    activityDaysDefault: formData.get("activityDaysDefault"),
+    timelogAccept0Hours: formData.get("timelogAccept0Hours") === "on",
+    repositoryLogDisplayLimit: formData.get("repositoryLogDisplayLimit"),
+    crossProjectIssueRelations: formData.get("crossProjectIssueRelations") === "on",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -71,6 +81,11 @@ export async function updateGeneralSettingsAction(
   await updateGeneralSettings(new DrizzleSettingsRepository(), {
     attachmentMaxSizeMb: parsed.data.attachmentMaxSizeMb,
     restApiEnabled: parsed.data.restApiEnabled,
+    feedsLimit: parsed.data.feedsLimit,
+    activityDaysDefault: parsed.data.activityDaysDefault,
+    timelogAccept0Hours: parsed.data.timelogAccept0Hours,
+    repositoryLogDisplayLimit: parsed.data.repositoryLogDisplayLimit,
+    crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
   });
 
   revalidatePath("/admin/settings");

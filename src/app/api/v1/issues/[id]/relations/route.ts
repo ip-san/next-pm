@@ -6,6 +6,7 @@ import { createIssueRelation, InvalidRelationError } from "@/application/issues/
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -98,7 +99,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const relation = await createIssueRelation(
-      { issueRelationRepository: new DrizzleIssueRelationRepository(), issueRepository: new DrizzleIssueRepository() },
+      {
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
+        issueRepository: new DrizzleIssueRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
       {
         issueFromId: loaded.issue.id,
         issueToId: parsed.data.issue_to_id,

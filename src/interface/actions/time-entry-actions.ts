@@ -7,6 +7,7 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { logTime, InvalidTimeEntryError } from "@/application/time-entries/log-time";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -65,7 +66,7 @@ export async function logTimeAction(
 
   try {
     await logTime(
-      { timeEntryRepository: new DrizzleTimeEntryRepository() },
+      { timeEntryRepository: new DrizzleTimeEntryRepository(), settingsRepository: new DrizzleSettingsRepository() },
       {
         projectId: project.id,
         issueId: issue.id,

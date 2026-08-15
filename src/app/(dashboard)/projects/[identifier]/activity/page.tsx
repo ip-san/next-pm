@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
 import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
@@ -11,6 +12,7 @@ import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/messa
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
@@ -18,8 +20,6 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export const dynamic = "force-dynamic";
-
-const DAYS = 30;
 
 const GROUP_LABEL: Record<ActivityEventGroup, string> = {
   issue: "チケット",
@@ -71,6 +71,7 @@ export default async function ProjectActivityPage({
   const user = await currentUserFromCookies();
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   const atomKey = user ? await getOrCreateAtomKey(new DrizzleUserRepository(), user.id) : null;
+  const { activityDaysDefault: DAYS } = resolveGeneralSettings(await new DrizzleSettingsRepository().getAll());
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

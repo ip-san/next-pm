@@ -9,6 +9,7 @@ import type { Changeset, ScmRepository } from "@/domain/scm/entity";
 import { scanCommitMessage, type KeywordScanOptions } from "@/domain/scm/keyword-scan";
 import type { ScmBrowser } from "@/domain/scm/scm-browser";
 import { resolveCommitKeywordSettings } from "@/domain/settings/commit-keywords";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
@@ -21,6 +22,7 @@ export interface SyncChangesetsRepositories {
   timeEntryRepository: TimeEntryRepository;
   enumerationRepository: EnumerationRepository;
   userRepository: UserRepository;
+  settingsRepository: SettingsRepository;
 }
 
 /**
@@ -85,7 +87,7 @@ async function applyTimeLog(
 
   try {
     await logTime(
-      { timeEntryRepository: repositories.timeEntryRepository },
+      { timeEntryRepository: repositories.timeEntryRepository, settingsRepository: repositories.settingsRepository },
       {
         projectId: issue.projectId,
         issueId: issue.id,

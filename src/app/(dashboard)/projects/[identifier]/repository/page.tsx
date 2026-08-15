@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { InvalidRefError, InvalidRepositoryPathError } from "@/domain/scm/validate-path";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -71,7 +73,8 @@ export default async function RepositoryPage({
   }
   if (!error && canViewChangesets) {
     try {
-      commits = await browser.log(scmRepository.rootPath, currentRef, 10);
+      const { repositoryLogDisplayLimit } = resolveGeneralSettings(await new DrizzleSettingsRepository().getAll());
+      commits = await browser.log(scmRepository.rootPath, currentRef, repositoryLogDisplayLimit);
     } catch {
       // Log failure shouldn't block showing the tree/file above.
     }

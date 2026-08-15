@@ -9,6 +9,7 @@ import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, Commit, ScmRepository } from "@/domain/scm/entity";
 import type { ScmBrowser } from "@/domain/scm/scm-browser";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
@@ -99,6 +100,13 @@ function makeUserRepository(user: User | null): UserRepository {
   };
 }
 
+function makeSettingsRepository(): SettingsRepository {
+  return {
+    getAll: mock(async () => ({})),
+    setMany: mock(async () => {}),
+  };
+}
+
 const OPEN_STATUS: IssueStatus = { id: "status-open", name: "Open", description: "", isClosed: false, defaultDoneRatio: null, position: 1 };
 const CLOSED_STATUS: IssueStatus = { id: "status-closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 2 };
 const ACTIVITY: Enumeration = { id: "activity-1", type: "TimeEntryActivity", name: "Development", position: 1, isDefault: true, projectId: null, parentId: null };
@@ -134,6 +142,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -156,6 +165,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -174,6 +184,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -193,6 +204,7 @@ describe("syncChangesets", () => {
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -214,6 +226,7 @@ describe("syncChangesets", () => {
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(null),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -233,6 +246,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository({ createdAt: new Date("2020-01-01") }), "HEAD", 50);
@@ -254,6 +268,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     await syncChangesets(repositories, makeScmRepository({ projectId: "proj-1" }), "HEAD", 50);
@@ -270,6 +285,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const scmRepository = makeScmRepository();
@@ -290,6 +306,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -314,6 +331,7 @@ describe("syncChangesets", () => {
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
@@ -332,6 +350,7 @@ describe("syncChangesets", () => {
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
       userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
     };
 
     const result = await syncChangesets(repositories, makeScmRepository(), "HEAD", 50, DEFAULT_KEYWORD_SCAN_OPTIONS, false);

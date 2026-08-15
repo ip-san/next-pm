@@ -4,8 +4,9 @@ import type { Issue } from "@/domain/issue/entity";
 import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
 import type { IssueRelation } from "@/domain/issue-relation/entity";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 
-function makeRepos(issuesById: Record<string, Issue>, existingRelations: IssueRelation[] = []) {
+function makeRepos(issuesById: Record<string, Issue>, existingRelations: IssueRelation[] = [], settings: Record<string, string> = {}) {
   const issueRepository = makeIssueRepositoryMock({
     findById: mock(async (id: string) => issuesById[id] ?? null),
   });
@@ -15,7 +16,11 @@ function makeRepos(issuesById: Record<string, Issue>, existingRelations: IssueRe
     create: mock(async (relation) => ({ ...relation, id: "relation-1" }) as IssueRelation),
     delete: mock(async () => {}),
   };
-  return { issueRepository, issueRelationRepository };
+  const settingsRepository: SettingsRepository = {
+    getAll: mock(async () => settings),
+    setMany: mock(async () => {}),
+  };
+  return { issueRepository, issueRelationRepository, settingsRepository };
 }
 
 describe("createIssueRelation", () => {
@@ -39,7 +44,7 @@ describe("createIssueRelation", () => {
     ).rejects.toThrow(InvalidRelationError);
   });
 
-  it("rejects relating issues from different projects", async () => {
+  it("rejects relating issues from different projects by default", async () => {
     const repos = makeRepos({
       "issue-a": makeIssue({ id: "issue-a", projectId: "proj-1" }),
       "issue-b": makeIssue({ id: "issue-b", projectId: "proj-2" }),
@@ -47,6 +52,16 @@ describe("createIssueRelation", () => {
     await expect(
       createIssueRelation(repos, { issueFromId: "issue-a", issueToId: "issue-b", relationType: "relates", delay: null }),
     ).rejects.toThrow(InvalidRelationError);
+  });
+
+  it("allows relating issues from different projects when cross_project_issue_relations=1", async () => {
+    const repos = makeRepos(
+      { "issue-a": makeIssue({ id: "issue-a", projectId: "proj-1" }), "issue-b": makeIssue({ id: "issue-b", projectId: "proj-2" }) },
+      [],
+      { cross_project_issue_relations: "1" },
+    );
+    const relation = await createIssueRelation(repos, { issueFromId: "issue-a", issueToId: "issue-b", relationType: "relates", delay: null });
+    expect(relation.relationType).toBe("relates");
   });
 
   it("rejects a duplicate relation between the same pair", async () => {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { activityEventPath } from "@/domain/activity/entity";
 import { buildAtomFeed } from "@/domain/atom/build-feed";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
@@ -10,6 +11,7 @@ import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/messa
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
@@ -17,9 +19,6 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export const dynamic = "force-dynamic";
-
-const DAYS = 30;
-const FEED_ENTRY_LIMIT = 25;
 
 async function resolveUser(request: Request, url: URL) {
   const viaCookie = await currentUserFromCookies();
@@ -35,9 +34,10 @@ async function resolveUser(request: Request, url: URL) {
   return new DrizzleUserRepository().findByAtomKey(key);
 }
 
-// Mirrors ActivitiesController#index format.atom. Scope: always the last 30 days across every
-// event type (no per-type show_* filtering, no date navigation) — a feed reader polls this
-// URL unattended, so there's no per-request UI state to carry the way the HTML page has.
+// Mirrors ActivitiesController#index format.atom. Scope: always the last activity_days_default
+// days across every event type (no per-type show_* filtering, no date navigation) — a feed
+// reader polls this URL unattended, so there's no per-request UI state to carry the way the
+// HTML page has.
 export async function GET(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
   const url = new URL(request.url);
@@ -49,10 +49,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   const user = await resolveUser(request, url);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { activityDaysDefault, feedsLimit } = resolveGeneralSettings(await new DrizzleSettingsRepository().getAll());
 
   const to = new Date();
   const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - DAYS);
+  from.setUTCDate(from.getUTCDate() - activityDaysDefault);
 
   const events = await listProjectActivity(
     {
@@ -78,7 +79,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     },
   );
 
-  const limited = events.slice(0, FEED_ENTRY_LIMIT);
+  const limited = events.slice(0, feedsLimit);
   const authorIds = [...new Set(limited.map((event) => event.authorId).filter((id): id is string => id !== null))];
   const authors = await new DrizzleUserRepository().findByIds(authorIds);
   const authorById = new Map(authors.map((author) => [author.id, `${author.lastname} ${author.firstname}`]));
