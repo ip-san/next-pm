@@ -120,6 +120,7 @@ sequenceDiagram
 - 使うユースケース関数はダッシュボードのServer Actionと**同じもの**(例: `POST /api/v1/issues`も`application/issues/create-issue.ts`の`createIssue()`を呼ぶ)——ロジックの二重実装を避けている。
 - 一覧系エンドポイントはRedmine本家と同じ`offset`/`limit`クエリパラメータ+`total_count`/`offset`/`limit`のレスポンス封筒(`interface/http/pagination.ts`の`parsePagination()`/`paginate()`)に対応——ただしDrizzleクエリ自体にLIMIT/OFFSETを渡すのではなく、リポジトリから取得した配列をルート側でスライスする実装(大規模データセットでは非効率だが、クライアント側の契約自体は満たしている)。全ての一覧エンドポイントが対応しているわけではなく、成長しうる主要リソース(issues/projects/time_entries/users/news/search/board messages)のみ。
 - `PUT`は`PATCH`のエイリアスとして扱う(例: `issues/[id]/route.ts`の`export const PUT = PATCH`)——next-pm自体の実装は部分更新(PATCH的)だが、Redmine公式クライアントの多くは`PUT`で送ってくるため互換性のために両方を受け付ける。
+- CRUDの網羅度はエンドポイントごとに差がある。show(`GET :id`)・update(`PUT`)・create(`POST`)は、対応する`application/**`のユースケース関数とリポジトリメソッドが既に存在するリソース(versions/wiki/news/roles/relations/projects)から優先的に埋めている。エラーレスポンスの形は経路によって`{error: string}`(大半)と`{errors: string[]}`(Redmine形式)が混在しており未統一。projectsのアーカイブ/削除、issues/time_entries/usersのDELETE、my/accountのPUTなど、リポジトリ側に書き込みメソッド自体が無いものは対応する後続作業として残っている。
 
 ## Server ComponentでもRoute HandlerでもないHTTPレスポンス
 

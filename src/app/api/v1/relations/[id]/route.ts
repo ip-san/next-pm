@@ -15,6 +15,38 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { user } = await resolveUser(request);
+
+  const relation = await new DrizzleIssueRelationRepository().findById(id);
+  if (!relation) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Re-derive the owning project/actor from the "from" issue — same visibility source used
+  // by DELETE below and by the issue-scoped relations list, so a relation's own show route
+  // can't leak more than what listing that issue's relations already reveals.
+  const issue = await new DrizzleIssueRepository().findById(relation.issueFromId);
+  if (!issue) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const project = await new DrizzleProjectRepository().findById(issue.projectId);
+  if (!project) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (!isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ relation });
+}
+
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, viaCookie } = await resolveUser(request);

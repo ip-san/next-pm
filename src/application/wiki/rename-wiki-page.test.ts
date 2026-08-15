@@ -19,6 +19,10 @@ function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
       page.title = newTitle;
       return page;
     },
+    delete: async (id) => {
+      const index = pages.findIndex((p) => p.id === id);
+      if (index !== -1) pages.splice(index, 1);
+    },
   };
 
   const wikiRedirectRepository: WikiRedirectRepository = {

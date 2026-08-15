@@ -74,6 +74,10 @@ export class DrizzleWikiPageRepository implements WikiPageRepository {
     const [row] = await db.update(wikiPages).set({ title: newTitle }).where(eq(wikiPages.id, id)).returning();
     return pageToDomain(row);
   }
+
+  async delete(id: string): Promise<void> {
+    await db.delete(wikiPages).where(eq(wikiPages.id, id));
+  }
 }
 
 export class DrizzleWikiRedirectRepository implements WikiRedirectRepository {

@@ -6,6 +6,8 @@ export interface WikiPageRepository {
   findByTitle(projectId: string, title: string): Promise<WikiPage | null>;
   create(page: Omit<WikiPage, "id">): Promise<WikiPage>;
   rename(id: string, newTitle: string): Promise<WikiPage>;
+  /** Cascades to the page's content versions (FK); children keep their row with parentId cleared. */
+  delete(id: string): Promise<void>;
 }
 
 export interface WikiRedirectRepository {
