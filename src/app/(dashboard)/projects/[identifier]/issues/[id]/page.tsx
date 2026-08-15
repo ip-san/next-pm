@@ -15,6 +15,7 @@ import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/i
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
@@ -27,6 +28,7 @@ import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueRelationForm } from "./issue-relation-form";
 import { LogTimeForm } from "./log-time-form";
+import { ReactionButton } from "./reaction-button";
 import { StatusUpdateForm } from "./status-update-form";
 import { WatcherManager } from "./watcher-manager";
 import { WatchToggleForm } from "./watch-toggle-form";
@@ -54,6 +56,18 @@ export default async function IssueDetailPage({
   ]);
   if (!project) {
     notFound();
+  }
+
+  const reactions = await new DrizzleReactionRepository().listForReactables(
+    "Journal",
+    journals.map((journal) => journal.id),
+  );
+  const reactionsByJournalId = new Map<string, { count: number; reacted: boolean }>();
+  for (const reaction of reactions) {
+    const entry = reactionsByJournalId.get(reaction.reactableId) ?? { count: 0, reacted: false };
+    entry.count += 1;
+    if (reaction.userId === user?.id) entry.reacted = true;
+    reactionsByJournalId.set(reaction.reactableId, entry);
   }
 
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
@@ -159,17 +173,31 @@ export default async function IssueDetailPage({
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">履歴</h2>
         <ul className="flex flex-col gap-2 text-sm">
-          {journals.map((journal) => (
-            <li key={journal.id} className="border rounded p-2">
-              <p className="text-gray-500 text-xs">{journal.createdAt.toISOString()}</p>
-              {journal.notes ? <p>{journal.notes}</p> : null}
-              {journal.details.map((detail, index) => (
-                <p key={index} className="text-xs text-gray-600">
-                  {detail.fieldName}: {detail.oldValue ?? "(なし)"} → {detail.newValue ?? "(なし)"}
-                </p>
-              ))}
-            </li>
-          ))}
+          {journals.map((journal) => {
+            const reaction = reactionsByJournalId.get(journal.id) ?? { count: 0, reacted: false };
+            return (
+              <li key={journal.id} className="border rounded p-2 flex flex-col gap-1">
+                <p className="text-gray-500 text-xs">{journal.createdAt.toISOString()}</p>
+                {journal.notes ? <p>{journal.notes}</p> : null}
+                {journal.details.map((detail, index) => (
+                  <p key={index} className="text-xs text-gray-600">
+                    {detail.fieldName}: {detail.oldValue ?? "(なし)"} → {detail.newValue ?? "(なし)"}
+                  </p>
+                ))}
+                {user ? (
+                  <ReactionButton
+                    journalId={journal.id}
+                    issueId={issue.id}
+                    projectIdentifier={identifier}
+                    count={reaction.count}
+                    reacted={reaction.reacted}
+                  />
+                ) : reaction.count > 0 ? (
+                  <span className="text-xs rounded-full border px-2 py-0.5 self-start">👍 {reaction.count}</span>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </section>
 
