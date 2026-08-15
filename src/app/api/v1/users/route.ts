@@ -4,6 +4,7 @@ import { generateSalt, hashPassword } from "@/domain/user/password";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -33,8 +34,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const users = await new DrizzleUserRepository().listAll();
-  return NextResponse.json({ users: users.map(toJson) });
+  const allUsers = await new DrizzleUserRepository().listAll();
+  const { items: users, total_count, offset, limit } = paginate(allUsers, parsePagination(new URL(request.url)));
+  return NextResponse.json({ users: users.map(toJson), total_count, offset, limit });
 }
 
 const createUserSchema = z.object({

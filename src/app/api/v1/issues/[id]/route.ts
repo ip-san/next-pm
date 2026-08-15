@@ -197,3 +197,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     throw error;
   }
 }
+
+// Redmine's REST API accepts PUT for issue updates; next-pm's own handler is PATCH-shaped
+// (partial update semantics), so alias PUT to it rather than requiring PATCH-aware clients.
+export const PUT = PATCH;

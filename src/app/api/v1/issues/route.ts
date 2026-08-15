@@ -18,6 +18,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -46,8 +47,9 @@ export async function GET(request: Request) {
 
   const visibilityRoles = issuesVisibilityRoles(actor);
   const allIssues = await new DrizzleIssueRepository().listByProject(project.id);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
-  return NextResponse.json({ issues });
+  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
+  const { items: issues, total_count, offset, limit } = paginate(visibleIssues, parsePagination(url));
+  return NextResponse.json({ issues, total_count, offset, limit });
 }
 
 const createIssueSchema = z.object({

@@ -10,6 +10,7 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -59,13 +60,14 @@ export async function GET(request: Request) {
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((i) => i !== null).map((i) => [i.id, i]));
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const entries = allEntries.filter((entry) => {
+  const visibleEntries = allEntries.filter((entry) => {
     if (!entry.issueId) return true;
     const issue = issueById.get(entry.issueId);
     return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
   });
 
-  return NextResponse.json({ time_entries: entries });
+  const { items: time_entries, total_count, offset, limit } = paginate(visibleEntries, parsePagination(url));
+  return NextResponse.json({ time_entries, total_count, offset, limit });
 }
 
 const createTimeEntrySchema = z.object({

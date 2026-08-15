@@ -11,6 +11,7 @@ import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/messa
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 
@@ -41,8 +42,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ boar
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const topics = await new DrizzleMessageRepository().listTopicsByBoard(board.id);
-  return NextResponse.json({ messages: topics });
+  const allTopics = await new DrizzleMessageRepository().listTopicsByBoard(board.id);
+  const { items: messages, total_count, offset, limit } = paginate(allTopics, parsePagination(new URL(request.url)));
+  return NextResponse.json({ messages, total_count, offset, limit });
 }
 
 const postMessageSchema = z.object({

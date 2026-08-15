@@ -3,6 +3,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 async function resolveUser(request: Request) {
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const news = await new DrizzleNewsRepository().listByProject(project.id);
-  return NextResponse.json({ news });
+  const allNews = await new DrizzleNewsRepository().listByProject(project.id);
+  const { items: news, total_count, offset, limit } = paginate(allNews, parsePagination(url));
+  return NextResponse.json({ news, total_count, offset, limit });
 }

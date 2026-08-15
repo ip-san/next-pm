@@ -6,6 +6,7 @@ import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-rep
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 async function resolveUser(request: Request) {
@@ -49,5 +50,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     },
   );
 
-  return NextResponse.json({ results });
+  const paginated = paginate(results, parsePagination(url));
+  return NextResponse.json({ results: paginated.items, total_count: paginated.total_count, offset: paginated.offset, limit: paginated.limit });
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
+import { paginate, parsePagination } from "@/interface/http/pagination";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 async function resolveUser(request: Request) {
@@ -27,5 +28,6 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ projects: visible });
+  const { items: projects, total_count, offset, limit } = paginate(visible, parsePagination(new URL(request.url)));
+  return NextResponse.json({ projects, total_count, offset, limit });
 }
