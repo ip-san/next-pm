@@ -11,6 +11,7 @@ import { updateIssue, WorkflowRequiredFieldError } from "@/application/issues/up
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -127,6 +128,7 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
         workflowRepository: new DrizzleWorkflowRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         issueStatusRepository: new DrizzleIssueStatusRepository(),
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),

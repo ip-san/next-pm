@@ -2,6 +2,7 @@ import { diffIssueChanges } from "@/domain/journal/diff-issue";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
+import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
@@ -28,6 +29,13 @@ export class WorkflowRequiredFieldError extends Error {
   }
 }
 
+export class BlockedIssueCloseError extends Error {
+  constructor() {
+    super("This issue cannot be closed because it is blocked by another open issue.");
+    this.name = "BlockedIssueCloseError";
+  }
+}
+
 export interface UpdateIssueInput {
   issueId: string;
   expectedLockVersion: number;
@@ -46,6 +54,7 @@ export async function updateIssue(
     workflowRepository: WorkflowRepository;
     workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
     issueStatusRepository: IssueStatusRepository;
+    issueRelationRepository: IssueRelationRepository;
     settingsRepository: SettingsRepository;
     userPreferencesRepository: UserPreferencesRepository;
     watcherRepository: WatcherRepository;
@@ -90,18 +99,34 @@ export async function updateIssue(
     delete changes[field];
   }
 
-  // Mirrors Redmine's Issue#update_done_ratio_from_issue_status, which only runs when
-  // Setting.issue_done_ratio == 'issue_status' — the same status-derived done_ratio the
-  // SCM commit-hook path (sync-changesets.ts) already applies unconditionally. Applied after
-  // the read-only stripping above since this is a model-level side effect of the status
-  // change itself, not a field the actor is directly setting.
   if (changes.statusId && changes.statusId !== before.statusId) {
-    const { issueDoneRatio } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
-    if (issueDoneRatio === "issue_status") {
-      const targetStatus = await repositories.issueStatusRepository.findById(changes.statusId);
-      if (targetStatus?.defaultDoneRatio != null) {
-        changes.doneRatio = targetStatus.defaultDoneRatio;
+    const targetStatus = await repositories.issueStatusRepository.findById(changes.statusId);
+
+    // Mirrors Redmine's Issue#validate_issue: `blocked?` — a "blocks" relation pointing at
+    // this issue whose blocker isn't closed yet — prevents closing regardless of who's
+    // making the change or what workflow transitions allow.
+    if (targetStatus?.isClosed) {
+      const relations = await repositories.issueRelationRepository.listForIssue(input.issueId);
+      const blockerIds = relations.filter((r) => r.relationType === "blocks" && r.issueToId === input.issueId).map((r) => r.issueFromId);
+      if (blockerIds.length > 0) {
+        const blockers = await repositories.issueRepository.findByIds(blockerIds);
+        const statuses = await repositories.issueStatusRepository.listAll();
+        const statusById = new Map(statuses.map((s) => [s.id, s]));
+        const stillBlocked = blockers.some((blocker) => !statusById.get(blocker.statusId)?.isClosed);
+        if (stillBlocked) {
+          throw new BlockedIssueCloseError();
+        }
       }
+    }
+
+    // Mirrors Redmine's Issue#update_done_ratio_from_issue_status, which only runs when
+    // Setting.issue_done_ratio == 'issue_status' — the same status-derived done_ratio the
+    // SCM commit-hook path (sync-changesets.ts) already applies unconditionally. Applied after
+    // the read-only stripping above since this is a model-level side effect of the status
+    // change itself, not a field the actor is directly setting.
+    const { issueDoneRatio } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
+    if (issueDoneRatio === "issue_status" && targetStatus?.defaultDoneRatio != null) {
+      changes.doneRatio = targetStatus.defaultDoneRatio;
     }
   }
 

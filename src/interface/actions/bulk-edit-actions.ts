@@ -6,8 +6,9 @@ import { can } from "@/domain/authorization/authorization-service";
 import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueUpdate } from "@/domain/issue/repository";
-import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -98,6 +99,7 @@ export async function bulkUpdateIssuesAction(
   const workflowRepository = new DrizzleWorkflowRepository();
   const workflowFieldPermissionRepository = new DrizzleWorkflowFieldPermissionRepository();
   const issueStatusRepository = new DrizzleIssueStatusRepository();
+  const issueRelationRepository = new DrizzleIssueRelationRepository();
   const settingsRepository = new DrizzleSettingsRepository();
   const userPreferencesRepository = new DrizzleUserPreferencesRepository();
   const watcherRepository = new DrizzleWatcherRepository();
@@ -127,6 +129,7 @@ export async function bulkUpdateIssuesAction(
           workflowRepository,
           workflowFieldPermissionRepository,
           issueStatusRepository,
+          issueRelationRepository,
           settingsRepository,
           userPreferencesRepository,
           watcherRepository,
@@ -147,7 +150,7 @@ export async function bulkUpdateIssuesAction(
       );
       updated++;
     } catch (error) {
-      if (error instanceof WorkflowTransitionDeniedError || error instanceof WorkflowRequiredFieldError) {
+      if (error instanceof WorkflowTransitionDeniedError || error instanceof WorkflowRequiredFieldError || error instanceof BlockedIssueCloseError) {
         skipped++;
         continue;
       }

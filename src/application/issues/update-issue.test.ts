@@ -1,8 +1,10 @@
 import { describe, expect, it, mock } from "bun:test";
-import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "./update-issue";
+import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "./update-issue";
 import type { Issue } from "@/domain/issue/entity";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
+import type { IssueRelation } from "@/domain/issue-relation/entity";
+import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
 import type { IssueStatus } from "@/domain/issue-status/entity";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { JournalRepository } from "@/domain/journal/repository";
@@ -19,6 +21,8 @@ function makeRepositories(
     transitions?: Parameters<WorkflowRepository["listForTracker"]>[0] extends never ? never : unknown[];
     fieldPermissions?: WorkflowFieldPermission[];
     statuses?: IssueStatus[];
+    relations?: IssueRelation[];
+    otherIssues?: Issue[];
     settings?: Record<string, string>;
     userPreferences?: UserPreferences | null;
   } = {},
@@ -26,6 +30,7 @@ function makeRepositories(
   const issue = overrides.issue ?? makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
   const issueRepository = makeIssueRepositoryMock({
     findById: mock(async () => issue),
+    findByIds: mock(async () => overrides.otherIssues ?? []),
     create: mock(async () => issue),
     update: mock(async (_id, _lockVersion, changes) => ({ ...issue, ...changes, lockVersion: issue.lockVersion + 1 })),
   });
@@ -52,6 +57,13 @@ function makeRepositories(
     listAll: mock(async () => statuses),
     create: mock(async (s) => ({ ...s, id: "status-1" })),
   };
+  const relations = overrides.relations ?? [];
+  const issueRelationRepository: IssueRelationRepository = {
+    listForIssue: mock(async () => relations),
+    findById: mock(async (id) => relations.find((r) => r.id === id) ?? null),
+    create: mock(async (r) => ({ ...r, id: "relation-1" })),
+    delete: mock(async () => undefined),
+  };
   const settingsRepository: SettingsRepository = {
     getAll: mock(async () => overrides.settings ?? {}),
     setMany: mock(async () => undefined),
@@ -73,6 +85,7 @@ function makeRepositories(
     workflowRepository,
     workflowFieldPermissionRepository,
     issueStatusRepository,
+    issueRelationRepository,
     settingsRepository,
     userPreferencesRepository,
     watcherRepository,
@@ -436,5 +449,91 @@ describe("updateIssue", () => {
       isAssignee: false,
     });
     expect(repos.watcherRepository.watch).not.toHaveBeenCalledWith("Issue", "issue-1", "user-2");
+  });
+
+  it("rejects closing an issue blocked by an open issue", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
+    const repos = makeRepositories({
+      issue,
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+      statuses: [
+        { id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: null, position: 1 },
+        { id: "new", name: "New", description: "", isClosed: false, defaultDoneRatio: null, position: 0 },
+      ],
+      relations: [{ id: "rel-1", issueFromId: "blocker-1", issueToId: "issue-1", relationType: "blocks", delay: null }],
+      otherIssues: [makeIssue({ id: "blocker-1", statusId: "new", priorityId: "normal" })],
+    });
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "issue-1",
+        expectedLockVersion: 0,
+        changes: { statusId: "closed" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(BlockedIssueCloseError);
+    expect(repos.issueRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("allows closing an issue whose blocker is already closed", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
+    const repos = makeRepositories({
+      issue,
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+      statuses: [
+        { id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: null, position: 1 },
+        { id: "new", name: "New", description: "", isClosed: false, defaultDoneRatio: null, position: 0 },
+      ],
+      relations: [{ id: "rel-1", issueFromId: "blocker-1", issueToId: "issue-1", relationType: "blocks", delay: null }],
+      otherIssues: [makeIssue({ id: "blocker-1", statusId: "closed", priorityId: "normal" })],
+    });
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(result.statusId).toBe("closed");
+  });
+
+  it("ignores a blocks relation pointing the other way (this issue blocking another, not blocked by it)", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
+    const repos = makeRepositories({
+      issue,
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+      statuses: [
+        { id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: null, position: 1 },
+        { id: "new", name: "New", description: "", isClosed: false, defaultDoneRatio: null, position: 0 },
+      ],
+      // issue-1 blocks issue-2, not the other way around — must not block closing issue-1.
+      relations: [{ id: "rel-1", issueFromId: "issue-1", issueToId: "issue-2", relationType: "blocks", delay: null }],
+    });
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+    expect(result.statusId).toBe("closed");
   });
 });

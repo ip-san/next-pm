@@ -3,11 +3,12 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { CustomFieldValidationError, setIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -144,6 +145,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
         issueStatusRepository: new DrizzleIssueStatusRepository(),
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
       },
       {
@@ -201,6 +203,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (error instanceof WorkflowRequiredFieldError) {
       return NextResponse.json({ error: "workflow_required_field", field: error.fieldName }, { status: 422 });
+    }
+    if (error instanceof BlockedIssueCloseError) {
+      return NextResponse.json({ error: "blocked_issue" }, { status: 422 });
     }
     throw error;
   }

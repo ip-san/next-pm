@@ -9,10 +9,11 @@ import { filterMembersVisibleToPrivateIssue, isPrivateIssueVisible } from "@/dom
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
-import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
@@ -248,6 +249,7 @@ export async function updateIssueStatusAction(
         workflowRepository: new DrizzleWorkflowRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         issueStatusRepository: new DrizzleIssueStatusRepository(),
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
@@ -272,6 +274,9 @@ export async function updateIssueStatusAction(
     }
     if (error instanceof WorkflowRequiredFieldError) {
       return { error: "このステータスでは必須項目が未入力のため変更できません。編集画面から入力してください。" };
+    }
+    if (error instanceof BlockedIssueCloseError) {
+      return { error: "このチケットは未完了の「ブロック」関連があるためクローズできません。" };
     }
     throw error;
   }
