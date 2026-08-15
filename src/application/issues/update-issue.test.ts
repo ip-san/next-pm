@@ -771,3 +771,182 @@ describe("updateIssue — close duplicates cascade", () => {
     expect(issuesById.get("dup")?.statusId).toBe("new");
   });
 });
+
+describe("updateIssue — reschedule following issues", () => {
+  it("pushes a successor forward when its predecessor's due date moves later", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "pred", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "succ", startDate: "2026-01-06", dueDate: "2026-01-10" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "pred", issueToId: "succ", relationType: "precedes", delay: null }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "pred",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-01-15" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    // succ's 4-day duration (Jan 6-10) is preserved: new start is pred's new due (Jan 15) + 1.
+    expect(issuesById.get("succ")?.startDate).toBe("2026-01-16");
+    expect(issuesById.get("succ")?.dueDate).toBe("2026-01-20");
+  });
+
+  it("does not move a successor that already starts after the recomputed soonest start", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "pred", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "succ", startDate: "2026-02-01", dueDate: "2026-02-05" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "pred", issueToId: "succ", relationType: "precedes", delay: null }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "pred",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-01-10" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("succ")?.startDate).toBe("2026-02-01");
+    expect(issuesById.get("succ")?.dueDate).toBe("2026-02-05");
+  });
+
+  it("recomputes soonest start from every predecessor, not just the one that changed", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "pred-a", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "pred-b", startDate: "2026-01-01", dueDate: "2026-01-20" }),
+        cascadeIssue({ id: "succ", startDate: "2026-01-06", dueDate: "2026-01-06" }),
+      ],
+      relations: [
+        { id: "rel-1", issueFromId: "pred-a", issueToId: "succ", relationType: "precedes", delay: null },
+        { id: "rel-2", issueFromId: "pred-b", issueToId: "succ", relationType: "precedes", delay: null },
+      ],
+    });
+
+    // Nudge pred-a forward by a single day — pred-b (due Jan 20) still dominates, so succ
+    // must land on Jan 21, not the day after pred-a's new due date.
+    await updateIssue(repos, {
+      issueId: "pred-a",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-01-06" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("succ")?.startDate).toBe("2026-01-21");
+  });
+
+  it("applies the relation's delay", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "pred", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "succ", startDate: "2026-01-06", dueDate: "2026-01-06" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "pred", issueToId: "succ", relationType: "precedes", delay: 3 }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "pred",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-01-10" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("succ")?.startDate).toBe("2026-01-14");
+  });
+
+  it("cascades through a chain of precedes relations", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "a", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "b", startDate: "2026-01-06", dueDate: "2026-01-06" }),
+        cascadeIssue({ id: "c", startDate: "2026-01-07", dueDate: "2026-01-07" }),
+      ],
+      relations: [
+        { id: "rel-1", issueFromId: "a", issueToId: "b", relationType: "precedes", delay: null },
+        { id: "rel-2", issueFromId: "b", issueToId: "c", relationType: "precedes", delay: null },
+      ],
+    });
+
+    await updateIssue(repos, {
+      issueId: "a",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-01-20" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("b")?.startDate).toBe("2026-01-21");
+    expect(issuesById.get("c")?.startDate).toBe("2026-01-22");
+  });
+
+  it("records a journal entry on the successor attributed to the acting user", async () => {
+    const { repos, issuesById, journalEntries } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "pred", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "succ", startDate: "2026-01-06", dueDate: "2026-01-06" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "pred", issueToId: "succ", relationType: "precedes", delay: null }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "pred",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-01-10" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("succ")?.startDate).toBe("2026-01-11");
+    const succJournal = journalEntries.find((j) => j.journalizedId === "succ");
+    expect(succJournal?.userId).toBe("user-1");
+  });
+
+  it("does not reschedule when the update leaves start/due dates untouched", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "pred", startDate: "2026-01-01", dueDate: "2026-01-05" }),
+        cascadeIssue({ id: "succ", startDate: "2026-01-06", dueDate: "2026-01-06" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "pred", issueToId: "succ", relationType: "precedes", delay: null }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "pred",
+      expectedLockVersion: 0,
+      changes: { subject: "Renamed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("succ")?.startDate).toBe("2026-01-06");
+  });
+});

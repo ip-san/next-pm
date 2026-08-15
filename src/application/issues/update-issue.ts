@@ -2,6 +2,7 @@ import { diffIssueChanges } from "@/domain/journal/diff-issue";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
+import { computeRescheduledDates, computeSoonestStart } from "@/domain/issue-relation/reschedule";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
@@ -60,7 +61,11 @@ export interface UpdateIssueRepositories {
 }
 
 export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<Issue> {
-  const after = await applyIssueUpdate(repositories, input, { skipTransitionCheck: false, skipBlockedCheck: false });
+  const after = await applyIssueUpdate(repositories, input, {
+    skipTransitionCheck: false,
+    skipBlockedCheck: false,
+    skipFieldPermissions: false,
+  });
 
   // Mirrors Redmine's Issue#close_duplicates, invoked from after_save whenever the status
   // just became closed: every issue that duplicates this one is closed too, cascading through
@@ -72,6 +77,15 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
     if (targetStatus?.isClosed) {
       await closeDuplicates(repositories, input.issueId, after.statusId, input.actingUserId, input.actorRoleIds, new Set([input.issueId]));
     }
+  }
+
+  // Mirrors Redmine's Issue#reschedule_following_issues, invoked from after_save whenever
+  // start_date or due_date actually changed: every "precedes" successor gets pushed forward
+  // to keep up, cascading through chains.
+  const startDateChanged = input.changes.startDate !== undefined && after.startDate === input.changes.startDate;
+  const dueDateChanged = input.changes.dueDate !== undefined && after.dueDate === input.changes.dueDate;
+  if (startDateChanged || dueDateChanged) {
+    await rescheduleFollowingIssues(repositories, input.issueId, input.actingUserId, new Set([input.issueId]));
   }
 
   return after;
@@ -116,7 +130,7 @@ async function closeDuplicates(
           isAuthor: duplicate.authorId === actingUserId,
           isAssignee: duplicate.assignedToId === actingUserId,
         },
-        { skipTransitionCheck: true, skipBlockedCheck: true },
+        { skipTransitionCheck: true, skipBlockedCheck: true, skipFieldPermissions: false },
       );
     } catch {
       // A per-duplicate failure (e.g. a required field this cascade can't fill in) must not
@@ -128,10 +142,79 @@ async function closeDuplicates(
   }
 }
 
+/**
+ * Pushes every "precedes" successor of `issueId` (relationType "precedes", issueFromId ===
+ * issueId) forward to keep up with its predecessors, recursing through chains. Mirrors
+ * Redmine's Issue#reschedule_following_issues -> IssueRelation#set_issue_to_dates ->
+ * Issue#soonest_start -> Issue#reschedule_after. Crucially, soonestStart is recomputed from
+ * *every* "precedes" relation pointing at the successor, not just the one that got us here —
+ * a successor with several predecessors must wait for the latest one.
+ *
+ * This is a direct attribute-assignment-then-save in Redmine (bypasses safe_attributes
+ * filtering entirely), so — like closeDuplicates — the cascade skips transition/blocked
+ * checks. Unlike closeDuplicates, it also skips field-permission read-only/required checks:
+ * there's no acting user's role driving this cascade, and Redmine's raw model save has no
+ * equivalent of workflow field permissions to begin with.
+ */
+async function rescheduleFollowingIssues(
+  repositories: UpdateIssueRepositories,
+  issueId: string,
+  actingUserId: string,
+  visited: Set<string>,
+): Promise<void> {
+  const relations = await repositories.issueRelationRepository.listForIssue(issueId);
+  const successorIds = relations.filter((r) => r.relationType === "precedes" && r.issueFromId === issueId).map((r) => r.issueToId);
+
+  for (const successorId of successorIds) {
+    if (visited.has(successorId)) continue;
+
+    const successorRelations = await repositories.issueRelationRepository.listForIssue(successorId);
+    const predecessorRelations = successorRelations.filter((r) => r.relationType === "precedes" && r.issueToId === successorId);
+    const predecessors = await Promise.all(
+      predecessorRelations.map(async (relation) => {
+        const predecessor = await repositories.issueRepository.findById(relation.issueFromId);
+        return { startDate: predecessor?.startDate ?? null, dueDate: predecessor?.dueDate ?? null, delay: relation.delay };
+      }),
+    );
+    const soonestStart = computeSoonestStart(predecessors);
+    if (!soonestStart) continue;
+
+    const successor = await repositories.issueRepository.findById(successorId);
+    if (!successor) continue;
+    const rescheduled = computeRescheduledDates(successor, soonestStart);
+    if (!rescheduled) continue;
+
+    visited.add(successorId);
+
+    try {
+      await applyIssueUpdate(
+        repositories,
+        {
+          issueId: successorId,
+          expectedLockVersion: successor.lockVersion,
+          changes: { startDate: rescheduled.startDate, dueDate: rescheduled.dueDate },
+          notes: "",
+          actingUserId,
+          actorRoleIds: [],
+          isAuthor: false,
+          isAssignee: false,
+        },
+        { skipTransitionCheck: true, skipBlockedCheck: true, skipFieldPermissions: true },
+      );
+    } catch {
+      // Mirrors closeDuplicates: a per-successor failure (e.g. a stale lock_version from a
+      // concurrent edit) must not abort the primary update that triggered this cascade.
+      continue;
+    }
+
+    await rescheduleFollowingIssues(repositories, successorId, actingUserId, visited);
+  }
+}
+
 async function applyIssueUpdate(
   repositories: UpdateIssueRepositories,
   input: UpdateIssueInput,
-  options: { skipTransitionCheck: boolean; skipBlockedCheck: boolean },
+  options: { skipTransitionCheck: boolean; skipBlockedCheck: boolean; skipFieldPermissions: boolean },
 ): Promise<Issue> {
   const before = await repositories.issueRepository.findById(input.issueId);
   if (!before) {
@@ -164,7 +247,9 @@ async function applyIssueUpdate(
     statusId: input.changes.statusId ?? before.statusId,
     roleIds: input.actorRoleIds,
   };
-  const fieldPermissions = await repositories.workflowFieldPermissionRepository.listForTracker(before.trackerId);
+  // Skipped for cascades with no real acting-user role behind them (rescheduleFollowingIssues)
+  // — Redmine's raw model save for these has no equivalent of workflow field permissions.
+  const fieldPermissions = options.skipFieldPermissions ? [] : await repositories.workflowFieldPermissionRepository.listForTracker(before.trackerId);
 
   const changes = { ...input.changes };
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
