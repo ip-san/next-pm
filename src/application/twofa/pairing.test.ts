@@ -42,6 +42,7 @@ function fakeUserRepository(user: User | null): UserRepository {
     findByAtomKey: mock(async () => store.user),
     findByMail: mock(async () => store.user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
+    updatePassword: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async (_id: string, encryptedKey: string) => {
       if (store.user) store.user = { ...store.user, twofaTotpKey: encryptedKey };

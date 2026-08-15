@@ -2,8 +2,10 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { loadLdapConfigFromEnv } from "@/domain/ldap/config";
+import { changePassword, CurrentPasswordMismatchError, InvalidPasswordError, LdapPasswordChangeNotAllowedError } from "@/application/auth/change-password";
 import { login } from "@/application/auth/login";
 import { verifyTwofaCode } from "@/application/twofa/verify";
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
@@ -12,6 +14,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { createSessionToken } from "@/infrastructure/auth/session-token";
 import { createTwofaPendingToken, TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
 import { LdaptsAuthenticator } from "@/infrastructure/ldap/ldapts-authenticator";
+import { currentUserFromCookies } from "@/interface/http/current-user";
 import { TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS, TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
 
 const loginSchema = z.object({
@@ -146,4 +149,47 @@ export async function logoutAction(): Promise<void> {
   cookieStore.delete(SESSION_COOKIE_NAME);
   cookieStore.delete(TWOFA_PENDING_COOKIE_NAME);
   redirect("/login");
+}
+
+export type ChangePasswordActionState = {
+  error: string | null;
+  ok: boolean;
+};
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(1),
+});
+
+export async function changePasswordAction(
+  _prevState: ChangePasswordActionState,
+  formData: FormData,
+): Promise<ChangePasswordActionState> {
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newPassword: formData.get("newPassword"),
+  });
+  if (!parsed.success) {
+    return { error: "現在のパスワードと新しいパスワードを入力してください。", ok: false };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。", ok: false };
+  }
+
+  try {
+    await changePassword(
+      { userRepository: new DrizzleUserRepository() },
+      { userId: user.id, currentPassword: parsed.data.currentPassword, newPassword: parsed.data.newPassword },
+    );
+  } catch (error) {
+    if (error instanceof LdapPasswordChangeNotAllowedError || error instanceof InvalidPasswordError || error instanceof CurrentPasswordMismatchError) {
+      return { error: error.message, ok: false };
+    }
+    throw error;
+  }
+
+  revalidatePath("/my/account");
+  return { error: null, ok: true };
 }

@@ -10,6 +10,12 @@ export interface UserRepository {
   /** Case-insensitive — mirrors Redmine's User.find_by_mail. */
   findByMail(mail: string): Promise<User | null>;
   create(user: Omit<User, "id">): Promise<User>;
+  /**
+   * Persists a new password hash/salt and unconditionally clears mustChangePassword — mirrors
+   * Redmine's Account#change_password, which always resets the forced-change flag on a
+   * successful change regardless of why it was set.
+   */
+  updatePassword(userId: string, passwordHash: string, passwordSalt: string): Promise<void>;
   /** Lazily assigns a feed token — only ever called when the user doesn't already have one. */
   setAtomKey(userId: string, atomKey: string): Promise<void>;
   /** Stores an as-yet-unconfirmed pairing's encrypted secret. Does not activate twofaScheme. */

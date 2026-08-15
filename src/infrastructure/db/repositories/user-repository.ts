@@ -97,6 +97,10 @@ export class DrizzleUserRepository implements UserRepository {
     await db.update(users).set({ atomKey }).where(eq(users.id, userId));
   }
 
+  async updatePassword(userId: string, passwordHash: string, passwordSalt: string): Promise<void> {
+    await db.update(users).set({ passwordHash, passwordSalt, mustChangePassword: false }).where(eq(users.id, userId));
+  }
+
   async setTotpPairing(userId: string, encryptedKey: string): Promise<void> {
     await db.update(users).set({ twofaTotpKey: encryptedKey }).where(eq(users.id, userId));
   }

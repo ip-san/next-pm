@@ -57,6 +57,7 @@ describe("dispatchJob", () => {
       updateTwofaLastUsedStep: mock(async () => {}),
       clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
+      updatePassword: mock(async () => {}),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
     expect(mailer.send).toHaveBeenCalledWith({ to: ["alice@example.com"], subject: "Subject", body: "Body" });
@@ -78,6 +79,7 @@ describe("dispatchJob", () => {
       updateTwofaLastUsedStep: mock(async () => {}),
       clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
+      updatePassword: mock(async () => {}),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
     expect(mailer.send).not.toHaveBeenCalled();
@@ -99,6 +101,7 @@ describe("dispatchJob", () => {
       updateTwofaLastUsedStep: mock(async () => {}),
       clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
+      updatePassword: mock(async () => {}),
     };
     await dispatchJob({ mailer, userRepository }, makeJob());
     expect(mailer.send).not.toHaveBeenCalled();
@@ -120,6 +123,7 @@ describe("dispatchJob", () => {
       updateTwofaLastUsedStep: mock(async () => {}),
       clearTwofa: mock(async () => {}),
       create: mock(async (u) => ({ ...u, id: "x" }) as User),
+      updatePassword: mock(async () => {}),
     };
     await expect(dispatchJob({ mailer, userRepository }, makeJob({ jobType: "unknown" }))).rejects.toThrow(UnknownJobTypeError);
   });
