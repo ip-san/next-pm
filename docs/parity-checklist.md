@@ -65,8 +65,8 @@
 | 注記(journal) | partial | 追加は更新フォーム経由で可能。**編集・削除ができない**(`add_issue_notes` / `edit_issue_notes` / `edit_own_issue_notes` 権限ごと無い) |
 | プライベート注記 | missing | `journals` にフラグ列が無い。`set_notes_private` / `view_private_notes` も無い |
 | プライベート課題 | partial | `issues.is_private` と可視性判定(`domain/issue/visibility.ts`)は実装済み。`set_issues_private` / `set_own_issues_private` 権限による設定可否の制御が無い |
-| 変更履歴の記録 | done | `journal_details.property` は `attr` / `cf` / `relation` / `attachment` の 4 種。添付の追加/削除は本家の `Journal#journalize_attachment` と同じ形(`prop_key` = 添付 ID、ファイル名を追加時は `value`・削除時は `old_value`)で記録する。単票の履歴表示は属性名をそのまま出すため、添付行は添付 ID が見えたままになっている |
-| 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)はアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。画像はサムネイル(`/api/attachments/[id]/thumbnail`、sharp で PNG に再エンコード)をインライン表示する。注記への添付は無い |
+| 変更履歴の記録 | done | `journal_details.property` は `attr` / `cf` / `relation` / `attachment` の 4 種。添付の追加/削除は本家の `Journal#journalize_attachment` と同じ形(`prop_key` = 添付 ID、ファイル名を追加時は `value`・削除時は `old_value`)で記録する。課題作成時に同時に添付したファイルは本家同様に履歴を作らない(その時点で journal が無い)。単票の履歴表示は属性名をそのまま出すため、添付行は添付 ID が見えたままになっている |
+| 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)は課題・Wiki・文書・ファイルのアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。課題・Wiki・文書の添付一覧は共通コンポーネント(`app/(dashboard)/projects/attachment-list.tsx`)で、画像はサムネイルをインライン表示する。注記への添付は無い |
 | リアクション | done | journal への 👍(本家 6.1 の Reaction 相当) |
 | CSV インポート | partial | 課題のみ(`issue-import-actions.ts`)。権限 `import_issues` は未定義、工数のインポート(`import_time_entries`)も無い |
 | カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` の 7 種のみ。本家の `user` / `version` / `link` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
@@ -266,7 +266,7 @@
 | 本文プレビュー | missing | 本家 `PreviewsController` |
 | 国際化(i18n) | missing | 文言が直書き。ユーザー別言語設定も無い |
 | テーマ切り替え | missing | |
-| 添付画像のサムネイル/インライン表示 | done | `/api/attachments/[id]/thumbnail` が sharp で PNG に再エンコードして返す(本家の `Redmine::Thumbnail.convert_available?` と同じく、使えない環境ではサムネイル無しに縮退)。元のバイト列は常に `Content-Disposition: attachment` のままなので SVG/HTML はインライン描画されない |
+| 添付画像のサムネイル/インライン表示 | done | 課題・Wiki・文書の添付一覧で表示。`/api/attachments/[id]/thumbnail` が sharp で PNG に再エンコードして返す(本家の `Redmine::Thumbnail.convert_available?` と同じく、使えない環境ではサムネイル無しに縮退)。本家 `Redmine::Thumbnail.generate` と同じくレンダラに渡す前に**ファイル先頭のバイト列から実フォーマットを判定**し、許可したラスタ形式以外(SVG/HTML 等)は宣言された content-type が `image/png` でも 404。サイズは 50 刻み・最大 800 に丸め、40 メガピクセル超の入力はデコードしない。元のバイト列は常に `Content-Disposition: attachment` のままなので SVG/HTML はインライン描画されない |
 | キーボード操作 | done | マイページのブロック移動をボタン化するなど、本家より意図的にアクセシブルにしている箇所がある(§15) |
 
 ## 15. 意図的に対象外とした項目

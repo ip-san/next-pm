@@ -107,6 +107,7 @@ const uploadWikiAttachmentSchema = z.object({
   pageId: z.string().uuid(),
   projectIdentifier: z.string().min(1),
   title: z.string().min(1),
+  description: z.string().default(""),
   file: z.instanceof(File),
 });
 
@@ -121,6 +122,7 @@ export async function uploadWikiAttachmentAction(
     pageId: formData.get("pageId"),
     projectIdentifier: formData.get("projectIdentifier"),
     title: formData.get("title"),
+    description: formData.get("description") ?? "",
     file: formData.get("file"),
   });
   if (!parsed.success) {
@@ -164,6 +166,7 @@ export async function uploadWikiAttachmentAction(
         authorId: user.id,
         filename: parsed.data.file.name,
         contentType: parsed.data.file.type,
+        description: parsed.data.description,
         data: buffer,
       },
     );
