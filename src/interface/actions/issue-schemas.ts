@@ -77,3 +77,15 @@ export const deleteIssueFormSchema = z.object({
 });
 
 export type DeleteIssueFormValues = z.infer<typeof deleteIssueFormSchema>;
+
+/** Issue copy: destination project/tracker plus Redmine's three "also copy" switches. */
+export const copyIssueFormSchema = z.object({
+  sourceIssueId: z.string().uuid(),
+  targetProjectId: z.string().uuid(),
+  targetTrackerId: z.string().uuid().or(z.literal("")),
+  copyAttachments: z.boolean(),
+  copySubtasks: z.boolean(),
+  copyWatchers: z.boolean(),
+});
+
+export type CopyIssueFormValues = z.infer<typeof copyIssueFormSchema>;

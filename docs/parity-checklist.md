@@ -37,7 +37,7 @@
 | 6 | 工数の編集・削除 | `edit_time_entries` 権限だけあって操作が無く、権限が空振りしている | §9 |
 | 7 | アカウントのセルフ登録・有効化・自動ログイン | 運用開始時に管理者が全ユーザーを手作りする必要がある | §5 |
 | 8 | カスタムフィールドの書式追加と対象拡大 | `user`/`version`/複数選択が無く、実運用の型が表現できない | §1 |
-| 9 | 課題のコピー(削除・別プロジェクトへの移動は対応済み) | 本家の日常操作で頻度が高い | §1 |
+| 9 | ~~課題のコピー・削除・親子の付け替え~~ (対応済み) | 本家の日常操作で頻度が高い | §1 |
 
 ### 0.3 意図的スコープ外(README「注目すべき設計判断」に記載済み)
 
@@ -55,10 +55,10 @@
 | 一括編集 | partial | ステータス・優先度・担当・進捗率・プロジェクトのみ(`bulk-edit-actions.ts`)。本家はトラッカー・バージョン・カテゴリ・日付・カスタムフィールド・注記の一括付与にも対応 |
 | コンテキストメニュー(一覧の右クリック) | missing | 本家 `ContextMenusController` 相当 |
 | 課題の削除 | done | `delete_issues` 権限 + 単票の確認画面(`issues/[id]/destroy`)と `DELETE /api/v1/issues/[id]`。本家 `IssuesController#destroy` に準拠し、子孫チケットを一緒に削除、記録済み工数は削除/紐付け解除/別チケットへ付け替えの 3 択(付け替え先は同一プロジェクト・可視・削除対象外に限定)。journal(明細・リアクション含む)・ウォッチャー・カスタム値・添付レコードを 1 トランザクションで削除し、添付の実ファイルはコミット後に削除する |
-| 課題のコピー | missing | 権限 `copy_issues` ごと無い |
+| 課題のコピー | done | `copy_issues` 権限 + 単票画面のコピーフォーム(`copy-issue-form.tsx` → `application/issues/copy-issue.ts`)。本家 `Issue#copy_from` / `after_create_from_copy` に準拠し、コピー先プロジェクト/トラッカーの選択、添付・子チケット・ウォッチャーの任意コピー、作成者をコピー実行者に差し替え、ステータスをコピー先トラッカーの初期値にリセット、カスタム値の引き継ぎ、`copied_to` 関連の作成(同一プロジェクト、または `cross_project_issue_relations` が有効なとき)まで行う。子チケットは可視なものだけを木構造のまま複製し、親を複製後の親に張り替え、open でないバージョンと非アクティブな担当者は外す |
 | 別プロジェクトへの移動 | done | 単票画面の `move-issue-form.tsx` から移動先プロジェクト+トラッカーを選んで実行(`application/issues/move-issue.ts`)。本家 `Issue#project=` / `after_project_change` に準拠し、トラッカーの自動フォールバック・カテゴリの同名再マッチ・共有外バージョンの解除・親の解除・同一プロジェクトの子チケットの随伴(keep_tracker)・工数の付け替え・プロジェクトをまたぐ関連の削除(`cross_project_issue_relations` が無効な場合)まで行う。移動先の候補は `add_issues` 権限を持つプロジェクトのみ。**一括編集での移動は未対応**(従来の備考にあった「一括編集の projectId 経由」は誤りで、`bulk-edit-actions.ts` は他プロジェクトの課題をスキップする) |
 | サブタスク(親子) | partial | 作成・更新の双方で `parentId` を設定でき、`manage_subtasks` 権限で可否を制御、付け替え時は自分自身/子孫を親にする循環を拒否する(`domain/issue/parent.ts`、本家 `Issue#validate_parent_issue`)。親課題の集計値(進捗率/日付/工数のロールアップ)・一覧のツリー表示が無い |
-| 課題の関連 | done | precedes/follows(遅延日数と後続の再スケジュール)・blocks/blocked・duplicates/duplicated(canonical のクローズで重複も自動クローズ)・relates・copied_to/copied_from の 9 種を定義、循環参照ガードあり(copied_* は課題のコピー機能が未実装のため実際には生成されない) |
+| 課題の関連 | done | precedes/follows(遅延日数と後続の再スケジュール)・blocks/blocked・duplicates/duplicated(canonical のクローズで重複も自動クローズ)・relates・copied_to/copied_from の 9 種を定義、循環参照ガードあり(copied_to は課題のコピーで生成される) |
 | 関連の権限分離 | partial | `manage_issue_relations` のみ。本家の `manage_related_issues`(別プロジェクト側の課題に関連を張る権限)が無い |
 | ウォッチャー | done | 追加/削除/自己トグル、作成・担当・コメント時の自動ウォッチ(`user_preferences.auto_watch_on`) |
 | ウォッチャー一覧の閲覧権限 | missing | 本家の `view_issue_watchers` が無く、閲覧可否が追加権限と一体になっている |
@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 47。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 48。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 

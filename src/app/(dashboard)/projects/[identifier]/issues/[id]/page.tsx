@@ -38,6 +38,7 @@ import { AttachmentList } from "../../../attachment-list";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueEditForm } from "./issue-edit-form";
+import { CopyIssueForm } from "./copy-issue-form";
 import { IssueRelationForm } from "./issue-relation-form";
 import { MoveIssueForm } from "./move-issue-form";
 import { LogTimeForm } from "./log-time-form";
@@ -129,6 +130,7 @@ export default async function IssueDetailPage({
   const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
   const canManageRelations = can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor });
   const canDeleteIssues = can({ permission: "delete_issues", project: toAuthorizationProject(project), actor });
+  const canCopyIssues = can({ permission: "copy_issues", project: toAuthorizationProject(project), actor });
   const canAddWatchers = can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor });
   const canDeleteWatchers = can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor });
 
@@ -181,7 +183,8 @@ export default async function IssueDetailPage({
   const assignableUsers = relevantUsers.filter((candidate) => projectMemberUserIds.includes(candidate.id));
   // Mirrors Issue.allowed_target_projects: only projects the viewer can add issues to, and
   // only ones with a tracker — listing every project would leak private project names.
-  const moveTargets = canEditThisIssue ? await listProjectsWithPermission(user, "add_issues", { requireTrackers: true }) : [];
+  const moveTargets =
+    canEditThisIssue || canCopyIssues ? await listProjectsWithPermission(user, "add_issues", { requireTrackers: true }) : [];
   const moveTargetTrackers = Object.fromEntries(
     await Promise.all(
       moveTargets.map(async (candidate) => [candidate.id, await new DrizzleTrackerRepository().findByIds(candidate.trackerIds)] as const),
@@ -285,6 +288,21 @@ export default async function IssueDetailPage({
           <MoveIssueForm
             issueId={issue.id}
             currentProjectId={project.id}
+            targets={moveTargets}
+            trackersByProjectId={moveTargetTrackers}
+          />
+        </section>
+      ) : null}
+
+      {canCopyIssues && moveTargets.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">チケットのコピー</h2>
+          <CopyIssueForm
+            issueId={issue.id}
+            currentProjectId={project.id}
+            hasSubtasks={childIssues.length > 0}
+            hasAttachments={attachments.length > 0}
+            canAddWatchers={canAddWatchers}
             targets={moveTargets}
             trackersByProjectId={moveTargetTrackers}
           />
