@@ -46,7 +46,17 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
         }}
       />
-      <ProjectSettingsForm project={project} trackers={trackers} customFields={customFields} customValueByFieldId={customValueByFieldId} />
+      <ProjectSettingsForm
+        project={project}
+        trackers={trackers}
+        customFields={customFields}
+        customValueByFieldId={customValueByFieldId}
+        // Redmine's safe_attributes: these two are not edit_project's to change. The server
+        // drops them when the actor lacks the permission, so leaving the controls out is
+        // only about not showing a field whose value would be ignored.
+        showPublicity={can({ permission: "select_project_publicity", project: projectContext, actor })}
+        showModules={can({ permission: "select_project_modules", project: projectContext, actor })}
+      />
     </main>
   );
 }

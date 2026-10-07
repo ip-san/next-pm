@@ -6,7 +6,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import type { IssuesVisibility } from "@/domain/role/entity";
+import type { IssuesVisibility, Role } from "@/domain/role/entity";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -51,6 +51,23 @@ export async function resolveActor(user: User | null, projectId: string): Promis
 
   const nonMember = await roleRepository.findBuiltinNonMember();
   return { actor: { kind: "non_member", role: nonMember }, roleIds: [nonMember.id], userGroupIds };
+}
+
+/**
+ * The role set a project-less permission question is answered against — every role the user
+ * holds in any project (direct or group-inherited) plus their builtin role, mirroring
+ * Redmine's `roles | memberships.roles << builtin_role` in the `:global => true` branch of
+ * User#allowed_to?. Feed this to `canGlobally`.
+ */
+export async function resolveGlobalRoles(user: User | null): Promise<Role[]> {
+  const roleRepository = new DrizzleRoleRepository();
+  if (!user) {
+    return [await roleRepository.findBuiltinAnonymous()];
+  }
+
+  const memberships = await new DrizzleMemberRepository().listByUser(user.id);
+  const membershipRoles = await roleRepository.findByIds([...new Set(memberships.flatMap((member) => member.roleIds))]);
+  return [...membershipRoles, await roleRepository.findBuiltinNonMember()];
 }
 
 /**

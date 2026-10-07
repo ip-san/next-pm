@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { can } from "@/domain/authorization/authorization-service";
-import { createProject } from "@/application/projects/create-project";
+import { createProject, CreateProjectNotPermittedError } from "@/application/projects/create-project";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { paginate, parsePagination } from "@/interface/http/pagination";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, resolveGlobalRoles, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 
 async function resolveUser(request: Request) {
@@ -51,12 +54,14 @@ const createProjectSchema = z.object({
   tracker_ids: z.array(z.string().uuid()).default([]),
 });
 
-// Mirrors createProjectAction: project creation is admin-only in this codebase, not gated
-// through the add_project/manage_project permissions like Redmine's own REST endpoint.
+// Goes through the same use case as createProjectAction, so add_project /
+// add_subprojects and the non-admin publicity/module rules apply here too — this endpoint
+// used to be admin-only, which Redmine's is not (ProjectsController#create is
+// authorize_global, with accept_api_auth :create).
 export async function POST(request: Request) {
   const { user, viaCookie } = await resolveUser(request);
-  if (!user?.isAdmin) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (viaCookie && !(await verifyCsrf(request))) {
     return NextResponse.json({ error: "csrf_check_failed" }, { status: 403 });
@@ -68,17 +73,32 @@ export async function POST(request: Request) {
   }
 
   try {
-    const project = await createProject(new DrizzleProjectRepository(), {
-      name: parsed.data.name,
-      identifier: parsed.data.identifier,
-      description: parsed.data.description,
-      isPublic: parsed.data.is_public,
-      parentId: parsed.data.parent_id,
-      enabledModules: parsed.data.enabled_modules,
-      trackerIds: parsed.data.tracker_ids,
-    });
+    const project = await createProject(
+      {
+        projectRepository: new DrizzleProjectRepository(),
+        memberRepository: new DrizzleMemberRepository(),
+        roleRepository: new DrizzleRoleRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
+      {
+        name: parsed.data.name,
+        identifier: parsed.data.identifier,
+        description: parsed.data.description,
+        isPublic: parsed.data.is_public,
+        parentId: parsed.data.parent_id,
+        enabledModules: parsed.data.enabled_modules,
+        trackerIds: parsed.data.tracker_ids,
+        actingUserId: user.id,
+        isAdmin: user.isAdmin,
+        globalRoles: await resolveGlobalRoles(user),
+        parentActor: parsed.data.parent_id ? (await resolveActor(user, parsed.data.parent_id)).actor : null,
+      },
+    );
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
+    if (error instanceof CreateProjectNotPermittedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "invalid_request" }, { status: 422 });
   }
 }

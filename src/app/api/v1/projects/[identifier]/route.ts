@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { can } from "@/domain/authorization/authorization-service";
 import { deleteProject, DeleteProjectNotPermittedError } from "@/application/projects/delete-project";
-import { updateProject } from "@/application/projects/update-project";
+import { updateProject, UpdateProjectNotPermittedError } from "@/application/projects/update-project";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
@@ -60,22 +60,34 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
   }
 
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_project", project: toAuthorizationProject(project), actor })) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
 
   const parsed = updateProjectSchema.safeParse((await request.json().catch(() => null))?.project);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
   }
 
-  const updated = await updateProject(projectRepository, project.id, {
-    name: parsed.data.name,
-    description: parsed.data.description,
-    isPublic: parsed.data.is_public,
-    enabledModules: parsed.data.enabled_modules,
-    trackerIds: parsed.data.tracker_ids,
-  });
+  // edit_project, and the separate select_project_publicity / select_project_modules rules,
+  // are enforced inside the use case against the project it loads itself.
+  let updated;
+  try {
+    updated = await updateProject(
+      projectRepository,
+      project.id,
+      {
+        name: parsed.data.name,
+        description: parsed.data.description,
+        isPublic: parsed.data.is_public,
+        enabledModules: parsed.data.enabled_modules,
+        trackerIds: parsed.data.tracker_ids,
+      },
+      { actor },
+    );
+  } catch (error) {
+    if (error instanceof UpdateProjectNotPermittedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ project: updated });
 }

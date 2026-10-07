@@ -4,9 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
-import { can } from "@/domain/authorization/authorization-service";
 import { copyProject } from "@/application/projects/copy-project";
-import { createProject } from "@/application/projects/create-project";
+import { createProject, CreateProjectNotPermittedError } from "@/application/projects/create-project";
 import { deleteProject, DeleteProjectNotPermittedError, ProjectDeleteConfirmationMismatchError } from "@/application/projects/delete-project";
 import { CustomFieldValidationError, setProjectCustomFieldValues } from "@/application/projects/set-project-custom-field-values";
 import {
@@ -17,16 +16,28 @@ import {
   reopenProject,
   unarchiveProject,
 } from "@/application/projects/project-status";
-import { updateProject } from "@/application/projects/update-project";
+import { updateProject, UpdateProjectNotPermittedError } from "@/application/projects/update-project";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, resolveGlobalRoles } from "@/interface/http/resolve-actor";
 
+
+function createProjectRepositories() {
+  return {
+    projectRepository: new DrizzleProjectRepository(),
+    memberRepository: new DrizzleMemberRepository(),
+    roleRepository: new DrizzleRoleRepository(),
+    settingsRepository: new DrizzleSettingsRepository(),
+  };
+}
 
 const createProjectSchema = z.object({
   name: z.string().min(1),
@@ -50,8 +61,8 @@ export async function createProjectAction(
   formData: FormData,
 ): Promise<CreateProjectActionState> {
   const user = await currentUserFromCookies();
-  if (!user?.isAdmin) {
-    return { error: "この操作を行う権限がありません。" };
+  if (!user) {
+    return { error: "ログインしてください。" };
   }
 
   const parentIdRaw = formData.get("parentId");
@@ -71,9 +82,18 @@ export async function createProjectAction(
 
   let identifier: string;
   try {
-    const project = await createProject(new DrizzleProjectRepository(), parsed.data);
+    const project = await createProject(createProjectRepositories(), {
+      ...parsed.data,
+      actingUserId: user.id,
+      isAdmin: user.isAdmin,
+      globalRoles: await resolveGlobalRoles(user),
+      parentActor: parsed.data.parentId ? (await resolveActor(user, parsed.data.parentId)).actor : null,
+    });
     identifier = project.identifier;
   } catch (error) {
+    if (error instanceof CreateProjectNotPermittedError) {
+      return { error: "この操作を行う権限がありません。" };
+    }
     return { error: error instanceof Error ? error.message : "プロジェクトを作成できませんでした。" };
   }
 
@@ -176,17 +196,26 @@ export async function updateProjectSettingsAction(
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_project", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
-  }
 
-  await updateProject(projectRepository, project.id, {
-    name: parsed.data.name,
-    description: parsed.data.description,
-    isPublic: parsed.data.isPublic,
-    enabledModules: parsed.data.enabledModules,
-    trackerIds: parsed.data.trackerIds,
-  });
+  try {
+    await updateProject(
+      projectRepository,
+      project.id,
+      {
+        name: parsed.data.name,
+        description: parsed.data.description,
+        isPublic: parsed.data.isPublic,
+        enabledModules: parsed.data.enabledModules,
+        trackerIds: parsed.data.trackerIds,
+      },
+      { actor },
+    );
+  } catch (error) {
+    if (error instanceof UpdateProjectNotPermittedError) {
+      return { error: "この操作を行う権限がありません。" };
+    }
+    throw error;
+  }
 
   if (parsed.data.customFieldIds.length > 0) {
     const rawValues = Object.fromEntries(
