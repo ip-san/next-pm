@@ -11,6 +11,7 @@ import { filterMembersWithPermission, memberUserIds } from "@/domain/member/enti
 import { addNewsComment, InvalidNewsCommentError } from "@/application/news/add-news-comment";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { createNews } from "@/application/news/create-news";
+import { deleteNews } from "@/application/news/delete-news";
 import { updateNews } from "@/application/news/update-news";
 import { InvalidNewsError } from "@/domain/news/validate";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
@@ -140,7 +141,10 @@ export async function deleteNewsAction(_prevState: DeleteNewsActionState, formDa
     return { error: "この操作を行う権限がありません。" };
   }
 
-  await newsRepository.delete(item.id);
+  await deleteNews(
+    { newsRepository, attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+    item.id,
+  );
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/news`);
   redirect(`/projects/${parsed.data.projectIdentifier}/news`);
 }

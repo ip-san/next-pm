@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { InvalidNewsError } from "@/domain/news/validate";
+import { deleteNews } from "@/application/news/delete-news";
 import { updateNews } from "@/application/news/update-news";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -117,6 +120,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  await newsRepository.delete(news.id);
+  await deleteNews(
+    { newsRepository, attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+    news.id,
+  );
   return new NextResponse(null, { status: 204 });
 }

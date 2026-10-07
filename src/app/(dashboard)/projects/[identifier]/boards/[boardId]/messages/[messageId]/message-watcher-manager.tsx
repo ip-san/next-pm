@@ -36,13 +36,19 @@ function RemoveWatcherButton({
   );
 }
 
-/** Mirrors the watchers sidebar on Redmine's messages/show: only the root topic is watchable. */
+/**
+ * Mirrors Redmine's watchers/_watchers partial for a Message: only the root topic is
+ * watchable, the "add" control hangs off add_message_watchers, and the *names list* is a
+ * separate gate (view_message_watchers) — a user who may add watchers but not view them gets
+ * the heading and the form, never the roster.
+ */
 export function MessageWatcherManager({
   messageId,
   boardId,
   projectIdentifier,
   watchers,
   candidates,
+  canView,
   canAdd,
   canRemove,
 }: {
@@ -51,6 +57,7 @@ export function MessageWatcherManager({
   projectIdentifier: string;
   watchers: WatcherUser[];
   candidates: WatcherUser[];
+  canView: boolean;
   canAdd: boolean;
   canRemove: boolean;
 }) {
@@ -58,8 +65,8 @@ export function MessageWatcherManager({
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <h3 className="font-medium">ウォッチャー</h3>
-      {watchers.length === 0 ? (
+      <h3 className="font-medium">ウォッチャー{canView ? ` (${watchers.length})` : ""}</h3>
+      {!canView ? null : watchers.length === 0 ? (
         <p className="text-gray-500 text-xs">なし</p>
       ) : (
         <ul className="flex flex-col gap-1">

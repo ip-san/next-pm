@@ -173,8 +173,9 @@ export default async function MessageThreadPage({
           messageId={topic.id}
           boardId={board.id}
           projectIdentifier={identifier}
-          watchers={watcherList}
+          watchers={canViewWatchers ? watcherList : []}
           candidates={canAddWatchers ? watcherCandidates : []}
+          canView={canViewWatchers}
           canAdd={canAddWatchers}
           canRemove={canRemoveWatchers}
         />
