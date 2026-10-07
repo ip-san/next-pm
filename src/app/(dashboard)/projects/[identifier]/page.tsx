@@ -14,6 +14,7 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { DeleteProjectForm } from "../delete-project-form";
 import { ProjectStatusButton } from "../project-status-button";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
@@ -55,6 +56,7 @@ export default async function ProjectPage({
   // read permission, so it stays available on an already-closed project (that is how it is
   // reopened at all). Archive/unarchive are admin-only and live on the admin projects list.
   const canCloseProject = can({ permission: "close_project", project: toAuthorizationProject(project), actor });
+  const canDeleteProject = can({ permission: "delete_project", project: toAuthorizationProject(project), actor });
   const canManageIssueCategories =
     project.enabledModules.includes("issue_tracking") &&
     can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor });
@@ -161,6 +163,9 @@ export default async function ProjectPage({
         {canCloseProject ? (
           <ProjectStatusButton projectIdentifier={identifier} transition={project.status === "closed" ? "reopen" : "close"} />
         ) : null}
+        {/* Project#deletable? also demands leaf? for a non-admin; the use case re-checks, so
+            a subproject owner sees the form and is told why rather than silently missing it. */}
+        {canDeleteProject ? <DeleteProjectForm projectIdentifier={identifier} /> : null}
       </nav>
       {project.status === "closed" ? (
         <p className="text-sm text-amber-700">このプロジェクトは閉鎖されています。参照はできますが、変更はできません。</p>

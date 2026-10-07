@@ -34,6 +34,23 @@ export interface ProjectRepository {
    */
   updateStatus(projectIds: string[], status: ProjectStatus): Promise<void>;
   /**
+   * Every attachment owned by anything inside this subtree — issues, messages, news,
+   * documents, wiki pages, versions and the projects themselves. Attachments are addressed
+   * polymorphically and so have no foreign key to a project; the caller needs the storage
+   * keys to remove the files once `deleteSubtree` has committed.
+   */
+  listAttachmentsInSubtree(projectIds: string[]): Promise<{ id: string; storageKey: string }[]>;
+  /**
+   * Deletes the listed projects (which must be a complete subtree, deepest first — see
+   * domain/project/nested-set.ts `planDelete`) and rewrites the surviving nodes' bounds, all
+   * in one transaction.
+   *
+   * Most of the cascade is the schema's own `ON DELETE CASCADE`. What this adds is the rows
+   * no foreign key reaches: the five polymorphic tables (attachments, custom_values,
+   * watchers, reactions, journals) whose target is a type string plus an id.
+   */
+  deleteSubtree(removedProjectIds: string[], shifted: NestedSetNode[]): Promise<void>;
+  /**
    * Mirrors Redmine's Project#copy, scoped to what this codebase calls the project
    * "skeleton" — members, issue categories, and versions. Everything else Redmine's copy
    * supports (issues, wiki, queries, boards, documents, attachments) is deferred to a future

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { can } from "@/domain/authorization/authorization-service";
+import { deleteProject, DeleteProjectNotPermittedError } from "@/application/projects/delete-project";
 import { updateProject } from "@/application/projects/update-project";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
@@ -76,4 +78,43 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
   });
 
   return NextResponse.json({ project: updated });
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
+  const { identifier } = await params;
+  const { user, viaCookie } = await resolveUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (viaCookie && !(await verifyCsrf(request))) {
+    return NextResponse.json({ error: "csrf_check_failed" }, { status: 403 });
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const project = await projectRepository.findByIdentifier(identifier);
+  if (!project) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  try {
+    await deleteProject(
+      { projectRepository, attachmentStorage: new FsAttachmentStore() },
+      {
+        projectId: project.id,
+        actor,
+        isAdmin: user.isAdmin,
+        // Redmine skips the typed confirmation for API requests
+        // (`api_request? || params[:confirm] == identifier`).
+        confirmIdentifier: project.identifier,
+      },
+    );
+  } catch (error) {
+    if (error instanceof DeleteProjectNotPermittedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
+
+  return new NextResponse(null, { status: 204 });
 }

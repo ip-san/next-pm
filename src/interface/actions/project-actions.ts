@@ -7,6 +7,7 @@ import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { can } from "@/domain/authorization/authorization-service";
 import { copyProject } from "@/application/projects/copy-project";
 import { createProject } from "@/application/projects/create-project";
+import { deleteProject, DeleteProjectNotPermittedError, ProjectDeleteConfirmationMismatchError } from "@/application/projects/delete-project";
 import { CustomFieldValidationError, setProjectCustomFieldValues } from "@/application/projects/set-project-custom-field-values";
 import {
   archiveProject,
@@ -22,6 +23,7 @@ import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/c
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -286,4 +288,57 @@ export async function closeProjectAction(_prevState: ProjectStatusActionState, f
 
 export async function reopenProjectAction(_prevState: ProjectStatusActionState, formData: FormData): Promise<ProjectStatusActionState> {
   return changeProjectStatus("reopen", formData);
+}
+
+const deleteProjectSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  confirmIdentifier: z.string(),
+});
+
+export type DeleteProjectActionState = {
+  error: string | null;
+};
+
+export async function deleteProjectAction(
+  _prevState: DeleteProjectActionState,
+  formData: FormData,
+): Promise<DeleteProjectActionState> {
+  const parsed = deleteProjectSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    confirmIdentifier: formData.get("confirmIdentifier") ?? "",
+  });
+  if (!parsed.success) {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+  const { actor } = await resolveActor(user, project.id);
+
+  try {
+    await deleteProject(
+      { projectRepository, attachmentStorage: new FsAttachmentStore() },
+      { projectId: project.id, actor, isAdmin: user.isAdmin, confirmIdentifier: parsed.data.confirmIdentifier },
+    );
+  } catch (error) {
+    if (error instanceof DeleteProjectNotPermittedError) {
+      return { error: "この操作を行う権限がありません。" };
+    }
+    if (error instanceof ProjectDeleteConfirmationMismatchError) {
+      return { error: "識別子が一致しません。削除するには識別子を正確に入力してください。" };
+    }
+    throw error;
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/projects", "layout");
+  redirect(user.isAdmin ? "/admin" : "/projects");
 }

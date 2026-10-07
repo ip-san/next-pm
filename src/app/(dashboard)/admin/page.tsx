@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { DeleteProjectForm } from "../projects/delete-project-form";
 import { ProjectStatusButton } from "../projects/project-status-button";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
@@ -87,6 +88,9 @@ export default async function AdminIndexPage() {
                       projectIdentifier={project.identifier}
                       transition={project.status === "archived" ? "unarchive" : "archive"}
                     />
+                    {/* An archived project's own pages 404 for everyone, so this list is the
+                        only place one can be deleted — same as Redmine's admin list. */}
+                    <DeleteProjectForm projectIdentifier={project.identifier} />
                   </span>
                 </td>
               </tr>

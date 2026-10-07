@@ -1,14 +1,61 @@
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { projects } from "@/infrastructure/db/schema/projects";
+import { attachments } from "@/infrastructure/db/schema/attachments";
+import { boards } from "@/infrastructure/db/schema/boards";
+import { customValues } from "@/infrastructure/db/schema/custom-values";
+import { documents } from "@/infrastructure/db/schema/documents";
 import { enabledModules } from "@/infrastructure/db/schema/enabled-modules";
 import { issueCategories } from "@/infrastructure/db/schema/issue-categories";
+import { issues } from "@/infrastructure/db/schema/issues";
+import { journals } from "@/infrastructure/db/schema/journals";
 import { memberRoles, members } from "@/infrastructure/db/schema/members";
+import { messages } from "@/infrastructure/db/schema/messages";
+import { news } from "@/infrastructure/db/schema/news";
+import { reactions } from "@/infrastructure/db/schema/reactions";
 import { projectTrackers } from "@/infrastructure/db/schema/trackers";
 import { versions } from "@/infrastructure/db/schema/versions";
+import { watchers } from "@/infrastructure/db/schema/watchers";
+import { wikiPages } from "@/infrastructure/db/schema/wiki";
 import type { Project, ProjectStatus } from "@/domain/project/entity";
 import type { ProjectRepository, ProjectSettingsUpdate } from "@/domain/project/repository";
 import { isWithinSubtree, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
+
+/**
+ * The polymorphic containers living inside a project subtree, as `[containerType, ids]`
+ * pairs — the shape the five type+id tables (attachments, custom_values, watchers,
+ * reactions, journals) are keyed by. "Project" itself is in the list because the Files
+ * module attaches to a project directly.
+ */
+async function containersInSubtree(
+  tx: Pick<typeof db, "select">,
+  projectIds: string[],
+): Promise<[string, string[]][]> {
+  const idsOf = async <T extends { id: string }>(rows: Promise<T[]>): Promise<string[]> => (await rows).map((row) => row.id);
+
+  // Sequential, not Promise.all: `tx` is a single pg client, and issuing concurrent queries
+  // on one is deprecated in pg 8 and gone in pg 9.
+  const issueIds = await idsOf(tx.select({ id: issues.id }).from(issues).where(inArray(issues.projectId, projectIds)));
+  const versionIds = await idsOf(tx.select({ id: versions.id }).from(versions).where(inArray(versions.projectId, projectIds)));
+  const newsIds = await idsOf(tx.select({ id: news.id }).from(news).where(inArray(news.projectId, projectIds)));
+  const documentIds = await idsOf(tx.select({ id: documents.id }).from(documents).where(inArray(documents.projectId, projectIds)));
+  const wikiPageIds = await idsOf(tx.select({ id: wikiPages.id }).from(wikiPages).where(inArray(wikiPages.projectId, projectIds)));
+  const boardIds = await idsOf(tx.select({ id: boards.id }).from(boards).where(inArray(boards.projectId, projectIds)));
+  const messageIds =
+    boardIds.length > 0 ? await idsOf(tx.select({ id: messages.id }).from(messages).where(inArray(messages.boardId, boardIds))) : [];
+
+  return (
+    [
+      ["Project", projectIds],
+      ["Issue", issueIds],
+      ["Version", versionIds],
+      ["News", newsIds],
+      ["Document", documentIds],
+      ["WikiPage", wikiPageIds],
+      ["Message", messageIds],
+    ] as [string, string[]][]
+  ).filter(([, ids]) => ids.length > 0);
+}
 
 async function attachRelations(
   rows: (typeof projects.$inferSelect)[],
@@ -176,6 +223,59 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async updateStatus(projectIds: string[], status: ProjectStatus): Promise<void> {
     if (projectIds.length === 0) return;
     await db.update(projects).set({ status }).where(inArray(projects.id, projectIds));
+  }
+
+  async listAttachmentsInSubtree(projectIds: string[]): Promise<{ id: string; storageKey: string }[]> {
+    if (projectIds.length === 0) return [];
+    const containers = await containersInSubtree(db, projectIds);
+    const found: { id: string; storageKey: string }[] = [];
+    for (const [containerType, ids] of containers) {
+      const rows = await db
+        .select({ id: attachments.id, storageKey: attachments.storageKey })
+        .from(attachments)
+        .where(and(eq(attachments.containerType, containerType), inArray(attachments.containerId, ids)));
+      found.push(...rows);
+    }
+    return found;
+  }
+
+  async deleteSubtree(removedProjectIds: string[], shifted: NestedSetNode[]): Promise<void> {
+    if (removedProjectIds.length === 0) return;
+
+    await db.transaction(async (tx) => {
+      const containers = await containersInSubtree(tx, removedProjectIds);
+
+      // Journals first, and their reactions before them: a reaction points at a journal,
+      // which points at an issue, and none of those three links is a foreign key.
+      for (const [containerType, ids] of containers) {
+        const journalRows = await tx
+          .select({ id: journals.id })
+          .from(journals)
+          .where(and(eq(journals.journalizedType, containerType), inArray(journals.journalizedId, ids)));
+        const journalIds = journalRows.map((row) => row.id);
+        if (journalIds.length > 0) {
+          await tx.delete(reactions).where(and(eq(reactions.reactableType, "Journal"), inArray(reactions.reactableId, journalIds)));
+          // journal_details go with the journal via its own cascade.
+          await tx.delete(journals).where(inArray(journals.id, journalIds));
+        }
+      }
+
+      for (const [containerType, ids] of containers) {
+        await tx.delete(attachments).where(and(eq(attachments.containerType, containerType), inArray(attachments.containerId, ids)));
+        await tx.delete(customValues).where(and(eq(customValues.customizedType, containerType), inArray(customValues.customizedId, ids)));
+        await tx.delete(watchers).where(and(eq(watchers.watchableType, containerType), inArray(watchers.watchableId, ids)));
+      }
+
+      // Deepest first — projects.parent_id is ON DELETE RESTRICT, so a parent cannot go
+      // before its children. Everything else hanging off a project is ON DELETE CASCADE.
+      for (const projectId of removedProjectIds) {
+        await tx.delete(projects).where(eq(projects.id, projectId));
+      }
+
+      for (const node of shifted) {
+        await tx.update(projects).set({ lft: node.lft, rgt: node.rgt }).where(eq(projects.id, node.id));
+      }
+    });
   }
 
   async copySkeletonFrom(
