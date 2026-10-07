@@ -6,6 +6,9 @@ import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 import type { PasswordResetToken } from "@/domain/password-reset/entity";
 import type { PasswordResetTokenRepository } from "@/domain/password-reset/repository";
+import type { PasswordPolicy } from "@/domain/user/password-policy";
+
+const TEST_POLICY: PasswordPolicy = { minLength: 8, requiredCharClasses: [] };
 
 function makeUserRepository() {
   const updatePassword = mock(async () => {});
@@ -43,7 +46,7 @@ describe("resetPassword", () => {
   it("rejects an unknown token", async () => {
     const { userRepository, updatePassword } = makeUserRepository();
     const { passwordResetTokenRepository } = makeTokenRepository(null);
-    await expect(resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "new-password-1")).rejects.toThrow(
+    await expect(resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "new-password-1", TEST_POLICY)).rejects.toThrow(
       InvalidResetTokenError,
     );
     expect(updatePassword).not.toHaveBeenCalled();
@@ -59,7 +62,7 @@ describe("resetPassword", () => {
       createdAt: new Date(),
     };
     const { passwordResetTokenRepository } = makeTokenRepository(expired);
-    await expect(resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "new-password-1")).rejects.toThrow(
+    await expect(resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "new-password-1", TEST_POLICY)).rejects.toThrow(
       InvalidResetTokenError,
     );
     expect(updatePassword).not.toHaveBeenCalled();
@@ -75,7 +78,7 @@ describe("resetPassword", () => {
       createdAt: new Date(),
     };
     const { passwordResetTokenRepository, deleteToken } = makeTokenRepository(valid);
-    await expect(resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "short")).rejects.toThrow(InvalidPasswordError);
+    await expect(resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "short", TEST_POLICY)).rejects.toThrow(InvalidPasswordError);
     expect(updatePassword).not.toHaveBeenCalled();
     expect(deleteToken).not.toHaveBeenCalled();
   });
@@ -90,7 +93,7 @@ describe("resetPassword", () => {
       createdAt: new Date(),
     };
     const { passwordResetTokenRepository, deleteToken } = makeTokenRepository(valid);
-    await resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "new-password-1");
+    await resetPassword({ userRepository, passwordResetTokenRepository }, "raw-token", "new-password-1", TEST_POLICY);
 
     expect(updatePassword).toHaveBeenCalledTimes(1);
     const [userId, hash, salt] = updatePassword.mock.calls[0] as unknown as [string, string, string];

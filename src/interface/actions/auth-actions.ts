@@ -10,6 +10,8 @@ import { login } from "@/application/auth/login";
 import { LdapPasswordResetNotAllowedError, requestPasswordReset } from "@/application/auth/request-password-reset";
 import { InvalidResetTokenError, resetPassword } from "@/application/auth/reset-password";
 import { verifyTwofaCode } from "@/application/twofa/verify";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
 import { DrizzlePasswordResetTokenRepository } from "@/infrastructure/db/repositories/password-reset-token-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
@@ -183,9 +185,15 @@ export async function changePasswordAction(
   }
 
   try {
+    const { passwordMinLength, passwordRequiredCharClasses } = await loadAuthSettings(new DrizzleSettingsRepository());
     await changePassword(
       { userRepository: new DrizzleUserRepository() },
-      { userId: user.id, currentPassword: parsed.data.currentPassword, newPassword: parsed.data.newPassword },
+      {
+        userId: user.id,
+        currentPassword: parsed.data.currentPassword,
+        newPassword: parsed.data.newPassword,
+        policy: { minLength: passwordMinLength, requiredCharClasses: passwordRequiredCharClasses },
+      },
     );
   } catch (error) {
     if (error instanceof LdapPasswordChangeNotAllowedError || error instanceof InvalidPasswordError || error instanceof CurrentPasswordMismatchError) {
@@ -243,6 +251,14 @@ export async function lostPasswordAction(
     return { error: "メールアドレスを入力してください。", success: false };
   }
 
+  // Redmine's AccountController#lost_password bails out to the home page unless
+  // Setting.lost_password? — the setting has to hold on the submit path too, not only by
+  // hiding the link, or the form stays reachable by URL once an admin turns it off.
+  const { lostPasswordEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
+  if (!lostPasswordEnabled) {
+    return { error: "パスワードの再設定は無効になっています。管理者にお問い合わせください。", success: false };
+  }
+
   try {
     await requestPasswordReset(
       { userRepository: new DrizzleUserRepository(), passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository(), jobRepository: new DrizzleJobRepository() },
@@ -284,10 +300,12 @@ export async function resetPasswordAction(
   }
 
   try {
+    const { passwordMinLength, passwordRequiredCharClasses } = await loadAuthSettings(new DrizzleSettingsRepository());
     await resetPassword(
       { userRepository: new DrizzleUserRepository(), passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository() },
       parsed.data.token,
       parsed.data.newPassword,
+      { minLength: passwordMinLength, requiredCharClasses: passwordRequiredCharClasses },
     );
   } catch (error) {
     if (error instanceof InvalidResetTokenError || error instanceof InvalidPasswordError) {

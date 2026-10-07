@@ -7,6 +7,9 @@ import { enumerationTypeEnum } from "@/infrastructure/db/schema/enumerations";
 import { coerceCustomFieldValue } from "@/domain/custom-field/coerce";
 import { isPermissionRegistered } from "@/domain/authorization/permission-registry";
 import { generateSalt, hashPassword } from "@/domain/user/password";
+import { describePasswordPolicyFailure } from "@/domain/user/password-policy";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -317,7 +320,7 @@ const createUserSchema = z.object({
   mail: z.string().email("正しいメールアドレスを入力してください。"),
   firstname: z.string().min(1),
   lastname: z.string().min(1),
-  password: z.string().min(8, "パスワードは8文字以上で入力してください。"),
+  password: z.string().min(1, "パスワードを入力してください。"),
   isAdmin: z.coerce.boolean().default(false),
 });
 
@@ -340,6 +343,19 @@ export async function createUserAction(
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  // The configured policy, not a literal — Redmine applies password_min_length /
+  // password_required_char_classes to the admin user form exactly as it does to self-service
+  // password changes (User#validate_password_length runs on every save).
+  const { passwordMinLength, passwordRequiredCharClasses } = await loadAuthSettings(new DrizzleSettingsRepository());
+  const policyFailure = describePasswordPolicyFailure(
+    parsed.data.password,
+    { minLength: passwordMinLength, requiredCharClasses: passwordRequiredCharClasses },
+    { login: parsed.data.login, firstname: parsed.data.firstname, lastname: parsed.data.lastname, mails: [parsed.data.mail] },
+  );
+  if (policyFailure) {
+    return { error: policyFailure };
   }
 
   const userRepository = new DrizzleUserRepository();
