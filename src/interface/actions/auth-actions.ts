@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { loadLdapConfigFromEnv } from "@/domain/ldap/config";
+import { evaluateLoginGate, INACTIVE_ACCOUNT_MESSAGE } from "@/domain/user/login-gate";
 import { changePassword, CurrentPasswordMismatchError, InvalidPasswordError, LdapPasswordChangeNotAllowedError } from "@/application/auth/change-password";
 import { login } from "@/application/auth/login";
 import { LdapPasswordResetNotAllowedError, requestPasswordReset } from "@/application/auth/request-password-reset";
@@ -17,34 +18,35 @@ import { DrizzlePasswordResetTokenRepository } from "@/infrastructure/db/reposit
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { createSessionToken } from "@/infrastructure/auth/session-token";
 import { createTwofaPendingToken, TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
 import { LdaptsAuthenticator } from "@/infrastructure/ldap/ldapts-authenticator";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { destroyCurrentSession, establishSession, revokeAllSessions } from "@/interface/http/session";
 import { TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS, TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
 
 const loginSchema = z.object({
   login: z.string().min(1),
   password: z.string().min(1),
+  rememberMe: z.boolean(),
 });
 
 export type LoginActionState = {
   error: string | null;
 };
 
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? "next_pm_session";
-
-async function establishSession(userId: string): Promise<void> {
-  const token = await createSessionToken({ userId });
+async function setPendingTwofaCookie(userId: string, rememberMe: boolean, attempts = 0): Promise<void> {
+  // The remember-me choice has to survive the second-factor round trip, exactly as Redmine
+  // stashes session[:twofa_autologin] — otherwise ticking the box silently does nothing for
+  // every user who has 2FA on.
+  const pendingToken = await createTwofaPendingToken({ userId, attempts, rememberMe });
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
+  cookieStore.set(TWOFA_PENDING_COOKIE_NAME, pendingToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS,
   });
-  cookieStore.delete(TWOFA_PENDING_COOKIE_NAME);
 }
 
 export async function loginAction(
@@ -54,36 +56,40 @@ export async function loginAction(
   const parsed = loginSchema.safeParse({
     login: formData.get("login"),
     password: formData.get("password"),
+    rememberMe: formData.get("rememberMe") === "on",
   });
   if (!parsed.success) {
     return { error: "ログインIDとパスワードを入力してください。" };
   }
 
+  const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
   const ldapConfig = loadLdapConfigFromEnv(process.env);
   const result = await login(
     { userRepository: new DrizzleUserRepository(), ldapAuthenticator: ldapConfig ? new LdaptsAuthenticator(ldapConfig) : null },
     parsed.data.login,
     parsed.data.password,
+    twofa,
   );
   if (!result.ok) {
     return { error: "ログインIDまたはパスワードが正しくありません。" };
   }
 
-  if (result.twofaRequired) {
-    const pendingToken = await createTwofaPendingToken({ userId: result.user.id, attempts: 0 });
-    const cookieStore = await cookies();
-    cookieStore.set(TWOFA_PENDING_COOKIE_NAME, pendingToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS,
-    });
-    redirect("/login/twofa");
+  switch (result.outcome.kind) {
+    case "inactive":
+      return { error: INACTIVE_ACCOUNT_MESSAGE[result.outcome.status] ?? "このアカウントではログインできません。" };
+    case "twofa_required":
+      await setPendingTwofaCookie(result.user.id, parsed.data.rememberMe);
+      redirect("/login/twofa");
+      break;
+    case "twofa_setup_required":
+      await setPendingTwofaCookie(result.user.id, parsed.data.rememberMe);
+      redirect("/login/twofa/setup");
+      break;
+    case "allowed":
+      await establishSession(result.user.id, { rememberMe: parsed.data.rememberMe });
+      redirect("/");
   }
-
-  await establishSession(result.user.id);
-  redirect("/");
+  return { error: null };
 }
 
 export type VerifyTwofaActionState = {
@@ -129,7 +135,16 @@ export async function verifyTwofaAction(
   );
 
   if (result.verified) {
-    await establishSession(pending.userId);
+    // The gate runs again rather than being assumed from the password step: minutes may have
+    // passed, and the account could have been locked in between (Redmine re-reads the user in
+    // handle_active_user for the same reason). skipTwofa, because this *is* the second factor.
+    const user = await new DrizzleUserRepository().findById(pending.userId);
+    const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
+    if (!user || evaluateLoginGate(user, twofa, { skipTwofa: true }).kind !== "allowed") {
+      cookieStore.delete(TWOFA_PENDING_COOKIE_NAME);
+      redirect("/login");
+    }
+    await establishSession(pending.userId, { rememberMe: pending.rememberMe });
     redirect("/");
   }
 
@@ -139,21 +154,12 @@ export async function verifyTwofaAction(
     redirect("/login?error=twofa_too_many_tries");
   }
 
-  const renewedToken = await createTwofaPendingToken({ userId: pending.userId, attempts });
-  cookieStore.set(TWOFA_PENDING_COOKIE_NAME, renewedToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS,
-  });
+  await setPendingTwofaCookie(pending.userId, pending.rememberMe, attempts);
   return { error: "確認コードが正しくありません。" };
 }
 
 export async function logoutAction(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
-  cookieStore.delete(TWOFA_PENDING_COOKIE_NAME);
+  await destroyCurrentSession();
   redirect("/login");
 }
 
@@ -201,6 +207,13 @@ export async function changePasswordAction(
     }
     throw error;
   }
+
+  // Redmine's User#destroy_tokens: a password change kills every session and remember-me
+  // cookie the account holds, on the assumption that the old password may be compromised.
+  // The user doing the changing gets a fresh session right back (MyController#password's
+  // `session[:tk] = @user.generate_session_token`), so only their *other* devices log out.
+  await revokeAllSessions(user.id);
+  await establishSession(user.id);
 
   revalidatePath("/my/account");
   return { error: null, ok: true };
@@ -301,12 +314,16 @@ export async function resetPasswordAction(
 
   try {
     const { passwordMinLength, passwordRequiredCharClasses } = await loadAuthSettings(new DrizzleSettingsRepository());
-    await resetPassword(
+    const { userId } = await resetPassword(
       { userRepository: new DrizzleUserRepository(), passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository() },
       parsed.data.token,
       parsed.data.newPassword,
       { minLength: passwordMinLength, requiredCharClasses: passwordRequiredCharClasses },
     );
+    // Same rule as a self-service change (User#destroy_tokens), and it matters more here:
+    // whoever used the reset link may be recovering the account precisely because someone
+    // else had it. No new session is minted — the reset flow sends them to the login form.
+    await revokeAllSessions(userId);
   } catch (error) {
     if (error instanceof InvalidResetTokenError || error instanceof InvalidPasswordError) {
       return { error: error.message, success: false };

@@ -57,30 +57,42 @@ function fakeLdap(overrides: Partial<LdapAuthenticator> = {}): LdapAuthenticator
 describe("login use case", () => {
   it("succeeds with correct credentials on an active account", async () => {
     const user = makeUser();
-    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass");
-    expect(result).toEqual({ ok: true, twofaRequired: false, user });
+    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass", "1");
+    expect(result).toEqual({ ok: true, user, outcome: { kind: "allowed" } });
   });
 
   it("reports twofaRequired for a user with an active TOTP pairing", async () => {
     const user = makeUser({ twofaScheme: "totp", twofaTotpKey: "encrypted", twofaTotpLastUsedStep: 5 });
-    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass");
-    expect(result).toEqual({ ok: true, twofaRequired: true, user });
+    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass", "1");
+    expect(result).toEqual({ ok: true, user, outcome: { kind: "twofa_required" } });
   });
 
   it("rejects a wrong password", async () => {
-    const result = await login({ userRepository: repoWith(makeUser()), ldapAuthenticator: null }, "alice", "wrong");
+    const result = await login({ userRepository: repoWith(makeUser()), ldapAuthenticator: null }, "alice", "wrong", "1");
     expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
   });
 
   it("rejects an unknown login when LDAP isn't configured", async () => {
-    const result = await login({ userRepository: repoWith(null), ldapAuthenticator: null }, "ghost", "whatever");
+    const result = await login({ userRepository: repoWith(null), ldapAuthenticator: null }, "ghost", "whatever", "1");
     expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
+  });
+
+  it("does not hand the caller an 'allowed' outcome when the twofa setting demands a factor the account lacks", async () => {
+    const user = makeUser({ isAdmin: true });
+    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass", "3");
+    expect(result).toEqual({ ok: true, user, outcome: { kind: "twofa_setup_required" } });
+  });
+
+  it("does not challenge a paired user once the twofa setting is disabled", async () => {
+    const user = makeUser({ twofaScheme: "totp", twofaTotpKey: "encrypted", twofaTotpLastUsedStep: 5 });
+    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass", "0");
+    expect(result).toEqual({ ok: true, user, outcome: { kind: "allowed" } });
   });
 
   it("rejects a locked account even with the correct password", async () => {
     const user = makeUser({ status: "locked" });
-    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass");
-    expect(result).toEqual({ ok: false, reason: "account_not_active" });
+    const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "s3cret-pass", "1");
+    expect(result).toEqual({ ok: true, user, outcome: { kind: "inactive", status: "locked" } });
   });
 
   describe("with an existing local user tied to LDAP (authSource === 'ldap')", () => {
@@ -89,20 +101,20 @@ describe("login use case", () => {
       const ldapAuthenticator = fakeLdap({
         authenticate: mock(async () => ({ firstname: "Alice", lastname: "Doe", mail: "alice@example.com" })),
       });
-      const result = await login({ userRepository: repoWith(user), ldapAuthenticator }, "alice", "directory-password");
-      expect(result).toEqual({ ok: true, twofaRequired: false, user });
+      const result = await login({ userRepository: repoWith(user), ldapAuthenticator }, "alice", "directory-password", "1");
+      expect(result).toEqual({ ok: true, user, outcome: { kind: "allowed" } });
       expect(ldapAuthenticator.authenticate).toHaveBeenCalledWith("alice", "directory-password");
     });
 
     it("rejects when the LDAP bind fails", async () => {
       const user = makeUser({ authSource: "ldap", passwordHash: "", passwordSalt: "" });
-      const result = await login({ userRepository: repoWith(user), ldapAuthenticator: fakeLdap() }, "alice", "wrong");
+      const result = await login({ userRepository: repoWith(user), ldapAuthenticator: fakeLdap() }, "alice", "wrong", "1");
       expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
     });
 
     it("rejects when LDAP is configured to delegate to but the authenticator is unavailable", async () => {
       const user = makeUser({ authSource: "ldap", passwordHash: "", passwordSalt: "" });
-      const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "whatever");
+      const result = await login({ userRepository: repoWith(user), ldapAuthenticator: null }, "alice", "whatever", "1");
       expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
     });
   });
@@ -113,7 +125,7 @@ describe("login use case", () => {
       const ldapAuthenticator = fakeLdap({
         authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "bob@example.com" })),
       });
-      const result = await login({ userRepository, ldapAuthenticator }, "bob", "directory-password");
+      const result = await login({ userRepository, ldapAuthenticator }, "bob", "directory-password", "1");
       expect(result.ok).toBe(true);
       expect(userRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ login: "bob", mail: "bob@example.com", firstname: "Bob", lastname: "Newuser", authSource: "ldap" }),
@@ -122,7 +134,7 @@ describe("login use case", () => {
 
     it("does not create a user when the LDAP bind fails", async () => {
       const userRepository = repoWith(null);
-      const result = await login({ userRepository, ldapAuthenticator: fakeLdap() }, "ghost", "wrong");
+      const result = await login({ userRepository, ldapAuthenticator: fakeLdap() }, "ghost", "wrong", "1");
       expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
       expect(userRepository.create).not.toHaveBeenCalled();
     });
@@ -130,7 +142,7 @@ describe("login use case", () => {
     it("does not create a user when LDAP returns no mail address", async () => {
       const userRepository = repoWith(null);
       const ldapAuthenticator = fakeLdap({ authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "" })) });
-      const result = await login({ userRepository, ldapAuthenticator }, "bob", "directory-password");
+      const result = await login({ userRepository, ldapAuthenticator }, "bob", "directory-password", "1");
       expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
       expect(userRepository.create).not.toHaveBeenCalled();
     });

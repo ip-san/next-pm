@@ -1,4 +1,10 @@
+import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { isSelfRegistrationEnabled } from "@/domain/settings/auth-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { LoginForm } from "./login-form";
+
+// The form's shape depends on settings read at request time.
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,
@@ -6,6 +12,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const settings = await loadAuthSettings(new DrizzleSettingsRepository());
 
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
@@ -16,7 +23,11 @@ export default async function LoginPage({
             確認コードの試行回数が上限に達しました。もう一度ログインしてください。
           </p>
         ) : null}
-        <LoginForm />
+        <LoginForm
+          autologinEnabled={settings.autologinDays > 0}
+          lostPasswordEnabled={settings.lostPasswordEnabled}
+          selfRegistrationEnabled={isSelfRegistrationEnabled(settings)}
+        />
       </div>
     </main>
   );

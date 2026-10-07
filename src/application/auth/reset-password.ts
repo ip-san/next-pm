@@ -19,7 +19,7 @@ export async function resetPassword(
   token: string,
   newPassword: string,
   policy: PasswordPolicy,
-): Promise<void> {
+): Promise<{ userId: string }> {
   const resetToken = await repositories.passwordResetTokenRepository.findByTokenHash(hashResetToken(token));
   if (!resetToken || resetToken.expiresAt.getTime() < Date.now()) {
     throw new InvalidResetTokenError("リンクが無効か、有効期限が切れています。もう一度パスワード再設定をお試しください。");
@@ -39,4 +39,8 @@ export async function resetPassword(
   const hash = hashPassword(newPassword, salt);
   await repositories.userRepository.updatePassword(resetToken.userId, hash, salt);
   await repositories.passwordResetTokenRepository.delete(resetToken.id);
+  // The caller must also revoke the user's sessions and remember-me cookies (Redmine's
+  // User#destroy_tokens) — returning the id rather than taking those repositories keeps this
+  // use case to the one job the mailed link is about.
+  return { userId: resetToken.userId };
 }

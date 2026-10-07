@@ -1,22 +1,18 @@
-import { cookies } from "next/headers";
 import type { User } from "@/domain/user/entity";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { verifySessionToken } from "@/infrastructure/auth/session-token";
+import { resolveSessionUserId } from "./session";
 
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? "next_pm_session";
-
-/** Resolves the current user for Server Components / Server Actions from the session cookie. */
+/**
+ * Resolves the current user for Server Components / Server Actions from the session cookie.
+ * The cookie-to-session-row half (signature, expiry, idle timeout) lives in session.ts.
+ */
 export async function currentUserFromCookies(): Promise<User | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  if (!token) return null;
+  const userId = await resolveSessionUserId();
+  if (!userId) return null;
 
-  const payload = await verifySessionToken(token);
-  if (!payload) return null;
-
-  return new DrizzleUserRepository().findById(payload.userId);
+  return new DrizzleUserRepository().findById(userId);
 }
 
 /**

@@ -1,13 +1,19 @@
-import { isActiveUser, isTwofaActive } from "@/domain/user/entity";
 import { verifyPassword } from "@/domain/user/password";
+import { evaluateLoginGate, type LoginGateOutcome } from "@/domain/user/login-gate";
 import type { UserRepository } from "@/domain/user/repository";
 import type { User } from "@/domain/user/entity";
+import type { TwofaMode } from "@/domain/settings/auth-settings";
 import type { LdapAuthenticator } from "@/domain/ldap/authenticator";
 
 export type LoginResult =
-  | { ok: true; twofaRequired: false; user: User }
-  | { ok: true; twofaRequired: true; user: User }
-  | { ok: false; reason: "invalid_credentials" | "account_not_active" };
+  /** The password (or LDAP bind) was wrong — deliberately indistinguishable from "no such login". */
+  | { ok: false; reason: "invalid_credentials" }
+  /**
+   * The credentials were right. `outcome` says whether that is enough to hand out a session:
+   * the caller must not do so unless it is "allowed". Mirrors Redmine's split between
+   * password_authentication (credentials) and handle_active_user/handle_inactive_user (gate).
+   */
+  | { ok: true; user: User; outcome: LoginGateOutcome };
 
 export interface LoginRepositories {
   userRepository: UserRepository;
@@ -22,7 +28,12 @@ export interface LoginRepositories {
  * never match anyway. A login with no local record falls back to LDAP on-the-fly registration:
  * on a successful bind, a new local user is created from the directory's attributes.
  */
-export async function login(repositories: LoginRepositories, loginName: string, clearPassword: string): Promise<LoginResult> {
+export async function login(
+  repositories: LoginRepositories,
+  loginName: string,
+  clearPassword: string,
+  twofa: TwofaMode,
+): Promise<LoginResult> {
   const user = await repositories.userRepository.findByLogin(loginName);
 
   if (user) {
@@ -33,10 +44,7 @@ export async function login(repositories: LoginRepositories, loginName: string, 
     if (!authenticated) {
       return { ok: false, reason: "invalid_credentials" };
     }
-    if (!isActiveUser(user)) {
-      return { ok: false, reason: "account_not_active" };
-    }
-    return isTwofaActive(user) ? { ok: true, twofaRequired: true, user } : { ok: true, twofaRequired: false, user };
+    return { ok: true, user, outcome: evaluateLoginGate(user, twofa) };
   }
 
   if (!repositories.ldapAuthenticator) {
@@ -69,5 +77,7 @@ export async function login(repositories: LoginRepositories, loginName: string, 
     twofaTotpKey: null,
     twofaTotpLastUsedStep: null,
   });
-  return { ok: true, twofaRequired: false, user: created };
+  // A freshly provisioned LDAP account is active with no second factor, but it still goes
+  // through the same gate rather than being waved past it: the twofa setting may require one.
+  return { ok: true, user: created, outcome: evaluateLoginGate(created, twofa) };
 }
