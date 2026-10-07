@@ -1,15 +1,19 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { filterMembersWithPermission } from "@/domain/member/entity";
 import { ancestorChain, childrenOf } from "@/domain/wiki/hierarchy";
+import { collectIssueRefs, parseWikiBlocks, type ResolvedIssue, type WikiBlock } from "@/domain/wiki/macro-blocks";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import {
@@ -18,9 +22,10 @@ import {
   DrizzleWikiRedirectRepository,
 } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { DeleteWikiAttachmentButton } from "./delete-wiki-attachment-button";
 import { WikiAttachmentUploadForm } from "./wiki-attachment-upload-form";
+import { WikiContent } from "./wiki-content";
 import { WikiProtectToggleForm } from "./wiki-protect-toggle-form";
 import { WikiWatcherManager } from "./wiki-watcher-manager";
 import { WikiWatchToggleForm } from "./wiki-watch-toggle-form";
@@ -98,7 +103,7 @@ export default async function WikiPageView({
   const children = wikiPage ? childrenOf(allPages, wikiPage.id) : [];
   const ancestors = wikiPage ? ancestorChain(allPages, wikiPage) : [];
 
-  let renderedText = current?.text ?? "";
+  let blocks: WikiBlock[] = [];
   if (current && wikiPage) {
     const childPages = children.map((page) => ({ title: page.title }));
     const textByTitle = new Map<string, string>();
@@ -108,7 +113,7 @@ export default async function WikiPageView({
         textByTitle.set(page.title, version.text);
       }
     }
-    renderedText = expandMacros(
+    const expanded = expandMacros(
       current.text,
       {
         headings: extractHeadings(current.text),
@@ -117,6 +122,29 @@ export default async function WikiPageView({
       },
       new Set([title]),
     );
+
+    // {{recent_pages}} is relative to the moment the page renders.
+    const now = new Date().getTime();
+    // The macro pass is synchronous, so everything it can look up is fetched first.
+    const issueByPrefix = await resolveMacroIssues(collectIssueRefs(expanded), user);
+    const currentByPage = await wikiContentRepository.listCurrentByProject(project.id);
+    blocks = parseWikiBlocks(expanded, {
+      // Redmine's Attachment.latest_attach: the page's own attachments only, newest wins.
+      findAttachment: (filename) =>
+        attachments
+          .filter((attachment) => attachment.filename === filename)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
+      resolveIssue: (prefix) => issueByPrefix.get(prefix) ?? null,
+      // Scoped to this project, which the viewer already holds view_wiki_pages for.
+      recentPages: ({ days, limit }) => {
+        const cutoff = now - days * 24 * 60 * 60 * 1000;
+        const recent = currentByPage
+          .filter((entry) => entry.version.createdAt.getTime() >= cutoff)
+          .sort((a, b) => b.version.createdAt.getTime() - a.version.createdAt.getTime())
+          .map((entry) => ({ title: entry.page.title, updatedAt: entry.version.createdAt }));
+        return limit === null ? recent : recent.slice(0, limit);
+      },
+    });
   }
 
   return (
@@ -183,7 +211,7 @@ export default async function WikiPageView({
 
       {current ? (
         <>
-          <p className="whitespace-pre-wrap text-sm">{renderedText}</p>
+          <WikiContent blocks={blocks} identifier={identifier} />
           <p className="text-xs text-gray-500 flex items-center gap-2">
             <span>バージョン {current.version}</span>
             {canViewEdits ? (
@@ -269,4 +297,59 @@ async function assignableWatchers(projectId: string): Promise<string[]> {
   return filterMembersWithPermission(members, rolesById, "view_wiki_pages")
     .map((member) => member.userId)
     .filter((userId): userId is string => userId !== null);
+}
+
+/**
+ * Resolves {{issue(...)}} references for the macro pass. An issue the viewer may not see —
+ * wrong project, no view_issues, or a private issue outside their reach — resolves to nothing,
+ * so the macro falls back to a bare "#id" and never leaks a subject. An ambiguous id prefix
+ * matching more than one issue is treated the same way.
+ */
+async function resolveMacroIssues(
+  prefixes: string[],
+  user: Awaited<ReturnType<typeof currentUserFromCookies>>,
+): Promise<Map<string, ResolvedIssue>> {
+  const resolved = new Map<string, ResolvedIssue>();
+  if (prefixes.length === 0) {
+    return resolved;
+  }
+
+  const issueRepository = new DrizzleIssueRepository();
+  const projectRepository = new DrizzleProjectRepository();
+  const trackerRepository = new DrizzleTrackerRepository();
+
+  for (const prefix of prefixes) {
+    if (!/^[0-9a-f]{1,8}$/i.test(prefix)) {
+      continue;
+    }
+    const matches = await issueRepository.findByIdPrefix(prefix);
+    if (matches.length !== 1) {
+      continue;
+    }
+    const issue = matches[0];
+
+    const issueProject = await projectRepository.findById(issue.projectId);
+    if (!issueProject) {
+      continue;
+    }
+    const { actor: issueActor, userGroupIds } = await resolveActor(user, issueProject.id);
+    if (!can({ permission: "view_issues", project: toAuthorizationProject(issueProject), actor: issueActor })) {
+      continue;
+    }
+    if (!isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(issueActor))) {
+      continue;
+    }
+
+    const tracker = await trackerRepository.findById(issue.trackerId);
+    resolved.set(prefix, {
+      id: issue.id,
+      idPrefix: issue.id.slice(0, 8),
+      trackerName: tracker?.name ?? "",
+      subject: issue.subject,
+      projectName: issueProject.name,
+      projectIdentifier: issueProject.identifier,
+    });
+  }
+
+  return resolved;
 }

@@ -167,7 +167,7 @@
 |---|---|---|
 | 閲覧・編集・版歴・差分・注釈 | done | 注釈(blame)を追加(`wiki/[title]/annotate`、本家 `WikiAnnotate`)。各行を最初に導入したバージョンと著者を表示し、履歴の各行からたどれる |
 | ページ名変更(リダイレクト付き) | done | 権限は本家と同じく `rename_wiki_pages` または `manage_wiki`(本家 `preparation.rb` は `wiki#rename` を両方に割り当てている)。保護ページは `protect_wiki_pages` が無いと改名できない |
-| マクロ | partial | `toc` / `include` / `child_pages` の 3 種のみ(`domain/wiki/macros.ts`)。本家の `collapse` / `thumbnail` / `issue` / `macro_list` 等が無い |
+| マクロ | done | テキストを返す `toc` / `include` / `child_pages`(`domain/wiki/macros.ts`)に加え、描画を伴う `collapse` / `thumbnail` / `issue` / `macro_list` / `recent_pages` を追加(`domain/wiki/macro-blocks.ts`)。本家 `MACROS_RE` と同じ記法(ブロック引数・`key=value` オプション・`!` によるエスケープ)を解釈する。ドメイン側はブロックの配列を返すだけで、HTML 文字列は組み立てない(描画は `wiki-content.tsx`)。`issue` は閲覧できないチケットを `#id` だけにフォールバックし件名を出さない、`thumbnail` はそのページ自身の添付のみを参照する。`hello_world` は不要なため未実装 |
 | エクスポート | done | HTML / PDF / ZIP |
 | 添付 | done | 追加は `edit_wiki_pages`、削除は本家と同じ専用権限 `delete_wiki_pages_attachments`(`acts_as_attachable :delete_permission`)。いずれも保護ページでは `protect_wiki_pages` が必要 |
 | ページ削除 | done | `delete_wiki_pages` を追加し、確認画面(`wiki/[title]/destroy`)で本家 `WikiController#destroy` の 3 択(子をトップレベルへ/子も削除/別ページへ付け替え)を提供。REST の DELETE も同権限 + `?todo=` に対応(既定は本家と同じ nullify)。ページ削除時に添付・ウォッチャー・そのページ宛てリダイレクトも併せて削除する(本家 `delete_redirects` と acts_as_attachable/watchable の dependent destroy 相当) |
