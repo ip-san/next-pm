@@ -6,6 +6,7 @@ import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/e
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { AttachmentList } from "../../../attachment-list";
 import { DeleteDocumentAttachmentButton } from "./delete-document-attachment-button";
 import { DeleteDocumentButton } from "./delete-document-button";
 import { DocumentAttachmentUploadForm } from "./document-attachment-upload-form";
@@ -50,17 +51,14 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium text-sm">添付ファイル</h2>
-        <ul className="flex flex-col gap-1 text-sm">
-          {attachments.map((attachment) => (
-            <li key={attachment.id} className="flex items-center gap-2">
-              <a href={`/api/attachments/${attachment.id}`} className="underline">
-                {attachment.filename}
-              </a>
-              {canDeleteDocuments ? <DeleteDocumentAttachmentButton projectIdentifier={identifier} attachmentId={attachment.id} /> : null}
-            </li>
-          ))}
-          {attachments.length === 0 ? <li className="text-gray-400 text-xs">添付ファイルはありません。</li> : null}
-        </ul>
+        <AttachmentList
+          attachments={attachments}
+          renderAction={
+            canDeleteDocuments
+              ? (attachment) => <DeleteDocumentAttachmentButton projectIdentifier={identifier} attachmentId={attachment.id} />
+              : undefined
+          }
+        />
         {canEditDocuments ? <DocumentAttachmentUploadForm documentId={document.id} projectIdentifier={identifier} /> : null}
       </section>
 
