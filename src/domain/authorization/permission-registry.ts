@@ -10,6 +10,7 @@ export type PermissionKey =
   | "add_issues"
   | "edit_issues"
   | "edit_own_issues"
+  | "delete_issues"
   | "set_issues_private"
   | "set_own_issues_private"
   | "manage_subtasks"
@@ -68,6 +69,7 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   add_issues: { module: "issue_tracking", readOnly: false },
   edit_issues: { module: "issue_tracking", readOnly: false },
   edit_own_issues: { module: "issue_tracking", readOnly: false },
+  delete_issues: { module: "issue_tracking", readOnly: false },
   set_issues_private: { module: "issue_tracking", readOnly: false },
   set_own_issues_private: { module: "issue_tracking", readOnly: false },
   manage_subtasks: { module: "issue_tracking", readOnly: false },

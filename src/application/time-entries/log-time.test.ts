@@ -9,6 +9,10 @@ function makeRepo(settings: Record<string, string> = {}) {
     listForProject: mock(async () => []),
     listForIssue: mock(async () => []),
     reassignProjectForIssues: mock(async () => undefined),
+    listForIssues: mock(async () => []),
+    deleteForIssues: mock(async () => undefined),
+    detachFromIssues: mock(async () => undefined),
+    reassignToIssue: mock(async () => undefined),
     create: mock(async (entry) => ({ ...entry, id: "entry-1", createdAt: new Date() }) as TimeEntry),
   };
   const settingsRepository: SettingsRepository = {
