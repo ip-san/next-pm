@@ -7,12 +7,18 @@ import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { wouldCreateParentCycle } from "@/domain/issue/parent";
 import type { IssueUpdate } from "@/domain/issue/repository";
-import { filterMembersVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
-import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import {
+  BlockedIssueCloseError,
+  InvalidParentIssueError,
+  updateIssue,
+  WorkflowRequiredFieldError,
+  WorkflowTransitionDeniedError,
+} from "@/application/issues/update-issue";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
@@ -405,6 +411,15 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     if (error instanceof BlockedIssueCloseError) {
       return { ok: false, error: "このチケットは未完了の「ブロック」関連があるためクローズできません。" };
     }
+    if (error instanceof InvalidParentIssueError) {
+      return {
+        ok: false,
+        error:
+          error.reason === "cycle"
+            ? "自分自身または子孫のチケットを親に指定することはできません。"
+            : "親チケットが見つかりません。",
+      };
+    }
     if (error instanceof CustomFieldValidationError) {
       return { ok: false, error: "カスタムフィールドの入力内容を確認してください。", fieldErrors: error.fieldErrors };
     }
@@ -428,11 +443,30 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   );
   const notifiableMembers = filterMembersVisibleToPrivateIssue(updated, members, rolesById);
   const watcherUserIds = await new DrizzleWatcherRepository().listWatcherUserIds("Issue", updated.id);
+  // Watchers are their own recipient group, so the member filter above doesn't cover them:
+  // someone can keep watching an issue this very request turned private. Mirrors Redmine's
+  // notified_watchers, which rejects watchers the issue isn't visible to.
+  const rolesByUserId = new Map(
+    members.flatMap((member) =>
+      member.userId === null
+        ? []
+        : [
+            [
+              member.userId,
+              member.roleIds.flatMap((roleId) => {
+                const role = rolesById.get(roleId);
+                return role ? [role] : [];
+              }),
+            ] as const,
+          ],
+    ),
+  );
+  const notifiableWatcherUserIds = filterUserIdsVisibleToPrivateIssue(updated, watcherUserIds, rolesByUserId);
 
   await enqueueNotification(
     { jobRepository: new DrizzleJobRepository() },
     {
-      recipientGroups: [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), watcherUserIds],
+      recipientGroups: [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds],
       excludeUserId: user.id,
       subject: `[${project.name}] ${updated.subject}`,
       body: parsed.data.notes.trim().length > 0 ? parsed.data.notes : "チケットが更新されました。",

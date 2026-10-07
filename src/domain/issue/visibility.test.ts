@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { filterMembersVisibleToPrivateIssue, isPrivateIssueVisible } from "./visibility";
+import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "./visibility";
 
 const privateIssue = { isPrivate: true, authorId: "author-1", assignedToId: "assignee-1", assignedToType: "user" as const };
 const publicIssue = { isPrivate: false, authorId: "author-1", assignedToId: "assignee-1", assignedToType: "user" as const };
@@ -81,5 +81,34 @@ describe("filterMembersVisibleToPrivateIssue", () => {
   it("drops a member whose role id isn't found in the map", () => {
     const visible = filterMembersVisibleToPrivateIssue(privateIssue, [{ userId: "user-unknown", roleIds: ["missing"] }], rolesById);
     expect(visible).toEqual([]);
+  });
+});
+
+describe("filterUserIdsVisibleToPrivateIssue", () => {
+  const rolesByUserId = new Map([
+    ["watcher-all", [{ issuesVisibility: "all" as const }]],
+    ["watcher-own", [{ issuesVisibility: "own" as const }]],
+    ["author-1", [{ issuesVisibility: "own" as const }]],
+    ["assignee-1", [{ issuesVisibility: "own" as const }]],
+  ]);
+  const watchers = ["watcher-all", "watcher-own", "author-1", "assignee-1", "ex-member"];
+
+  it("returns every watcher unchanged when the issue is not private", () => {
+    expect(filterUserIdsVisibleToPrivateIssue(publicIssue, watchers, rolesByUserId)).toEqual(watchers);
+  });
+
+  it("drops watchers who could not see the issue once it became private", () => {
+    // Regression: a watcher keeps watching across the edit that turns an issue private, and
+    // Redmine's notified_watchers rejects anyone the issue isn't visible to. "watcher-own"
+    // and the ex-member must not be mailed the subject or the note.
+    expect(filterUserIdsVisibleToPrivateIssue(privateIssue, watchers, rolesByUserId)).toEqual([
+      "watcher-all",
+      "author-1",
+      "assignee-1",
+    ]);
+  });
+
+  it("drops a watcher with no roles on the project at all", () => {
+    expect(filterUserIdsVisibleToPrivateIssue(privateIssue, ["ex-member"], rolesByUserId)).toEqual([]);
   });
 });

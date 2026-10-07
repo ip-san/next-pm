@@ -1,5 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
-import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "./update-issue";
+import {
+  BlockedIssueCloseError,
+  InvalidParentIssueError,
+  updateIssue,
+  WorkflowRequiredFieldError,
+  WorkflowTransitionDeniedError,
+} from "./update-issue";
 import { CustomFieldValidationError } from "./set-custom-field-values";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
@@ -1156,5 +1162,116 @@ describe("updateIssue — tracker changes", () => {
         isAssignee: false,
       }),
     ).rejects.toThrow(WorkflowTransitionDeniedError);
+  });
+});
+
+describe("updateIssue — parent issue invariants", () => {
+  function makeParentRepositories(projectIssues: Issue[], target: Issue) {
+    const repos = makeRepositories({ issue: target });
+    repos.issueRepository.listByProject = mock(async () => projectIssues);
+    repos.issueRepository.findById = mock(async (id: string) => projectIssues.find((i) => i.id === id) ?? null);
+    return repos;
+  }
+
+  it("accepts a parent in the same project", async () => {
+    const target = makeIssue({ id: "child", projectId: "proj-1", statusId: "new", priorityId: "normal" });
+    const parent = makeIssue({ id: "parent", projectId: "proj-1" });
+    const repos = makeParentRepositories([target, parent], target);
+
+    const result = await updateIssue(repos, {
+      issueId: "child",
+      expectedLockVersion: 0,
+      changes: { parentId: "parent" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(result.parentId).toBe("parent");
+  });
+
+  it("rejects a parent that lives in another project", async () => {
+    // The parent_id column's FK only guarantees the row exists — nothing stops it pointing
+    // at another project's issue, which would pull a subtree across a permission boundary.
+    const target = makeIssue({ id: "child", projectId: "proj-1", statusId: "new", priorityId: "normal" });
+    const foreign = makeIssue({ id: "foreign", projectId: "proj-2" });
+    const repos = makeRepositories({ issue: target });
+    repos.issueRepository.listByProject = mock(async () => [target]);
+    repos.issueRepository.findById = mock(async (id: string) => [target, foreign].find((i) => i.id === id) ?? null);
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "child",
+        expectedLockVersion: 0,
+        changes: { parentId: "foreign" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(InvalidParentIssueError);
+    expect(repos.issueRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an issue being made its own parent", async () => {
+    const target = makeIssue({ id: "child", projectId: "proj-1", statusId: "new", priorityId: "normal" });
+    const repos = makeParentRepositories([target], target);
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "child",
+        expectedLockVersion: 0,
+        changes: { parentId: "child" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(InvalidParentIssueError);
+    expect(repos.issueRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects re-parenting under one of its own descendants", async () => {
+    const root = makeIssue({ id: "root", projectId: "proj-1", statusId: "new", priorityId: "normal" });
+    const child = makeIssue({ id: "child", projectId: "proj-1", parentId: "root" });
+    const grandchild = makeIssue({ id: "grandchild", projectId: "proj-1", parentId: "child" });
+    const repos = makeParentRepositories([root, child, grandchild], root);
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "root",
+        expectedLockVersion: 0,
+        changes: { parentId: "grandchild" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(InvalidParentIssueError);
+    expect(repos.issueRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("allows clearing the parent without any lookup", async () => {
+    const target = makeIssue({ id: "child", projectId: "proj-1", parentId: "parent", statusId: "new", priorityId: "normal" });
+    const repos = makeRepositories({ issue: target });
+
+    const result = await updateIssue(repos, {
+      issueId: "child",
+      expectedLockVersion: 0,
+      changes: { parentId: null },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(result.parentId).toBeNull();
+    expect(repos.issueRepository.listByProject).not.toHaveBeenCalled();
   });
 });

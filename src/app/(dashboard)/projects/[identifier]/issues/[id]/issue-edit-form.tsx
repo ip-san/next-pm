@@ -28,7 +28,6 @@ interface FormState {
   assignedToId: string;
   categoryId: string;
   fixedVersionId: string;
-  parentId: string;
   isPrivate: boolean;
   startDate: string;
   dueDate: string;
@@ -107,7 +106,6 @@ export function IssueEditForm({
       issue.assignedToId === null ? "" : issue.assignedToType === "group" ? `group:${issue.assignedToId}` : issue.assignedToId,
     categoryId: issue.categoryId ?? "",
     fixedVersionId: issue.fixedVersionId ?? "",
-    parentId: issue.parentId ?? "",
     isPrivate: issue.isPrivate,
     startDate: issue.startDate ?? "",
     dueDate: issue.dueDate ?? "",
@@ -116,6 +114,12 @@ export function IssueEditForm({
     notes: "",
     customFieldValues: customValues,
   });
+  // The parent picker starts empty and only reports a value once the user touches it. The
+  // stored parent is deliberately not seeded into client state: it may be an issue this
+  // viewer can't see (its subject is already withheld from `parentIssueLabel`, and shipping
+  // its id would disclose that it exists), and an untouched picker must leave the existing
+  // parent alone rather than submit "" and silently detach it.
+  const [parentId, setParentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -168,12 +172,12 @@ export function IssueEditForm({
       issueId: issue.id,
       lockVersion: issue.lockVersion,
       trackerId: state.trackerId,
-      parentId: state.parentId,
       notes: state.notes,
       customFieldValues: Object.fromEntries(
         applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]),
       ),
     };
+    if (parentId !== null) values.parentId = parentId;
     if (allowedStatuses.length > 0) values.statusId = selectedStatusId;
     if (!isReadOnly("subject")) values.subject = state.subject;
     if (!isReadOnly("description")) values.description = state.description;
@@ -394,7 +398,7 @@ export function IssueEditForm({
           inputId="parentId"
           inputName="parentId"
           initialLabel={parentIssueLabel ?? ""}
-          onSelect={(issueId) => set("parentId", issueId)}
+          onSelect={(issueId) => setParentId(issueId)}
         />
       </div>
 

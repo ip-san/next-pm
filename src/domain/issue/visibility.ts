@@ -52,3 +52,25 @@ export function filterMembersVisibleToPrivateIssue<M extends Pick<Member, "userI
   if (!issue.isPrivate) return members;
   return members.filter((member) => member.roleIds.some((roleId) => rolesById.get(roleId)?.issuesVisibility === "all"));
 }
+
+/**
+ * Faithful port of the `notified.reject! {|user| !visible?(user)}` step that Redmine applies
+ * to *watchers* as well as members (`acts_as_watchable`'s `notified_watchers`, which runs the
+ * same rejection as `Issue#notified_users`). Watchers are a separate recipient group from
+ * project members — a watcher can keep watching an issue that is later turned private, and
+ * mailing them its subject and notes would leak exactly what the private flag is for.
+ *
+ * `rolesByUserId` carries each candidate's roles on the issue's project; a watcher with no
+ * entry (no longer a member, so no `view_issues` either) never passes. Group-assignee
+ * membership isn't resolved here — a watcher who can only see the issue because a group they
+ * belong to is the assignee is dropped, which costs one notification rather than leaking,
+ * the same trade-off `filterMembersVisibleToPrivateIssue` documents above.
+ */
+export function filterUserIdsVisibleToPrivateIssue(
+  issue: Pick<Issue, "isPrivate" | "authorId" | "assignedToId" | "assignedToType">,
+  userIds: string[],
+  rolesByUserId: Map<string, { issuesVisibility: IssuesVisibility }[]>,
+): string[] {
+  if (!issue.isPrivate) return userIds;
+  return userIds.filter((userId) => isPrivateIssueVisible(issue, userId, [], rolesByUserId.get(userId) ?? []));
+}

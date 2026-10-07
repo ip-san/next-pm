@@ -3,7 +3,13 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import {
+  BlockedIssueCloseError,
+  InvalidParentIssueError,
+  updateIssue,
+  WorkflowRequiredFieldError,
+  WorkflowTransitionDeniedError,
+} from "@/application/issues/update-issue";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -190,6 +196,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (error instanceof BlockedIssueCloseError) {
       return NextResponse.json({ error: "blocked_issue" }, { status: 422 });
+    }
+    if (error instanceof InvalidParentIssueError) {
+      return NextResponse.json({ error: "invalid_parent_id", reason: error.reason }, { status: 422 });
     }
     // Raised before the issue row is written, so a rejected custom value no longer leaves a
     // partially applied update behind the way the previous save-then-validate order did.

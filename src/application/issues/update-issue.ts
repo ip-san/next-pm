@@ -11,6 +11,7 @@ import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { UserPreferencesRepository } from "@/domain/user-preferences/repository";
 import type { WatcherRepository } from "@/domain/watcher/repository";
+import { wouldCreateParentCycle } from "@/domain/issue/parent";
 import { isFieldBlank } from "@/domain/workflow/blank";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { applyIssueCustomFieldValues, prepareIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
@@ -30,6 +31,13 @@ export class WorkflowRequiredFieldError extends Error {
   constructor(public readonly fieldName: WorkflowEligibleField) {
     super(`Field "${fieldName}" is required in this status for this role and cannot be blank.`);
     this.name = "WorkflowRequiredFieldError";
+  }
+}
+
+export class InvalidParentIssueError extends Error {
+  constructor(public readonly reason: "not_found" | "cross_project" | "cycle") {
+    super(`The requested parent issue is not valid for this issue (${reason}).`);
+    this.name = "InvalidParentIssueError";
   }
 }
 
@@ -320,6 +328,27 @@ async function applyIssueUpdate(
   for (const field of requiredAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     if (isFieldBlank(merged[field])) {
       throw new WorkflowRequiredFieldError(field);
+    }
+  }
+
+  // Parent re-assignment is checked here rather than only in the calling action, because
+  // `parentId` is a plain field of `IssueUpdate` that any caller can set: a cross-project or
+  // cyclic parent corrupts the tree (the column's own FK only guarantees the row exists), and
+  // a cycle makes every later walk of the chain loop. Mirrors Redmine's
+  // Issue#validate_parent_issue, which lives on the model for the same reason. Visibility of
+  // the chosen parent stays with the callers, which alone know the acting user's roles.
+  if (changes.parentId !== undefined && changes.parentId !== null && changes.parentId !== before.parentId) {
+    const projectIssues = await repositories.issueRepository.listByProject(before.projectId);
+    const parent = projectIssues.find((candidate) => candidate.id === changes.parentId);
+    if (!parent) {
+      // Either no such issue, or one in another project — indistinguishable here on purpose,
+      // so the error can't be used to probe for issue ids outside this project.
+      const exists = await repositories.issueRepository.findById(changes.parentId);
+      throw new InvalidParentIssueError(exists ? "cross_project" : "not_found");
+    }
+    const parentIdById = new Map(projectIssues.map((candidate) => [candidate.id, candidate.parentId]));
+    if (wouldCreateParentCycle(input.issueId, changes.parentId, parentIdById)) {
+      throw new InvalidParentIssueError("cycle");
     }
   }
 
