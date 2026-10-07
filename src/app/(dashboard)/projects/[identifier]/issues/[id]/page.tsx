@@ -27,12 +27,19 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import {
+  issuesVisibilityRoles,
+  listProjectsWithPermission,
+  resolveActor,
+  toAuthorizationProject,
+  visibleIssueFilter,
+} from "@/interface/http/resolve-actor";
 import { AttachmentList } from "../../../attachment-list";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueEditForm } from "./issue-edit-form";
 import { IssueRelationForm } from "./issue-relation-form";
+import { MoveIssueForm } from "./move-issue-form";
 import { LogTimeForm } from "./log-time-form";
 import { ReactionButton } from "./reaction-button";
 import { WatcherManager } from "./watcher-manager";
@@ -171,6 +178,14 @@ export default async function IssueDetailPage({
   // may have left since, so their name is resolved separately for the label the form keeps
   // in the dropdown — the update action skips re-validating an unchanged assignee.
   const assignableUsers = relevantUsers.filter((candidate) => projectMemberUserIds.includes(candidate.id));
+  // Mirrors Issue.allowed_target_projects: only projects the viewer can add issues to, and
+  // only ones with a tracker — listing every project would leak private project names.
+  const moveTargets = canEditThisIssue ? await listProjectsWithPermission(user, "add_issues", { requireTrackers: true }) : [];
+  const moveTargetTrackers = Object.fromEntries(
+    await Promise.all(
+      moveTargets.map(async (candidate) => [candidate.id, await new DrizzleTrackerRepository().findByIds(candidate.trackerIds)] as const),
+    ),
+  );
   const assigneeUser =
     issue.assignedToId && issue.assignedToType === "user"
       ? (userLabelById.get(issue.assignedToId) ?? (await new DrizzleUserRepository().findById(issue.assignedToId)))
@@ -255,6 +270,18 @@ export default async function IssueDetailPage({
           })}
         </ul>
       </section>
+
+      {canEditThisIssue && moveTargets.some((candidate) => candidate.id !== project.id) ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">別プロジェクトへ移動</h2>
+          <MoveIssueForm
+            issueId={issue.id}
+            currentProjectId={project.id}
+            targets={moveTargets}
+            trackersByProjectId={moveTargetTrackers}
+          />
+        </section>
+      ) : null}
 
       {canEditThisIssue ? (
         <section>

@@ -2,6 +2,7 @@ import type { CompiledPredicate } from "@/domain/query/filter-builder";
 import type { Issue } from "./entity";
 
 export interface IssueUpdate {
+  projectId?: string;
   trackerId?: string;
   statusId?: string;
   priorityId?: string;

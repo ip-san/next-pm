@@ -59,3 +59,12 @@ export const updateIssueFormSchema = z.object({
 });
 
 export type UpdateIssueFormValues = z.infer<typeof updateIssueFormSchema>;
+
+/** Single-issue move: destination project plus the tracker to land on (blank = Redmine's own fallback). */
+export const moveIssueFormSchema = z.object({
+  issueId: z.string().uuid(),
+  targetProjectId: z.string().uuid(),
+  targetTrackerId: z.string().uuid().or(z.literal("")),
+});
+
+export type MoveIssueFormValues = z.infer<typeof moveIssueFormSchema>;

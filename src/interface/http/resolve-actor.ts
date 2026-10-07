@@ -1,4 +1,8 @@
 import type { User } from "@/domain/user/entity";
+import { can } from "@/domain/authorization/authorization-service";
+import type { PermissionKey } from "@/domain/authorization/permission-registry";
+import type { Project } from "@/domain/project/entity";
+import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
@@ -85,4 +89,31 @@ export function visibleIssueFilter(
 ): (issue: Pick<Issue, "isPrivate" | "authorId" | "assignedToId" | "assignedToType">) => boolean {
   const roles = issuesVisibilityRoles(actor);
   return (issue) => isPrivateIssueVisible(issue, userId, userGroupIds, roles);
+}
+
+/**
+ * Projects where `user` holds `permission`, for pickers that must not reveal projects the
+ * viewer has no business seeing — Redmine's `Issue.allowed_target_projects` is the same
+ * idea (`Project.allowed_to_condition(user, :add_issues)`), and listing every project in a
+ * move or copy dropdown would leak private project names.
+ *
+ * Resolves the actor per project because membership (and therefore the effective role set)
+ * is per project; the project count this iterates over is the same one the projects index
+ * already renders in full.
+ */
+export async function listProjectsWithPermission(
+  user: User | null,
+  permission: PermissionKey,
+  options: { requireTrackers?: boolean } = {},
+): Promise<Project[]> {
+  const projects = await new DrizzleProjectRepository().listAll();
+  const allowed: Project[] = [];
+  for (const project of projects) {
+    if (options.requireTrackers && project.trackerIds.length === 0) continue;
+    const { actor } = await resolveActor(user, project.id);
+    if (can({ permission, project: toAuthorizationProject(project), actor })) {
+      allowed.push(project);
+    }
+  }
+  return allowed;
 }
