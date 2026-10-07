@@ -6,6 +6,8 @@ export type PermissionKey =
   | "manage_members"
   | "manage_versions"
   | "add_subprojects"
+  | "save_queries"
+  | "manage_public_queries"
   | "view_issues"
   | "add_issues"
   | "edit_issues"
@@ -60,6 +62,15 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_members: { module: null, readOnly: false },
   manage_versions: { module: null, readOnly: false },
   add_subprojects: { module: null, readOnly: false },
+
+  // Redmine declares both outside any project module (lib/redmine/preparation.rb#L50), so
+  // they stay available even on a project with issue tracking disabled — a saved query can
+  // be a time-entry query too. `save_queries` is `:require => :loggedin` and
+  // `manage_public_queries` is `:require => :member`; next-pm has no `require` concept in
+  // the registry, so that distinction lives in the seed (the builtin Anonymous role gets
+  // neither) and in domain/query/visibility.ts#isQueryEditable.
+  save_queries: { module: null, readOnly: false },
+  manage_public_queries: { module: null, readOnly: false },
 
   view_issues: { module: "issue_tracking", readOnly: true },
   add_issues: { module: "issue_tracking", readOnly: false },

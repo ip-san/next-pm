@@ -29,7 +29,9 @@ async function seed() {
   console.log("Seeding builtin roles...");
   const [nonMember] = await db
     .insert(roles)
-    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_issues"] })
+    // Mirrors Redmine's default data: Non member may save its own queries, Anonymous may
+    // not (save_queries is declared `:require => :loggedin`).
+    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_issues", "save_queries"] })
     .returning();
   const [anonymous] = await db
     .insert(roles)
@@ -41,6 +43,8 @@ async function seed() {
       name: "Manager",
       permissions: [
         "view_project",
+        "save_queries",
+        "manage_public_queries",
         "view_issues",
         "add_issues",
         "edit_issues",
