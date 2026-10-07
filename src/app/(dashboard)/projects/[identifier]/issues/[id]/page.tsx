@@ -132,7 +132,11 @@ export default async function IssueDetailPage({
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
   const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
   const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
-  const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
+  // Issue#attachments_addable? — attributes_editable? OR notes_addable?.
+  const canAttachFiles =
+    canEditIssues ||
+    (canEditOwnIssues && issue.authorId === user?.id) ||
+    can({ permission: "add_issue_notes", project: toAuthorizationProject(project), actor });
   const canManageRelations = can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor });
   const canDeleteIssues = can({ permission: "delete_issues", project: toAuthorizationProject(project), actor });
   const canCopyIssues = can({ permission: "copy_issues", project: toAuthorizationProject(project), actor });
