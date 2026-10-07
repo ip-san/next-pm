@@ -32,6 +32,9 @@ export type PermissionKey =
   | "edit_own_messages"
   | "delete_messages"
   | "delete_own_messages"
+  | "view_message_watchers"
+  | "add_message_watchers"
+  | "delete_message_watchers"
   | "view_news"
   | "manage_news"
   | "comment_news"
@@ -93,6 +96,9 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_own_messages: { module: "boards", readOnly: false },
   delete_messages: { module: "boards", readOnly: false },
   delete_own_messages: { module: "boards", readOnly: false },
+  view_message_watchers: { module: "boards", readOnly: true },
+  add_message_watchers: { module: "boards", readOnly: false },
+  delete_message_watchers: { module: "boards", readOnly: false },
 
   view_news: { module: "news", readOnly: true },
   manage_news: { module: "news", readOnly: false },

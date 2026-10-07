@@ -294,3 +294,104 @@ export async function toggleWikiPageWatchAction(_prevState: ToggleWatchActionSta
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
   return { error: null };
 }
+
+const messageWatcherSchema = z.object({
+  messageId: z.string().uuid(),
+  boardId: z.string().uuid(),
+  projectIdentifier: z.string().min(1),
+  userId: z.string().uuid(),
+});
+
+/**
+ * Mirrors WatchersController#create/#destroy for a Message: `authorize_for_watchable_type`
+ * derives the permission from the watchable's class name, so a topic's watcher list is gated
+ * by `add_message_watchers` / `delete_message_watchers`. Only the root topic is watchable in
+ * Redmine's UI, and the target must be an assignable watcher — a member of the project.
+ */
+async function loadWatchableTopic(messageId: string, boardId: string) {
+  const topic = await new DrizzleMessageRepository().findById(messageId);
+  if (!topic || topic.boardId !== boardId || topic.parentId !== null) {
+    return { error: "トピックが見つかりません。" as const, topic: null, project: null };
+  }
+
+  const board = await new DrizzleBoardRepository().findById(topic.boardId);
+  if (!board) {
+    return { error: "フォーラムが見つかりません。" as const, topic: null, project: null };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(board.projectId);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" as const, topic: null, project: null };
+  }
+
+  return { error: null, topic, project };
+}
+
+export async function addMessageWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
+  const parsed = messageWatcherSchema.safeParse({
+    messageId: formData.get("messageId"),
+    boardId: formData.get("boardId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    userId: formData.get("userId"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const loaded = await loadWatchableTopic(parsed.data.messageId, parsed.data.boardId);
+  if (loaded.topic === null) {
+    return { error: loaded.error };
+  }
+
+  const { actor } = await resolveActor(user, loaded.project.id);
+  if (!can({ permission: "add_message_watchers", project: toAuthorizationProject(loaded.project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  const targetMember = await new DrizzleMemberRepository().findByUserAndProject(parsed.data.userId, loaded.project.id);
+  if (!targetMember) {
+    return { error: "指定されたユーザーはこのプロジェクトのメンバーではありません。" };
+  }
+
+  await new DrizzleWatcherRepository().watch("Message", loaded.topic.id, parsed.data.userId);
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/boards/${parsed.data.boardId}/messages/${loaded.topic.id}`);
+  return { error: null };
+}
+
+export async function removeMessageWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
+  const parsed = messageWatcherSchema.safeParse({
+    messageId: formData.get("messageId"),
+    boardId: formData.get("boardId"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    userId: formData.get("userId"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const loaded = await loadWatchableTopic(parsed.data.messageId, parsed.data.boardId);
+  if (loaded.topic === null) {
+    return { error: loaded.error };
+  }
+
+  const { actor } = await resolveActor(user, loaded.project.id);
+  if (!can({ permission: "delete_message_watchers", project: toAuthorizationProject(loaded.project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  await new DrizzleWatcherRepository().unwatch("Message", loaded.topic.id, parsed.data.userId);
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/boards/${parsed.data.boardId}/messages/${loaded.topic.id}`);
+  return { error: null };
+}

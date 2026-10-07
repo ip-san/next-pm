@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 46。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 49。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -180,9 +180,10 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| フォーラム(トピック/返信) | done | 投稿・編集・削除、ウォッチ |
-| フォーラム(ボード自体の管理) | partial | 作成のみ(`board-actions.ts` は `createBoardAction` だけ)。編集・削除・並べ替えが無い |
-| トピックのロック/固定表示(sticky) | missing | 本家 `Message#locked` / `sticky` |
+| フォーラム(トピック/返信) | done | 投稿・編集・削除、ウォッチ、引用返信(本家 `MessagesController#quote` と同じ `RE:` 付与と `> ` 引用)、添付(`acts_as_attachable` 既定どおり追加は `Message#editable_by?`、削除は `edit_messages`)、別ボードへのトピック移動(`edit_messages`。本家 `update_messages_board` と同じく返信も一緒に移る) |
+| フォーラム(ボード自体の管理) | done | 作成・編集・削除・並べ替え・親フォーラム(`manage_boards`)。本家 `acts_as_tree :dependent => :nullify` と同じく、削除したボードの子ボードはプロジェクト直下へ繰り上がり、トピックと添付だけが消える。並び順は `acts_as_positioned :scope => [:project_id, :parent_id]` と同じく兄弟集合内で 1 始まりの連番 |
+| トピックのロック/固定表示(sticky) | done | 本家 `Message#locked` / `sticky`。トピック編集時に `edit_messages` を持つ場合だけ設定できる(本家の条件付き `safe_attributes` と同じで `edit_own_messages` だけでは不可)。ロック中のトピックは返信フォームと引用リンクを出さず、`postMessage` も拒否する。一覧は sticky を先頭に固定(第二キーは本家の `COALESCE(last_reply_id, id)` 相当を持たないため作成日時) |
+| トピックのウォッチャー管理 | done | `view_message_watchers` / `add_message_watchers` / `delete_message_watchers`。本家 `WatchersController#authorize_for_watchable_type` と同じく root トピックだけが対象で、追加できるのはプロジェクトメンバーのみ |
 | News | partial | 作成・削除・コメント追加・ウォッチ。**編集とコメント削除が無い** |
 | 文書(Documents) | partial | 作成・削除・添付。**編集ができない**(`edit_documents` 権限だけが存在する) |
 | ファイル(Files モジュール) | done | `/projects/[identifier]/files`。プロジェクト直下とバージョン単位のファイルを本家 `FilesController#index` と同じ区分け(プロジェクト → バージョンの逆順)で一覧し、ファイル名/日付/サイズ/DL 数でソート、ダイジェストと説明を表示する。追加・削除は `manage_files`、ダウンロードのたびに `attachments.downloads` を加算(本家と同じく Project/Version のみ)。ファイルを持つバージョンは `Version#deletable?` と同じく削除できない |

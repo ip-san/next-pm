@@ -5,7 +5,12 @@ import { createBoardAction, type CreateBoardActionState } from "@/interface/acti
 
 const initialState: CreateBoardActionState = { error: null };
 
-export function BoardCreateForm({ projectIdentifier }: { projectIdentifier: string }) {
+export interface BoardOption {
+  id: string;
+  label: string;
+}
+
+export function BoardCreateForm({ projectIdentifier, parentOptions }: { projectIdentifier: string; parentOptions: BoardOption[] }) {
   const [state, formAction, pending] = useActionState(createBoardAction, initialState);
 
   return (
@@ -14,6 +19,16 @@ export function BoardCreateForm({ projectIdentifier }: { projectIdentifier: stri
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <input name="name" placeholder="名前" maxLength={30} required className="border rounded px-3 py-2 text-sm" />
       <textarea name="description" placeholder="説明" maxLength={255} required className="border rounded px-3 py-2 text-sm" />
+      {parentOptions.length > 0 ? (
+        <select name="parentId" defaultValue="" className="border rounded px-3 py-2 text-sm">
+          <option value="">(親フォーラムなし)</option>
+          {parentOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : null}
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
         作成
