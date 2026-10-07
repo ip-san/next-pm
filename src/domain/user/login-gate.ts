@@ -14,11 +14,16 @@ export function mustActivateTwofa(user: Pick<User, "isAdmin" | "twofaScheme">, t
   return twofa === "2" || (twofa === "3" && user.isAdmin);
 }
 
-/** Redmine's account_pending / account_locked flash messages. */
+/**
+ * Redmine's account_pending / account_locked flash messages. `active` and `anonymous` are
+ * unreachable here (the gate only returns "inactive" for the other two) but are spelled out
+ * so adding a status to UserStatus forces a decision rather than falling through silently.
+ */
 export const INACTIVE_ACCOUNT_MESSAGE: Record<User["status"], string> = {
   registered: "アカウントはまだ有効化されていません。",
   locked: "アカウントはロックされています。",
   active: "このアカウントではログインできません。",
+  anonymous: "このアカウントではログインできません。",
 };
 
 export type LoginGateOutcome =

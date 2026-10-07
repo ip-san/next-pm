@@ -1,5 +1,14 @@
 import type { WikiContentVersion, WikiPage } from "@/domain/wiki/entity";
+import { isProtectedByDefault, isWikiPageEditable } from "@/domain/wiki/protection";
 import type { WikiContentRepository, WikiPageRepository } from "@/domain/wiki/repository";
+import { resolveWikiPageParent } from "./set-wiki-page-parent";
+
+export class WikiPageProtectedError extends Error {
+  constructor() {
+    super("This wiki page is protected and can only be changed with protect_wiki_pages.");
+    this.name = "WikiPageProtectedError";
+  }
+}
 
 export interface SaveWikiPageInput {
   projectId: string;
@@ -7,7 +16,17 @@ export interface SaveWikiPageInput {
   text: string;
   comments: string;
   authorId: string;
-  parentId: string | null;
+  /** The page's parent. `undefined` leaves an existing page's parent alone. */
+  parentId: string | null | undefined;
+  /**
+   * The actor's rename_wiki_pages. Redmine makes parent_id a safe attribute only for a new
+   * page or a caller holding that permission, and safe_attributes silently drops what isn't
+   * safe — so a parentId sent for an existing page without it is ignored, not rejected.
+   * Enforced here rather than per caller: hiding the select in the form is not a gate.
+   */
+  canReparentExisting: boolean;
+  /** The actor's protect_wiki_pages — the only thing that unlocks a protected page (WikiPage#editable_by?). */
+  canProtect: boolean;
 }
 
 /**
@@ -20,12 +39,26 @@ export async function saveWikiPage(
   input: SaveWikiPageInput,
 ): Promise<{ page: WikiPage; version: WikiContentVersion }> {
   let page = await repositories.wikiPageRepository.findByTitle(input.projectId, input.title);
-  if (!page) {
+  if (page) {
+    if (!isWikiPageEditable(page, input.canProtect)) {
+      throw new WikiPageProtectedError();
+    }
+    if (input.canReparentExisting && input.parentId !== undefined && input.parentId !== page.parentId) {
+      const parentId = await resolveWikiPageParent(repositories.wikiPageRepository, input.projectId, page, input.parentId);
+      page = await repositories.wikiPageRepository.setParent(page.id, parentId);
+    }
+  } else {
+    const parentId = await resolveWikiPageParent(
+      repositories.wikiPageRepository,
+      input.projectId,
+      null,
+      input.parentId ?? null,
+    );
     page = await repositories.wikiPageRepository.create({
       projectId: input.projectId,
       title: input.title,
-      parentId: input.parentId,
-      isProtected: false,
+      parentId,
+      isProtected: isProtectedByDefault(input.title),
     });
   }
 

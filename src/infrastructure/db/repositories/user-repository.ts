@@ -1,9 +1,18 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import { attachments } from "@/infrastructure/db/schema/attachments";
+import { issueCategories } from "@/infrastructure/db/schema/issue-categories";
+import { issues } from "@/infrastructure/db/schema/issues";
+import { journalDetails, journals } from "@/infrastructure/db/schema/journals";
+import { messages } from "@/infrastructure/db/schema/messages";
+import { news, newsComments } from "@/infrastructure/db/schema/news";
+import { queries } from "@/infrastructure/db/schema/queries";
+import { timeEntries } from "@/infrastructure/db/schema/time-entries";
 import { users } from "@/infrastructure/db/schema/users";
+import { wikiContentVersions } from "@/infrastructure/db/schema/wiki";
 import { emailAddresses } from "@/infrastructure/db/schema/email-addresses";
-import type { User } from "@/domain/user/entity";
-import type { UserRepository } from "@/domain/user/repository";
+import { ANONYMOUS_USER_LOGIN, type User, type UserStatus } from "@/domain/user/entity";
+import type { UserAdminRepository, UserRepository } from "@/domain/user/repository";
 
 function toDomain(row: typeof users.$inferSelect): User {
   return {
@@ -28,9 +37,15 @@ function toDomain(row: typeof users.$inferSelect): User {
   };
 }
 
-export class DrizzleUserRepository implements UserRepository {
+export class DrizzleUserRepository implements UserRepository, UserAdminRepository {
   async listAll(): Promise<User[]> {
-    const rows = await db.select().from(users);
+    // The AnonymousUser placeholder is not an account — Redmine's `User.logged` scope excludes
+    // it from every listing, and so must this one (admin list, REST /users, pickers).
+    const rows = await db
+      .select()
+      .from(users)
+      .where(ne(users.status, "anonymous"))
+      .orderBy(users.login, users.id);
     return rows.map(toDomain);
   }
 
@@ -135,9 +150,9 @@ export class DrizzleUserRepository implements UserRepository {
     return toDomain(row);
   }
 
-  async updateStatus(userId: string, status: User["status"]): Promise<void> {
-    await db.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, userId));
-  }
+  // updateStatus is further down, in the UserAdminRepository half: both ports declare the
+  // same signature, so one implementation satisfies them structurally and a second copy here
+  // would just be two ways to write the same column.
 
   async updateProfile(
     userId: string,
@@ -182,5 +197,108 @@ export class DrizzleUserRepository implements UserRepository {
       .update(users)
       .set({ twofaScheme: null, twofaTotpKey: null, twofaTotpLastUsedStep: null })
       .where(eq(users.id, userId));
+  }
+
+  async update(
+    id: string,
+    changes: Pick<User, "login" | "mail" | "firstname" | "lastname" | "isAdmin" | "authSource">,
+  ): Promise<User> {
+    const [row] = await db
+      .update(users)
+      .set({ ...changes, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return toDomain(row);
+  }
+
+  async updateStatus(id: string, status: UserStatus): Promise<void> {
+    await db.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, id));
+  }
+
+  async findOrCreateAnonymous(): Promise<User> {
+    const [existing] = await db.select().from(users).where(eq(users.status, "anonymous")).limit(1);
+    if (existing) return toDomain(existing);
+
+    // login and mail are unique and not-null, so the placeholder still needs values; the empty
+    // login is Redmine's own choice and no create form can produce it (min length 1).
+    const [row] = await db
+      .insert(users)
+      .values({
+        login: ANONYMOUS_USER_LOGIN,
+        mail: "anonymous@localhost",
+        firstname: "",
+        lastname: "Anonymous",
+        isAdmin: false,
+        status: "anonymous",
+        passwordHash: "",
+        passwordSalt: "",
+        mustChangePassword: false,
+      })
+      .returning();
+    return toDomain(row);
+  }
+
+  async reassignReferencesAndDelete(fromUserId: string, toUserId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Authored content survives its author, reassigned to the anonymous placeholder.
+      await tx.update(issues).set({ authorId: toUserId }).where(eq(issues.authorId, fromUserId));
+      await tx.update(journals).set({ userId: toUserId }).where(eq(journals.userId, fromUserId));
+      await tx.update(attachments).set({ authorId: toUserId }).where(eq(attachments.authorId, fromUserId));
+      await tx.update(news).set({ authorId: toUserId }).where(eq(news.authorId, fromUserId));
+      await tx.update(newsComments).set({ authorId: toUserId }).where(eq(newsComments.authorId, fromUserId));
+      await tx.update(messages).set({ authorId: toUserId }).where(eq(messages.authorId, fromUserId));
+      await tx
+        .update(wikiContentVersions)
+        .set({ authorId: toUserId })
+        .where(eq(wikiContentVersions.authorId, fromUserId));
+      await tx.update(timeEntries).set({ userId: toUserId }).where(eq(timeEntries.userId, fromUserId));
+      // Redmine's list only names TimeEntry#user_id because its author_id column is nullable;
+      // here it is NOT NULL, so it has to move too or the delete would fail on the FK.
+      await tx.update(timeEntries).set({ authorId: toUserId }).where(eq(timeEntries.authorId, fromUserId));
+
+      // Assignments are cleared rather than handed to the placeholder.
+      await tx
+        .update(issues)
+        .set({ assignedToId: null, assignedToType: null })
+        .where(and(eq(issues.assignedToId, fromUserId), eq(issues.assignedToType, "user")));
+      await tx
+        .update(issueCategories)
+        .set({ assignedToId: null })
+        .where(eq(issueCategories.assignedToId, fromUserId));
+
+      // Journal details recording an assignee change would otherwise keep pointing at an id
+      // that no longer resolves to anything (Redmine rewrites the same two columns).
+      await tx
+        .update(journalDetails)
+        .set({ oldValue: toUserId })
+        .where(
+          and(
+            eq(journalDetails.property, "attr"),
+            eq(journalDetails.fieldName, "assignedToId"),
+            eq(journalDetails.oldValue, fromUserId),
+          ),
+        );
+      await tx
+        .update(journalDetails)
+        .set({ newValue: toUserId })
+        .where(
+          and(
+            eq(journalDetails.property, "attr"),
+            eq(journalDetails.fieldName, "assignedToId"),
+            eq(journalDetails.newValue, fromUserId),
+          ),
+        );
+
+      // Private queries are personal and go; shared ones survive under the placeholder.
+      await tx.delete(queries).where(and(eq(queries.userId, fromUserId), eq(queries.visibility, "private")));
+      await tx.update(queries).set({ userId: toUserId }).where(eq(queries.userId, fromUserId));
+
+      // Everything else referencing the user (watchers, preferences, my-page layout, reactions,
+      // group memberships, project memberships, 2FA backup codes, password-reset tokens)
+      // cascades on the delete below, matching the `dependent: :destroy` associations Redmine
+      // declares. The delete shares this transaction so a failure can never leave an account
+      // that has lost its authorship but survives.
+      await tx.delete(users).where(eq(users.id, fromUserId));
+    });
   }
 }

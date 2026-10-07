@@ -7,7 +7,7 @@ import { updateCommitKeywordSettings } from "@/application/settings/commit-keywo
 import { updateGeneralSettings } from "@/application/settings/general-settings";
 import { PASSWORD_CHAR_CLASSES, SELF_REGISTRATION_MODES, TWOFA_MODES } from "@/domain/settings/auth-settings";
 import { parseKeywordList } from "@/domain/settings/commit-keywords";
-import { ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
+import { PARENT_ISSUE_ROLLUP_VALUES, ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 
@@ -58,6 +58,9 @@ const updateGeneralSettingsSchema = z.object({
   repositoryLogDisplayLimit: z.coerce.number().int().positive("正の整数を入力してください。"),
   crossProjectIssueRelations: z.coerce.boolean().default(false),
   issueDoneRatio: z.enum(ISSUE_DONE_RATIO_VALUES).default("issue_field"),
+  parentIssueDates: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
+  parentIssuePriority: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
+  parentIssueDoneRatio: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
 });
 
 export async function updateGeneralSettingsAction(
@@ -78,6 +81,9 @@ export async function updateGeneralSettingsAction(
     repositoryLogDisplayLimit: formData.get("repositoryLogDisplayLimit"),
     crossProjectIssueRelations: formData.get("crossProjectIssueRelations") === "on",
     issueDoneRatio: formData.get("issueDoneRatio"),
+    parentIssueDates: formData.get("parentIssueDates"),
+    parentIssuePriority: formData.get("parentIssuePriority"),
+    parentIssueDoneRatio: formData.get("parentIssueDoneRatio"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -92,6 +98,9 @@ export async function updateGeneralSettingsAction(
     repositoryLogDisplayLimit: parsed.data.repositoryLogDisplayLimit,
     crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
     issueDoneRatio: parsed.data.issueDoneRatio,
+    parentIssueDates: parsed.data.parentIssueDates,
+    parentIssuePriority: parsed.data.parentIssuePriority,
+    parentIssueDoneRatio: parsed.data.parentIssueDoneRatio,
   });
 
   revalidatePath("/admin/settings");

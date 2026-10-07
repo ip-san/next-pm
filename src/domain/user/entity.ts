@@ -1,6 +1,14 @@
 import type { MailNotificationOption } from "@/domain/notification/mail-notification";
 
-export type UserStatus = "active" | "registered" | "locked";
+/**
+ * Mirrors Redmine's User::STATUS_* set. "anonymous" belongs to the single AnonymousUser row
+ * that owns the records of deleted users (see User#remove_references_before_destroy) — it is
+ * never a login target and never appears in a user listing.
+ */
+export type UserStatus = "active" | "registered" | "locked" | "anonymous";
+
+/** The login Redmine gives its AnonymousUser; the create form's min-length rule keeps it unreachable. */
+export const ANONYMOUS_USER_LOGIN = "";
 
 export interface User {
   id: string;
@@ -36,4 +44,9 @@ export function isTwofaActive(user: Pick<User, "twofaScheme">): boolean {
 
 export function isActiveUser(user: Pick<User, "status">): boolean {
   return user.status === "active";
+}
+
+/** Redmine's AnonymousUser — the placeholder principal that inherits a deleted user's records. */
+export function isAnonymousUser(user: Pick<User, "status">): boolean {
+  return user.status === "anonymous";
 }

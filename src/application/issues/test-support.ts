@@ -6,6 +6,8 @@ import type { Project } from "@/domain/project/entity";
 import type { Role } from "@/domain/role/entity";
 import type { User } from "@/domain/user/entity";
 import type { Version } from "@/domain/version/entity";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import type { IssueAttributeRepositories } from "./validate-issue-attributes";
 
 /**
@@ -20,7 +22,7 @@ export function makeIssueAttributeRepositoriesMock(
     categoryIds?: string[];
     versionIds?: string[];
     members?: Pick<Member, "userId" | "groupId" | "roleIds">[];
-    roles?: Pick<Role, "id" | "assignable">[];
+    roles?: (Pick<Role, "id" | "assignable"> & Partial<Pick<Role, "builtin" | "permissions" | "issuesVisibility">>)[];
     users?: Pick<User, "id" | "status">[];
   } = {},
 ): IssueAttributeRepositories {
@@ -50,6 +52,9 @@ export function makeIssueAttributeRepositoriesMock(
     } as unknown as IssueAttributeRepositories["memberRepository"],
     roleRepository: {
       findByIds: mock(async () => roles as Role[]),
+      findBuiltinNonMember: mock(
+        async () => ({ id: "role-non-member", builtin: 1, permissions: [], issuesVisibility: "default" }) as unknown as Role,
+      ),
     } as unknown as IssueAttributeRepositories["roleRepository"],
     userRepository: {
       findByIds: mock(async () => users as User[]),
@@ -63,5 +68,26 @@ export function makeIssueAttributeRepositoriesMock(
     versionRepository: {
       listSharedWith: mock(async () => versionIds.map((id) => ({ id }) as Version)),
     } as unknown as IssueAttributeRepositories["versionRepository"],
+  };
+}
+
+/**
+ * The extra ports `recalculateParents` needs. Settings default to "independent", so the
+ * rollup is a no-op unless a test opts in — which keeps it out of the way of every test
+ * that is about something else.
+ */
+export function makeRollupRepositoriesMock(settings: Record<string, string> = {}) {
+  return {
+    issueStatusRepository: {
+      findById: mock(async () => null),
+      listAll: mock(async () => []),
+      create: mock(async () => {
+        throw new Error("not used");
+      }),
+    } as unknown as IssueStatusRepository,
+    settingsRepository: {
+      getAll: mock(async () => settings),
+      setMany: mock(async () => undefined),
+    } as unknown as SettingsRepository,
   };
 }

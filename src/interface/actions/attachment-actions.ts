@@ -61,9 +61,12 @@ export async function uploadIssueAttachmentAction(
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
+  // Mirrors Issue#attachments_addable? — `attributes_editable? || notes_addable?`, so
+  // someone who may only comment can attach a file to that comment.
   const hasEditIssues = can({ permission: "edit_issues", project: projectContext, actor });
   const hasEditOwnIssues = can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!hasEditIssues && !(hasEditOwnIssues && issue.authorId === user.id)) {
+  const hasAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  if (!hasEditIssues && !(hasEditOwnIssues && issue.authorId === user.id) && !hasAddNotes) {
     return { error: "この操作を行う権限がありません。" };
   }
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
@@ -152,6 +155,8 @@ export async function deleteIssueAttachmentAction(
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return { error: "チケットが見つかりません。" };
   }
+  // Deletion stays edit-only: Issue#attachments_editable? is `visible? && attributes_editable?`,
+  // with no notes_addable? branch — add_issue_notes lets you attach, not detach.
   const projectContext = toAuthorizationProject(project);
   const hasEditIssues = can({ permission: "edit_issues", project: projectContext, actor });
   const hasEditOwnIssues = can({ permission: "edit_own_issues", project: projectContext, actor });

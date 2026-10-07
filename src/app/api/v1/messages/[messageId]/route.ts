@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
 import { canDeleteMessage } from "@/domain/message/authorization";
+import { deleteMessage } from "@/application/messages/delete-message";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -49,6 +52,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ m
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  await messageRepository.delete(message.id);
+  await deleteMessage(
+    { messageRepository, attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+    message,
+  );
   return new NextResponse(null, { status: 204 });
 }

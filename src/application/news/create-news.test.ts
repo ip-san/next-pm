@@ -8,6 +8,7 @@ function makeRepo(): NewsRepository {
     listByProject: mock(async () => []),
     findById: mock(async () => null),
     create: mock(async (news) => ({ ...news, id: "news-1", createdAt: new Date() }) as News),
+    update: mock(async () => ({}) as News),
     delete: mock(async () => {}),
     search: mock(async () => []),
   };

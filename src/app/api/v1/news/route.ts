@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
-import { createNews, InvalidNewsError } from "@/application/news/create-news";
+import { createNews } from "@/application/news/create-news";
+import { InvalidNewsError } from "@/domain/news/validate";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -11,7 +12,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { paginate, parsePagination } from "@/interface/http/pagination";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { listProjectsWithPermission, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 
 async function resolveUser(request: Request) {
@@ -21,12 +22,25 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-/** Mirrors the gate on projects/[identifier]/news/page.tsx: view_news, nothing else. */
+/**
+ * Mirrors NewsController#index, which answers both `GET /news.json` and
+ * `GET /projects/:id/news.json`: with `project_id` the scope is that project's news behind
+ * view_news, without it the scope is `News.visible` — every project the caller may read news
+ * in, newest first.
+ */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const projectId = url.searchParams.get("project_id");
+  const { user } = await resolveUser(request);
+  const newsRepository = new DrizzleNewsRepository();
+
   if (!projectId) {
-    return NextResponse.json({ error: "project_id is required" }, { status: 400 });
+    const projects = await listProjectsWithPermission(user, "view_news");
+    const all = (await Promise.all(projects.map((project) => newsRepository.listByProject(project.id))))
+      .flat()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const { items: news, total_count, offset, limit } = paginate(all, parsePagination(url));
+    return NextResponse.json({ news, total_count, offset, limit });
   }
 
   const project = await new DrizzleProjectRepository().findById(projectId);
@@ -34,13 +48,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { user } = await resolveUser(request);
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "view_news", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const allNews = await new DrizzleNewsRepository().listByProject(project.id);
+  const allNews = await newsRepository.listByProject(project.id);
   const { items: news, total_count, offset, limit } = paginate(allNews, parsePagination(url));
   return NextResponse.json({ news, total_count, offset, limit });
 }

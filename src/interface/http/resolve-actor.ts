@@ -1,11 +1,13 @@
 import type { User } from "@/domain/user/entity";
 import { actorIssuesVisibilityRoles, can, projectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { PermissionKey } from "@/domain/authorization/permission-registry";
+import type { JournalViewer } from "@/domain/journal/visibility";
 import type { Project } from "@/domain/project/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import type { IssueVisibilityScope } from "@/domain/query/issue-search";
 import type { IssuesVisibility } from "@/domain/role/entity";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -14,11 +16,16 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { resolveAuthSettings } from "@/domain/settings/auth-settings";
 import { ROLE_BUILTIN_ANONYMOUS, type Role } from "@/domain/role/entity";
 
-/** Not a stored role: what an anonymous visitor gets while login_required is on — nothing at all. */
-const NO_ACCESS_ROLE: Pick<Role, "builtin" | "permissions" | "issuesVisibility"> = {
+/**
+ * Not a stored role: what an anonymous visitor gets while login_required is on — nothing at
+ * all. Both visibility fields take their most restrictive value, so that even if a future
+ * caller reads them without first checking a permission, they cannot widen anything.
+ */
+const NO_ACCESS_ROLE: Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility"> = {
   builtin: ROLE_BUILTIN_ANONYMOUS,
   permissions: [],
   issuesVisibility: "own",
+  timeEntriesVisibility: "own",
 };
 
 export interface ResolvedActor {
@@ -83,6 +90,24 @@ export function issuesVisibilityRoles(actor: AuthorizationActor): { issuesVisibi
 }
 
 /**
+ * The same rule as `visibleIssueFilter`, expressed as data rather than a predicate, for the
+ * issue list's SQL-side visibility clause — a list that paginates in the database can't
+ * filter its rows in JavaScript afterwards without breaking the row count and the totals.
+ * `seesAllPrivateIssues` collapses the role scan the in-memory version does per issue.
+ */
+export function issueVisibilityScope(
+  userId: string | null,
+  actor: AuthorizationActor,
+  userGroupIds: string[],
+): IssueVisibilityScope {
+  return {
+    userId,
+    userGroupIds,
+    seesAllPrivateIssues: issuesVisibilityRoles(actor).some((role) => role.issuesVisibility === "all"),
+  };
+}
+
+/**
  * Predicate for filtering any issue-bearing list (siblings, parent/child links, related
  * issues, roadmap/version rollups, ...) down to what `userId`/`actor` may actually see.
  * Every read path that reaches issues other than the one already gated by the page's own
@@ -122,4 +147,19 @@ export async function listProjectsWithPermission(
     }
   }
   return allowed;
+}
+
+/**
+ * The viewer a journal read needs: who is asking, and whether they hold `view_private_notes`
+ * on the project whose journals they're reading.
+ */
+export function journalViewerFor(
+  userId: string | null,
+  actor: AuthorizationActor,
+  project: { status: string; isPublic: boolean; enabledModules: string[] },
+): JournalViewer {
+  return {
+    userId,
+    canViewPrivateNotes: can({ permission: "view_private_notes", project: toAuthorizationProject(project), actor }),
+  };
 }

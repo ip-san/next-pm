@@ -9,6 +9,7 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 import { AttachmentList } from "../../../attachment-list";
 import { DeleteDocumentAttachmentButton } from "./delete-document-attachment-button";
 import { DeleteDocumentButton } from "./delete-document-button";
+import { DocumentEditForm } from "./document-edit-form";
 import { DocumentAttachmentUploadForm } from "./document-attachment-upload-form";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   }
   const canEditDocuments = can({ permission: "edit_documents", project: toAuthorizationProject(project), actor });
   const canDeleteDocuments = can({ permission: "delete_documents", project: toAuthorizationProject(project), actor });
+  // preparation.rb lists documents#add_attachment under add_documents as well as edit_documents.
+  const canAttach = canEditDocuments || can({ permission: "add_documents", project: toAuthorizationProject(project), actor });
 
   const document = await new DrizzleDocumentRepository().findById(documentId);
   if (!document || document.projectId !== project.id) {
@@ -59,12 +62,22 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               : undefined
           }
         />
-        {canEditDocuments ? <DocumentAttachmentUploadForm documentId={document.id} projectIdentifier={identifier} /> : null}
+        {canAttach ? <DocumentAttachmentUploadForm documentId={document.id} projectIdentifier={identifier} /> : null}
       </section>
 
-      {canDeleteDocuments ? (
-        <div className="border-t pt-4">
-          <DeleteDocumentButton projectIdentifier={identifier} documentId={document.id} />
+      {canEditDocuments || canDeleteDocuments ? (
+        <div className="border-t pt-4 flex gap-3 items-start">
+          {canEditDocuments ? (
+            <DocumentEditForm
+              projectIdentifier={identifier}
+              documentId={document.id}
+              categoryId={document.categoryId}
+              title={document.title}
+              description={document.description}
+              categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+            />
+          ) : null}
+          {canDeleteDocuments ? <DeleteDocumentButton projectIdentifier={identifier} documentId={document.id} /> : null}
         </div>
       ) : null}
     </main>

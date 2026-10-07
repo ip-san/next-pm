@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import {
@@ -8,7 +7,6 @@ import {
   RegistrationInputError,
   SelfRegistrationDisabledError,
 } from "@/application/accounts/register-account";
-import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { evaluateLoginGate } from "@/domain/user/login-gate";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
@@ -16,7 +14,6 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleUserTokenRepository } from "@/infrastructure/db/repositories/user-token-repository";
 import { resolveAppOrigin } from "@/interface/http/app-origin";
-import { requireAdmin } from "@/interface/http/require-admin";
 import { startPendingTwofaSetup } from "@/interface/http/twofa-pending-cookie";
 import { establishSession } from "@/interface/http/session";
 
@@ -82,55 +79,4 @@ export async function registerAction(
     redirect("/my/account");
   }
   return { error: null, outcome: result.kind };
-}
-
-export type AdminActivateUserState = {
-  error: string | null;
-};
-
-const activateUserSchema = z.object({ userId: z.string().uuid() });
-
-/**
- * Redmine's UsersController#update with status=active, reached from the users list — the
- * administrator's half of self_registration mode '2' (manual activation). Deliberately
- * narrow: it only ever moves `registered` to `active`, so it cannot be used to unlock a
- * locked account.
- */
-export async function adminActivateUserAction(
-  _prevState: AdminActivateUserState,
-  formData: FormData,
-): Promise<AdminActivateUserState> {
-  const authError = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const parsed = activateUserSchema.safeParse({ userId: formData.get("userId") });
-  if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
-  }
-
-  const userRepository = new DrizzleUserRepository();
-  const user = await userRepository.findById(parsed.data.userId);
-  if (!user || user.status !== "registered") {
-    return { error: "有効化できるのは「登録済」のアカウントだけです。" };
-  }
-
-  await userRepository.updateStatus(user.id, "active");
-  // Redmine's Mailer.deliver_account_activated — without it a registrant who went through the
-  // manual-approval mode never learns they can log in. Addressed literally rather than by id
-  // for the usual reason: it is a transactional mail, not a notification to be filtered.
-  await enqueueNotification(
-    { jobRepository: new DrizzleJobRepository() },
-    {
-      recipientGroups: [],
-      recipientAddresses: [user.mail],
-      excludeUserId: null,
-      subject: "アカウントが有効になりました",
-      body: `アカウント(${user.login})が有効になりました。以下からログインできます:\n\n${await resolveAppOrigin()}/login`,
-    },
-  );
-
-  revalidatePath("/admin/users");
-  return { error: null };
 }

@@ -1,4 +1,5 @@
-import { boolean, integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import type { TrackerCoreField } from "@/domain/tracker/core-fields";
 import { issueStatuses } from "./issue-statuses";
 import { projects } from "./projects";
 
@@ -10,6 +11,14 @@ export const trackers = pgTable("trackers", {
     .references(() => issueStatuses.id),
   position: integer("position").notNull().default(0),
   isInRoadmap: boolean("is_in_roadmap").notNull().default(true),
+  /**
+   * Standard issue fields this tracker switches off — Redmine's `Tracker::CORE_FIELDS`
+   * (see domain/tracker/core-fields.ts). Redmine packs this into a `fields_bits` integer whose
+   * bit positions are the CORE_FIELDS array's indexes, which is why its model comments warn
+   * never to insert into that array; storing the names instead keeps the column readable and
+   * the field order free to change.
+   */
+  disabledCoreFields: jsonb("disabled_core_fields").notNull().$type<TrackerCoreField[]>().default([]),
 });
 
 export const projectTrackers = pgTable(

@@ -2,6 +2,21 @@ import { boolean, integer, pgTable, text, timestamp, uniqueIndex, uuid, type Any
 import { projects } from "./projects";
 import { users } from "./users";
 
+/**
+ * Redmine's `wikis` row, reduced to the one attribute that actually carries behavior: the
+ * project's start page. Wiki pages still hang off project_id directly rather than off this
+ * row — a project has exactly one wiki, so the extra indirection would buy nothing — which is
+ * why nothing references this table.
+ */
+export const wikis = pgTable("wikis", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .unique()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  startPage: text("start_page").notNull().default("Wiki"),
+});
+
 export const wikiPages = pgTable(
   "wiki_pages",
   {

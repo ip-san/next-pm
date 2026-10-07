@@ -5,16 +5,31 @@ import { saveWikiPageAction, type SaveWikiPageActionState } from "@/interface/ac
 
 const initialState: SaveWikiPageActionState = { error: null };
 
+export interface ParentCandidate {
+  id: string;
+  title: string;
+}
+
 export function WikiEditForm({
   projectId,
   projectIdentifier,
   title,
   initialText,
+  parentId,
+  parentCandidates,
+  canSetParent,
 }: {
   projectId: string;
   projectIdentifier: string;
   title: string;
   initialText: string;
+  parentId: string | null;
+  parentCandidates: ParentCandidate[];
+  /**
+   * Redmine shows the parent select when parent_id is a safe attribute: always while the
+   * page is new, and afterwards only with rename_wiki_pages.
+   */
+  canSetParent: boolean;
 }) {
   const [state, formAction, pending] = useActionState(saveWikiPageAction, initialState);
 
@@ -29,6 +44,21 @@ export function WikiEditForm({
         </label>
         <textarea id="text" name="text" rows={16} defaultValue={initialText} className="border rounded px-3 py-2 font-mono text-sm" />
       </div>
+      {canSetParent ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="parentId" className="text-sm font-medium">
+            親ページ
+          </label>
+          <select id="parentId" name="parentId" defaultValue={parentId ?? ""} className="border rounded px-3 py-2">
+            <option value="">(なし)</option>
+            {parentCandidates.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="comments" className="text-sm font-medium">
           コメント

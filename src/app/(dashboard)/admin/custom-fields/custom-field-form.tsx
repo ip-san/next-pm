@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createCustomFieldAction, type AdminActionState } from "@/interface/actions/admin-actions";
+import { createCustomFieldAction, updateCustomFieldAction } from "@/interface/actions/admin-custom-field-actions";
+import type { AdminActionState } from "@/interface/actions/admin-action-state";
 import type { Tracker } from "@/domain/tracker/entity";
-import type { CustomizedType } from "@/domain/custom-field/entity";
+import type { CustomField, CustomizedType } from "@/domain/custom-field/entity";
 
 const initialState: AdminActionState = { error: null };
 
@@ -20,19 +21,36 @@ const FORMAT_OPTIONS = [
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
   { value: "Issue", label: "チケット" },
   { value: "Project", label: "プロジェクト" },
+  { value: "TimeEntry", label: "作業時間" },
 ];
 
-export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
-  const [state, formAction, pending] = useActionState(createCustomFieldAction, initialState);
-  const [customizedType, setCustomizedType] = useState<CustomizedType>("Issue");
+/**
+ * Doubles as the create and the edit form. On edit the 対象 and 形式 selects are rendered
+ * read-only: Redmine disables the format select for a persisted record and CustomField's STI
+ * type never changes, so neither is submitted.
+ */
+export function CustomFieldForm({ trackers, field }: { trackers: Tracker[]; field?: CustomField }) {
+  const [state, formAction, pending] = useActionState(
+    field ? updateCustomFieldAction : createCustomFieldAction,
+    initialState,
+  );
+  const [customizedType, setCustomizedType] = useState<CustomizedType>(field?.customizedType ?? "Issue");
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-md border-t pt-4">
+      {field ? <input type="hidden" name="customFieldId" value={field.id} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm font-medium">
           名称
         </label>
-        <input id="name" name="name" required maxLength={30} className="border rounded px-3 py-2" />
+        <input
+          id="name"
+          name="name"
+          required
+          maxLength={30}
+          defaultValue={field?.name}
+          className="border rounded px-3 py-2"
+        />
       </div>
 
       <div className="flex flex-col gap-1">
@@ -41,9 +59,10 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
         </label>
         <select
           id="customizedType"
-          name="customizedType"
+          name={field ? undefined : "customizedType"}
           required
-          className="border rounded px-3 py-2"
+          disabled={Boolean(field)}
+          className="border rounded px-3 py-2 disabled:bg-gray-100"
           value={customizedType}
           onChange={(event) => setCustomizedType(event.target.value as CustomizedType)}
         >
@@ -59,7 +78,14 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
         <label htmlFor="fieldFormat" className="text-sm font-medium">
           形式
         </label>
-        <select id="fieldFormat" name="fieldFormat" required className="border rounded px-3 py-2">
+        <select
+          id="fieldFormat"
+          name={field ? undefined : "fieldFormat"}
+          required
+          disabled={Boolean(field)}
+          defaultValue={field?.fieldFormat}
+          className="border rounded px-3 py-2 disabled:bg-gray-100"
+        >
           {FORMAT_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -72,18 +98,28 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
         <label htmlFor="possibleValues" className="text-sm font-medium">
           選択肢（形式が「リスト」の場合、カンマ区切り）
         </label>
-        <input id="possibleValues" name="possibleValues" className="border rounded px-3 py-2" />
+        <input
+          id="possibleValues"
+          name="possibleValues"
+          defaultValue={field?.possibleValues.join(", ")}
+          className="border rounded px-3 py-2"
+        />
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="defaultValue" className="text-sm font-medium">
           既定値
         </label>
-        <input id="defaultValue" name="defaultValue" className="border rounded px-3 py-2" />
+        <input
+          id="defaultValue"
+          name="defaultValue"
+          defaultValue={field?.defaultValue ?? ""}
+          className="border rounded px-3 py-2"
+        />
       </div>
 
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isRequired" />
+        <input type="checkbox" name="isRequired" defaultChecked={field?.isRequired} />
         必須項目
       </label>
 
@@ -91,7 +127,12 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
         <legend className="text-sm font-medium">対象トラッカー</legend>
         {trackers.map((tracker) => (
           <label key={tracker.id} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="trackerIds" value={tracker.id} />
+            <input
+              type="checkbox"
+              name="trackerIds"
+              value={tracker.id}
+              defaultChecked={field?.trackerIds.includes(tracker.id)}
+            />
             {tracker.name}
           </label>
         ))}
@@ -103,7 +144,7 @@ export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "追加中…" : "カスタムフィールドを追加"}
+        {pending ? "保存中…" : field ? "変更を保存" : "カスタムフィールドを追加"}
       </button>
     </form>
   );

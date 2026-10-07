@@ -71,6 +71,9 @@ export function IssueEditForm({
   doneRatioEditable,
   canSetPrivate,
   canManageSubtasks,
+  derivedFields,
+  canEditAttributes,
+  canSetNotesPrivate,
 }: {
   issue: Issue;
   parentIssueLabel: string | null;
@@ -100,6 +103,19 @@ export function IssueEditForm({
   canSetPrivate: boolean;
   /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
   canManageSubtasks: boolean;
+  /**
+   * Attributes this issue derives from its subtasks (the `parent_issue_*` settings, which
+   * only apply to a non-leaf issue). Redmine drops them from safe_attribute_names, so they
+   * render read-only here and are never submitted.
+   */
+  derivedFields: { dates: boolean; priority: boolean; doneRatio: boolean };
+  /**
+   * False for a viewer who holds only `add_issue_notes`: Redmine gates the whole attribute
+   * block on attributes_editable? and shows them just the note box.
+   */
+  canEditAttributes: boolean;
+  /** `set_notes_private` — offers the private-note checkbox next to the comment box. */
+  canSetNotesPrivate: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<FormState>({
@@ -126,6 +142,7 @@ export function IssueEditForm({
   // its id would disclose that it exists), and an untouched picker must leave the existing
   // parent alone rather than submit "" and silently detach it.
   const [parentId, setParentId] = useState<string | null>(null);
+  const [privateNote, setPrivateNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -162,7 +179,14 @@ export function IssueEditForm({
     () => workflowRuleByAttribute(fieldPermissions, { trackerId: state.trackerId, statusId: selectedStatusId, roleIds }),
     [fieldPermissions, state.trackerId, selectedStatusId, roleIds],
   );
-  const isReadOnly = (field: keyof typeof rules) => rules[field] === "readonly";
+  const derivedByParentRollup: Partial<Record<keyof typeof rules, boolean>> = {
+    startDate: derivedFields.dates,
+    dueDate: derivedFields.dates,
+    priorityId: derivedFields.priority,
+    doneRatio: derivedFields.doneRatio,
+  };
+  const isReadOnly = (field: keyof typeof rules) =>
+    !canEditAttributes || rules[field] === "readonly" || derivedByParentRollup[field] === true;
   const isRequired = (field: keyof typeof rules) => rules[field] === "required";
 
   async function onSubmit(event: React.FormEvent) {
@@ -177,14 +201,15 @@ export function IssueEditForm({
     const values: UpdateIssueFormValues = {
       issueId: issue.id,
       lockVersion: issue.lockVersion,
-      trackerId: state.trackerId,
+      ...(canEditAttributes ? { trackerId: state.trackerId } : {}),
       notes: state.notes,
-      customFieldValues: Object.fromEntries(
-        applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]),
-      ),
+      privateNotes: canSetNotesPrivate && privateNote,
+      customFieldValues: canEditAttributes
+        ? Object.fromEntries(applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]))
+        : {},
     };
-    if (canManageSubtasks && parentId !== null) values.parentId = parentId;
-    if (allowedStatuses.length > 0) values.statusId = selectedStatusId;
+    if (canEditAttributes && canManageSubtasks && parentId !== null) values.parentId = parentId;
+    if (canEditAttributes && allowedStatuses.length > 0) values.statusId = selectedStatusId;
     if (!isReadOnly("subject")) values.subject = state.subject;
     if (!isReadOnly("description")) values.description = state.description;
     if (!isReadOnly("priorityId")) values.priorityId = state.priorityId;
@@ -217,6 +242,7 @@ export function IssueEditForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-xl">
+      {!canEditAttributes ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="trackerId" className="text-sm font-medium">
           トラッカー
@@ -234,7 +260,9 @@ export function IssueEditForm({
           ))}
         </select>
       </div>
+      )}
 
+      {!canEditAttributes ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="statusId" className="text-sm font-medium">
           ステータス
@@ -258,6 +286,7 @@ export function IssueEditForm({
           <p className="text-sm">{statusName}（遷移できるステータスがありません）</p>
         )}
       </div>
+      )}
 
       {isReadOnly("subject") ? (
         <ReadOnlyField label="件名" value={issue.subject} />
@@ -497,6 +526,7 @@ export function IssueEditForm({
         </label>
       )}
 
+      {canEditAttributes ? (
       <CustomFieldInputs
         fields={applicableCustomFields}
         values={state.customFieldValues}
@@ -509,6 +539,7 @@ export function IssueEditForm({
           }))
         }
       />
+      ) : null}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="notes" className="text-sm font-medium">
@@ -522,6 +553,13 @@ export function IssueEditForm({
           className="border rounded px-3 py-2"
         />
       </div>
+
+      {canSetNotesPrivate ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={privateNote} onChange={(event) => setPrivateNote(event.target.checked)} />
+          プライベート注記にする（閲覧権限のある人だけに表示）
+        </label>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm text-red-600">
