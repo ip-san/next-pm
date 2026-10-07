@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { resetApiKey, resetAtomKey, showOrCreateApiKey } from "@/application/accounts/access-keys";
+import { AccountNotDeletableError, deleteOwnAccount } from "@/application/accounts/delete-own-account";
 import {
   addEmailAddress,
   EmailAddressError,
@@ -20,6 +22,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { destroyCurrentSession } from "@/interface/http/session";
 
 const ACCOUNT_PATH = "/my/account";
 
@@ -226,4 +229,43 @@ export async function resetAtomKeyAction(_prevState: EmailAddressActionState, _f
   await resetAtomKey(new DrizzleUserRepository(), user.id);
   revalidatePath(ACCOUNT_PATH);
   return { error: null };
+}
+
+const deleteAccountSchema = z.object({ confirm: z.literal("DELETE", { message: "DELETE と入力してください。" }) });
+
+/**
+ * Redmine's MyController#destroy, which likewise takes a confirmation parameter rather than
+ * deleting on a bare POST. The typed word is this app's stand-in for Redmine's confirm page:
+ * the action is irreversible and reassigns everything the account authored.
+ */
+export async function deleteOwnAccountAction(
+  _prevState: MyAccountActionState,
+  formData: FormData,
+): Promise<MyAccountActionState> {
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。", ok: false };
+  }
+
+  const parsed = deleteAccountSchema.safeParse({ confirm: formData.get("confirm") });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", ok: false };
+  }
+
+  const { unsubscribeEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
+  const userRepository = new DrizzleUserRepository();
+  try {
+    await deleteOwnAccount({ userRepository, userAdminRepository: userRepository }, user.id, unsubscribeEnabled);
+  } catch (error) {
+    if (error instanceof AccountNotDeletableError) {
+      return { error: error.message, ok: false };
+    }
+    throw error;
+  }
+
+  // The user_sessions row is already gone with the account (ON DELETE CASCADE), so this is
+  // really about clearing the cookies — but it goes through the same teardown every logout
+  // uses rather than deleting cookies by hand here.
+  await destroyCurrentSession();
+  redirect("/login");
 }

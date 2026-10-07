@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { ownAccountDeletable } from "@/domain/user/account-deletion";
+import { isActiveUser } from "@/domain/user/entity";
 import { gravatarUrl, userInitials } from "@/domain/user/avatar";
 import { resolvePreferences } from "@/domain/user-preferences/entity";
 import { isTwofaAvailable } from "@/domain/settings/auth-settings";
@@ -7,7 +9,9 @@ import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { AccessKeysSection } from "./access-keys-section";
+import { DeleteAccountSection } from "./delete-account-section";
 import { EmailAddressesSection } from "./email-addresses-section";
 import { PasswordSection } from "./password-section";
 import { ProfileSection } from "./profile-section";
@@ -27,6 +31,12 @@ export default async function MyAccountPage() {
     user.id,
   );
   const additionalAddresses = await new DrizzleEmailAddressRepository().listForUser(user.id);
+  // Redmine's User#own_account_deletable? — the section is not rendered at all when it is
+  // false, and deleteOwnAccountAction re-checks the same rule server-side.
+  const otherActiveAdminExists = (await new DrizzleUserRepository().listAll()).some(
+    (candidate) => candidate.id !== user.id && candidate.isAdmin && isActiveUser(candidate),
+  );
+  const canDeleteOwnAccount = ownAccountDeletable(user, settings.unsubscribeEnabled, otherActiveAdminExists);
 
   return (
     <main className="p-8 flex flex-col gap-6 max-w-lg">
@@ -63,6 +73,7 @@ export default async function MyAccountPage() {
       <PasswordSection authSource={user.authSource} />
       {isTwofaAvailable(settings) ? <TwofaSection enabled={user.twofaScheme !== null} /> : null}
       <AccessKeysSection hasApiKey={user.apiKey !== null} atomKey={user.atomKey} />
+      {canDeleteOwnAccount ? <DeleteAccountSection /> : null}
     </main>
   );
 }

@@ -243,6 +243,10 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
       // Authored content survives its author, reassigned to the anonymous placeholder.
       await tx.update(issues).set({ authorId: toUserId }).where(eq(issues.authorId, fromUserId));
       await tx.update(journals).set({ userId: toUserId }).where(eq(journals.userId, fromUserId));
+      // Redmine updates journals.updated_by_id alongside user_id. It was missing here, and it
+      // is a RESTRICT foreign key: deleting anyone who had ever *edited* a note — their own or,
+      // with edit_issue_notes, somebody else's — failed on the constraint.
+      await tx.update(journals).set({ updatedById: toUserId }).where(eq(journals.updatedById, fromUserId));
       await tx.update(attachments).set({ authorId: toUserId }).where(eq(attachments.authorId, fromUserId));
       await tx.update(news).set({ authorId: toUserId }).where(eq(news.authorId, fromUserId));
       await tx.update(newsComments).set({ authorId: toUserId }).where(eq(newsComments.authorId, fromUserId));
