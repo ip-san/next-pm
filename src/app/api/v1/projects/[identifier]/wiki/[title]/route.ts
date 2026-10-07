@@ -4,7 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
-import { saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { WikiPageProtectedError, saveWikiPage } from "@/application/wiki/save-wiki-page";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -96,17 +96,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
   }
 
-  const { page } = await saveWikiPage(
-    { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
-    {
-      projectId: project.id,
-      title,
-      text: parsed.data.text,
-      comments: parsed.data.comments,
-      authorId: user.id,
-      parentId: null,
-    },
-  );
+  let page;
+  try {
+    ({ page } = await saveWikiPage(
+      { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
+      {
+        projectId: project.id,
+        title,
+        text: parsed.data.text,
+        comments: parsed.data.comments,
+        authorId: user.id,
+        parentId: null,
+        canProtect: can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }),
+      },
+    ));
+  } catch (error) {
+    if (error instanceof WikiPageProtectedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
 
   const members = await new DrizzleMemberRepository().listByProject(project.id);
   const rolesById = new Map(

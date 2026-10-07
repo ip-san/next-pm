@@ -19,7 +19,15 @@ export type PermissionKey =
   | "edit_time_entries"
   | "edit_own_time_entries"
   | "view_wiki_pages"
+  | "view_wiki_edits"
   | "edit_wiki_pages"
+  | "rename_wiki_pages"
+  | "delete_wiki_pages"
+  | "delete_wiki_pages_attachments"
+  | "protect_wiki_pages"
+  | "view_wiki_page_watchers"
+  | "add_wiki_page_watchers"
+  | "delete_wiki_page_watchers"
   | "manage_wiki"
   | "export_wiki_pages"
   | "manage_boards"
@@ -76,7 +84,15 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_own_time_entries: { module: "time_tracking", readOnly: false },
 
   view_wiki_pages: { module: "wiki", readOnly: true },
+  view_wiki_edits: { module: "wiki", readOnly: true },
   edit_wiki_pages: { module: "wiki", readOnly: false },
+  rename_wiki_pages: { module: "wiki", readOnly: false },
+  delete_wiki_pages: { module: "wiki", readOnly: false },
+  delete_wiki_pages_attachments: { module: "wiki", readOnly: false },
+  protect_wiki_pages: { module: "wiki", readOnly: false },
+  view_wiki_page_watchers: { module: "wiki", readOnly: true },
+  add_wiki_page_watchers: { module: "wiki", readOnly: false },
+  delete_wiki_page_watchers: { module: "wiki", readOnly: false },
   manage_wiki: { module: "wiki", readOnly: false },
   export_wiki_pages: { module: "wiki", readOnly: true },
 

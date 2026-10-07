@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -26,6 +27,10 @@ export default async function WikiEditPage({
   }
 
   const wikiPage = await new DrizzleWikiPageRepository().findByTitle(project.id, title);
+  // WikiController#edit returns 403 on a protected page unless the actor can unprotect it.
+  if (wikiPage && !isWikiPageEditable(wikiPage, can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }))) {
+    notFound();
+  }
   const current = wikiPage ? await new DrizzleWikiContentRepository().findCurrent(wikiPage.id) : null;
 
   return (

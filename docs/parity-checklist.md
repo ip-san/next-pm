@@ -117,12 +117,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 43。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 50。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `manage_subtasks`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_issues_private`, `set_notes_private`, `set_own_issues_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `manage_subtasks`, `save_queries`, `search_project`, `select_project_publicity`, `set_issues_private`, `set_notes_private`, `set_own_issues_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -166,16 +166,16 @@
 | 機能 | 状態 | 備考 |
 |---|---|---|
 | 閲覧・編集・版歴・差分 | done | |
-| ページ名変更(リダイレクト付き) | done | 権限は `manage_wiki` に統合。本家の `rename_wiki_pages` は独立権限 |
+| ページ名変更(リダイレクト付き) | done | 権限は本家と同じく `rename_wiki_pages` または `manage_wiki`(本家 `preparation.rb` は `wiki#rename` を両方に割り当てている)。保護ページは `protect_wiki_pages` が無いと改名できない |
 | マクロ | partial | `toc` / `include` / `child_pages` の 3 種のみ(`domain/wiki/macros.ts`)。本家の `collapse` / `thumbnail` / `issue` / `macro_list` 等が無い |
 | エクスポート | done | HTML / PDF / ZIP |
-| 添付 | done | |
+| 添付 | done | 追加は `edit_wiki_pages`、削除は本家と同じ専用権限 `delete_wiki_pages_attachments`(`acts_as_attachable :delete_permission`)。いずれも保護ページでは `protect_wiki_pages` が必要 |
 | ページ削除 | partial | REST API(`DELETE /api/v1/projects/[identifier]/wiki/[title]`)にはあるが **UI に無い**。権限 `delete_wiki_pages` も未定義 |
-| 保護ページ | partial | `wiki_pages.is_protected` 列はあるが切り替え UI と `protect_wiki_pages` 権限が無い |
+| 保護ページ | done | ページ画面の保護/解除トグル(`protect_wiki_pages`)。保護ページの編集・改名・添付の追加/削除は同権限が無いと拒否(本家 `WikiPage#editable_by?` を `domain/wiki/protection.ts` に再実装)。`Sidebar` は作成時に自動で保護(本家 `DEFAULT_PROTECTED_PAGES`) |
 | 親子階層 | partial | `parent_id` 列はあるが設定 UI・目次表示が無い |
 | Wiki の開始ページ設定・Wiki 自体の削除 | missing | 本家 `WikisController` |
 | ウォッチ | done | ページ単位のウォッチ |
-| 版歴の閲覧権限 | missing | 本家の `view_wiki_edits` が無い |
+| 版歴の閲覧権限 | done | `view_wiki_edits` を追加し、履歴・差分ページと活動フィードの Wiki 更新(本家 `WikiContentVersion` の `acts_as_activity_provider`)を同権限で制御 |
 
 ## 8. フォーラム・News・文書・ファイル
 

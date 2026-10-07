@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import { saveWikiPage } from "./save-wiki-page";
+import { WikiPageProtectedError, saveWikiPage } from "./save-wiki-page";
 import type { WikiPage, WikiContentVersion } from "@/domain/wiki/entity";
 import type { WikiContentRepository, WikiPageRepository } from "@/domain/wiki/repository";
 
@@ -10,6 +10,8 @@ function makeRepos(existingPage: WikiPage | null, existingVersion: WikiContentVe
     findByTitle: mock(async () => existingPage),
     create: mock(async (p) => ({ ...p, id: "page-1" })),
     rename: mock(async (id, newTitle) => ({ ...(existingPage as WikiPage), id, title: newTitle })),
+    setParent: mock(async (id, parentId) => ({ ...(existingPage as WikiPage), id, parentId })),
+    setProtected: mock(async (id, isProtected) => ({ ...(existingPage as WikiPage), id, isProtected })),
     delete: mock(async () => {}),
   };
   const wikiContentRepository: WikiContentRepository = {
@@ -23,7 +25,15 @@ function makeRepos(existingPage: WikiPage | null, existingVersion: WikiContentVe
   return { wikiPageRepository, wikiContentRepository };
 }
 
-const baseInput = { projectId: "proj-1", title: "Home", text: "Hello", comments: "", authorId: "user-1", parentId: null };
+const baseInput = {
+  projectId: "proj-1",
+  title: "Home",
+  text: "Hello",
+  comments: "",
+  authorId: "user-1",
+  parentId: null,
+  canProtect: false,
+};
 
 describe("saveWikiPage", () => {
   it("creates a new page at version 1 when the title doesn't exist yet", async () => {
@@ -51,5 +61,18 @@ describe("saveWikiPage", () => {
     expect(page.id).toBe("page-1");
     expect(version.version).toBe(2);
     expect(version.text).toBe("New text");
+  });
+
+  it("refuses to append a version to a protected page without protect_wiki_pages", async () => {
+    const existingPage: WikiPage = { id: "page-1", projectId: "proj-1", title: "Home", parentId: null, isProtected: true };
+    const repos = makeRepos(existingPage, null);
+    await expect(saveWikiPage(repos, baseInput)).rejects.toThrow(WikiPageProtectedError);
+    expect(repos.wikiContentRepository.createVersion).not.toHaveBeenCalled();
+  });
+
+  it("protects a newly created Sidebar page, mirroring DEFAULT_PROTECTED_PAGES", async () => {
+    const repos = makeRepos(null, null);
+    const { page } = await saveWikiPage(repos, { ...baseInput, title: "Sidebar" });
+    expect(page.isProtected).toBe(true);
   });
 });

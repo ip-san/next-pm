@@ -75,6 +75,16 @@ export class DrizzleWikiPageRepository implements WikiPageRepository {
     return pageToDomain(row);
   }
 
+  async setParent(id: string, parentId: string | null): Promise<WikiPage> {
+    const [row] = await db.update(wikiPages).set({ parentId }).where(eq(wikiPages.id, id)).returning();
+    return pageToDomain(row);
+  }
+
+  async setProtected(id: string, isProtected: boolean): Promise<WikiPage> {
+    const [row] = await db.update(wikiPages).set({ isProtected }).where(eq(wikiPages.id, id)).returning();
+    return pageToDomain(row);
+  }
+
   async delete(id: string): Promise<void> {
     await db.delete(wikiPages).where(eq(wikiPages.id, id));
   }

@@ -26,7 +26,9 @@ export default async function WikiHistoryPage({
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
+  // Redmine maps wiki#history/diff/annotate to view_wiki_edits, not view_wiki_pages
+  // (preparation.rb#L125) — seeing a page does not imply seeing who changed it.
+  if (!can({ permission: "view_wiki_edits", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
 

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { DrizzleWikiPageRepository, DrizzleWikiRedirectRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -22,7 +23,12 @@ export default async function WikiRenamePage({
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  // wiki#rename is mapped to rename_wiki_pages *and* manage_wiki (preparation.rb#L128,#L135).
+  const canRename =
+    can({ permission: "rename_wiki_pages", project: projectContext, actor }) ||
+    can({ permission: "manage_wiki", project: projectContext, actor });
+  if (!canRename) {
     notFound();
   }
 
@@ -32,6 +38,9 @@ export default async function WikiRenamePage({
     title,
   );
   if (!resolved) {
+    notFound();
+  }
+  if (!isWikiPageEditable(resolved.page, can({ permission: "protect_wiki_pages", project: projectContext, actor }))) {
     notFound();
   }
 

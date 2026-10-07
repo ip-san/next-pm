@@ -98,7 +98,9 @@ export async function listProjectActivity(
     }
   }
 
-  if (wantsGroup("wiki_edit") && can({ permission: "view_wiki_pages", project: input.projectContext, actor: input.actor })) {
+  // WikiContentVersion's acts_as_activity_provider declares :permission => :view_wiki_edits
+  // (wiki_content_version.rb#L42), not view_wiki_pages — the feed exposes edit history.
+  if (wantsGroup("wiki_edit") && can({ permission: "view_wiki_edits", project: input.projectContext, actor: input.actor })) {
     const versions = await repositories.wikiContentRepository.listByProject(input.projectId);
     for (const { page, version } of versions) {
       if (inRange(version.createdAt, input.from, input.to)) {

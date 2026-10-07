@@ -1,5 +1,13 @@
 import type { WikiContentVersion, WikiPage } from "@/domain/wiki/entity";
+import { isProtectedByDefault, isWikiPageEditable } from "@/domain/wiki/protection";
 import type { WikiContentRepository, WikiPageRepository } from "@/domain/wiki/repository";
+
+export class WikiPageProtectedError extends Error {
+  constructor() {
+    super("This wiki page is protected and can only be changed with protect_wiki_pages.");
+    this.name = "WikiPageProtectedError";
+  }
+}
 
 export interface SaveWikiPageInput {
   projectId: string;
@@ -8,6 +16,8 @@ export interface SaveWikiPageInput {
   comments: string;
   authorId: string;
   parentId: string | null;
+  /** The actor's protect_wiki_pages — the only thing that unlocks a protected page (WikiPage#editable_by?). */
+  canProtect: boolean;
 }
 
 /**
@@ -20,12 +30,16 @@ export async function saveWikiPage(
   input: SaveWikiPageInput,
 ): Promise<{ page: WikiPage; version: WikiContentVersion }> {
   let page = await repositories.wikiPageRepository.findByTitle(input.projectId, input.title);
-  if (!page) {
+  if (page) {
+    if (!isWikiPageEditable(page, input.canProtect)) {
+      throw new WikiPageProtectedError();
+    }
+  } else {
     page = await repositories.wikiPageRepository.create({
       projectId: input.projectId,
       title: input.title,
       parentId: input.parentId,
-      isProtected: false,
+      isProtected: isProtectedByDefault(input.title),
     });
   }
 

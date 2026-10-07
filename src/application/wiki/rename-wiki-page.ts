@@ -1,5 +1,7 @@
 import type { WikiPage } from "@/domain/wiki/entity";
+import { isWikiPageEditable } from "@/domain/wiki/protection";
 import type { WikiPageRepository, WikiRedirectRepository } from "@/domain/wiki/repository";
+import { WikiPageProtectedError } from "./save-wiki-page";
 
 export class WikiPageNotFoundError extends Error {}
 export class WikiTitleConflictError extends Error {}
@@ -8,6 +10,8 @@ export interface RenameWikiPageInput {
   pageId: string;
   newTitle: string;
   keepRedirect: boolean;
+  /** Redmine gates `rename` on editable? as well as on rename_wiki_pages — see domain/wiki/protection.ts. */
+  canProtect: boolean;
 }
 
 /**
@@ -23,6 +27,9 @@ export async function renameWikiPage(
   const page = await repositories.wikiPageRepository.findById(input.pageId);
   if (!page) {
     throw new WikiPageNotFoundError(input.pageId);
+  }
+  if (!isWikiPageEditable(page, input.canProtect)) {
+    throw new WikiPageProtectedError();
   }
 
   const oldTitle = page.title;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
+import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -15,6 +16,7 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { DeleteWikiAttachmentButton } from "./delete-wiki-attachment-button";
 import { WikiAttachmentUploadForm } from "./wiki-attachment-upload-form";
+import { WikiProtectToggleForm } from "./wiki-protect-toggle-form";
 import { WikiWatchToggleForm } from "./wiki-watch-toggle-form";
 
 export default async function WikiPageView({
@@ -35,8 +37,14 @@ export default async function WikiPageView({
   if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
-  const canEdit = can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor });
-  const canExport = can({ permission: "export_wiki_pages", project: toAuthorizationProject(project), actor });
+  const projectContext = toAuthorizationProject(project);
+  const canExport = can({ permission: "export_wiki_pages", project: projectContext, actor });
+  const canProtect = can({ permission: "protect_wiki_pages", project: projectContext, actor });
+  const canViewEdits = can({ permission: "view_wiki_edits", project: projectContext, actor });
+  const canDeleteAttachments = can({ permission: "delete_wiki_pages_attachments", project: projectContext, actor });
+  const canRenameOrManage =
+    can({ permission: "rename_wiki_pages", project: projectContext, actor }) ||
+    can({ permission: "manage_wiki", project: projectContext, actor });
 
   const wikiPageRepository = new DrizzleWikiPageRepository();
   const wikiContentRepository = new DrizzleWikiContentRepository();
@@ -49,6 +57,12 @@ export default async function WikiPageView({
     redirect(`/projects/${identifier}/wiki/${encodeURIComponent(resolved.page.title)}`);
   }
   const wikiPage = resolved?.page ?? null;
+  // Redmine's WikiController#editable? — edit_wiki_pages gets you to the form, but a protected
+  // page additionally needs protect_wiki_pages (WikiPage#editable_by?). A page that does not
+  // exist yet cannot be protected.
+  const canEdit =
+    can({ permission: "edit_wiki_pages", project: projectContext, actor }) &&
+    (wikiPage === null || isWikiPageEditable(wikiPage, canProtect));
   const current = wikiPage ? await wikiContentRepository.findCurrent(wikiPage.id) : null;
   const attachments = wikiPage ? await new DrizzleAttachmentRepository().listByContainer("WikiPage", wikiPage.id) : [];
   const isWatching =
@@ -97,7 +111,15 @@ export default async function WikiPageView({
               </a>
             </>
           ) : null}
-          {canEdit && wikiPage ? (
+          {canProtect && wikiPage ? (
+            <WikiProtectToggleForm
+              pageId={wikiPage.id}
+              projectIdentifier={identifier}
+              title={title}
+              isProtected={wikiPage.isProtected}
+            />
+          ) : null}
+          {canRenameOrManage && wikiPage && isWikiPageEditable(wikiPage, canProtect) ? (
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/rename`} className="text-sm underline">
               名前を変更
             </Link>
@@ -113,11 +135,14 @@ export default async function WikiPageView({
       {current ? (
         <>
           <p className="whitespace-pre-wrap text-sm">{renderedText}</p>
-          <p className="text-xs text-gray-500">
-            バージョン {current.version} ·{" "}
-            <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/history`} className="underline">
-              履歴を見る
-            </Link>
+          <p className="text-xs text-gray-500 flex items-center gap-2">
+            <span>バージョン {current.version}</span>
+            {canViewEdits ? (
+              <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/history`} className="underline">
+                履歴を見る
+              </Link>
+            ) : null}
+            {wikiPage?.isProtected ? <span className="border rounded px-1 text-gray-600">保護中</span> : null}
           </p>
 
           <section className="flex flex-col gap-2">
@@ -128,7 +153,7 @@ export default async function WikiPageView({
                   <a href={`/api/attachments/${attachment.id}`} className="underline">
                     {attachment.filename}
                   </a>
-                  {canEdit ? (
+                  {canDeleteAttachments && wikiPage && isWikiPageEditable(wikiPage, canProtect) ? (
                     <DeleteWikiAttachmentButton projectIdentifier={identifier} title={title} attachmentId={attachment.id} />
                   ) : null}
                 </li>

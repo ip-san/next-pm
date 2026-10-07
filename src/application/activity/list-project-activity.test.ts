@@ -17,7 +17,7 @@ const managerRole: Role = {
   name: "Manager",
   builtin: 0,
   position: 1,
-  permissions: ["view_issues", "view_wiki_pages", "view_news", "view_messages", "view_documents", "view_time_entries", "view_changesets"],
+  permissions: ["view_issues", "view_wiki_pages", "view_wiki_edits", "view_news", "view_messages", "view_documents", "view_time_entries", "view_changesets"],
   issuesVisibility: "all",
   timeEntriesVisibility: "all",
   usersVisibility: "all",
