@@ -1,14 +1,23 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { InvalidTimeEntryError, logTime } from "@/application/time-entries/log-time";
+import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { filterVisibleTimeEntries } from "@/interface/http/time-entry-access";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { paginate, parsePagination } from "@/interface/http/pagination";
 
@@ -19,8 +28,10 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-// Mirrors projects/[identifier]/time-entries/page.tsx's exact filtering: an entry logged
-// against a private issue the requester can't see must not leak that issue's existence.
+// Mirrors projects/[identifier]/time-entries/page.tsx's exact filtering: the role's
+// time_entries_visibility ("own" sees only its own rows), plus the rule that an entry
+// logged against a private issue the requester can't see must not leak that issue's
+// existence.
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const projectId = url.searchParams.get("project_id");
@@ -60,7 +71,7 @@ export async function GET(request: Request) {
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((i) => i !== null).map((i) => [i.id, i]));
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleEntries = allEntries.filter((entry) => {
+  const visibleEntries = filterVisibleTimeEntries(allEntries, user?.id ?? null, actor).filter((entry) => {
     if (!entry.issueId) return true;
     const issue = issueById.get(entry.issueId);
     return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
@@ -73,10 +84,12 @@ export async function GET(request: Request) {
 const createTimeEntrySchema = z.object({
   issue_id: z.string().uuid().nullable().default(null),
   project_id: z.string().uuid().nullable().default(null),
+  user_id: z.string().uuid().nullable().default(null),
   activity_id: z.string().uuid(),
   hours: z.number(),
   comments: z.string().default(""),
   spent_on: z.string(),
+  custom_field_values: z.record(z.string(), z.string()).default({}),
 });
 
 export async function POST(request: Request) {
@@ -124,8 +137,32 @@ export async function POST(request: Request) {
   if (issue && !isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  if (!can({ permission: "log_time", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "log_time", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // Attributing the entry to someone else needs log_time_for_other_users AND a target in
+  // assignable_users — holding the permission is not a licence to log time against an
+  // arbitrary account (TimeEntry#safe_attributes= + validate_time_entry).
+  let userId = user.id;
+  if (parsed.data.user_id && parsed.data.user_id !== user.id) {
+    if (!can({ permission: "log_time_for_other_users", project: projectContext, actor })) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const assignable = await listAssignableTimeEntryUsers(
+      {
+        memberRepository: new DrizzleMemberRepository(),
+        roleRepository: new DrizzleRoleRepository(),
+        userRepository: new DrizzleUserRepository(),
+      },
+      project.id,
+      user,
+    );
+    if (!assignable.some((candidate) => candidate.id === parsed.data.user_id)) {
+      return NextResponse.json({ error: "invalid_user_id" }, { status: 422 });
+    }
+    userId = parsed.data.user_id;
   }
 
   try {
@@ -134,7 +171,7 @@ export async function POST(request: Request) {
       {
         projectId: project.id,
         issueId,
-        userId: user.id,
+        userId,
         authorId: user.id,
         activityId: parsed.data.activity_id,
         hours: parsed.data.hours,
@@ -142,6 +179,25 @@ export async function POST(request: Request) {
         spentOn: parsed.data.spent_on,
       },
     );
+
+    if (Object.keys(parsed.data.custom_field_values).length > 0) {
+      try {
+        await setTimeEntryCustomFieldValues(
+          { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+          entry.id,
+          parsed.data.custom_field_values,
+        );
+      } catch (customFieldError) {
+        if (customFieldError instanceof CustomFieldValidationError) {
+          return NextResponse.json(
+            { time_entry: entry, error: "invalid_custom_field_values", details: customFieldError.fieldErrors },
+            { status: 422 },
+          );
+        }
+        throw customFieldError;
+      }
+    }
+
     return NextResponse.json({ time_entry: entry }, { status: 201 });
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
