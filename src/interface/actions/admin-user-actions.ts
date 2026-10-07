@@ -53,10 +53,20 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
   }
 
   const parsed = userAttributesSchema
-    .extend({ password: z.string().min(8, "パスワードは8文字以上で入力してください。") })
-    .safeParse({ ...attributesFrom(formData), password: formData.get("password") });
+    .extend({ password: z.string().default("") })
+    .safeParse({ ...attributesFrom(formData), password: formData.get("password") ?? "" });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  // Redmine's UsersController#create skips the password entirely when an auth source is chosen;
+  // such an account keeps the empty hash/salt the schema documents and authenticates via LDAP.
+  const isLdap = parsed.data.authSource === "ldap";
+  if (isLdap && parsed.data.password.length > 0) {
+    return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
+  }
+  if (!isLdap && parsed.data.password.length < 8) {
+    return { error: "パスワードは8文字以上で入力してください。" };
   }
 
   const userRepository = new DrizzleUserRepository();
@@ -64,7 +74,7 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
     return { error: "そのログインIDは既に使用されています。" };
   }
 
-  const salt = generateSalt();
+  const salt = isLdap ? "" : generateSalt();
   try {
     await userRepository.create({
       login: parsed.data.login,
@@ -74,8 +84,8 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
       isAdmin: parsed.data.isAdmin,
       status: "active",
       passwordSalt: salt,
-      passwordHash: hashPassword(parsed.data.password, salt),
-      mustChangePassword: true,
+      passwordHash: isLdap ? "" : hashPassword(parsed.data.password, salt),
+      mustChangePassword: !isLdap,
       apiKey: null,
       atomKey: null,
       authSource: parsed.data.authSource,
@@ -120,6 +130,24 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
     return { error: "そのログインIDは既に使用されています。" };
   }
 
+  // Every password rule is settled before anything is written: UsersController#update only
+  // touches the password when one was submitted and the account isn't delegated to a directory,
+  // and a half-applied update that saved the attributes and then refused the password would
+  // leave the admin guessing what actually changed.
+  const password = parsed.data.password;
+  if (password.length > 0) {
+    if (parsed.data.authSource === "ldap") {
+      return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
+    }
+    if (password.length < 8) {
+      return { error: "パスワードは8文字以上で入力してください。" };
+    }
+  } else if (existing.authSource === "ldap" && parsed.data.authSource === null) {
+    // An LDAP-backed account carries an empty local hash by construction (see schema/users.ts),
+    // so moving it to internal authentication without a password would lock it out for good.
+    return { error: "内部認証に切り替えるにはパスワードを設定してください。" };
+  }
+
   // Redmine's users/_form hides the admin checkbox for User.current, so an admin cannot
   // demote themselves and lock the whole instance out of its own admin area.
   const actor = await currentUserFromCookies();
@@ -141,17 +169,9 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
     throw error;
   }
 
-  // UsersController#update only touches the password when one was submitted and the account
-  // isn't delegated to a directory — an LDAP-backed user has no local hash to set.
-  if (parsed.data.password.length > 0) {
-    if (parsed.data.authSource === "ldap") {
-      return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
-    }
-    if (parsed.data.password.length < 8) {
-      return { error: "パスワードは8文字以上で入力してください。" };
-    }
+  if (password.length > 0) {
     const salt = generateSalt();
-    await userRepository.updatePassword(existing.id, hashPassword(parsed.data.password, salt), salt);
+    await userRepository.updatePassword(existing.id, hashPassword(password, salt), salt);
   }
 
   revalidatePath("/admin/users");

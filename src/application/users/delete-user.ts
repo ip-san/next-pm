@@ -37,6 +37,5 @@ export async function deleteUser(
   }
 
   const anonymous = await userAdminRepository.findOrCreateAnonymous();
-  await userAdminRepository.reassignReferences(user.id, anonymous.id);
-  await userAdminRepository.delete(user.id);
+  await userAdminRepository.reassignReferencesAndDelete(user.id, anonymous.id);
 }

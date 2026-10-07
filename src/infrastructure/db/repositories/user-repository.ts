@@ -154,10 +154,6 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
     await db.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, id));
   }
 
-  async delete(id: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
-  }
-
   async findOrCreateAnonymous(): Promise<User> {
     const [existing] = await db.select().from(users).where(eq(users.status, "anonymous")).limit(1);
     if (existing) return toDomain(existing);
@@ -181,7 +177,7 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
     return toDomain(row);
   }
 
-  async reassignReferences(fromUserId: string, toUserId: string): Promise<void> {
+  async reassignReferencesAndDelete(fromUserId: string, toUserId: string): Promise<void> {
     await db.transaction(async (tx) => {
       // Authored content survives its author, reassigned to the anonymous placeholder.
       await tx.update(issues).set({ authorId: toUserId }).where(eq(issues.authorId, fromUserId));
@@ -238,7 +234,10 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
 
       // Everything else referencing the user (watchers, preferences, my-page layout, reactions,
       // group memberships, project memberships, 2FA backup codes, password-reset tokens)
-      // cascades on its FK, matching the `dependent: :destroy` associations Redmine declares.
+      // cascades on the delete below, matching the `dependent: :destroy` associations Redmine
+      // declares. The delete shares this transaction so a failure can never leave an account
+      // that has lost its authorship but survives.
+      await tx.delete(users).where(eq(users.id, fromUserId));
     });
   }
 }

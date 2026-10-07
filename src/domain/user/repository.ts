@@ -37,17 +37,20 @@ export interface UserAdminRepository {
   ): Promise<User>;
   /** Mirrors User#activate! / #lock! / #register! — a plain status write with no other side effect. */
   updateStatus(id: string, status: UserStatus): Promise<void>;
-  delete(id: string): Promise<void>;
   /**
    * Mirrors `User.anonymous`, which finds the AnonymousUser row or creates it on the fly.
    * Doing it lazily rather than from the seed keeps existing databases working untouched.
    */
   findOrCreateAnonymous(): Promise<User>;
   /**
-   * Mirrors User#remove_references_before_destroy: everything the deleted user authored moves
-   * to `toUserId`, assignments are cleared, and the rows that are purely personal (watches,
-   * private queries, preferences, tokens) are discarded. Runs in one transaction so a failure
-   * can never leave records half-reassigned.
+   * Mirrors User#destroy together with its before_destroy hook
+   * (User#remove_references_before_destroy): everything the deleted user authored moves to
+   * `toUserId`, assignments are cleared, the purely personal rows (watches, private queries,
+   * preferences, tokens) are discarded, and only then is the account row removed.
+   *
+   * Reassignment and removal are one transaction on purpose — the FKs from authored content are
+   * RESTRICT, so a partial run would leave an account that has already lost its authorship and
+   * can still never be deleted.
    */
-  reassignReferences(fromUserId: string, toUserId: string): Promise<void>;
+  reassignReferencesAndDelete(fromUserId: string, toUserId: string): Promise<void>;
 }

@@ -48,9 +48,8 @@ function makeRepos(found: User | null) {
   const userAdminRepository = {
     update: mock(async () => user()),
     updateStatus: mock(async () => {}),
-    delete: mock(async () => {}),
     findOrCreateAnonymous: mock(async () => anonymous),
-    reassignReferences: mock(async () => {}),
+    reassignReferencesAndDelete: mock(async () => {}),
   } satisfies UserAdminRepository;
   return { userRepository, userAdminRepository };
 }
@@ -61,20 +60,19 @@ describe("deleteUser", () => {
 
     await deleteUser(repositories, "user-1", "admin-1");
 
-    expect(repositories.userAdminRepository.reassignReferences).toHaveBeenCalledWith("user-1", "anon");
-    expect(repositories.userAdminRepository.delete).toHaveBeenCalledWith("user-1");
+    expect(repositories.userAdminRepository.reassignReferencesAndDelete).toHaveBeenCalledWith("user-1", "anon");
   });
 
   it("refuses to delete the acting admin's own account", async () => {
     const repositories = makeRepos(user({ id: "admin-1" }));
     await expect(deleteUser(repositories, "admin-1", "admin-1")).rejects.toThrow(UserNotDeletableError);
-    expect(repositories.userAdminRepository.delete).not.toHaveBeenCalled();
+    expect(repositories.userAdminRepository.reassignReferencesAndDelete).not.toHaveBeenCalled();
   });
 
   it("refuses to delete the anonymous placeholder", async () => {
     const repositories = makeRepos(anonymous);
     await expect(deleteUser(repositories, "anon", "admin-1")).rejects.toThrow(UserNotDeletableError);
-    expect(repositories.userAdminRepository.delete).not.toHaveBeenCalled();
+    expect(repositories.userAdminRepository.reassignReferencesAndDelete).not.toHaveBeenCalled();
   });
 });
 

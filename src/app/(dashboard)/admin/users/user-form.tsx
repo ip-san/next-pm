@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createUserAction, updateUserAction } from "@/interface/actions/admin-user-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
 import type { User } from "@/domain/user/entity";
@@ -16,6 +16,10 @@ const initialState: AdminActionState = { error: null };
  */
 export function UserForm({ user, isSelf = false }: { user?: User; isSelf?: boolean }) {
   const [state, formAction, pending] = useActionState(user ? updateUserAction : createUserAction, initialState);
+  const [authSource, setAuthSource] = useState(user?.authSource ?? "");
+  // An LDAP-backed account has no local password at all, so the field stops being mandatory
+  // the moment a directory is chosen — Redmine's create form skips it the same way.
+  const passwordRequired = !user && authSource !== "ldap";
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-sm border-t pt-4">
@@ -76,23 +80,30 @@ export function UserForm({ user, isSelf = false }: { user?: User; isSelf?: boole
         <label htmlFor="authSource" className="text-sm font-medium">
           認証方式
         </label>
-        <select id="authSource" name="authSource" defaultValue={user?.authSource ?? ""} className="border rounded px-3 py-2">
+        <select
+          id="authSource"
+          name="authSource"
+          value={authSource}
+          onChange={(event) => setAuthSource(event.target.value as "" | "ldap")}
+          className="border rounded px-3 py-2"
+        >
           <option value="">内部(パスワード)</option>
           <option value="ldap">LDAP</option>
         </select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="password" className="text-sm font-medium">
-          パスワード{user ? "(変更する場合のみ)" : ""}
+          パスワード{user ? "(変更する場合のみ)" : authSource === "ldap" ? "(LDAP認証では不要)" : ""}
         </label>
         <input
           id="password"
           name="password"
           type="password"
-          required={!user}
+          required={passwordRequired}
+          disabled={authSource === "ldap"}
           minLength={8}
           autoComplete="new-password"
-          className="border rounded px-3 py-2"
+          className="border rounded px-3 py-2 disabled:bg-gray-100"
         />
       </div>
       {isSelf ? null : (

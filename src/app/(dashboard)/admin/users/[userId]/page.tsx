@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ROLE_BUILTIN_MEMBER } from "@/domain/role/entity";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -22,7 +23,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ userI
     new DrizzleUserRepository().findById(userId),
     memberRepository.listByUser(userId),
     new DrizzleProjectRepository().listAll(),
-    new DrizzleRoleRepository().listAssignable(),
+    new DrizzleRoleRepository().listAll(),
   ]);
   // The anonymous placeholder is not an account and has no admin screen.
   if (!user || user.status === "anonymous") {
@@ -32,8 +33,9 @@ export default async function EditUserPage({ params }: { params: Promise<{ userI
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const rows = memberships.map((member) => ({ member, project: projectById.get(member.projectId) }));
   const joinedProjectIds = new Set(memberships.map((member) => member.projectId));
-  // Only ordinary roles are givable to a project member (Role.find_all_givable).
-  const givableRoles = roles.filter((role) => role.builtin === 0);
+  // Redmine's Role.givable is `builtin = 0` — the `assignable` flag governs whether issues can
+  // be assigned to the role's holders, not whether the role can be handed to a member.
+  const givableRoles = roles.filter((role) => role.builtin === ROLE_BUILTIN_MEMBER);
 
   return (
     <main className="p-8 flex flex-col gap-8">
