@@ -5,6 +5,7 @@ import { z } from "zod";
 import { copyTrackerWorkflow } from "@/application/trackers/copy-tracker-workflow";
 import { deleteTracker, TrackerNotDeletableError } from "@/application/trackers/delete-tracker";
 import { nextPosition, resolveMove } from "@/domain/ordering/positioned";
+import { normalizeDisabledCoreFields, TRACKER_CORE_FIELDS, type TrackerCoreField } from "@/domain/tracker/core-fields";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
@@ -18,6 +19,11 @@ const trackerAttributesSchema = z.object({
   name: z.string().min(1).max(30),
   defaultStatusId: z.string().uuid("既定のステータスを選択してください。"),
   isInRoadmap: z.coerce.boolean().default(false),
+  /**
+   * The form submits the *enabled* fields (one checkbox per core field, checked = enabled),
+   * exactly like Redmine's `tracker[core_fields][]`; the disabled set is the complement.
+   */
+  enabledCoreFields: z.array(z.string()).default([]),
 });
 
 function attributesFrom(formData: FormData) {
@@ -25,7 +31,13 @@ function attributesFrom(formData: FormData) {
     name: formData.get("name"),
     defaultStatusId: formData.get("defaultStatusId"),
     isInRoadmap: formData.get("isInRoadmap") === "on",
+    enabledCoreFields: formData.getAll("coreFields"),
   };
+}
+
+function disabledCoreFieldsFrom(enabled: string[]): TrackerCoreField[] {
+  const kept = new Set(enabled);
+  return normalizeDisabledCoreFields(TRACKER_CORE_FIELDS.filter((field) => !kept.has(field)));
 }
 
 async function assertStatusExists(defaultStatusId: string): Promise<string | null> {
@@ -51,8 +63,13 @@ export async function createTrackerAction(
     return { error: statusError };
   }
 
+  const { enabledCoreFields, ...attributes } = parsed.data;
   const repository = new DrizzleTrackerRepository();
-  const created = await repository.create({ ...parsed.data, position: nextPosition(await repository.listAll()) });
+  const created = await repository.create({
+    ...attributes,
+    disabledCoreFields: disabledCoreFieldsFrom(enabledCoreFields),
+    position: nextPosition(await repository.listAll()),
+  });
 
   // Redmine's TrackersController#create runs copy_workflow_rules after the save, so the new
   // tracker starts from an existing tracker's workflow instead of an empty one.
@@ -92,7 +109,7 @@ export async function updateTrackerAction(
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
   }
 
-  const { trackerId, ...attributes } = parsed.data;
+  const { trackerId, enabledCoreFields, ...attributes } = parsed.data;
   const repository = new DrizzleTrackerRepository();
   if (!(await repository.findById(trackerId))) {
     return { error: "トラッカーが見つかりません。" };
@@ -101,7 +118,10 @@ export async function updateTrackerAction(
   if (statusError) {
     return { error: statusError };
   }
-  await repository.update(trackerId, attributes);
+  await repository.update(trackerId, {
+    ...attributes,
+    disabledCoreFields: disabledCoreFieldsFrom(enabledCoreFields),
+  });
 
   revalidatePath("/admin/trackers");
   return { error: null };

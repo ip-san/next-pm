@@ -3,10 +3,24 @@
 import { useActionState } from "react";
 import { createTrackerAction, updateTrackerAction } from "@/interface/actions/admin-tracker-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
+import { TRACKER_CORE_FIELDS, type TrackerCoreField } from "@/domain/tracker/core-fields";
 import type { IssueStatus } from "@/domain/issue-status/entity";
 import type { Tracker } from "@/domain/tracker/entity";
 
 const initialState: AdminActionState = { error: null };
+
+const CORE_FIELD_LABEL: Record<TrackerCoreField, string> = {
+  assignedToId: "担当者",
+  categoryId: "カテゴリ",
+  fixedVersionId: "対象バージョン",
+  parentId: "親チケット",
+  startDate: "開始日",
+  dueDate: "期日",
+  estimatedHours: "予定工数",
+  doneRatio: "進捗率",
+  description: "説明",
+  priorityId: "優先度",
+};
 
 /**
  * Doubles as the create and the edit form. On create it also offers Redmine's
@@ -25,6 +39,7 @@ export function TrackerForm({
     tracker ? updateTrackerAction : createTrackerAction,
     initialState,
   );
+  const disabled = new Set(tracker?.disabledCoreFields ?? []);
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-sm">
@@ -65,6 +80,17 @@ export function TrackerForm({
         <input type="checkbox" name="isInRoadmap" defaultChecked={tracker?.isInRoadmap ?? true} />
         ロードマップに表示する
       </label>
+
+      {/* Redmine's tracker[core_fields][]: a checked box means the field stays enabled. */}
+      <fieldset className="flex flex-col gap-1">
+        <legend className="text-sm font-medium">標準フィールド</legend>
+        {TRACKER_CORE_FIELDS.map((field) => (
+          <label key={field} className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="coreFields" value={field} defaultChecked={!disabled.has(field)} />
+            {CORE_FIELD_LABEL[field]}
+          </label>
+        ))}
+      </fieldset>
       {tracker ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="copyWorkflowFrom" className="text-sm font-medium">

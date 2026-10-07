@@ -10,7 +10,10 @@ export interface TrackerRepository {
 
 /** Admin-screen writes — see IssueStatusAdminRepository for why these sit apart. */
 export interface TrackerAdminRepository {
-  update(id: string, changes: Pick<Tracker, "name" | "defaultStatusId" | "isInRoadmap">): Promise<Tracker>;
+  update(
+    id: string,
+    changes: Pick<Tracker, "name" | "defaultStatusId" | "isInRoadmap" | "disabledCoreFields">,
+  ): Promise<Tracker>;
   delete(id: string): Promise<void>;
   /** Count of issues with tracker_id = id — Tracker#check_integrity. */
   countIssuesUsing(id: string): Promise<number>;

@@ -68,7 +68,7 @@ function makeWatcherRepository() {
 
 describe("createIssue", () => {
   it("defaults the status to the tracker's default status", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -104,7 +104,7 @@ describe("createIssue", () => {
   });
 
   it("rejects a blank field the tracker's default status requires for this role", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const permission: WorkflowFieldPermission = {
       id: "fp-1",
       trackerId: "tracker-1",
@@ -129,7 +129,7 @@ describe("createIssue", () => {
   });
 
   it("allows creation when the required field is filled", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const permission: WorkflowFieldPermission = {
       id: "fp-1",
       trackerId: "tracker-1",
@@ -157,7 +157,7 @@ describe("createIssue", () => {
   });
 
   it("auto-watches the issue for its author on creation", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -178,7 +178,7 @@ describe("createIssue", () => {
   });
 
   it("auto-watches the issue for a user assignee, but not a group assignee", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -203,7 +203,7 @@ describe("createIssue", () => {
   });
 
   it("does not auto-watch for a group assignee", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });

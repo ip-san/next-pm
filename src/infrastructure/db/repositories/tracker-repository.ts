@@ -13,6 +13,7 @@ function toDomain(row: typeof trackers.$inferSelect): Tracker {
     defaultStatusId: row.defaultStatusId,
     position: row.position,
     isInRoadmap: row.isInRoadmap,
+    disabledCoreFields: row.disabledCoreFields,
   };
 }
 
@@ -42,12 +43,16 @@ export class DrizzleTrackerRepository implements TrackerRepository, TrackerAdmin
         defaultStatusId: tracker.defaultStatusId,
         position: tracker.position,
         isInRoadmap: tracker.isInRoadmap,
+        disabledCoreFields: tracker.disabledCoreFields,
       })
       .returning();
     return toDomain(row);
   }
 
-  async update(id: string, changes: Pick<Tracker, "name" | "defaultStatusId" | "isInRoadmap">): Promise<Tracker> {
+  async update(
+    id: string,
+    changes: Pick<Tracker, "name" | "defaultStatusId" | "isInRoadmap" | "disabledCoreFields">,
+  ): Promise<Tracker> {
     const [row] = await db.update(trackers).set(changes).where(eq(trackers.id, id)).returning();
     return toDomain(row);
   }
