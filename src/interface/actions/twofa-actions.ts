@@ -229,7 +229,7 @@ export async function confirmForcedTwofaPairingAction(
   const encryptionKey = loadTotpEncryptionKeyFromEnv(process.env);
   const result = await confirmTotpPairing(
     { userRepository: new DrizzleUserRepository(), backupCodeRepository: new DrizzleTwofaBackupCodeRepository() },
-    pending.userId,
+    setupUserId,
     parsed.data.code,
     encryptionKey,
     Math.floor(Date.now() / 1000),
@@ -241,6 +241,7 @@ export async function confirmForcedTwofaPairingAction(
   }
 
   // The pairing *is* the second factor for this login, so no separate code entry follows.
-  await establishSession(pending.userId, { rememberMe: pending.rememberMe });
+  // setupUserId, not the raw cookie claim: it is the id the gate was actually evaluated for.
+  await establishSession(setupUserId, { rememberMe: pending.rememberMe });
   return { error: null, backupCodes: result.backupCodes };
 }
