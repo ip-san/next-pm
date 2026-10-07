@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { describeJournalDetail } from "@/domain/journal/detail-label";
 import { memberUserIds } from "@/domain/member/entity";
 import { otherIssueId, relationLabelFor } from "@/application/issues/create-issue-relation";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
@@ -172,6 +173,16 @@ export default async function IssueDetailPage({
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const customValueByFieldId = new Map(customValues.map((cv) => [cv.customFieldId, cv.value]));
   const customFieldNameById = new Map(allCustomFields.map((field) => [field.id, field.name]));
+  // Only ids this page already showed the viewer go in here; anything else renders as a
+  // short id, so a journal can't resolve a private project's name or an invisible issue's.
+  const journalValueNames = new Map<string, string>([
+    ...statuses.map((status) => [status.id, status.name] as const),
+    ...priorities.map((priority) => [priority.id, priority.name] as const),
+    ...trackers.map((candidate) => [candidate.id, candidate.name] as const),
+    ...categories.map((category) => [category.id, category.name] as const),
+    ...versions.map((version) => [version.id, version.name] as const),
+    ...relevantUsers.map((candidate) => [candidate.id, `${candidate.lastname} ${candidate.firstname}`] as const),
+  ]);
 
   // Group assignment counts as being the assignee for workflow purposes, exactly as the
   // update action resolves it — keying the form off `assignedToId === user.id` alone would
@@ -270,20 +281,20 @@ export default async function IssueDetailPage({
                   {journal.updatedById ? <span className="ml-2">（編集済み）</span> : null}
                 </p>
                 {journal.notes ? <p>{journal.notes}</p> : null}
-                {journal.details.map((detail, index) => (
-                  <p key={index} className="text-xs text-gray-600">
-                    {detail.property === "cf" ? (customFieldNameById.get(detail.fieldName) ?? detail.fieldName) : detail.fieldName}:{" "}
-                    {detail.fieldName === "description" ? (
-                      // Mirrors Redmine's details_to_strings, which reports a description edit
-                      // as "updated" rather than dumping both revisions into the history list.
-                      <>更新</>
-                    ) : (
-                      <>
-                        {detail.oldValue ?? "(なし)"} → {detail.newValue ?? "(なし)"}
-                      </>
-                    )}
-                  </p>
-                ))}
+                {journal.details.map((detail, index) => {
+                  const described = describeJournalDetail(detail, {
+                    customFields: customFieldNameById,
+                    values: journalValueNames,
+                  });
+                  return (
+                    <p key={index} className="text-xs text-gray-600">
+                      {described.kind === "updated" ? `${described.label} を更新` : null}
+                      {described.kind === "changed" ? `${described.label}: ${described.from} → ${described.to}` : null}
+                      {described.kind === "added" ? `${described.label} ${described.value} を追加` : null}
+                      {described.kind === "removed" ? `${described.label} ${described.value} を削除` : null}
+                    </p>
+                  );
+                })}
                 {canEditAnyNote || (canEditOwnNote && journal.userId === user?.id) ? (
                   <JournalEditForm
                     journalId={journal.id}
