@@ -22,6 +22,7 @@ function makeUserRepository() {
     findByMail: mock(async () => null),
     create: mock(async (u) => ({ ...u, id: "generated" }) as User),
     updatePassword,
+    updateStatus: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async () => {}),
     confirmTotpPairing: mock(async () => {}),

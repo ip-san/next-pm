@@ -6,7 +6,11 @@ import QRCode from "qrcode";
 import { z } from "zod";
 import { confirmTotpPairing, deactivateTwofa, startTotpPairing, TotpEncryptionKeyMissingError } from "@/application/twofa/pairing";
 import { verifyCurrentPassword } from "@/application/auth/verify-current-password";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { loadLdapConfigFromEnv } from "@/domain/ldap/config";
+import { isTwofaActive } from "@/domain/user/entity";
+import { evaluateLoginGate, mustActivateTwofa } from "@/domain/user/login-gate";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
@@ -30,6 +34,13 @@ export async function startTwofaPairingAction(_prevState: StartTwofaPairingState
   const user = await currentUserFromCookies();
   if (!user) {
     return { error: "ログインしてください。", pairing: null };
+  }
+  // Re-pairing silently replaces the active secret, so a stolen session would be enough to
+  // swap the second factor for the attacker's own. Redmine guards this with sudo mode (a
+  // password re-prompt); next-pm has no sudo mode, so the route is simply closed — turning
+  // 2FA off first already demands the current password (deactivateTwofaAction).
+  if (isTwofaActive(user)) {
+    return { error: "二段階認証は既に有効です。設定し直すには一度無効にしてください。", pairing: null };
   }
 
   const encryptionKey = loadTotpEncryptionKeyFromEnv(process.env);
@@ -110,6 +121,14 @@ export async function deactivateTwofaAction(
     return { error: "ログインしてください。", ok: false };
   }
 
+  // Redmine's Setting.twofa_required? / twofa_required_for_administrators? make the factor
+  // mandatory; letting a user switch it off would put the account straight back into
+  // "must activate" on the next login, and in the meantime leave it password-only.
+  const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
+  if (mustActivateTwofa({ isAdmin: user.isAdmin, twofaScheme: null }, twofa)) {
+    return { error: "このアカウントでは二段階認証が必須のため、無効にできません。", ok: false };
+  }
+
   const ldapConfig = loadLdapConfigFromEnv(process.env);
   const passwordOk = await verifyCurrentPassword(
     { userRepository: new DrizzleUserRepository(), ldapAuthenticator: ldapConfig ? new LdaptsAuthenticator(ldapConfig) : null },
@@ -136,16 +155,33 @@ export async function deactivateTwofaAction(
  * happens *before* the session exists instead, off the same short-lived pending token the
  * second-factor form uses. Same end state, no redirect loop to engineer around.
  */
-async function pendingPairingUserId(): Promise<string | null> {
+/**
+ * Resolves the pending login *and* re-checks that it is genuinely owed a first pairing.
+ *
+ * The second condition is load-bearing. The pending cookie is handed out after a correct
+ * password alone, and startTotpPairing will happily overwrite an existing secret (Redmine's
+ * init_pairing! does too). Without this check, a user who already has 2FA — whose pending
+ * cookie exists because they were sent to the *code* form — could walk to the setup page
+ * instead, pair their own authenticator and get a session: the second factor bypassed with
+ * nothing but the password. evaluateLoginGate only answers "twofa_setup_required" for an
+ * active account that has no scheme yet, which is exactly the one case setup may proceed.
+ */
+async function pendingSetupUserId(): Promise<string | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(TWOFA_PENDING_COOKIE_NAME)?.value;
   const pending = token ? await verifyTwofaPendingToken(token) : null;
-  return pending?.userId ?? null;
+  if (!pending) return null;
+
+  const user = await new DrizzleUserRepository().findById(pending.userId);
+  if (!user) return null;
+
+  const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
+  return evaluateLoginGate(user, twofa).kind === "twofa_setup_required" ? user.id : null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- useActionState's signature; this action takes no input
 export async function startForcedTwofaPairingAction(_prevState: StartTwofaPairingState, _formData: FormData): Promise<StartTwofaPairingState> {
-  const userId = await pendingPairingUserId();
+  const userId = await pendingSetupUserId();
   if (!userId) {
     return { error: "ログインからやり直してください。", pairing: null };
   }
@@ -177,6 +213,12 @@ export async function confirmForcedTwofaPairingAction(
     return { error: "確認コードを入力してください。", backupCodes: null };
   }
 
+  // Same ownership + "is this login actually owed a first pairing" check as the start action,
+  // re-run here because the two are separate requests.
+  const setupUserId = await pendingSetupUserId();
+  if (!setupUserId) {
+    return { error: "ログインからやり直してください。", backupCodes: null };
+  }
   const cookieStore = await cookies();
   const pendingToken = cookieStore.get(TWOFA_PENDING_COOKIE_NAME)?.value;
   const pending = pendingToken ? await verifyTwofaPendingToken(pendingToken) : null;

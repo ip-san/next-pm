@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; activated?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, activated } = await searchParams;
   const settings = await loadAuthSettings(new DrizzleSettingsRepository());
 
   return (
@@ -23,6 +23,12 @@ export default async function LoginPage({
             確認コードの試行回数が上限に達しました。もう一度ログインしてください。
           </p>
         ) : null}
+        {error === "activation_failed" ? (
+          <p role="alert" className="text-sm text-red-600">
+            リンクが無効か、有効期限が切れています。
+          </p>
+        ) : null}
+        {activated === "1" ? <p className="text-sm text-green-700">アカウントが有効になりました。ログインしてください。</p> : null}
         <LoginForm
           autologinEnabled={settings.autologinDays > 0}
           lostPasswordEnabled={settings.lostPasswordEnabled}

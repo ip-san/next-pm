@@ -42,6 +42,7 @@ function repoWith(user: User | null) {
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
     updatePassword,
+    updateStatus: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async () => {}),
     confirmTotpPairing: mock(async () => {}),

@@ -1,4 +1,4 @@
-import type { User } from "./entity";
+import type { User, UserStatus } from "./entity";
 
 export interface UserRepository {
   listAll(): Promise<User[]>;
@@ -16,6 +16,8 @@ export interface UserRepository {
    * successful change regardless of why it was set.
    */
   updatePassword(userId: string, passwordHash: string, passwordSalt: string): Promise<void>;
+  /** Redmine's User#activate! / #register! / #lock! — the whole of what those do is set this column. */
+  updateStatus(userId: string, status: UserStatus): Promise<void>;
   /** Lazily assigns a feed token — only ever called when the user doesn't already have one. */
   setAtomKey(userId: string, atomKey: string): Promise<void>;
   /** Stores an as-yet-unconfirmed pairing's encrypted secret. Does not activate twofaScheme. */

@@ -93,6 +93,10 @@ export class DrizzleUserRepository implements UserRepository {
     return toDomain(row);
   }
 
+  async updateStatus(userId: string, status: User["status"]): Promise<void> {
+    await db.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
   async setAtomKey(userId: string, atomKey: string): Promise<void> {
     await db.update(users).set({ atomKey }).where(eq(users.id, userId));
   }

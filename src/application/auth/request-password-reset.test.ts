@@ -39,6 +39,7 @@ function makeRepos(user: User | null) {
     findByAtomKey: mock(async () => user),
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
+    updateStatus: mock(async () => {}),
     updatePassword: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async () => {}),

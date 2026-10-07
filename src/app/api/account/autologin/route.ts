@@ -5,6 +5,7 @@ import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleUserTokenRepository } from "@/infrastructure/db/repositories/user-token-repository";
+import { safeBackPath } from "@/domain/user/back-url";
 import { AUTOLOGIN_COOKIE_NAME, establishSession } from "@/interface/http/session";
 
 /**
@@ -17,17 +18,14 @@ import { AUTOLOGIN_COOKIE_NAME, establishSession } from "@/interface/http/sessio
  * original path in `back`, so this works for a deep link, not only for the home page.
  */
 
-/** Only ever bounce back to a path on this app — never to an absolute URL an attacker supplied. */
-function safeBackPath(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) {
-    return "/";
-  }
-  return raw;
-}
-
 export async function GET(request: NextRequest): Promise<Response> {
   const back = safeBackPath(request.nextUrl.searchParams.get("back"));
-  const redirectResponse = NextResponse.redirect(new URL(back, request.nextUrl.origin));
+  const target = new URL(back, request.nextUrl.origin);
+  // Belt and braces: safeBackPath already rejects everything that could leave the origin, but
+  // this is a redirect built from a query parameter, so the resolved origin is checked too.
+  const redirectResponse = NextResponse.redirect(
+    target.origin === request.nextUrl.origin ? target : new URL("/", request.nextUrl.origin),
+  );
 
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTOLOGIN_COOKIE_NAME)?.value;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { ActivateUserButton } from "./activate-user-button";
 import { UserForm } from "./user-form";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
@@ -33,6 +34,7 @@ export default async function UsersPage() {
             <th className="pr-4 py-1">メール</th>
             <th className="pr-4 py-1">状態</th>
             <th className="pr-4 py-1">管理者</th>
+            <th className="pr-4 py-1"></th>
           </tr>
         </thead>
         <tbody>
@@ -45,6 +47,7 @@ export default async function UsersPage() {
               <td className="pr-4 py-1">{u.mail}</td>
               <td className="pr-4 py-1">{STATUS_LABEL[u.status]}</td>
               <td className="pr-4 py-1">{u.isAdmin ? "○" : ""}</td>
+              <td className="pr-4 py-1">{u.status === "registered" ? <ActivateUserButton userId={u.id} /> : null}</td>
             </tr>
           ))}
         </tbody>

@@ -43,6 +43,7 @@ function fakeUserRepository(user: User | null): UserRepository {
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
     updatePassword: mock(async () => {}),
+    updateStatus: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async () => {}),
     confirmTotpPairing: mock(async () => {}),
