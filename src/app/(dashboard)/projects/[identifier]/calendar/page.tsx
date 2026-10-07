@@ -29,7 +29,14 @@ export default async function ProjectCalendarPage({
 
   const user = await currentUserFromCookies();
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  // Redmine's CalendarsController authorizes `view_calendar` alone and then renders
+  // `Issue.visible`, which is empty without `view_issues` — the two are collapsed into one
+  // gate here because this page has no content other than issues and versions.
+  const projectContext = toAuthorizationProject(project);
+  if (
+    !can({ permission: "view_calendar", project: projectContext, actor }) ||
+    !can({ permission: "view_issues", project: projectContext, actor })
+  ) {
     notFound();
   }
 

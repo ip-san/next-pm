@@ -21,6 +21,8 @@ export const dynamic = "force-dynamic";
 const NAV_LINKS: { module: string; path: string; label: string }[] = [
   { module: "issue_tracking", path: "issues", label: "チケット" },
   { module: "issue_tracking", path: "roadmap", label: "ロードマップ" },
+  { module: "calendar", path: "calendar", label: "カレンダー" },
+  { module: "gantt", path: "gantt", label: "ガントチャート" },
   { module: "time_tracking", path: "time-entries", label: "工数" },
   { module: "wiki", path: "wiki", label: "Wiki" },
   { module: "boards", path: "boards", label: "フォーラム" },

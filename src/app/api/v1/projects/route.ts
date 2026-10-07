@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { can } from "@/domain/authorization/authorization-service";
 import { createProject } from "@/application/projects/create-project";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -15,7 +16,6 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-const AVAILABLE_MODULES = ["issue_tracking", "time_tracking", "wiki", "boards", "news", "documents", "files", "repository"] as const;
 
 /**
  * Mirrors Project.visible_condition (public, or the actor is a member/admin) by reusing the
@@ -47,7 +47,7 @@ const createProjectSchema = z.object({
   description: z.string().default(""),
   is_public: z.boolean().default(true),
   parent_id: z.string().uuid().nullable().default(null),
-  enabled_modules: z.array(z.enum(AVAILABLE_MODULES)).default([]),
+  enabled_modules: z.array(z.enum(PROJECT_MODULES)).default([]),
   tracker_ids: z.array(z.string().uuid()).default([]),
 });
 

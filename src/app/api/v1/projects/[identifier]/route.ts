@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { can } from "@/domain/authorization/authorization-service";
 import { updateProject } from "@/application/projects/update-project";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -14,7 +15,6 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-const AVAILABLE_MODULES = ["issue_tracking", "time_tracking", "wiki", "boards", "news", "documents", "files", "repository"] as const;
 
 export async function GET(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
@@ -37,7 +37,7 @@ const updateProjectSchema = z.object({
   name: z.string().min(1),
   description: z.string().default(""),
   is_public: z.boolean().default(false),
-  enabled_modules: z.array(z.enum(AVAILABLE_MODULES)).default([]),
+  enabled_modules: z.array(z.enum(PROJECT_MODULES)).default([]),
   tracker_ids: z.array(z.string().uuid()).default([]),
 });
 

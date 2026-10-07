@@ -29,11 +29,11 @@ async function seed() {
   console.log("Seeding builtin roles...");
   const [nonMember] = await db
     .insert(roles)
-    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_issues"] })
+    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_members", "view_issues"] })
     .returning();
   const [anonymous] = await db
     .insert(roles)
-    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_project", "view_issues"] })
+    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_project", "view_members", "view_issues"] })
     .returning();
   const [manager] = await db
     .insert(roles)
@@ -41,6 +41,11 @@ async function seed() {
       name: "Manager",
       permissions: [
         "view_project",
+        "add_project",
+        "close_project",
+        "delete_project",
+        "select_project_publicity",
+        "view_members",
         "view_issues",
         "add_issues",
         "edit_issues",
@@ -51,6 +56,7 @@ async function seed() {
         "manage_issue_categories",
         "view_time_entries",
         "log_time",
+        "manage_project_activities",
         "view_wiki_pages",
         "edit_wiki_pages",
         "manage_boards",
@@ -70,6 +76,8 @@ async function seed() {
         "browse_repository",
         "view_changesets",
         "manage_repository",
+        "view_calendar",
+        "view_gantt",
       ],
     })
     .returning();

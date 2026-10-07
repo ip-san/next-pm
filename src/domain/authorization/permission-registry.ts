@@ -1,8 +1,12 @@
 export type PermissionKey =
   | "view_project"
+  | "add_project"
   | "edit_project"
   | "close_project"
+  | "delete_project"
+  | "select_project_publicity"
   | "select_project_modules"
+  | "view_members"
   | "manage_members"
   | "manage_versions"
   | "add_subprojects"
@@ -21,6 +25,7 @@ export type PermissionKey =
   | "log_time"
   | "edit_time_entries"
   | "edit_own_time_entries"
+  | "manage_project_activities"
   | "view_wiki_pages"
   | "edit_wiki_pages"
   | "manage_wiki"
@@ -43,7 +48,9 @@ export type PermissionKey =
   | "manage_files"
   | "browse_repository"
   | "view_changesets"
-  | "manage_repository";
+  | "manage_repository"
+  | "view_calendar"
+  | "view_gantt";
 
 interface PermissionDefinition {
   /** Module this permission belongs to; null means it's core (not gated by EnabledModule). */
@@ -57,9 +64,16 @@ interface PermissionDefinition {
 
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
   view_project: { module: null, readOnly: true },
+  add_project: { module: null, readOnly: false },
   edit_project: { module: null, readOnly: false },
-  close_project: { module: null, readOnly: false },
+  // Redmine marks close_project and delete_project `:read => true` so that a *closed*
+  // project can still be reopened or deleted — a non-read permission would be denied by
+  // the `!isActive` rule below and lock the project in place with no way out.
+  close_project: { module: null, readOnly: true },
+  delete_project: { module: null, readOnly: true },
+  select_project_publicity: { module: null, readOnly: false },
   select_project_modules: { module: null, readOnly: false },
+  view_members: { module: null, readOnly: true },
   manage_members: { module: null, readOnly: false },
   manage_versions: { module: null, readOnly: false },
   add_subprojects: { module: null, readOnly: false },
@@ -80,6 +94,7 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   log_time: { module: "time_tracking", readOnly: false },
   edit_time_entries: { module: "time_tracking", readOnly: false },
   edit_own_time_entries: { module: "time_tracking", readOnly: false },
+  manage_project_activities: { module: "time_tracking", readOnly: false },
 
   view_wiki_pages: { module: "wiki", readOnly: true },
   edit_wiki_pages: { module: "wiki", readOnly: false },
@@ -106,7 +121,30 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   browse_repository: { module: "repository", readOnly: true },
   view_changesets: { module: "repository", readOnly: true },
   manage_repository: { module: "repository", readOnly: false },
+  view_calendar: { module: "calendar", readOnly: true },
+  view_gantt: { module: "gantt", readOnly: true },
 };
+
+/**
+ * Redmine's `Redmine::AccessControl.available_project_modules` — every module some
+ * permission is gated on, in the order the project settings form lists them. Derived from
+ * the registry rather than written out by hand would lose that order, so this stays an
+ * explicit list and `permission-registry.test.ts` asserts the two agree.
+ */
+export const PROJECT_MODULES = [
+  "issue_tracking",
+  "time_tracking",
+  "wiki",
+  "boards",
+  "news",
+  "documents",
+  "files",
+  "repository",
+  "calendar",
+  "gantt",
+] as const;
+
+export type ProjectModule = (typeof PROJECT_MODULES)[number];
 
 export function isPermissionRegistered(key: string): key is PermissionKey {
   return key in PERMISSION_REGISTRY;

@@ -10,6 +10,8 @@ export const MODULE_LABEL: Record<string, string> = {
   documents: "ドキュメント",
   files: "ファイル",
   repository: "リポジトリ",
+  calendar: "カレンダー",
+  gantt: "ガントチャート",
 };
 
 export const PERMISSIONS_BY_MODULE = Object.entries(PERMISSION_REGISTRY).reduce<Record<string, PermissionKey[]>>(

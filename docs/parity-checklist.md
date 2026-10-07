@@ -97,7 +97,7 @@
 |---|---|---|
 | 作成・編集 | done | 名称/識別子/説明/公開設定/親プロジェクト |
 | 階層(サブプロジェクト) | done | nested set(`lft`/`rgt`)で実装 |
-| モジュールの有効/無効 | partial | `enabled_modules` + 設定画面あり。ただし `calendar` / `gantt` モジュールが権限レジストリに未登録で、この 2 つは常時有効扱い |
+| モジュールの有効/無効 | done | `enabled_modules` + 設定画面あり。`calendar` / `gantt` も権限レジストリに登録済みで、他モジュールと同じく個別に切り替えられる |
 | ステータス(active/closed/archived) | partial | ドメイン判定は実装済み(読み取り専用権限のみ closed で許可)。**アーカイブ/クローズを切り替える管理 UI が無い** |
 | プロジェクトの削除 | missing | 権限 `delete_project` ごと無い |
 | プロジェクトのコピー | done | `copyProjectAction` |
@@ -116,14 +116,16 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 46。下表参照 |
-| プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 53。下表参照 |
+| プロジェクトモジュール | done | 本家 10 と同数。`calendar` / `gantt` を追加し、`PROJECT_MODULES` を権限レジストリから一元化した |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_message_watchers`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `set_notes_private`, `use_webhooks`, `view_issue_watchers`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
+
+> 本家の `:public => true`(ロールに関係なく全員に与えられる)は next-pm のレジストリに概念が無い。`view_project` を既存ロールへ明示的に seed しているのと同じ扱いで、`view_members` も builtin 2 ロールと Manager へ seed してある。本家よりわずかに厳しい(ロールから外せてしまう)点だけが差異。
 
 ## 5. ユーザー・認証・アカウント
 
