@@ -16,7 +16,8 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { canAttachIssueToTimeEntry, canAttributeTimeEntryTo, filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { paginate, parsePagination } from "@/interface/http/pagination";
@@ -28,10 +29,10 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-// Mirrors projects/[identifier]/time-entries/page.tsx's exact filtering: the role's
-// time_entries_visibility ("own" sees only its own rows), plus the rule that an entry
-// logged against a private issue the requester can't see must not leak that issue's
-// existence.
+// Rows go through `canAccessTimeEntry`, exactly as the HTML list, the report, the CSV
+// export and the single-entry endpoint do, and the envelope's total_count is computed over
+// that filtered set — never over the raw query — so the count can't be used to infer how
+// many entries were withheld.
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const projectId = url.searchParams.get("project_id");
@@ -59,7 +60,19 @@ export async function GET(request: Request) {
 
   const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
+  const permitted = can({ permission: "view_time_entries", project: projectContext, actor });
+  if (issueId) {
+    // Scoped by issue: the answer must not distinguish "this issue exists but is in a
+    // project you can't read" (or "is private and not yours") from "no such issue", or the
+    // endpoint becomes an existence oracle for issue ids across every project.
+    const issue = await issueRepository.findById(issueId);
+    const visible = issue !== null && isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor));
+    if (!permitted || !visible) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+  } else if (!permitted) {
+    // Scoped by project: the caller supplied the project id, so 403 adds nothing they
+    // didn't already have — and it matches every other project-scoped endpoint here.
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

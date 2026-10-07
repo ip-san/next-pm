@@ -17,6 +17,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       userId: user?.id ?? null,
       userGroupIds,
       issueVisibilityRoles: issuesVisibilityRoles(actor),
+      timeEntryVisibilityRoles: timeEntriesVisibilityRoles(actor),
       from,
       to,
     },

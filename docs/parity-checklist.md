@@ -194,7 +194,7 @@
 |---|---|---|
 | 工数の記録 | done | 課題単票の `log-time-form` と、チケット任意のプロジェクト単位フォーム(`time-entries/new`、本家 `timelog/new` 相当) |
 | 工数の編集・削除 | done | 一覧・課題単票からの編集画面(`time-entries/[entryId]/edit`)と削除。`editable_by?`(visible かつ 自分の工数+`edit_own_time_entries` または `edit_time_entries`)を `domain/time-entry/visibility.ts` に実装。削除権限は本家同様に編集権限と同一 |
-| 工数の可視性(ロール設定) | done | `time_entries_visibility` が `own` のロールは自分名義の工数しか見えない(`TimeEntry#visible?` 相当)。一覧・レポート・課題単票・REST API のすべてに適用 |
+| 工数の可視性(ロール設定) | done | `time_entries_visibility` が `own` のロールは自分名義の工数しか見えない(`TimeEntry#visible?` 相当)。一覧・レポート・課題単票・活動・CSV エクスポート・REST API のすべてが同じ述語(`interface/http/time-entry-access.ts` の `canAccessTimeEntry`)を通る |
 | プロジェクトの工数一覧 | partial | 一覧と集計レポートあり。フィルタ・列選択・ソートは §2 の制約 |
 | 横断の工数一覧 | missing | 本家 `/time_entries` |
 | 他ユーザー名義での記録 | done | `log_time_for_other_users`。対象は `TimeEntry#assignable_users`(= `log_time` を持つロールの有効なメンバー + 自分)に限定され、権限が無ければ選択欄自体を出さずサーバ側でも拒否 |
