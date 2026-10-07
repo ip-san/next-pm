@@ -1,5 +1,6 @@
 "use server";
 
+import { deleteDocument } from "@/application/documents/delete-document";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -173,7 +174,10 @@ export async function deleteDocumentAction(_prevState: DeleteDocumentActionState
     return { error: "この操作を行う権限がありません。" };
   }
 
-  await documentRepository.delete(document.id);
+  await deleteDocument(
+    { documentRepository, attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+    document.id,
+  );
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/documents`);
   redirect(`/projects/${parsed.data.projectIdentifier}/documents`);
 }
