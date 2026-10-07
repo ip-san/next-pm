@@ -10,7 +10,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // viewer holds the permission in at least one visible project with the module enabled
   // (`allowed_to?(..., nil, :global => true) && EnabledModule.exists?`). `can` already
   // folds the module check in, so one lookup per permission answers both halves.
-  const issueProjects = await listProjectsWithPermission(user, "view_issues");
+  const [issueProjects, timeProjects] = await Promise.all([
+    listProjectsWithPermission(user, "view_issues"),
+    listProjectsWithPermission(user, "view_time_entries"),
+  ]);
 
   return (
     <div className="flex flex-col flex-1">
@@ -25,6 +28,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {issueProjects.length > 0 ? (
             <Link href="/issues" className="hover:underline">
               チケット
+            </Link>
+          ) : null}
+          {timeProjects.length > 0 ? (
+            <Link href="/time_entries" className="hover:underline">
+              作業時間
             </Link>
           ) : null}
           <Link href="/search" className="hover:underline">

@@ -19,9 +19,9 @@
 | 差分 | 内容 |
 |---|---|
 | 課題の識別子 | 本家は全体で一意の連番(`#123`)。next-pm は UUID の先頭 8 桁(`#eb0b2d1a`)を表示・参照の shorthand に使う。メール件名の返信検出(`domain/mail/parse-email.ts`)やコミットメッセージ走査(`domain/scm/keyword-scan.ts`)もこの表記に合わせてある。移行するなら全機能横断の変更になる |
-| クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。適用先はプロジェクトの課題一覧と横断の課題一覧(§13)。工数一覧(§9)への再利用は未着手(`type` 列はそのための下地) |
+| クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。適用先は課題一覧(プロジェクト/横断)と工数一覧(プロジェクト/横断)。`queries.type` の STI でどちらの保存済みクエリかを分け、フィルタコンパイラ・ページング・ソート・列の検証は共有し、列カタログと読み取りモデルだけが別 |
 | 課題の更新経路 | 解消済み。単票の編集フォームからドメイン層の全項目(トラッカー・親課題・カスタム値を含む)に到達できるようになった。残る穴は一括編集の対応項目(§1)とコンテキストメニュー |
-| 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm も `/issues` を持つようになった。残るグローバル画面は `/time_entries` と `/activity` |
+| 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm も `/issues` と `/time_entries` を持つようになった。残るグローバル画面は `/activity` |
 | 管理画面の CRUD | ユーザー/ロール/トラッカー/課題ステータス/カスタムフィールド/列挙項目の編集・削除・並べ替えを実装済み。残るのはボード(§8)と、列挙項目のプロジェクト単位の上書き編集 |
 | 国際化 | 本家は約 50 言語のロケールファイル + ユーザーごとの言語設定。next-pm は文言がコンポーネントに直書きで i18n 基盤自体が無い |
 
@@ -31,7 +31,7 @@
 |---|---|---|---|
 | ~~1~~ | ~~課題の単票編集フォーム~~ (対応済み) | ドメイン層が揃っているため UI + Server Action のみで済む割に、体感差が最大 | §1 |
 | ~~2~~ | ~~クエリの表示列・ソート・グルーピング・合計・ページング~~ | 課題一覧について実装済み。残るは工数一覧・横断一覧への展開 | §2 |
-| 3 | 横断画面(`/issues` は対応済み。残り `/time_entries`, `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
+| 3 | 横断画面(`/issues`, `/time_entries` は対応済み。残り `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
 | 4 | ~~管理画面の更新・削除~~ (実装済み) | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
 | 5 | プライベート注記・注記の編集/削除 | `journals` にフラグ列追加 + 権限 3 種の追加が前提 | §1, §4 |
 | 6 | ~~工数の編集・削除~~(対応済み) | 編集/削除・他ユーザー名義の記録・工数カスタムフィールド・CSV 入出力・REST の個別操作まで実装 | §9 |
@@ -85,7 +85,7 @@
 | 表示列の選択 | done | `queries.column_names`。既定は本家 `Setting.issue_list_default_columns` と同じ 6 列。`spent_hours` は `view_time_entries` 保持者にのみ提示(本家 `IssueQuery#initialize_available_columns` 準拠) |
 | グルーピング | done | `queries.group_by`。グループ見出しに件数と小計を表示。件数・小計はページではなく絞り込み結果全体に対して SQL で集計するため、グループがページ境界で分割されても正しい。グループの並び順は本家同様その列のソート式(ステータスなら `position`)に従う |
 | ソート | done | `queries.sort_criteria`。列見出しクリックで多段ソート(本家同様 3 キーまで、クリックした列が先頭へ)。UUID 主キーには順序が無いため `id` 列のソートは `created_at` に対応付け、ページングが安定するよう常に `id` を最終キーに付ける |
-| 合計行(予定工数/作業時間などの total) | done | 本家 `options[:totalable_names]` 相当を `queries.totalable_names` に保持。予定工数・作業時間・数値カスタムフィールドの合計を、全体とグループ単位の両方で SQL 集計。作業時間の列と合計は `view_time_entries` 保持者にのみ出すが、本家の `TimeEntry.visible_condition` 相当(ロールの `time_entries_visibility` が `own` の場合に自分の分だけ数える)は効かせていない — §4 の通りこの設定は next-pm 全体でまだ未適用 |
+| 合計行(予定工数/作業時間などの total) | done | 本家 `options[:totalable_names]` 相当を `queries.totalable_names` に保持。予定工数・作業時間・数値カスタムフィールドの合計を、全体とグループ単位の両方で SQL 集計。作業時間の列と合計は `view_time_entries` 保持者にのみ出し、本家 `TimeEntry.visible_condition` 相当(ロールの `time_entries_visibility` が `own` ならそのプロジェクトでは自分の分だけ数える)も効かせる。横断一覧ではこの判定がプロジェクトごとに異なるため、SQL 側で「`all` のプロジェクト、または `own` のプロジェクトで自分名義」という条件に展開する |
 | ページネーション | done | 件数・行・グループ集計・合計すべて SQL 側で処理し、1 ページ分しかメモリに載せない。プライベート課題の可視性も `Array#filter` ではなく WHERE 句で効かせてあるため、件数と合計が可視範囲とずれない。ページサイズは本家 `Setting.per_page_options`(既定 `25,50,100`)。範囲外のページ番号は最終ページに丸める |
 | CSV エクスポート | partial | 課題のみ(`/api/projects/[identifier]/issues/csv`)。工数・ユーザーの CSV が無い。一覧と同じ URL 契約・同じユースケースを使うため、選択した表示列・フィルタ・ソートをそのまま反映する(行数の上限は本家同様 `issues_export_limit`、既定 500) |
 | PDF エクスポート | done | 課題一覧・Wiki・ガント |
@@ -194,12 +194,12 @@
 | 工数の記録 | done | 課題単票の `log-time-form` と、チケット任意のプロジェクト単位フォーム(`time-entries/new`、本家 `timelog/new` 相当) |
 | 工数の編集・削除 | done | 一覧・課題単票からの編集画面(`time-entries/[entryId]/edit`)と削除。`editable_by?`(visible かつ 自分の工数+`edit_own_time_entries` または `edit_time_entries`)を `domain/time-entry/visibility.ts` に実装。削除権限は本家同様に編集権限と同一 |
 | 工数の可視性(ロール設定) | done | `time_entries_visibility` が `own` のロールは自分名義の工数しか見えない(`TimeEntry#visible?` 相当)。一覧・レポート・課題単票・CSV エクスポート・REST API(一覧/個別)・編集/削除のすべてが同じ述語(`interface/http/time-entry-access.ts` の `canAccessTimeEntry`)を通る。活動(`application/activity/list-project-activity.ts`)だけは Application 層から Interface 層を参照できないため、同じ 3 条件をインラインで適用している。課題一覧の `spent_hours` 列・ソート・合計も同じロール設定で絞る(`SpentHoursScope`、本家 `Issue.load_visible_spent_hours` 相当) |
-| プロジェクトの工数一覧 | partial | 一覧と集計レポートあり。フィルタ・列選択・ソートは未適用 — §2 のクエリエンジンは `queries.type = 'TimeEntryQuery'` を見込んだ作りになっているが、工数側の列カタログと読み取りモデルはまだ無い |
-| 横断の工数一覧 | missing | 本家 `/time_entries` |
+| プロジェクトの工数一覧 | done | クエリエンジン駆動に置き換え(`domain/query/time-entry-columns.ts` の列カタログ、`time-entry-search.ts` の読み取りモデル、`application/time-entries/list-time-entries.ts`)。フィルタ・表示列・ソート・グルーピング・合計・ページング・保存済みクエリ(`queries.type = 'TimeEntryQuery'`)が横断一覧と同じ実装で動く。集計レポート(`./report`)は本家同様に別アクションのまま変更なし |
+| 横断の工数一覧 | done | `/time_entries`。プロジェクト一覧と同じ `TimeEntryTable` / 同じユースケースで、スコープだけが「`view_time_entries` を持つ全プロジェクト」に変わる。可視性は本家 `TimeEntry.visible_condition` どおりプロジェクトごとの `time_entries_visibility` を OR で展開し、加えて next-pm 独自の「見えない課題に紐づく工数は出さない」規則(`canAccessTimeEntry`)も SQL 側で効かせる。編集可否は行のプロジェクトの `edit_time_entries` / `edit_own_time_entries` で判定 |
 | 他ユーザー名義での記録 | done | `log_time_for_other_users`。対象は `TimeEntry#assignable_users`(= `log_time` を持つロールの有効なメンバー + 自分)に限定され、権限が無ければ選択欄自体を出さずサーバ側でも拒否 |
 | 工数の一括編集 | missing | 本家 `TimelogController#bulk_edit` / `bulk_update` |
 | 工数のカスタムフィールド | partial | 対象 `TimeEntry` のカスタムフィールドを管理画面から作成でき、記録・編集フォームと REST API から値を設定できる。ロール別の可視/編集可否は §1 と同じ制約 |
-| 工数の CSV エクスポート・インポート | partial | エクスポート(`/api/projects/[identifier]/time-entries/csv`)とインポート(`import_time_entries`、`time-entries/import`)。列構成は相互に一致。本家の多段マッピングウィザードは対象外で、単一ステップのアップロード(課題インポートと同じ設計) |
+| 工数の CSV エクスポート・インポート | partial | 一覧と同じ表示列・フィルタ・ソートで出すクエリ駆動のエクスポート(`/api/time_entries/csv`、`/api/projects/[identifier]/time-entries/query-csv`)と、列構成がインポータと一致する固定形式のエクスポート(`/api/projects/[identifier]/time-entries/csv`)の2本立て。表示列は利用者が変えられるため、取り込みが当てにできる形式にはならない — だから置き換えずに併置している。インポート(`import_time_entries`、`time-entries/import`)は固定形式の側と対応する。本家の多段マッピングウィザードは対象外で、単一ステップのアップロード(課題インポートと同じ設計) |
 | コミットメッセージからの工数記録 | done | `@2h` 記法(`commit_logtime_enabled`) |
 
 ## 10. リポジトリ(SCM)

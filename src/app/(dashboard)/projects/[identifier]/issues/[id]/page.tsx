@@ -41,7 +41,7 @@ import {
 } from "@/interface/http/resolve-actor";
 import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { AttachmentList } from "../../../attachment-list";
-import { DeleteTimeEntryButton } from "../../time-entries/delete-time-entry-button";
+import { DeleteTimeEntryButton } from "@/interface/components/query/delete-time-entry-button";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueEditForm } from "./issue-edit-form";
