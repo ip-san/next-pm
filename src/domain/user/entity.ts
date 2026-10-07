@@ -1,13 +1,19 @@
+import type { MailNotificationOption } from "@/domain/notification/mail-notification";
+
 export type UserStatus = "active" | "registered" | "locked";
 
 export interface User {
   id: string;
   login: string;
+  /** The default address. Additional ones live in domain/email-address — see that schema's comment. */
   mail: string;
   firstname: string;
   lastname: string;
   isAdmin: boolean;
   status: UserStatus;
+  /** Stored but not yet read: next-pm has no i18n framework. See schema/users.ts. */
+  language: string | null;
+  mailNotification: MailNotificationOption;
   passwordHash: string;
   passwordSalt: string;
   mustChangePassword: boolean;

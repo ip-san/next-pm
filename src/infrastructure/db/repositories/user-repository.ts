@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { users } from "@/infrastructure/db/schema/users";
+import { emailAddresses } from "@/infrastructure/db/schema/email-addresses";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 
@@ -13,6 +14,8 @@ function toDomain(row: typeof users.$inferSelect): User {
     lastname: row.lastname,
     isAdmin: row.isAdmin,
     status: row.status,
+    language: row.language,
+    mailNotification: row.mailNotification,
     passwordHash: row.passwordHash,
     passwordSalt: row.passwordSalt,
     mustChangePassword: row.mustChangePassword,
@@ -42,9 +45,26 @@ export class DrizzleUserRepository implements UserRepository {
     return rows.map(toDomain);
   }
 
+  /**
+   * Mirrors Redmine's User.find_by_login exactly, including its two-step shape: an exact match
+   * wins, and only if there is none does it fall back to a case-insensitive one.
+   *
+   * The case-insensitive fallback is not cosmetic. Redmine validates login uniqueness with
+   * `:case_sensitive => false`, so "Admin" and "admin" are the same account there. Matching
+   * case-sensitively only would let a registrant (or LDAP on-the-fly creation) claim "Admin"
+   * alongside an existing "admin" and impersonate them to anyone reading a name.
+   */
   async findByLogin(login: string): Promise<User | null> {
-    const [row] = await db.select().from(users).where(eq(users.login, login)).limit(1);
-    return row ? toDomain(row) : null;
+    const [exact] = await db.select().from(users).where(eq(users.login, login)).limit(1);
+    if (exact) {
+      return toDomain(exact);
+    }
+    const [insensitive] = await db
+      .select()
+      .from(users)
+      .where(sql`lower(${users.login}) = lower(${login})`)
+      .limit(1);
+    return insensitive ? toDomain(insensitive) : null;
   }
 
   async findByApiKey(apiKey: string): Promise<User | null> {
@@ -57,6 +77,16 @@ export class DrizzleUserRepository implements UserRepository {
     return row ? toDomain(row) : null;
   }
 
+  /**
+   * Mirrors Redmine's User.find_by_mail, which is `having_mail(...).first` over the whole
+   * email_addresses table — so an additional address matches just as the default one does.
+   * next-pm keeps the default address on users.mail (see schema/email-addresses.ts), so this
+   * searches both: the default first, then the additional ones.
+   *
+   * Searching both is what keeps the single callers correct everywhere at once — lost-password
+   * delivery, mail-handler sender matching and every uniqueness check — rather than each one
+   * having to remember the second table exists.
+   */
   async findByMail(mail: string): Promise<User | null> {
     // Exact case-insensitive equality, not a LIKE pattern match — mail comes from parsed email
     // headers in the mail-handler path, and a sender address containing "%"/"_" must never be
@@ -66,7 +96,17 @@ export class DrizzleUserRepository implements UserRepository {
       .from(users)
       .where(sql`lower(${users.mail}) = lower(${mail})`)
       .limit(1);
-    return row ? toDomain(row) : null;
+    if (row) {
+      return toDomain(row);
+    }
+
+    const [viaAdditional] = await db
+      .select({ user: users })
+      .from(emailAddresses)
+      .innerJoin(users, eq(users.id, emailAddresses.userId))
+      .where(sql`lower(${emailAddresses.address}) = lower(${mail})`)
+      .limit(1);
+    return viaAdditional ? toDomain(viaAdditional.user) : null;
   }
 
   async create(user: Omit<User, "id">): Promise<User> {
@@ -79,6 +119,8 @@ export class DrizzleUserRepository implements UserRepository {
         lastname: user.lastname,
         isAdmin: user.isAdmin,
         status: user.status,
+        language: user.language,
+        mailNotification: user.mailNotification,
         passwordHash: user.passwordHash,
         passwordSalt: user.passwordSalt,
         mustChangePassword: user.mustChangePassword,
@@ -97,8 +139,23 @@ export class DrizzleUserRepository implements UserRepository {
     await db.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, userId));
   }
 
+  async updateProfile(
+    userId: string,
+    values: Pick<User, "firstname" | "lastname" | "language" | "mailNotification">,
+  ): Promise<void> {
+    await db.update(users).set({ ...values, updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async updateMail(userId: string, mail: string): Promise<void> {
+    await db.update(users).set({ mail, updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
   async setAtomKey(userId: string, atomKey: string): Promise<void> {
     await db.update(users).set({ atomKey }).where(eq(users.id, userId));
+  }
+
+  async setApiKey(userId: string, apiKey: string): Promise<void> {
+    await db.update(users).set({ apiKey }).where(eq(users.id, userId));
   }
 
   async updatePassword(userId: string, passwordHash: string, passwordSalt: string): Promise<void> {

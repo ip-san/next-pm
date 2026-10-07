@@ -22,6 +22,8 @@ async function seed() {
       status: "active",
       passwordSalt: adminSalt,
       passwordHash: hashPassword("admin", adminSalt),
+      language: null,
+      mailNotification: "all",
       mustChangePassword: true,
     })
     .returning();

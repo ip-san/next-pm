@@ -15,6 +15,8 @@ import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
+import { resolvePreferences } from "@/domain/user-preferences/entity";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
@@ -69,6 +71,13 @@ export default async function IssueDetailPage({
   if (!project) {
     notFound();
   }
+
+  // Redmine's UserPreference#comments_sorting, applied by IssuesHelper when it renders the
+  // history. The repository's own order is oldest-first, so "desc" just reverses it.
+  const preferences = user ? await new DrizzleUserPreferencesRepository().findByUserId(user.id) : null;
+  const orderedJournals = resolvePreferences(preferences, user?.id ?? "").commentsSorting === "desc"
+    ? [...journals].reverse()
+    : journals;
 
   const reactions = await new DrizzleReactionRepository().listForReactables(
     "Journal",
@@ -240,7 +249,7 @@ export default async function IssueDetailPage({
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">履歴</h2>
         <ul className="flex flex-col gap-2 text-sm">
-          {journals.map((journal) => {
+          {orderedJournals.map((journal) => {
             const reaction = reactionsByJournalId.get(journal.id) ?? { count: 0, reacted: false };
             return (
               <li key={journal.id} className="border rounded p-2 flex flex-col gap-1">

@@ -18,12 +18,12 @@ import { DrizzlePasswordResetTokenRepository } from "@/infrastructure/db/reposit
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { createTwofaPendingToken, TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
+import { TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
 import { LdaptsAuthenticator } from "@/infrastructure/ldap/ldapts-authenticator";
 import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { destroyCurrentSession, establishSession, revokeAllSessions } from "@/interface/http/session";
-import { TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS, TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
+import { startPendingTwofaSetup, TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
 
 const loginSchema = z.object({
   login: z.string().min(1),
@@ -34,21 +34,6 @@ const loginSchema = z.object({
 export type LoginActionState = {
   error: string | null;
 };
-
-async function setPendingTwofaCookie(userId: string, rememberMe: boolean, attempts = 0): Promise<void> {
-  // The remember-me choice has to survive the second-factor round trip, exactly as Redmine
-  // stashes session[:twofa_autologin] — otherwise ticking the box silently does nothing for
-  // every user who has 2FA on.
-  const pendingToken = await createTwofaPendingToken({ userId, attempts, rememberMe });
-  const cookieStore = await cookies();
-  cookieStore.set(TWOFA_PENDING_COOKIE_NAME, pendingToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: TWOFA_PENDING_COOKIE_MAX_AGE_SECONDS,
-  });
-}
 
 export async function loginAction(
   _prevState: LoginActionState,
@@ -79,11 +64,11 @@ export async function loginAction(
     case "inactive":
       return { error: INACTIVE_ACCOUNT_MESSAGE[result.outcome.status] ?? "このアカウントではログインできません。" };
     case "twofa_required":
-      await setPendingTwofaCookie(result.user.id, parsed.data.rememberMe);
+      await startPendingTwofaSetup(result.user.id, parsed.data.rememberMe);
       redirect("/login/twofa");
       break;
     case "twofa_setup_required":
-      await setPendingTwofaCookie(result.user.id, parsed.data.rememberMe);
+      await startPendingTwofaSetup(result.user.id, parsed.data.rememberMe);
       redirect("/login/twofa/setup");
       break;
     case "allowed":
@@ -155,7 +140,7 @@ export async function verifyTwofaAction(
     redirect("/login?error=twofa_too_many_tries");
   }
 
-  await setPendingTwofaCookie(pending.userId, pending.rememberMe, attempts);
+  await startPendingTwofaSetup(pending.userId, pending.rememberMe, attempts);
   return { error: "確認コードが正しくありません。" };
 }
 

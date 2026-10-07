@@ -82,6 +82,8 @@ export async function registerAccount(
     status: activateImmediately ? "active" : "registered",
     passwordSalt: salt,
     passwordHash: hashPassword(input.password, salt),
+    language: null,
+    mailNotification: "all",
     mustChangePassword: false,
     apiKey: null,
     atomKey: null,

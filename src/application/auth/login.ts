@@ -69,6 +69,8 @@ export async function login(
     status: "active",
     passwordHash: "",
     passwordSalt: "",
+    language: null,
+    mailNotification: "all",
     mustChangePassword: false,
     apiKey: null,
     atomKey: null,

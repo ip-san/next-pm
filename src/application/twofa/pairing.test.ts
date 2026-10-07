@@ -20,6 +20,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     status: "active",
     passwordSalt: "salt",
     passwordHash: "hash",
+    language: null,
+    mailNotification: "all" as const,
     mustChangePassword: false,
     apiKey: null,
     atomKey: null,
@@ -43,7 +45,10 @@ function fakeUserRepository(user: User | null): UserRepository {
     findByMail: mock(async () => store.user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
     updatePassword: mock(async () => {}),
+    updateProfile: mock(async () => {}),
+    updateMail: mock(async () => {}),
     updateStatus: mock(async () => {}),
+    setApiKey: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async (_id: string, encryptedKey: string) => {
       if (store.user) store.user = { ...store.user, twofaTotpKey: encryptedKey };

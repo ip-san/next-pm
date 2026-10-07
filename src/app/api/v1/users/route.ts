@@ -79,6 +79,8 @@ export async function POST(request: Request) {
       status: "active",
       passwordSalt: salt,
       passwordHash: hashPassword(parsed.data.password, salt),
+      language: null,
+      mailNotification: "all",
       mustChangePassword: true,
       apiKey: null,
       atomKey: null,

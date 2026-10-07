@@ -9,12 +9,14 @@ import {
   SelfRegistrationDisabledError,
 } from "@/application/accounts/register-account";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { evaluateLoginGate } from "@/domain/user/login-gate";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleUserTokenRepository } from "@/infrastructure/db/repositories/user-token-repository";
 import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { requireAdmin } from "@/interface/http/require-admin";
+import { startPendingTwofaSetup } from "@/interface/http/twofa-pending-cookie";
 import { establishSession } from "@/interface/http/session";
 
 export type RegisterActionState = {
@@ -68,6 +70,13 @@ export async function registerAction(
 
   if (result.kind === "activated") {
     // Redmine's register_automatically logs the user straight in and sends them to my/account.
+    // It still has to clear the same gate every other login does: with twofa '2' (required for
+    // everyone) a brand-new account owes a second factor before it gets a session, and handing
+    // one out here would be a way in that skips the requirement entirely.
+    if (evaluateLoginGate(result.user, settings.twofa).kind !== "allowed") {
+      await startPendingTwofaSetup(result.user.id);
+      redirect("/login/twofa/setup");
+    }
     await establishSession(result.user.id);
     redirect("/my/account");
   }

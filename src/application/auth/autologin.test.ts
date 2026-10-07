@@ -18,6 +18,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     status: "active",
     passwordHash: "",
     passwordSalt: "",
+    language: null,
+    mailNotification: "all" as const,
     mustChangePassword: false,
     apiKey: null,
     atomKey: null,

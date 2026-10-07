@@ -18,8 +18,14 @@ export interface UserRepository {
   updatePassword(userId: string, passwordHash: string, passwordSalt: string): Promise<void>;
   /** Redmine's User#activate! / #register! / #lock! — the whole of what those do is set this column. */
   updateStatus(userId: string, status: UserStatus): Promise<void>;
+  /** The my-account form's own fields. Deliberately excludes login, status and isAdmin, which it may not touch. */
+  updateProfile(userId: string, values: Pick<User, "firstname" | "lastname" | "language" | "mailNotification">): Promise<void>;
+  /** Changing the default address; the caller owns the uniqueness check and the security notification. */
+  updateMail(userId: string, mail: string): Promise<void>;
   /** Lazily assigns a feed token — only ever called when the user doesn't already have one. */
   setAtomKey(userId: string, atomKey: string): Promise<void>;
+  /** Issues or replaces the REST API key. Until the my-account screen existed, nothing ever wrote this column. */
+  setApiKey(userId: string, apiKey: string): Promise<void>;
   /** Stores an as-yet-unconfirmed pairing's encrypted secret. Does not activate twofaScheme. */
   setTotpPairing(userId: string, encryptedKey: string): Promise<void>;
   /** Activates 2FA on a confirmed pairing, seeding the anti-replay floor with the step that confirmed it. */
