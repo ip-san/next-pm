@@ -1,6 +1,7 @@
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import { diffIssueChanges } from "@/domain/journal/diff-issue";
+import { splitPrivateNote } from "@/domain/journal/visibility";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
@@ -84,6 +85,9 @@ export interface UpdateIssueInput {
   canEditAttributes?: boolean;
   /** `add_issue_notes` (Redmine's `notes_addable?`). False drops the note. */
   canAddNotes?: boolean;
+  /** Mark the note private. Requires `set_notes_private`; false otherwise (fails closed). */
+  privateNotes?: boolean;
+  canSetNotesPrivate?: boolean;
 }
 
 export interface UpdateIssueRepositories extends IssueAttributeRepositories {
@@ -443,13 +447,19 @@ async function applyIssueUpdate(
 
   const details = [...diffIssueChanges(before, changes), ...customFieldDetails];
   if (details.length > 0 || notes.trim().length > 0) {
-    await repositories.journalRepository.create({
-      journalizedType: "Issue",
-      journalizedId: input.issueId,
-      userId: input.actingUserId,
-      notes,
-      details,
-    });
+    // Mirrors Journal#split_private_notes: a private note carrying attribute changes
+    // becomes two journals so the changes stay public, and a blank note is never private.
+    const privateNotes = input.canSetNotesPrivate === true && input.privateNotes === true;
+    for (const journal of splitPrivateNote({ notes, privateNotes, details })) {
+      await repositories.journalRepository.create({
+        journalizedType: "Issue",
+        journalizedId: input.issueId,
+        userId: input.actingUserId,
+        notes: journal.notes,
+        privateNotes: journal.privateNotes,
+        details: journal.details,
+      });
+    }
     // Mirrors Redmine's issue_contributed_to trigger — firing on any recorded change, not
     // just notes, since a plain field edit shows up in the issue's history the same as a
     // comment does.

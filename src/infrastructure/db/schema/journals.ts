@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const journals = pgTable("journals", {
@@ -10,6 +10,8 @@ export const journals = pgTable("journals", {
     .notNull()
     .references(() => users.id),
   notes: text("notes").notNull().default(""),
+  /** Redmine's journals.private_notes — the note is visible only to view_private_notes holders (and its author). */
+  privateNotes: boolean("private_notes").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

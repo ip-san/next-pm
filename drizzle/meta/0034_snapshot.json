@@ -1,6 +1,6 @@
 {
-  "id": "eb6b0cbc-ed01-4e92-8397-9a9e10948e33",
-  "prevId": "c1691a78-b168-4dc3-8acc-bbedfed94c92",
+  "id": "79452cd7-c606-481d-a8a0-a462ae02c049",
+  "prevId": "eb6b0cbc-ed01-4e92-8397-9a9e10948e33",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2153,6 +2153,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'IssueQuery'"
+        },
         "project_id": {
           "name": "project_id",
           "type": "uuid",
@@ -2174,6 +2181,33 @@
         },
         "filters": {
           "name": "filters",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "column_names": {
+          "name": "column_names",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "group_by": {
+          "name": "group_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_criteria": {
+          "name": "sort_criteria",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "totalable_names": {
+          "name": "totalable_names",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -2596,6 +2630,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -2768,6 +2809,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "disabled_core_fields": {
+          "name": "disabled_core_fields",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {},

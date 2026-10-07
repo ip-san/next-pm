@@ -72,7 +72,12 @@ export async function listProjectActivity(
       }
     }
 
-    const journals = await repositories.journalRepository.listByProject(input.projectId);
+    // The viewer is derived here rather than passed in, so both the activity page and the
+    // Atom feed get private-note filtering without either having to remember it.
+    const journals = await repositories.journalRepository.listByProject(input.projectId, {
+      userId: input.userId,
+      canViewPrivateNotes: can({ permission: "view_private_notes", project: input.projectContext, actor: input.actor }),
+    });
     for (const journal of journals) {
       const issue = issueById.get(journal.journalizedId);
       if (!issue) continue; // belongs to an issue the actor can't see, or outside this project

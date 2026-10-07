@@ -73,6 +73,7 @@ export function IssueEditForm({
   canManageSubtasks,
   derivedFields,
   canEditAttributes,
+  canSetNotesPrivate,
 }: {
   issue: Issue;
   parentIssueLabel: string | null;
@@ -113,6 +114,8 @@ export function IssueEditForm({
    * block on attributes_editable? and shows them just the note box.
    */
   canEditAttributes: boolean;
+  /** `set_notes_private` — offers the private-note checkbox next to the comment box. */
+  canSetNotesPrivate: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<FormState>({
@@ -139,6 +142,7 @@ export function IssueEditForm({
   // its id would disclose that it exists), and an untouched picker must leave the existing
   // parent alone rather than submit "" and silently detach it.
   const [parentId, setParentId] = useState<string | null>(null);
+  const [privateNote, setPrivateNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -199,6 +203,7 @@ export function IssueEditForm({
       lockVersion: issue.lockVersion,
       ...(canEditAttributes ? { trackerId: state.trackerId } : {}),
       notes: state.notes,
+      privateNotes: canSetNotesPrivate && privateNote,
       customFieldValues: canEditAttributes
         ? Object.fromEntries(applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]))
         : {},
@@ -548,6 +553,13 @@ export function IssueEditForm({
           className="border rounded px-3 py-2"
         />
       </div>
+
+      {canSetNotesPrivate ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={privateNote} onChange={(event) => setPrivateNote(event.target.checked)} />
+          プライベート注記にする（閲覧権限のある人だけに表示）
+        </label>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm text-red-600">

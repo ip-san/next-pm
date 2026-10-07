@@ -50,6 +50,8 @@ async function seed() {
         "edit_issues",
         "edit_own_issues",
         "add_issue_notes",
+        "set_notes_private",
+        "view_private_notes",
         "delete_issues",
         "copy_issues",
         "set_issues_private",

@@ -1,4 +1,4 @@
-import { PERMISSION_REGISTRY, type PermissionKey } from "@/domain/authorization/permission-registry";
+import { isPermissionSetableForBuiltin, PERMISSION_REGISTRY, type PermissionKey } from "@/domain/authorization/permission-registry";
 
 /** Mirrors Redmine's Role::BUILTIN_NON_MEMBER / BUILTIN_ANONYMOUS; 0 means an ordinary, assignable role. */
 export const ROLE_BUILTIN_MEMBER = 0;
@@ -47,11 +47,5 @@ export function isBuiltinRole(role: Pick<Role, "builtin">): boolean {
  */
 export function setablePermissions(builtin: RoleBuiltin): PermissionKey[] {
   const keys = Object.keys(PERMISSION_REGISTRY) as PermissionKey[];
-  if (builtin === ROLE_BUILTIN_NON_MEMBER) {
-    return keys.filter((key) => PERMISSION_REGISTRY[key].require !== "member");
-  }
-  if (builtin === ROLE_BUILTIN_ANONYMOUS) {
-    return keys.filter((key) => PERMISSION_REGISTRY[key].require === null);
-  }
-  return keys;
+  return keys.filter((key) => isPermissionSetableForBuiltin(key, builtin));
 }

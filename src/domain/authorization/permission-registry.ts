@@ -13,6 +13,8 @@ export type PermissionKey =
   | "edit_issues"
   | "edit_own_issues"
   | "add_issue_notes"
+  | "set_notes_private"
+  | "view_private_notes"
   | "delete_issues"
   | "copy_issues"
   | "set_issues_private"
@@ -68,7 +70,11 @@ interface PermissionDefinition {
    * allowed on closed (but not archived) projects; everything else requires an active project.
    */
   readOnly: boolean;
-  /** Null when any principal, including an anonymous visitor, may hold the permission. */
+  /**
+   * Null when any principal, including an anonymous visitor, may hold the permission.
+   * Without this, an admin could hand `view_private_notes` to the builtin Anonymous role
+   * and publish every private note.
+   */
   require: PermissionRequirement;
 }
 
@@ -92,6 +98,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_issues: { module: "issue_tracking", readOnly: false, require: null },
   edit_own_issues: { module: "issue_tracking", readOnly: false, require: null },
   add_issue_notes: { module: "issue_tracking", readOnly: false, require: null },
+  set_notes_private: { module: "issue_tracking", readOnly: false, require: "member" },
+  view_private_notes: { module: "issue_tracking", readOnly: true, require: "member" },
   delete_issues: { module: "issue_tracking", readOnly: false, require: "member" },
   copy_issues: { module: "issue_tracking", readOnly: false, require: null },
   set_issues_private: { module: "issue_tracking", readOnly: false, require: null },
@@ -138,4 +146,22 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
 
 export function isPermissionRegistered(key: string): key is PermissionKey {
   return key in PERMISSION_REGISTRY;
+}
+
+/**
+ * Port of `Role#setable_permissions`, as a single-key predicate: whether a role of this
+ * builtin kind may be granted this permission at all. Keeps a members-only permission off
+ * the Non-member and Anonymous roles however the role is edited. `domain/role/entity.ts`'s
+ * `setablePermissions` is the list-shaped form of the same rule and delegates here, so the
+ * role form, the permission matrix and both server actions can never disagree.
+ *
+ * The builtin values are `Role`'s own (`ROLE_BUILTIN_*`), spelled out rather than imported
+ * because that module imports this one.
+ */
+export function isPermissionSetableForBuiltin(permission: PermissionKey, builtin: number): boolean {
+  const required = PERMISSION_REGISTRY[permission].require;
+  if (required === null) return true;
+  if (builtin === 2) return false; // Anonymous: neither member nor logged in
+  if (builtin === 1) return required !== "member"; // Non-member is logged in but not a member
+  return true;
 }

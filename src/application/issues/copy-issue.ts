@@ -22,6 +22,7 @@ import type { UserPreferencesRepository } from "@/domain/user-preferences/reposi
 import type { VersionRepository } from "@/domain/version/repository";
 import type { WatcherRepository } from "@/domain/watcher/repository";
 import type { WorkflowFieldPermissionRepository } from "@/domain/workflow/repository";
+import { resolveProjectActors } from "@/application/authorization/project-actors";
 import { createIssueRelation } from "./create-issue-relation";
 import { ProjectHasNoTrackerError } from "./move-issue";
 import { createIssue } from "./create-issue";
@@ -326,26 +327,17 @@ async function copyWatchers(
   const watcherUserIds = await repositories.watcherRepository.listWatcherUserIds("Issue", source.id);
   if (watcherUserIds.length === 0) return;
 
-  const [users, members, nonMemberRole] = await Promise.all([
+  const [users, actors] = await Promise.all([
     repositories.userRepository.findByIds(watcherUserIds),
-    repositories.memberRepository.listByProject(copy.projectId),
-    repositories.roleRepository.findBuiltinNonMember(),
+    resolveProjectActors(repositories, copy.projectId, watcherUserIds),
   ]);
-  const roleIdsByUserId = new Map(members.flatMap((member) => (member.userId ? [[member.userId, member.roleIds] as const] : [])));
-  const allRoles = await repositories.roleRepository.findByIds([...new Set(members.flatMap((member) => member.roleIds))]);
-  const roleById = new Map(allRoles.map((role) => [role.id, role]));
   const targetContext = projectAuthorizationContext(targetProject);
 
   for (const user of users) {
     if (user.status !== "active") continue;
 
-    const memberRoleIds = roleIdsByUserId.get(user.id);
-    const actor: AuthorizationActor = user.isAdmin
-      ? { kind: "admin" }
-      : memberRoleIds
-        ? { kind: "member", roles: memberRoleIds.flatMap((roleId) => (roleById.get(roleId) ? [roleById.get(roleId)!] : [])) }
-        : { kind: "non_member", role: nonMemberRole };
-
+    const actor = actors.get(user.id);
+    if (!actor) continue;
     if (!can({ permission: "view_issues", project: targetContext, actor })) continue;
     // A private copy narrows it further to the people its own visibility rule allows.
     if (!isPrivateIssueVisible(copy, user.id, [], actorIssuesVisibilityRoles(actor))) continue;

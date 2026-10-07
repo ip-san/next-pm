@@ -22,6 +22,8 @@ export async function journalizeAttachment(
     journalizedId: input.issueId,
     userId: input.userId,
     notes: "",
+    // An attachment entry carries no note, so there is nothing for private_notes to hide.
+    privateNotes: false,
     details: [
       {
         property: "attachment",
