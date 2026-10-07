@@ -75,6 +75,31 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         </select>
       </label>
 
+      <fieldset className="flex flex-col gap-2 border rounded p-3">
+        <legend className="text-sm font-medium px-1">親チケットの値を子チケットから算出する</legend>
+        <label className="flex flex-col gap-1 text-sm">
+          開始日・期日
+          <select name="parentIssueDates" defaultValue={settings.parentIssueDates} className="border rounded px-2 py-1">
+            <option value="independent">子チケットから算出しない</option>
+            <option value="derived">子チケットから算出する</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          優先度
+          <select name="parentIssuePriority" defaultValue={settings.parentIssuePriority} className="border rounded px-2 py-1">
+            <option value="independent">子チケットから算出しない</option>
+            <option value="derived">子チケットから算出する</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          進捗率
+          <select name="parentIssueDoneRatio" defaultValue={settings.parentIssueDoneRatio} className="border rounded px-2 py-1">
+            <option value="independent">子チケットから算出しない</option>
+            <option value="derived">子チケットから算出する</option>
+          </select>
+        </label>
+      </fieldset>
+
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
           {state.error}

@@ -9,8 +9,12 @@ import type { Issue } from "@/domain/issue/entity";
 import { collectSelfAndDescendantIds } from "@/domain/issue/parent";
 import type { IssueRepository } from "@/domain/issue/repository";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import type { EnumerationRepository } from "@/domain/enumeration/repository";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ProjectRepository } from "@/domain/project/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
+import { recalculateParents } from "./recalculate-parents";
 
 export class DeleteIssueNotPermittedError extends Error {
   constructor() {
@@ -43,6 +47,9 @@ export interface DeleteIssueRepositories {
   timeEntryRepository: TimeEntryRepository;
   attachmentRepository: AttachmentRepository;
   attachmentStorage: AttachmentStorage;
+  issueStatusRepository: IssueStatusRepository;
+  enumerationRepository: EnumerationRepository;
+  settingsRepository: SettingsRepository;
 }
 
 export interface DeleteIssueInput {
@@ -102,7 +109,14 @@ export async function deleteIssue(
   const attachments = await repositories.attachmentRepository.listByContainers("Issue", deletedIssueIds);
   const removedStorageKeys = attachments.map((attachment) => attachment.storageKey);
 
+  // Captured before the rows go: the surviving parent has to be re-derived without them.
+  const survivingParentId = issue.parentId;
+
   await repositories.issueRepository.deleteWithDependents(deletedIssueIds);
+
+  if (survivingParentId) {
+    await recalculateParents(repositories, survivingParentId, [survivingParentId]);
+  }
 
   // After the transaction: a file left behind is wasted disk, but a row pointing at a file
   // that is already gone would be a broken download, so this order is the safe one. Failures

@@ -57,7 +57,7 @@
 | 課題の削除 | done | `delete_issues` 権限 + 単票の確認画面(`issues/[id]/destroy`)と `DELETE /api/v1/issues/[id]`。本家 `IssuesController#destroy` に準拠し、子孫チケットを一緒に削除、記録済み工数は削除/紐付け解除/別チケットへ付け替えの 3 択(付け替え先は同一プロジェクト・可視・削除対象外に限定)。journal(明細・リアクション含む)・ウォッチャー・カスタム値・添付レコードを 1 トランザクションで削除し、添付の実ファイルはコミット後に削除する |
 | 課題のコピー | done | `copy_issues` 権限 + 単票画面のコピーフォーム(`copy-issue-form.tsx` → `application/issues/copy-issue.ts`)。本家 `Issue#copy_from` / `after_create_from_copy` に準拠し、コピー先プロジェクト/トラッカーの選択、添付・子チケット・ウォッチャーの任意コピー、作成者をコピー実行者に差し替え、ステータスをコピー先トラッカーの初期値にリセット、カスタム値の引き継ぎ、`copied_to` 関連の作成(同一プロジェクト、または `cross_project_issue_relations` が有効なとき)まで行う。子チケットは可視なものだけを木構造のまま複製し、親を複製後の親に張り替え、open でないバージョンと非アクティブな担当者は外す |
 | 別プロジェクトへの移動 | done | 単票画面の `move-issue-form.tsx` から移動先プロジェクト+トラッカーを選んで実行(`application/issues/move-issue.ts`)。本家 `Issue#project=` / `after_project_change` に準拠し、トラッカーの自動フォールバック・カテゴリの同名再マッチ・共有外バージョンの解除・親の解除・同一プロジェクトの子チケットの随伴(keep_tracker)・工数の付け替え・プロジェクトをまたぐ関連の削除(`cross_project_issue_relations` が無効な場合)まで行う。移動先の候補は `add_issues` 権限を持つプロジェクトのみ。**一括編集での移動は未対応**(従来の備考にあった「一括編集の projectId 経由」は誤りで、`bulk-edit-actions.ts` は他プロジェクトの課題をスキップする) |
-| サブタスク(親子) | partial | 作成・更新の双方で `parentId` を設定でき、`manage_subtasks` 権限で可否を制御、付け替え時は自分自身/子孫を親にする循環を拒否する(`domain/issue/parent.ts`、本家 `Issue#validate_parent_issue`)。親課題の集計値(進捗率/日付/工数のロールアップ)・一覧のツリー表示が無い |
+| サブタスク(親子) | partial | 作成・更新の双方で `parentId` を設定でき、`manage_subtasks` 権限で可否を制御、付け替え時は自分自身/子孫を親にする循環を拒否する(`domain/issue/parent.ts`、本家 `Issue#validate_parent_issue`)。親課題の集計値は `parent_issue_dates` / `parent_issue_priority` / `parent_issue_done_ratio` 設定で子から算出(`domain/issue/rollup.ts` + `application/issues/recalculate-parents.ts`、本家 `Issue#recalculate_attributes_for`)、算出対象の項目は編集フォームで読み取り専用になる。**一覧のツリー表示が無い**(クエリエンジン側の一覧刷新と競合するため見送り)。なお本家に予定工数のロールアップ設定は無く、`total_estimated_hours` は表示専用の合計値 |
 | 課題の関連 | done | precedes/follows(遅延日数と後続の再スケジュール)・blocks/blocked・duplicates/duplicated(canonical のクローズで重複も自動クローズ)・relates・copied_to/copied_from の 9 種を定義、循環参照ガードあり(copied_to は課題のコピーで生成される) |
 | 関連の権限分離 | partial | `manage_issue_relations` のみ。本家の `manage_related_issues`(別プロジェクト側の課題に関連を張る権限)が無い |
 | ウォッチャー | done | 追加/削除/自己トグル、作成・担当・コメント時の自動ウォッチ(`user_preferences.auto_watch_on`) |
@@ -156,7 +156,7 @@
 | ワークフロー | done | 遷移とフィールド権限の編集 |
 | カスタムフィールド | done | 作成/編集/削除(入力済みの値ごと)/並べ替え。本家同様、保存後の形式(`field_format`)と対象(STI の型)は変更不可 |
 | 列挙項目(優先度・作業分類・文書カテゴリ) | partial | 作成/編集(名称・既定フラグ)/削除/並べ替え。削除は本家 `EnumerationsController#destroy` 準拠で、使用中なら付け替え先(`reassign_to`)必須。プロジェクト単位の上書き編集は未対応 |
-| アプリケーション設定 | partial | 10 項目のみ(添付上限・REST API 有効化・活動日数・フィード件数・進捗率の算出方式・プロジェクト間の関連許可・リポジトリログ表示件数・コミットキーワード各種)。本家は 100 前後の設定を持ち、認証(`login_required`, セッション有効期限)・表示(日時書式、既定言語)・課題追跡(既定トラッカー、添付の既定)・メール通知の設定が未対応 |
+| アプリケーション設定 | partial | 13 項目(添付上限・REST API 有効化・活動日数・フィード件数・0 時間工数の可否・進捗率の算出方式・プロジェクト間の関連許可・リポジトリログ表示件数・親チケットの日付/優先度/進捗率の算出方式・コミットキーワード各種)。クエリエンジンが追加した `per_page_options` / `issues_export_limit` は既定値付きで登録済みだが、まだ入力欄が無い。本家は 100 前後の設定を持ち、認証(`login_required`, セッション有効期限)・表示(日時書式、既定言語)・課題追跡(既定トラッカー、添付の既定)・メール通知の設定が未対応 |
 | 情報画面(環境情報) | missing | 本家 `/admin/info` |
 | プラグイン一覧 | out-of-scope | プラグイン機構そのものが無い |
 

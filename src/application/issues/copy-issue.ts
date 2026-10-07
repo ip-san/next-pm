@@ -11,6 +11,7 @@ import type { Issue } from "@/domain/issue/entity";
 import { collectSelfAndDescendantIds } from "@/domain/issue/parent";
 import { resolveProjectChange } from "@/domain/issue/project-change";
 import type { IssueRepository } from "@/domain/issue/repository";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueCategoryRepository } from "@/domain/issue-category/repository";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
@@ -22,6 +23,7 @@ import type { VersionRepository } from "@/domain/version/repository";
 import type { WatcherRepository } from "@/domain/watcher/repository";
 import type { WorkflowFieldPermissionRepository } from "@/domain/workflow/repository";
 import { createIssueRelation } from "./create-issue-relation";
+import { ProjectHasNoTrackerError } from "./move-issue";
 import { createIssue } from "./create-issue";
 import { setIssueCustomFieldValues } from "./set-custom-field-values";
 import { isAssigneeAssignable, type IssueAttributeRepositories } from "./validate-issue-attributes";
@@ -52,6 +54,7 @@ export type CopyIssueRepositories = IssueAttributeRepositories & {
   userPreferencesRepository: UserPreferencesRepository;
   watcherRepository: WatcherRepository;
   settingsRepository: SettingsRepository;
+  issueStatusRepository: IssueStatusRepository;
 };
 
 export interface CopyIssueInput {
@@ -110,6 +113,10 @@ export async function copyIssue(repositories: CopyIssueRepositories, input: Copy
   if (!can({ permission: "add_issues", project: projectAuthorizationContext(targetProject), actor: input.targetActor })) {
     throw new CopyIssueNotPermittedError("target");
   }
+  // Same guard moveIssue applies — `allowed_target_projects(...).having_trackers`.
+  if (targetProject.trackerIds.length === 0) {
+    throw new ProjectHasNoTrackerError();
+  }
 
   const [targetCategories, targetVersions, sourceCategories] = await Promise.all([
     repositories.issueCategoryRepository.listByProject(input.targetProjectId),
@@ -160,7 +167,7 @@ export async function copyIssue(repositories: CopyIssueRepositories, input: Copy
 }
 
 interface CopyContext {
-  targetProject: { id: string; trackerIds: string[] };
+  targetProject: { id: string; trackerIds: string[]; status: string; isPublic: boolean; enabledModules: string[] };
   targetCategoryIdByName: ReadonlyMap<string, string>;
   targetSharedVersionIds: ReadonlySet<string>;
   categoryNameById: ReadonlyMap<string, string>;
@@ -233,7 +240,13 @@ async function copyOne(
     startDate: source.startDate,
     dueDate: source.dueDate,
     actorRoleIds: input.actorRoleIdsOnTarget,
-    canSetPrivate: input.canSetPrivate,
+    // `|| source.isPrivate`: createIssue drops is_private when the actor may not set it,
+    // which on this path would publish a private issue's subject, description, custom
+    // values and attachments to everyone in the target project. Carrying the flag over is
+    // not the actor *choosing* to make something private — it is preserving the source's
+    // confidentiality — and it is what Redmine does, since copy_from assigns attributes
+    // directly rather than through safe_attributes.
+    canSetPrivate: input.canSetPrivate || source.isPrivate,
     // The hierarchy comes from the source, not from user input; the root copy's parent is
     // already gated on manage_subtasks by the caller above.
     canManageSubtasks: true,
@@ -244,7 +257,7 @@ async function copyOne(
     await copyAttachments(repositories, source, copy, input.actingUserId);
   }
   if (input.copyWatchers) {
-    await copyWatchers(repositories, source, copy);
+    await copyWatchers(repositories, source, copy, context.targetProject);
   }
 
   return copy;
@@ -297,12 +310,46 @@ async function copyAttachments(
   }
 }
 
-/** `self.watcher_user_ids = issue.visible_watcher_users.select { active }`. */
-async function copyWatchers(repositories: CopyIssueRepositories, source: Issue, copy: Issue): Promise<void> {
+/**
+ * `self.watcher_user_ids = issue.visible_watcher_users.select { active }`, plus a filter
+ * Redmine doesn't need here: a watcher is only carried over if they could actually see the
+ * copy. Copying into another project otherwise attaches people with no access to it —
+ * they'd be notified about an issue they can't open, and their names would show up on its
+ * watcher list — which is the same leak `notified_watchers` guards against at send time.
+ */
+async function copyWatchers(
+  repositories: CopyIssueRepositories,
+  source: Issue,
+  copy: Issue,
+  targetProject: { status: string; isPublic: boolean; enabledModules: string[] },
+): Promise<void> {
   const watcherUserIds = await repositories.watcherRepository.listWatcherUserIds("Issue", source.id);
-  const users = await repositories.userRepository.findByIds(watcherUserIds);
+  if (watcherUserIds.length === 0) return;
+
+  const [users, members, nonMemberRole] = await Promise.all([
+    repositories.userRepository.findByIds(watcherUserIds),
+    repositories.memberRepository.listByProject(copy.projectId),
+    repositories.roleRepository.findBuiltinNonMember(),
+  ]);
+  const roleIdsByUserId = new Map(members.flatMap((member) => (member.userId ? [[member.userId, member.roleIds] as const] : [])));
+  const allRoles = await repositories.roleRepository.findByIds([...new Set(members.flatMap((member) => member.roleIds))]);
+  const roleById = new Map(allRoles.map((role) => [role.id, role]));
+  const targetContext = projectAuthorizationContext(targetProject);
+
   for (const user of users) {
     if (user.status !== "active") continue;
+
+    const memberRoleIds = roleIdsByUserId.get(user.id);
+    const actor: AuthorizationActor = user.isAdmin
+      ? { kind: "admin" }
+      : memberRoleIds
+        ? { kind: "member", roles: memberRoleIds.flatMap((roleId) => (roleById.get(roleId) ? [roleById.get(roleId)!] : [])) }
+        : { kind: "non_member", role: nonMemberRole };
+
+    if (!can({ permission: "view_issues", project: targetContext, actor })) continue;
+    // A private copy narrows it further to the people its own visibility rule allows.
+    if (!isPrivateIssueVisible(copy, user.id, [], actorIssuesVisibilityRoles(actor))) continue;
+
     await repositories.watcherRepository.watch("Issue", copy.id, user.id);
   }
 }

@@ -29,6 +29,7 @@ function makeRepositories(options: {
   watcherUserIds?: string[];
   users?: Pick<User, "id" | "status">[];
   settings?: Record<string, string>;
+  issuesVisibility?: "all" | "default" | "own";
 }) {
   const created: Issue[] = [];
   const relations: IssueRelation[] = [];
@@ -40,8 +41,21 @@ function makeRepositories(options: {
   const repositories = {
     ...makeIssueAttributeRepositoriesMock({
       users: options.users ?? [{ id: "user-1", status: "active" }],
-      members: [{ userId: "user-1", groupId: null, roleIds: ["role-assignable"] }],
-      roles: [{ id: "role-assignable", assignable: true }],
+      members: [
+        { userId: "user-1", groupId: null, roleIds: ["role-assignable"] },
+        { userId: "watcher-active", groupId: null, roleIds: ["role-assignable"] },
+        { userId: "watcher-locked", groupId: null, roleIds: ["role-assignable"] },
+        { userId: "watcher-outsider", groupId: null, roleIds: ["role-assignable"] },
+      ],
+      roles: [
+        {
+          id: "role-assignable",
+          assignable: true,
+          builtin: 0,
+          permissions: ["view_issues"],
+          issuesVisibility: options.issuesVisibility ?? "all",
+        },
+      ],
     }),
     issueRepository: makeIssueRepositoryMock({
       findById: mock(async (id: string) => issuesById.get(id) ?? null),
@@ -324,5 +338,83 @@ describe("copyIssue — subtasks", () => {
     await copyIssue(repositories, { ...baseInput, copySubtasks: true });
 
     expect(created.find((issue) => issue.subject === "Child")!.fixedVersionId).toBeNull();
+  });
+});
+
+describe("copyIssue — confidentiality of the copy", () => {
+  const privateSource = makeIssue({
+    id: "source",
+    projectId: "proj-1",
+    trackerId: "tracker-1",
+    subject: "Secret",
+    isPrivate: true,
+    authorId: "user-1",
+  });
+
+  it("keeps a private source private even when the actor may not set the flag", async () => {
+    // Regression: createIssue drops is_private without the permission, which published the
+    // source's subject, description, custom values and attachments to the whole project.
+    const { repositories, created } = makeRepositories({ issues: [privateSource] });
+
+    await copyIssue(repositories, { ...baseInput, canSetPrivate: false });
+
+    expect(created[0].isPrivate).toBe(true);
+  });
+
+  it("keeps a private subtask private in the copied tree", async () => {
+    const privateChild = makeIssue({
+      id: "child",
+      projectId: "proj-1",
+      trackerId: "tracker-1",
+      subject: "Secret child",
+      parentId: "source",
+      isPrivate: true,
+      authorId: "user-1",
+    });
+    const publicParent = makeIssue({ id: "source", projectId: "proj-1", trackerId: "tracker-1", subject: "Parent" });
+    const { repositories, created } = makeRepositories({ issues: [publicParent, privateChild] });
+
+    await copyIssue(repositories, { ...baseInput, copySubtasks: true, canSetPrivate: false });
+
+    expect(created.find((issue) => issue.subject === "Secret child")!.isPrivate).toBe(true);
+  });
+
+  it("does not carry a watcher who cannot see the target project", async () => {
+    // A cross-project copy otherwise attaches people with no access: they'd be notified
+    // about an issue they can't open, and would appear on its watcher list.
+    const users = [
+      { id: "watcher-active", status: "active" as const },
+      { id: "watcher-outsider", status: "active" as const },
+      { id: "user-1", status: "active" as const },
+    ];
+    const { repositories, watched } = makeRepositories({
+      issues: [makeIssue({ id: "source", projectId: "proj-1", trackerId: "tracker-1" })],
+      watcherUserIds: ["watcher-active", "nobody-at-all"],
+      users: [...users, { id: "nobody-at-all", status: "active" as const }],
+    });
+
+    await copyIssue(repositories, { ...baseInput, copyWatchers: true });
+
+    expect(watched.map((entry) => entry.userId)).toContain("watcher-active");
+    expect(watched.map((entry) => entry.userId)).not.toContain("nobody-at-all");
+  });
+
+  it("does not carry a watcher who could not see the private copy", async () => {
+    // The copy is private and authored by user-1. watcher-active is neither author nor
+    // assignee, and their role's issues_visibility is "default", so the private-issue rule
+    // excludes them — exactly the case that would otherwise notify them about it.
+    const { repositories, watched } = makeRepositories({
+      issues: [privateSource],
+      watcherUserIds: ["watcher-active"],
+      users: [
+        { id: "watcher-active", status: "active" },
+        { id: "user-1", status: "active" },
+      ],
+      issuesVisibility: "default",
+    });
+
+    await copyIssue(repositories, { ...baseInput, copyWatchers: true, canSetPrivate: false });
+
+    expect(watched.map((entry) => entry.userId)).not.toContain("watcher-active");
   });
 });

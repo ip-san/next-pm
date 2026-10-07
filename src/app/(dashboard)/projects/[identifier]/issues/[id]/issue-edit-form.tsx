@@ -71,6 +71,7 @@ export function IssueEditForm({
   doneRatioEditable,
   canSetPrivate,
   canManageSubtasks,
+  derivedFields,
 }: {
   issue: Issue;
   parentIssueLabel: string | null;
@@ -100,6 +101,12 @@ export function IssueEditForm({
   canSetPrivate: boolean;
   /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
   canManageSubtasks: boolean;
+  /**
+   * Attributes this issue derives from its subtasks (the `parent_issue_*` settings, which
+   * only apply to a non-leaf issue). Redmine drops them from safe_attribute_names, so they
+   * render read-only here and are never submitted.
+   */
+  derivedFields: { dates: boolean; priority: boolean; doneRatio: boolean };
 }) {
   const router = useRouter();
   const [state, setState] = useState<FormState>({
@@ -162,7 +169,13 @@ export function IssueEditForm({
     () => workflowRuleByAttribute(fieldPermissions, { trackerId: state.trackerId, statusId: selectedStatusId, roleIds }),
     [fieldPermissions, state.trackerId, selectedStatusId, roleIds],
   );
-  const isReadOnly = (field: keyof typeof rules) => rules[field] === "readonly";
+  const derivedByParentRollup: Partial<Record<keyof typeof rules, boolean>> = {
+    startDate: derivedFields.dates,
+    dueDate: derivedFields.dates,
+    priorityId: derivedFields.priority,
+    doneRatio: derivedFields.doneRatio,
+  };
+  const isReadOnly = (field: keyof typeof rules) => rules[field] === "readonly" || derivedByParentRollup[field] === true;
   const isRequired = (field: keyof typeof rules) => rules[field] === "required";
 
   async function onSubmit(event: React.FormEvent) {

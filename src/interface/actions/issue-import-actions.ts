@@ -7,6 +7,8 @@ import { parseCsv } from "@/domain/csv/decode";
 import { createIssue } from "@/application/issues/create-issue";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
@@ -200,7 +202,16 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
 
     try {
       await createIssue(
-        { ...drizzleIssueAttributeRepositories(), issueRepository, trackerRepository, workflowFieldPermissionRepository, userPreferencesRepository, watcherRepository },
+        {
+          ...drizzleIssueAttributeRepositories(),
+          issueRepository,
+          trackerRepository,
+          workflowFieldPermissionRepository,
+          userPreferencesRepository,
+          watcherRepository,
+          issueStatusRepository: new DrizzleIssueStatusRepository(),
+          settingsRepository: new DrizzleSettingsRepository(),
+        },
         {
           projectId: project.id,
           trackerId: tracker.id,

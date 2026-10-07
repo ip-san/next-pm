@@ -16,6 +16,7 @@ import { isFieldBlank } from "@/domain/workflow/blank";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { applyIssueCustomFieldValues, prepareIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
 import { assertIssueAttributesAssignable, type IssueAttributeRepositories } from "@/application/issues/validate-issue-attributes";
+import { recalculateParents } from "@/application/issues/recalculate-parents";
 import { readOnlyAttributeNames, requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import { canTransitionTo } from "@/domain/workflow/transition-rules";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
@@ -294,6 +295,27 @@ async function applyIssueUpdate(
   if (!input.canSetPrivate) delete changes.isPrivate;
   if (!input.canManageSubtasks) delete changes.parentId;
 
+  // Mirrors safe_attribute_names subtracting start_date/due_date, priority_id and done_ratio
+  // when the matching parent_issue_* setting derives them — all gated on `!leaf?`, so a
+  // childless issue keeps full control of its own values.
+  const rollupSettings = resolveGeneralSettings(await repositories.settingsRepository.getAll());
+  const touchesDerivable =
+    (rollupSettings.parentIssueDates === "derived" && (changes.startDate !== undefined || changes.dueDate !== undefined)) ||
+    (rollupSettings.parentIssuePriority === "derived" && changes.priorityId !== undefined) ||
+    (rollupSettings.parentIssueDoneRatio === "derived" && changes.doneRatio !== undefined);
+  if (touchesDerivable) {
+    const siblings = await repositories.issueRepository.listByProject(before.projectId);
+    const hasChildren = siblings.some((candidate) => candidate.parentId === before.id);
+    if (hasChildren) {
+      if (rollupSettings.parentIssueDates === "derived") {
+        delete changes.startDate;
+        delete changes.dueDate;
+      }
+      if (rollupSettings.parentIssuePriority === "derived") delete changes.priorityId;
+      if (rollupSettings.parentIssueDoneRatio === "derived") delete changes.doneRatio;
+    }
+  }
+
   // Resolved up front so the status branch below doesn't re-read the settings table. Note
   // Redmine keeps 'done_ratio' in safe_attributes regardless of this setting — only the views
   // hide the field — so a submitted value is still honoured unless the target status carries
@@ -422,6 +444,20 @@ async function applyIssueUpdate(
 
   if (after.assignedToId && after.assignedToType === "user" && after.assignedToId !== before.assignedToId) {
     await applyAutoWatch(repositories, "issue_assigned_to_me", "Issue", input.issueId, after.assignedToId);
+  }
+
+  // Any of these can move a parent's derived dates, priority or done ratio. A re-parent has
+  // to refresh the old parent too, which is no longer reachable from this issue.
+  const affectsRollup =
+    changes.startDate !== undefined ||
+    changes.dueDate !== undefined ||
+    changes.doneRatio !== undefined ||
+    changes.estimatedHours !== undefined ||
+    changes.priorityId !== undefined ||
+    changes.statusId !== undefined ||
+    changes.parentId !== undefined;
+  if (affectsRollup) {
+    await recalculateParents(repositories, input.issueId, [before.parentId]);
   }
 
   return after;
