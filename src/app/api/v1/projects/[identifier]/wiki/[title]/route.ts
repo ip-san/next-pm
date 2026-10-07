@@ -173,10 +173,17 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const todo = new URL(request.url).searchParams.get("todo");
-  const parsedTodo = z.enum(["nullify", "destroy", "reassign"]).safeParse(todo ?? "nullify");
+  const query = new URL(request.url).searchParams;
+  const parsedTodo = z.enum(["nullify", "destroy", "reassign"]).safeParse(query.get("todo") ?? "nullify");
   if (!parsedTodo.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 422 });
+  }
+  // Validated before it reaches the use case: an id that isn't a uuid would otherwise fall
+  // through the in-project lookup to findById and blow up on Postgres' uuid cast.
+  const rawReassignTo = query.get("reassign_to_id");
+  const parsedReassignTo = z.string().uuid().nullable().safeParse(rawReassignTo);
+  if (!parsedReassignTo.success) {
+    return NextResponse.json({ error: "invalid_request", reason: "reassign_to_id" }, { status: 422 });
   }
 
   try {
@@ -191,7 +198,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       {
         pageId: page.id,
         childrenDisposition: parsedTodo.data,
-        reassignToId: new URL(request.url).searchParams.get("reassign_to_id"),
+        reassignToId: parsedReassignTo.data,
         canProtect: can({ permission: "protect_wiki_pages", project: projectContext, actor }),
       },
     );

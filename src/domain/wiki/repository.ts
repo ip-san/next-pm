@@ -29,6 +29,8 @@ export interface WikiRedirectRepository {
   deleteByTitle(projectId: string, title: string): Promise<void>;
   /** Mirrors WikiPage#delete_redirects: drops the redirects that pointed at a page being deleted. */
   deleteByTarget(projectId: string, title: string): Promise<void>;
+  /** Mirrors Wiki#delete_redirects, the before_destroy on the wiki itself: every redirect goes. */
+  deleteAllForProject(projectId: string): Promise<void>;
   create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect>;
 }
 

@@ -1,10 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { WikiPageNotFoundError, WikiTitleConflictError, renameWikiPage } from "./rename-wiki-page";
 import { WikiPageProtectedError } from "./save-wiki-page";
-import type { WikiPage, WikiRedirect } from "@/domain/wiki/entity";
-import type { WikiPageRepository, WikiRedirectRepository } from "@/domain/wiki/repository";
+import type { Wiki, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
+import type { WikiPageRepository, WikiRedirectRepository, WikiRepository } from "@/domain/wiki/repository";
 
-function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
+function makeRepos(pages: WikiPage[], redirects: WikiRedirect[], startPage: string | null = null) {
+  let wiki: Wiki | null = startPage === null ? null : { id: "wiki-1", projectId: "proj-1", startPage };
+  const wikiRepository: WikiRepository = {
+    findByProject: async () => wiki,
+    setStartPage: async (projectId, value) => {
+      wiki = { id: "wiki-1", projectId, startPage: value };
+      return wiki;
+    },
+  };
+
   const wikiPageRepository: WikiPageRepository = {
     listForProject: async (projectId) => pages.filter((p) => p.projectId === projectId),
     findById: async (id) => pages.find((p) => p.id === id) ?? null,
@@ -49,6 +58,11 @@ function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
         }
       }
     },
+    deleteAllForProject: async (projectId) => {
+      for (const redirect of redirects.filter((r) => r.projectId === projectId)) {
+        redirects.splice(redirects.indexOf(redirect), 1);
+      }
+    },
     deleteByTarget: async (projectId, title) => {
       for (const redirect of redirects.filter((r) => r.projectId === projectId && r.redirectsToTitle === title)) {
         redirects.splice(redirects.indexOf(redirect), 1);
@@ -66,7 +80,14 @@ function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
     },
   };
 
-  return { wikiPageRepository, wikiRedirectRepository, pages, redirects };
+  return {
+    wikiPageRepository,
+    wikiRedirectRepository,
+    wikiRepository,
+    pages,
+    redirects,
+    startPage: () => wiki?.startPage ?? null,
+  };
 }
 
 const page: WikiPage = { id: "page-1", projectId: "proj-1", title: "Old_title", parentId: null, isProtected: false };
@@ -74,7 +95,7 @@ const page: WikiPage = { id: "page-1", projectId: "proj-1", title: "Old_title", 
 describe("renameWikiPage", () => {
   it("renames the page and leaves a redirect from the old title", async () => {
     const repos = makeRepos([{ ...page }], []);
-    const renamed = await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined });
+    const renamed = await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined, markAsStartPage: false });
 
     expect(renamed.title).toBe("New_title");
     expect(repos.redirects).toEqual([
@@ -84,14 +105,14 @@ describe("renameWikiPage", () => {
 
   it("does not create a redirect when keepRedirect is false", async () => {
     const repos = makeRepos([{ ...page }], []);
-    await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: false, canProtect: false, parentId: undefined });
+    await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: false, canProtect: false, parentId: undefined, markAsStartPage: false });
 
     expect(repos.redirects).toEqual([]);
   });
 
   it("is a no-op when the new title matches the current one", async () => {
     const repos = makeRepos([{ ...page }], []);
-    const result = await renameWikiPage(repos, { pageId: "page-1", newTitle: "Old_title", keepRedirect: true, canProtect: false, parentId: undefined });
+    const result = await renameWikiPage(repos, { pageId: "page-1", newTitle: "Old_title", keepRedirect: true, canProtect: false, parentId: undefined, markAsStartPage: false });
 
     expect(result.title).toBe("Old_title");
     expect(repos.redirects).toEqual([]);
@@ -99,7 +120,7 @@ describe("renameWikiPage", () => {
 
   it("throws when the page doesn't exist", async () => {
     const repos = makeRepos([], []);
-    await expect(renameWikiPage(repos, { pageId: "missing", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined })).rejects.toThrow(
+    await expect(renameWikiPage(repos, { pageId: "missing", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined, markAsStartPage: false })).rejects.toThrow(
       WikiPageNotFoundError,
     );
   });
@@ -107,7 +128,7 @@ describe("renameWikiPage", () => {
   it("throws when a page with the new title already exists", async () => {
     const other: WikiPage = { id: "page-2", projectId: "proj-1", title: "New_title", parentId: null, isProtected: false };
     const repos = makeRepos([{ ...page }, other], []);
-    await expect(renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined })).rejects.toThrow(
+    await expect(renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined, markAsStartPage: false })).rejects.toThrow(
       WikiTitleConflictError,
     );
   });
@@ -122,7 +143,7 @@ describe("renameWikiPage", () => {
       createdAt: new Date(),
     };
     const repos = makeRepos([{ ...page }], [existingRedirect]);
-    await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined });
+    await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined, markAsStartPage: false });
 
     const redirectFromA = repos.redirects.find((r) => r.title === "A");
     expect(redirectFromA?.redirectsToTitle).toBe("New_title");
@@ -134,7 +155,7 @@ describe("renameWikiPage", () => {
     const roundTripPage: WikiPage = { id: "page-1", projectId: "proj-1", title: "B", parentId: null, isProtected: false };
     const staleRedirect: WikiRedirect = { id: "redirect-1", projectId: "proj-1", title: "A", redirectsToTitle: "B", createdAt: new Date() };
     const repos = makeRepos([roundTripPage], [staleRedirect]);
-    await renameWikiPage(repos, { pageId: "page-1", newTitle: "A", keepRedirect: false, canProtect: false, parentId: undefined });
+    await renameWikiPage(repos, { pageId: "page-1", newTitle: "A", keepRedirect: false, canProtect: false, parentId: undefined, markAsStartPage: false });
 
     expect(repos.redirects.find((r) => r.title === "A")).toBeUndefined();
   });
@@ -142,13 +163,13 @@ describe("renameWikiPage", () => {
   it("refuses to rename a protected page without protect_wiki_pages", async () => {
     const repos = makeRepos([{ ...page, isProtected: true }], []);
     await expect(
-      renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined }),
+      renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: false, parentId: undefined, markAsStartPage: false }),
     ).rejects.toThrow(WikiPageProtectedError);
   });
 
   it("renames a protected page when the actor holds protect_wiki_pages", async () => {
     const repos = makeRepos([{ ...page, isProtected: true }], []);
-    const renamed = await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: true, parentId: undefined });
+    const renamed = await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: true, canProtect: true, parentId: undefined, markAsStartPage: false });
     expect(renamed.title).toBe("New_title");
   });
 
@@ -163,8 +184,61 @@ describe("renameWikiPage", () => {
       createdAt: new Date(),
     };
     const repos = makeRepos([{ ...page }], [staleRedirect]);
-    await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: false, canProtect: false, parentId: undefined });
+    await renameWikiPage(repos, { pageId: "page-1", newTitle: "New_title", keepRedirect: false, canProtect: false, parentId: undefined, markAsStartPage: false });
 
     expect(repos.redirects.find((r) => r.title === "New_title" && r.redirectsToTitle === "Somewhere")).toBeUndefined();
+  });
+
+  // WikiPage#update_wiki_start_page: the setting names a page, so it follows that page's title.
+  it("moves the wiki start page when the start page itself is renamed", async () => {
+    const repos = makeRepos([{ ...page }], [], "Old_title");
+    await renameWikiPage(repos, {
+      pageId: "page-1",
+      newTitle: "New_title",
+      keepRedirect: true,
+      canProtect: false,
+      parentId: undefined,
+      markAsStartPage: false,
+    });
+    expect(repos.startPage()).toBe("New_title");
+  });
+
+  it("leaves the start page alone when a different page is renamed", async () => {
+    const repos = makeRepos([{ ...page }], [], "Somewhere_else");
+    await renameWikiPage(repos, {
+      pageId: "page-1",
+      newTitle: "New_title",
+      keepRedirect: true,
+      canProtect: false,
+      parentId: undefined,
+      markAsStartPage: false,
+    });
+    expect(repos.startPage()).toBe("Somewhere_else");
+  });
+
+  it("lets markAsStartPage point the setting at this page", async () => {
+    const repos = makeRepos([{ ...page }], [], "Somewhere_else");
+    await renameWikiPage(repos, {
+      pageId: "page-1",
+      newTitle: "New_title",
+      keepRedirect: true,
+      canProtect: false,
+      parentId: undefined,
+      markAsStartPage: true,
+    });
+    expect(repos.startPage()).toBe("New_title");
+  });
+
+  it("can mark a page as the start page without renaming it", async () => {
+    const repos = makeRepos([{ ...page }], [], "Somewhere_else");
+    await renameWikiPage(repos, {
+      pageId: "page-1",
+      newTitle: "Old_title",
+      keepRedirect: true,
+      canProtect: false,
+      parentId: undefined,
+      markAsStartPage: true,
+    });
+    expect(repos.startPage()).toBe("Old_title");
   });
 });

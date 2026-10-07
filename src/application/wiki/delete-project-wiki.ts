@@ -21,5 +21,8 @@ export async function deleteProjectWiki(
   for (const page of await repositories.wikiPageRepository.listForProject(projectId)) {
     await purgeWikiPage(repositories, projectId, page.id, page.title);
   }
+  // Wiki#delete_redirects: purging page by page only clears redirects that pointed at a
+  // deleted title, so anything left dangling goes with the wiki itself.
+  await repositories.wikiRedirectRepository.deleteAllForProject(projectId);
   await repositories.wikiRepository.setStartPage(projectId, DEFAULT_WIKI_START_PAGE);
 }

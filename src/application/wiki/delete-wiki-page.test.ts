@@ -51,6 +51,7 @@ function makeRepos(pages: WikiPage[], attachments: Attachment[] = []) {
       findByTitle: mock(),
       retarget: mock(),
       deleteByTitle: mock(),
+      deleteAllForProject: async () => {},
       deleteByTarget: async (_projectId: string, title: string) => {
         deletedRedirectTargets.push(title);
       },

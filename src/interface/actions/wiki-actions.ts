@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
-import { DEFAULT_WIKI_START_PAGE } from "@/domain/wiki/entity";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
@@ -320,19 +319,22 @@ export async function renameWikiPageAction(
     return { error: "この操作を行う権限がありません。" };
   }
 
-  const wikiRepository = new DrizzleWikiRepository();
-  const wiki = await wikiRepository.findByProject(project.id);
-  const wasStartPage = (wiki?.startPage ?? DEFAULT_WIKI_START_PAGE) === wikiPage.title;
+
 
   let renamed;
   try {
     renamed = await renameWikiPage(
-      { wikiPageRepository: new DrizzleWikiPageRepository(), wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
+      {
+        wikiPageRepository: new DrizzleWikiPageRepository(),
+        wikiRedirectRepository: new DrizzleWikiRedirectRepository(),
+        wikiRepository: new DrizzleWikiRepository(),
+      },
       {
         pageId: parsed.data.pageId,
         newTitle: canReparent ? parsed.data.newTitle : wikiPage.title,
         keepRedirect: parsed.data.keepRedirect === "on",
         parentId: canReparent ? (parsed.data.parentId === undefined ? undefined : parsed.data.parentId || null) : undefined,
+        markAsStartPage: canManageWiki && parsed.data.isStartPage === "on",
         canProtect: can({ permission: "protect_wiki_pages", project: projectContext, actor }),
       },
     );
@@ -350,14 +352,6 @@ export async function renameWikiPageAction(
       return { error: "親ページとして指定できないページです。" };
     }
     throw error;
-  }
-
-  // Redmine's WikiPage#update_wiki_start_page, a before_save: the start page follows the
-  // page it names when that page is renamed, and manage_wiki can point it at this page.
-  // Being the start page already is an attribute of the page, not a permission, so the
-  // follow happens for anyone allowed to rename at all.
-  if (wasStartPage || (canManageWiki && parsed.data.isStartPage === "on")) {
-    await wikiRepository.setStartPage(project.id, renamed.title);
   }
 
   redirect(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(renamed.title)}`);

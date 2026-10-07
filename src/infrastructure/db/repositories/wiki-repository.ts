@@ -139,6 +139,10 @@ export class DrizzleWikiRedirectRepository implements WikiRedirectRepository {
     await db.delete(wikiRedirects).where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.redirectsToTitle, title)));
   }
 
+  async deleteAllForProject(projectId: string): Promise<void> {
+    await db.delete(wikiRedirects).where(eq(wikiRedirects.projectId, projectId));
+  }
+
   async create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect> {
     const [row] = await db
       .insert(wikiRedirects)
