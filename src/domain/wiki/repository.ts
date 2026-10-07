@@ -21,6 +21,8 @@ export interface WikiRedirectRepository {
    */
   retarget(projectId: string, oldTarget: string, newTarget: string): Promise<void>;
   deleteByTitle(projectId: string, title: string): Promise<void>;
+  /** Mirrors WikiPage#delete_redirects: drops the redirects that pointed at a page being deleted. */
+  deleteByTarget(projectId: string, title: string): Promise<void>;
   create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect>;
 }
 
@@ -45,4 +47,6 @@ export interface WikiContentRepository {
   search(projectId: string, query: string): Promise<WikiSearchHit[]>;
   /** Every version of every page in the project (not just the current one) — activity feed. */
   listByProject(projectId: string): Promise<WikiVersionWithPage[]>;
+  /** Each page's current version only — Redmine's `WikiPage.with_updated_on` scope, used by the index views. */
+  listCurrentByProject(projectId: string): Promise<WikiVersionWithPage[]>;
 }

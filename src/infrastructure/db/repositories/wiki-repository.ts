@@ -118,6 +118,10 @@ export class DrizzleWikiRedirectRepository implements WikiRedirectRepository {
     await db.delete(wikiRedirects).where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.title, title)));
   }
 
+  async deleteByTarget(projectId: string, title: string): Promise<void> {
+    await db.delete(wikiRedirects).where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.redirectsToTitle, title)));
+  }
+
   async create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect> {
     const [row] = await db
       .insert(wikiRedirects)
@@ -208,6 +212,49 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
           text: r.text as string,
           comments: r.comments as string,
           createdAt: r.created_at as Date,
+        },
+      };
+    });
+  }
+
+  /**
+   * Each page's current version, joined to its page — the index views need every page's last
+   * update without loading its whole history. Same DISTINCT ON shape as `search`, and raw SQL
+   * for the same reason.
+   */
+  async listCurrentByProject(projectId: string): Promise<WikiVersionWithPage[]> {
+    const result = await db.execute(sql`
+      select wp.id as page_id, wp.project_id, wp.title, wp.parent_id, wp.is_protected,
+             wcv.id as version_id, wcv.version, wcv.author_id, wcv.text, wcv.comments, wcv.created_at
+      from (
+        select distinct on (page_id) *
+        from ${wikiContentVersions}
+        order by page_id, version desc
+      ) wcv
+      join ${wikiPages} wp on wp.id = wcv.page_id
+      where wp.project_id = ${projectId}
+      order by wp.title
+    `);
+
+    return result.rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        page: {
+          id: r.page_id as string,
+          projectId: r.project_id as string,
+          title: r.title as string,
+          parentId: r.parent_id as string | null,
+          isProtected: r.is_protected as boolean,
+        },
+        version: {
+          id: r.version_id as string,
+          pageId: r.page_id as string,
+          version: r.version as number,
+          authorId: r.author_id as string,
+          text: r.text as string,
+          comments: r.comments as string,
+          // db.execute bypasses Drizzle's column mapping, so timestamps arrive as strings.
+          createdAt: new Date(r.created_at as string),
         },
       };
     });

@@ -49,6 +49,11 @@ function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
         }
       }
     },
+    deleteByTarget: async (projectId, title) => {
+      for (const redirect of redirects.filter((r) => r.projectId === projectId && r.redirectsToTitle === title)) {
+        redirects.splice(redirects.indexOf(redirect), 1);
+      }
+    },
     deleteByTitle: async (projectId, title) => {
       for (const redirect of redirects.filter((r) => r.projectId === projectId && r.title === title)) {
         redirects.splice(redirects.indexOf(redirect), 1);

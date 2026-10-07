@@ -18,6 +18,7 @@ function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
     findByTitle: async (projectId, title) => redirects.find((r) => r.projectId === projectId && r.title === title) ?? null,
     retarget: async () => {},
     deleteByTitle: async () => {},
+    deleteByTarget: async () => {},
     create: async (entry) => ({ ...entry, id: "redirect-1", createdAt: new Date() }),
   };
   return { wikiPageRepository, wikiRedirectRepository };

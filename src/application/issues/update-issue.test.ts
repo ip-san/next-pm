@@ -91,6 +91,7 @@ function makeRepositories(
     unwatch: mock(async () => undefined),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => overrides.customFields ?? []),
@@ -641,6 +642,7 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
     unwatch: mock(async () => undefined),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => []),

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { ancestorChain, childrenOf } from "@/domain/wiki/hierarchy";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
@@ -41,6 +42,7 @@ export default async function WikiPageView({
   const canExport = can({ permission: "export_wiki_pages", project: projectContext, actor });
   const canProtect = can({ permission: "protect_wiki_pages", project: projectContext, actor });
   const canViewEdits = can({ permission: "view_wiki_edits", project: projectContext, actor });
+  const canDelete = can({ permission: "delete_wiki_pages", project: projectContext, actor });
   const canDeleteAttachments = can({ permission: "delete_wiki_pages_attachments", project: projectContext, actor });
   const canRenameOrManage =
     can({ permission: "rename_wiki_pages", project: projectContext, actor }) ||
@@ -68,10 +70,13 @@ export default async function WikiPageView({
   const isWatching =
     user && wikiPage ? await new DrizzleWatcherRepository().isWatching("WikiPage", wikiPage.id, user.id) : false;
 
+  const allPages = wikiPage ? await wikiPageRepository.listForProject(project.id) : [];
+  const children = wikiPage ? childrenOf(allPages, wikiPage.id) : [];
+  const ancestors = wikiPage ? ancestorChain(allPages, wikiPage) : [];
+
   let renderedText = current?.text ?? "";
   if (current && wikiPage) {
-    const allPages = await wikiPageRepository.listForProject(project.id);
-    const childPages = allPages.filter((page) => page.parentId === wikiPage.id).map((page) => ({ title: page.title }));
+    const childPages = children.map((page) => ({ title: page.title }));
     const textByTitle = new Map<string, string>();
     for (const page of allPages) {
       const version = await wikiContentRepository.findCurrent(page.id);
@@ -92,6 +97,21 @@ export default async function WikiPageView({
 
   return (
     <main className="p-8 flex flex-col gap-6">
+      {/* Redmine's wiki_page_breadcrumb: the ancestor trail, root first. */}
+      <nav className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+        <Link href={`/projects/${identifier}/wiki/index`} className="underline">
+          目次
+        </Link>
+        {ancestors.map((ancestor) => (
+          <span key={ancestor.id} className="flex items-center gap-1">
+            <span aria-hidden>»</span>
+            <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(ancestor.title)}`} className="underline">
+              {ancestor.title}
+            </Link>
+          </span>
+        ))}
+      </nav>
+
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{title}</h1>
         <div className="flex items-center gap-3">
@@ -124,6 +144,11 @@ export default async function WikiPageView({
               名前を変更
             </Link>
           ) : null}
+          {canDelete && wikiPage && isWikiPageEditable(wikiPage, canProtect) ? (
+            <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/destroy`} className="text-sm underline text-red-600">
+              削除
+            </Link>
+          ) : null}
           {canEdit ? (
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/edit`} className="bg-black text-white rounded px-3 py-2 text-sm">
               編集
@@ -144,6 +169,21 @@ export default async function WikiPageView({
             ) : null}
             {wikiPage?.isProtected ? <span className="border rounded px-1 text-gray-600">保護中</span> : null}
           </p>
+
+          {children.length > 0 ? (
+            <section className="flex flex-col gap-2">
+              <h2 className="font-medium text-sm">子ページ</h2>
+              <ul className="flex flex-col gap-1 pl-4 list-disc text-sm">
+                {children.map((child) => (
+                  <li key={child.id}>
+                    <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(child.title)}`} className="underline">
+                      {child.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="flex flex-col gap-2">
             <h2 className="font-medium text-sm">添付ファイル</h2>

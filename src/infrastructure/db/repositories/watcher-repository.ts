@@ -42,4 +42,8 @@ export class DrizzleWatcherRepository implements WatcherRepository {
       .where(and(eq(watchers.watchableType, watchableType), eq(watchers.watchableId, watchableId)));
     return rows.map((r) => r.userId);
   }
+
+  async unwatchAll(watchableType: WatchableType, watchableId: string): Promise<void> {
+    await db.delete(watchers).where(and(eq(watchers.watchableType, watchableType), eq(watchers.watchableId, watchableId)));
+  }
 }
