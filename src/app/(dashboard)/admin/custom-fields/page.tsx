@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { deleteCustomFieldAction, reorderCustomFieldAction } from "@/interface/actions/admin-custom-field-actions";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { AdminRowControls } from "../admin-row-controls";
 import { CustomFieldForm } from "./custom-field-form";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
@@ -56,6 +58,16 @@ export default async function CustomFieldsPage() {
             {field.fieldFormat === "list" ? (
               <p className="text-xs text-gray-500">選択肢: {field.possibleValues.join(", ")}</p>
             ) : null}
+            <div className="mt-2">
+              <AdminRowControls
+                id={field.id}
+                idField="customFieldId"
+                editHref={`/admin/custom-fields/${field.id}`}
+                reorderAction={reorderCustomFieldAction}
+                deleteAction={deleteCustomFieldAction}
+                deleteConfirm={`カスタムフィールド「${field.name}」と入力済みの値をすべて削除しますか?`}
+              />
+            </div>
           </li>
         ))}
         {fields.length === 0 ? <li className="text-gray-400">登録されていません。</li> : null}
