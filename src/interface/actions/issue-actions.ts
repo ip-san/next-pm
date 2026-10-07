@@ -10,7 +10,7 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
-import { moveIssue, ProjectHasNoTrackerError } from "@/application/issues/move-issue";
+import { moveIssue, MoveIssueNotPermittedError, ProjectHasNoTrackerError } from "@/application/issues/move-issue";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
@@ -520,6 +520,10 @@ export async function moveIssueAction(values: {
         targetProjectId: parsed.data.targetProjectId,
         targetTrackerId: parsed.data.targetTrackerId || undefined,
         actingUserId: user.id,
+        sourceActor: source.actor,
+        targetActor: target.actor,
+        isAuthor: existing.authorId === user.id,
+        actorGroupIds: source.userGroupIds,
       },
     );
   } catch (error) {
@@ -528,6 +532,14 @@ export async function moveIssueAction(values: {
     }
     if (error instanceof ProjectHasNoTrackerError) {
       return { ok: false, error: "移動先のプロジェクトにトラッカーが割り当てられていません。" };
+    }
+    // The checks above should have caught these; reaching here means the use case's own
+    // re-derivation disagreed, so report it the same way rather than leaking the detail.
+    if (error instanceof MoveIssueNotPermittedError) {
+      return {
+        ok: false,
+        error: error.side === "source" ? "この操作を行う権限がありません。" : "移動先のプロジェクトが見つかりません。",
+      };
     }
     throw error;
   }
