@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -9,8 +8,8 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { filterVisibleTimeEntries } from "@/interface/http/time-entry-access";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { DeleteTimeEntryButton } from "./delete-time-entry-button";
 
 export default async function ProjectTimeEntriesPage({
@@ -42,16 +41,15 @@ export default async function ProjectTimeEntriesPage({
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((i) => i !== null).map((i) => [i.id, i]));
 
-  // Two independent narrowings, both from Redmine:
-  //   1. TimeEntry#visible? — a role with time_entries_visibility == "own" only ever sees
-  //      its own rows, even though view_time_entries got it this far.
-  //   2. an entry against a private issue the viewer can't see must not leak that issue's
-  //      subject (or even the fact that time was logged against it) — drop it entirely.
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const entries = filterVisibleTimeEntries(allEntries, user?.id ?? null, actor).filter((entry) => {
-    if (!entry.issueId) return true;
-    const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
+  // The shared read predicate: view_time_entries, the role's time_entries_visibility, and
+  // the private-issue rule (an entry against an issue the viewer can't see must not leak
+  // that issue's subject, or even the fact that time was logged against it).
+  const entries = filterAccessibleTimeEntries(allEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById,
   });
 
   const entryUsers = await new DrizzleUserRepository().findByIds([...new Set(entries.map((entry) => entry.userId))]);

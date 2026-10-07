@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { InvalidTimeEntryError, logTime } from "@/application/time-entries/log-time";
 import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -16,8 +16,8 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { filterVisibleTimeEntries } from "@/interface/http/time-entry-access";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { canAttachIssueToTimeEntry, canAttributeTimeEntryTo, filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { paginate, parsePagination } from "@/interface/http/pagination";
 
@@ -57,8 +57,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })) {
+  if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -70,11 +71,12 @@ export async function GET(request: Request) {
   const issueIds = [...new Set(allEntries.map((e) => e.issueId).filter((id): id is string => id !== null))];
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((i) => i !== null).map((i) => [i.id, i]));
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleEntries = filterVisibleTimeEntries(allEntries, user?.id ?? null, actor).filter((entry) => {
-    if (!entry.issueId) return true;
-    const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
+  const visibleEntries = filterAccessibleTimeEntries(allEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById,
   });
 
   const { items: time_entries, total_count, offset, limit } = paginate(visibleEntries, parsePagination(url));
@@ -130,16 +132,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
-  // Checked before the permission gate, and returns the same not_found a nonexistent
-  // issue would — logging time against an issue implicitly confirms it exists, so a
-  // private issue the actor can't see must look identical to one that isn't there.
-  if (issue && !isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
   const projectContext = toAuthorizationProject(project);
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "log_time", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  // The issue check returns the same not_found a nonexistent issue would — logging time
+  // against an issue implicitly confirms it exists, so a private issue the actor can't see
+  // must look identical to one that isn't there.
+  if (issue && !canAttachIssueToTimeEntry(issue, project.id, { userId: user.id, actor, userGroupIds, projectContext })) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   // Attributing the entry to someone else needs log_time_for_other_users AND a target in
@@ -147,9 +149,6 @@ export async function POST(request: Request) {
   // arbitrary account (TimeEntry#safe_attributes= + validate_time_entry).
   let userId = user.id;
   if (parsed.data.user_id && parsed.data.user_id !== user.id) {
-    if (!can({ permission: "log_time_for_other_users", project: projectContext, actor })) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
     const assignable = await listAssignableTimeEntryUsers(
       {
         memberRepository: new DrizzleMemberRepository(),
@@ -159,7 +158,15 @@ export async function POST(request: Request) {
       project.id,
       user,
     );
-    if (!assignable.some((candidate) => candidate.id === parsed.data.user_id)) {
+    const allowed = canAttributeTimeEntryTo({
+      changed: true,
+      requestedUserId: parsed.data.user_id,
+      // The entry is being created by this actor, so they are its author.
+      authorId: user.id,
+      assignableUserIds: assignable.map((candidate) => candidate.id),
+      canLogTimeForOtherUsers: can({ permission: "log_time_for_other_users", project: projectContext, actor }),
+    });
+    if (!allowed) {
       return NextResponse.json({ error: "invalid_user_id" }, { status: 422 });
     }
     userId = parsed.data.user_id;
@@ -167,7 +174,11 @@ export async function POST(request: Request) {
 
   try {
     const entry = await logTime(
-      { timeEntryRepository: new DrizzleTimeEntryRepository(), settingsRepository: new DrizzleSettingsRepository() },
+      {
+        timeEntryRepository: new DrizzleTimeEntryRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+        enumerationRepository: new DrizzleEnumerationRepository(),
+      },
       {
         projectId: project.id,
         issueId,

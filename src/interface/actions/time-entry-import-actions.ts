@@ -6,7 +6,6 @@ import { can } from "@/domain/authorization/authorization-service";
 import { parseCsv } from "@/domain/csv/decode";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { InvalidTimeEntryError, logTime } from "@/application/time-entries/log-time";
 import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
@@ -21,7 +20,8 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { canAttachIssueToTimeEntry, canAttributeTimeEntryTo } from "@/interface/http/time-entry-access";
 
 export type ImportTimeEntriesActionState = {
   error: string | null;
@@ -111,10 +111,11 @@ export async function importTimeEntriesCsvAction(
 
   const timeEntryRepository = new DrizzleTimeEntryRepository();
   const settingsRepository = new DrizzleSettingsRepository();
+  const enumerationRepository = new DrizzleEnumerationRepository();
   const issueRepository = new DrizzleIssueRepository();
   const customFieldRepository = new DrizzleCustomFieldRepository();
   const customValueRepository = new DrizzleCustomValueRepository();
-  const visibilityRoles = issuesVisibilityRoles(actor);
+  const accessContext = { userId: user.id, actor, userGroupIds, projectContext };
 
   function cell(row: string[], name: string): string {
     const index = columnIndex.get(name);
@@ -151,12 +152,22 @@ export async function importTimeEntriesCsvAction(
     let userId = user.id;
     if (login.length > 0) {
       const target = assignableByLogin.get(login.toLowerCase());
-      if (!target) {
-        rowErrors.push(`${rowNumber}行目: ユーザー「${login}」に工数を記録できません。`);
-        continue;
-      }
-      if (target.id !== user.id && !canLogForOthers) {
-        rowErrors.push(`${rowNumber}行目: 他のユーザー名義で工数を記録する権限がありません。`);
+      // The importer is the author of every row it creates, so canAttributeTimeEntryTo's
+      // author shortcut is exactly "this row is mine"; anything else needs the permission
+      // and a target in assignable_users. Redmine's importer silently falls back to the
+      // importer's own id here — next-pm reports the row instead, so a CSV is never
+      // imported as something other than what it says.
+      const allowed =
+        target !== undefined &&
+        canAttributeTimeEntryTo({
+          changed: target.id !== user.id,
+          requestedUserId: target.id,
+          authorId: user.id,
+          assignableUserIds: assignableUsers.map((candidate) => candidate.id),
+          canLogTimeForOtherUsers: canLogForOthers,
+        });
+      if (!allowed) {
+        rowErrors.push(`${rowNumber}行目: ユーザー「${login}」名義で工数を記録できません。`);
         continue;
       }
       userId = target.id;
@@ -166,15 +177,11 @@ export async function importTimeEntriesCsvAction(
     let issueId: string | null = null;
     if (rawIssueId.length > 0) {
       const issue = await issueRepository.findById(rawIssueId);
-      if (
-        !issue ||
-        issue.projectId !== project.id ||
-        !isPrivateIssueVisible(issue, user.id, userGroupIds, visibilityRoles)
-      ) {
+      if (!canAttachIssueToTimeEntry(issue, project.id, accessContext)) {
         rowErrors.push(`${rowNumber}行目: チケット「${rawIssueId}」が見つかりません。`);
         continue;
       }
-      issueId = issue.id;
+      issueId = rawIssueId;
     }
 
     const rawCustomValues: Record<string, string> = {};
@@ -194,7 +201,7 @@ export async function importTimeEntriesCsvAction(
 
     try {
       const entry = await logTime(
-        { timeEntryRepository, settingsRepository },
+        { timeEntryRepository, settingsRepository, enumerationRepository },
         {
           projectId: project.id,
           issueId,

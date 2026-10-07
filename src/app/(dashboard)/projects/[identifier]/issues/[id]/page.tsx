@@ -27,7 +27,7 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
-import { filterVisibleTimeEntries } from "@/interface/http/time-entry-access";
+import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { DeleteTimeEntryButton } from "../../time-entries/delete-time-entry-button";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
@@ -96,9 +96,13 @@ export default async function IssueDetailPage({
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
   // Spent time is its own permission in Redmine, and a role with time_entries_visibility
   // == "own" only ever sees its own rows — being able to see the issue is not enough.
-  const visibleTimeEntries = can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })
-    ? filterVisibleTimeEntries(timeEntries, user?.id ?? null, actor)
-    : [];
+  const visibleTimeEntries = filterAccessibleTimeEntries(timeEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext: toAuthorizationProject(project),
+    issueById: new Map([[issue.id, issue]]),
+  });
   const canEditTimeEntries = can({ permission: "edit_time_entries", project: toAuthorizationProject(project), actor });
   const canEditOwnTimeEntries = can({ permission: "edit_own_time_entries", project: toAuthorizationProject(project), actor });
   const timeEntryCustomFields = canLogTime

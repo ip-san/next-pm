@@ -5,9 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { User } from "@/domain/user/entity";
-import { canEditTimeEntry, isTimeEntryVisible } from "@/domain/time-entry/visibility";
+import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { deleteTimeEntry } from "@/application/time-entries/delete-time-entry";
 import { logTime, InvalidTimeEntryError } from "@/application/time-entries/log-time";
@@ -15,6 +14,7 @@ import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-ti
 import { updateTimeEntry } from "@/application/time-entries/update-time-entry";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -23,12 +23,28 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import {
+  canAccessTimeEntry,
+  canAttachIssueToTimeEntry,
+  canAttributeTimeEntryTo,
+  type TimeEntryAccessContext,
+} from "@/interface/http/time-entry-access";
 
 export type LogTimeActionState = {
   error: string | null;
 };
+
+const NOT_FOUND = "工数が見つかりません。";
+const ISSUE_NOT_FOUND = "チケットが見つかりません。";
+
+function writeRepositories() {
+  return {
+    timeEntryRepository: new DrizzleTimeEntryRepository(),
+    settingsRepository: new DrizzleSettingsRepository(),
+    enumerationRepository: new DrizzleEnumerationRepository(),
+  };
+}
 
 /** `cf_<uuid>` form inputs, same convention the issue forms use. */
 function customFieldValuesFromForm(formData: FormData): Record<string, string> {
@@ -45,39 +61,72 @@ function firstFieldError(error: CustomFieldValidationError): string {
   return Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの値を確認してください。";
 }
 
+async function saveCustomFieldValues(entryId: string, formData: FormData): Promise<void> {
+  await setTimeEntryCustomFieldValues(
+    { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+    entryId,
+    customFieldValuesFromForm(formData),
+  );
+}
+
 /**
- * Resolves the user the time is attributed to. Mirrors TimeEntry#safe_attributes= +
- * validate_time_entry: attributing to anyone but yourself needs `log_time_for_other_users`
- * AND the target has to be in `assignable_users` — holding the permission is not a licence
- * to log time against an arbitrary account.
+ * Resolves the user a time entry is attributed to, through the shared
+ * `canAttributeTimeEntryTo` rule. `authorId` is the entry's author (the actor's own id when
+ * creating), because that is what Redmine compares the new value against.
  */
 async function resolveTargetUserId(input: {
   requestedUserId: string | null;
   currentUser: User;
+  authorId: string;
+  currentUserIdOfEntry: string;
   projectId: string;
   canLogForOthers: boolean;
 }): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
-  const requested = input.requestedUserId;
-  if (!requested || requested === input.currentUser.id) {
-    return { ok: true, userId: input.currentUser.id };
-  }
-  if (!input.canLogForOthers) {
-    return { ok: false, error: "他のユーザー名義で工数を記録する権限がありません。" };
-  }
+  const requested = input.requestedUserId ?? input.currentUserIdOfEntry;
+  const changed = requested !== input.currentUserIdOfEntry;
 
-  const assignable = await listAssignableTimeEntryUsers(
-    {
-      memberRepository: new DrizzleMemberRepository(),
-      roleRepository: new DrizzleRoleRepository(),
-      userRepository: new DrizzleUserRepository(),
-    },
-    input.projectId,
-    input.currentUser,
-  );
-  if (!assignable.some((candidate) => candidate.id === requested)) {
-    return { ok: false, error: "指定したユーザーはこのプロジェクトで工数を記録できません。" };
+  const assignableUserIds =
+    changed && requested !== input.authorId
+      ? (
+          await listAssignableTimeEntryUsers(
+            {
+              memberRepository: new DrizzleMemberRepository(),
+              roleRepository: new DrizzleRoleRepository(),
+              userRepository: new DrizzleUserRepository(),
+            },
+            input.projectId,
+            input.currentUser,
+          )
+        ).map((candidate) => candidate.id)
+      : [];
+
+  const allowed = canAttributeTimeEntryTo({
+    changed,
+    requestedUserId: requested,
+    authorId: input.authorId,
+    assignableUserIds,
+    canLogTimeForOtherUsers: input.canLogForOthers,
+  });
+  if (!allowed) {
+    return { ok: false, error: "指定したユーザー名義で工数を記録する権限がありません。" };
   }
   return { ok: true, userId: requested };
+}
+
+/** Resolves and authorizes the issue a time entry is being attached to. */
+async function resolveIssueId(
+  issueId: string | null,
+  projectId: string,
+  context: Pick<TimeEntryAccessContext, "userId" | "actor" | "userGroupIds" | "projectContext">,
+): Promise<{ ok: true; issueId: string | null } | { ok: false; error: string }> {
+  if (issueId === null) {
+    return { ok: true, issueId: null };
+  }
+  const issue = await new DrizzleIssueRepository().findById(issueId);
+  if (!canAttachIssueToTimeEntry(issue, projectId, context)) {
+    return { ok: false, error: ISSUE_NOT_FOUND };
+  }
+  return { ok: true, issueId };
 }
 
 const logTimeSchema = z.object({
@@ -114,7 +163,7 @@ export async function logTimeAction(
 
   const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: ISSUE_NOT_FOUND };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
@@ -124,16 +173,16 @@ export async function logTimeAction(
 
   const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "log_time", project: projectContext, actor })) {
-    return { error: "この操作を行う権限がありません。" };
-  }
-  if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+  // canAttachIssueToTimeEntry carries the log_time check as well as the visibility one.
+  if (!canAttachIssueToTimeEntry(issue, project.id, { userId: user.id, actor, userGroupIds, projectContext })) {
+    return { error: ISSUE_NOT_FOUND };
   }
 
   const target = await resolveTargetUserId({
     requestedUserId: parsed.data.userId,
     currentUser: user,
+    authorId: user.id,
+    currentUserIdOfEntry: user.id,
     projectId: project.id,
     canLogForOthers: can({ permission: "log_time_for_other_users", project: projectContext, actor }),
   });
@@ -142,24 +191,17 @@ export async function logTimeAction(
   }
 
   try {
-    const entry = await logTime(
-      { timeEntryRepository: new DrizzleTimeEntryRepository(), settingsRepository: new DrizzleSettingsRepository() },
-      {
-        projectId: project.id,
-        issueId: issue.id,
-        userId: target.userId,
-        authorId: user.id,
-        activityId: parsed.data.activityId,
-        hours: parsed.data.hours,
-        comments: parsed.data.comments,
-        spentOn: parsed.data.spentOn,
-      },
-    );
-    await setTimeEntryCustomFieldValues(
-      { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
-      entry.id,
-      customFieldValuesFromForm(formData),
-    );
+    const entry = await logTime(writeRepositories(), {
+      projectId: project.id,
+      issueId: issue.id,
+      userId: target.userId,
+      authorId: user.id,
+      activityId: parsed.data.activityId,
+      hours: parsed.data.hours,
+      comments: parsed.data.comments,
+      spentOn: parsed.data.spentOn,
+    });
+    await saveCustomFieldValues(entry.id, formData);
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
       return { error: error.message };
@@ -222,24 +264,16 @@ export async function createTimeEntryAction(
     return { error: "この操作を行う権限がありません。" };
   }
 
-  // An issue typed into this form has to belong to the project being logged against, and
-  // has to be one the actor can actually see — same rule as TimeEntry#validate_time_entry's
-  // `errors.add :issue_id, :invalid if issue && project != issue.project` plus the
-  // visibility branch of safe_attributes=.
-  if (parsed.data.issueId) {
-    const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
-    if (
-      !issue ||
-      issue.projectId !== project.id ||
-      !isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))
-    ) {
-      return { error: "チケットが見つかりません。" };
-    }
+  const issue = await resolveIssueId(parsed.data.issueId, project.id, { userId: user.id, actor, userGroupIds, projectContext });
+  if (!issue.ok) {
+    return { error: issue.error };
   }
 
   const target = await resolveTargetUserId({
     requestedUserId: parsed.data.userId,
     currentUser: user,
+    authorId: user.id,
+    currentUserIdOfEntry: user.id,
     projectId: project.id,
     canLogForOthers: can({ permission: "log_time_for_other_users", project: projectContext, actor }),
   });
@@ -248,24 +282,17 @@ export async function createTimeEntryAction(
   }
 
   try {
-    const entry = await logTime(
-      { timeEntryRepository: new DrizzleTimeEntryRepository(), settingsRepository: new DrizzleSettingsRepository() },
-      {
-        projectId: project.id,
-        issueId: parsed.data.issueId,
-        userId: target.userId,
-        authorId: user.id,
-        activityId: parsed.data.activityId,
-        hours: parsed.data.hours,
-        comments: parsed.data.comments,
-        spentOn: parsed.data.spentOn,
-      },
-    );
-    await setTimeEntryCustomFieldValues(
-      { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
-      entry.id,
-      customFieldValuesFromForm(formData),
-    );
+    const entry = await logTime(writeRepositories(), {
+      projectId: project.id,
+      issueId: issue.issueId,
+      userId: target.userId,
+      authorId: user.id,
+      activityId: parsed.data.activityId,
+      hours: parsed.data.hours,
+      comments: parsed.data.comments,
+      spentOn: parsed.data.spentOn,
+    });
+    await saveCustomFieldValues(entry.id, formData);
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
       return { error: error.message };
@@ -282,8 +309,10 @@ export async function createTimeEntryAction(
 
 /**
  * Loads an entry and runs TimelogController's find_time_entry + check_editability chain.
- * Returns the same "not found" for an entry the actor can't see as for one that doesn't
- * exist, so the list can't be probed for hidden entries by id.
+ * The read half is `canAccessTimeEntry`, the same predicate the list, the report, the CSV
+ * export and the REST endpoints use — an entry the actor couldn't have found in the list
+ * (including one booked against a private issue they can't see) must not be reachable here
+ * by id either, and it answers the same "not found" a nonexistent entry would.
  */
 async function loadEditableEntry(projectIdentifier: string, entryId: string) {
   const user = await currentUserFromCookies();
@@ -298,23 +327,30 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
 
   const timeEntryRepository = new DrizzleTimeEntryRepository();
   const entry = await timeEntryRepository.findById(entryId);
+  // The project comes from the entry, never from the form: a form naming a project the
+  // actor has rights in can't be used to reach an entry that lives somewhere else.
   if (!entry || entry.projectId !== project.id) {
-    return { ok: false as const, error: "工数が見つかりません。" };
+    return { ok: false as const, error: NOT_FOUND };
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor } = await resolveActor(user, project.id);
-  const visible =
-    can({ permission: "view_time_entries", project: projectContext, actor }) &&
-    isTimeEntryVisible(entry, user.id, timeEntriesVisibilityRoles(actor));
-  if (!visible) {
-    return { ok: false as const, error: "工数が見つかりません。" };
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const issue = entry.issueId ? await new DrizzleIssueRepository().findById(entry.issueId) : null;
+  const context: TimeEntryAccessContext = {
+    userId: user.id,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById: new Map(issue ? [[issue.id, issue]] : []),
+  };
+  if (!canAccessTimeEntry(entry, context)) {
+    return { ok: false as const, error: NOT_FOUND };
   }
   if (
     !canEditTimeEntry({
       entry,
       userId: user.id,
-      visible,
+      visible: true,
       canEditTimeEntries: can({ permission: "edit_time_entries", project: projectContext, actor }),
       canEditOwnTimeEntries: can({ permission: "edit_own_time_entries", project: projectContext, actor }),
     })
@@ -322,7 +358,7 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
     return { ok: false as const, error: "この操作を行う権限がありません。" };
   }
 
-  return { ok: true as const, user, project, projectContext, actor, entry, timeEntryRepository };
+  return { ok: true as const, user, project, projectContext, actor, userGroupIds, entry, timeEntryRepository };
 }
 
 const updateTimeEntrySchema = z.object({
@@ -358,17 +394,30 @@ export async function updateTimeEntryAction(
   if (!loaded.ok) {
     return { error: loaded.error };
   }
+  const accessContext = {
+    userId: loaded.user.id,
+    actor: loaded.actor,
+    userGroupIds: loaded.userGroupIds,
+    projectContext: loaded.projectContext,
+  };
+
+  // Re-authorized even though the entry is already editable: pointing an entry at a
+  // different issue is the issue branch of safe_attributes=, not part of check_editability.
+  const issue =
+    parsed.data.issueId === loaded.entry.issueId
+      ? { ok: true as const, issueId: loaded.entry.issueId }
+      : await resolveIssueId(parsed.data.issueId, loaded.entry.projectId, accessContext);
+  if (!issue.ok) {
+    return { error: issue.error };
+  }
 
   const target = await resolveTargetUserId({
-    requestedUserId: parsed.data.userId ?? loaded.entry.userId,
+    requestedUserId: parsed.data.userId,
     currentUser: loaded.user,
-    projectId: loaded.project.id,
-    // Reassigning an entry that is already someone else's is only "logging for another
-    // user" when the value actually changes — re-saving an entry you may edit but didn't
-    // author must not demand the permission.
-    canLogForOthers:
-      (parsed.data.userId ?? loaded.entry.userId) === loaded.entry.userId ||
-      can({ permission: "log_time_for_other_users", project: loaded.projectContext, actor: loaded.actor }),
+    authorId: loaded.entry.authorId,
+    currentUserIdOfEntry: loaded.entry.userId,
+    projectId: loaded.entry.projectId,
+    canLogForOthers: can({ permission: "log_time_for_other_users", project: loaded.projectContext, actor: loaded.actor }),
   });
   if (!target.ok) {
     return { error: target.error };
@@ -376,14 +425,10 @@ export async function updateTimeEntryAction(
 
   try {
     await updateTimeEntry(
-      {
-        timeEntryRepository: loaded.timeEntryRepository,
-        settingsRepository: new DrizzleSettingsRepository(),
-        issueRepository: new DrizzleIssueRepository(),
-      },
+      { ...writeRepositories(), timeEntryRepository: loaded.timeEntryRepository, issueRepository: new DrizzleIssueRepository() },
       loaded.entry,
       {
-        issueId: parsed.data.issueId,
+        issueId: issue.issueId,
         userId: target.userId,
         activityId: parsed.data.activityId,
         hours: parsed.data.hours,
@@ -391,11 +436,7 @@ export async function updateTimeEntryAction(
         spentOn: parsed.data.spentOn,
       },
     );
-    await setTimeEntryCustomFieldValues(
-      { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
-      loaded.entry.id,
-      customFieldValuesFromForm(formData),
-    );
+    await saveCustomFieldValues(loaded.entry.id, formData);
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
       return { error: error.message };

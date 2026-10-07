@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
 import { encodeCsv } from "@/domain/csv/encode";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -10,8 +9,8 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { filterVisibleTimeEntries } from "@/interface/http/time-entry-access";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +27,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const user = await currentUserFromCookies();
+  const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })) {
+  if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -44,11 +44,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((issue) => issue !== null).map((issue) => [issue.id, issue]));
 
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const entries = filterVisibleTimeEntries(allEntries, user?.id ?? null, actor).filter((entry) => {
-    if (!entry.issueId) return true;
-    const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
+  const entries = filterAccessibleTimeEntries(allEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById,
   });
 
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));

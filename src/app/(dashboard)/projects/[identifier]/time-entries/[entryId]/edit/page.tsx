@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
-import { canEditTimeEntry, isTimeEntryVisible } from "@/domain/time-entry/visibility";
+import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -14,13 +14,16 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
-import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
+import { canAccessTimeEntry } from "@/interface/http/time-entry-access";
 import { DeleteTimeEntryButton } from "../../delete-time-entry-button";
 import { TimeEntryForm } from "../../time-entry-form";
 
-// Mirrors TimelogController#edit: find_time_entry (visible? or 404) then check_editability
-// (editable_by? or 403). Both collapse to notFound() here — an entry the actor may not see
-// must not be distinguishable from one that doesn't exist.
+// Mirrors TimelogController#edit: find_time_entry then check_editability. The read half is
+// `canAccessTimeEntry`, the same predicate the list, the CSV export and the REST endpoints
+// apply, so an entry the actor couldn't have found in the list — including one booked
+// against a private issue they can't see — isn't reachable here by id either. Both halves
+// collapse to notFound(): an entry the actor may not see must not be distinguishable from
+// one that doesn't exist.
 export default async function EditTimeEntryPage({
   params,
 }: {
@@ -44,9 +47,15 @@ export default async function EditTimeEntryPage({
 
   const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  const visible =
-    can({ permission: "view_time_entries", project: projectContext, actor }) &&
-    isTimeEntryVisible(entry, user.id, timeEntriesVisibilityRoles(actor));
+  const issueRepository = new DrizzleIssueRepository();
+  const entryIssue = entry.issueId ? await issueRepository.findById(entry.issueId) : null;
+  const visible = canAccessTimeEntry(entry, {
+    userId: user.id,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById: new Map(entryIssue ? [[entryIssue.id, entryIssue]] : []),
+  });
   if (
     !canEditTimeEntry({
       entry,
@@ -60,7 +69,7 @@ export default async function EditTimeEntryPage({
   }
 
   const [allIssues, activities, customFields, values] = await Promise.all([
-    new DrizzleIssueRepository().listByProject(project.id),
+    issueRepository.listByProject(project.id),
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
     new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry"),
     new DrizzleCustomValueRepository().listForCustomized("TimeEntry", entry.id),
