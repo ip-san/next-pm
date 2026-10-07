@@ -1,8 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import { issues } from "@/infrastructure/db/schema/issues";
 import { trackers } from "@/infrastructure/db/schema/trackers";
+import type { Positioned } from "@/domain/ordering/positioned";
 import type { Tracker } from "@/domain/tracker/entity";
-import type { TrackerRepository } from "@/domain/tracker/repository";
+import type { TrackerAdminRepository, TrackerRepository } from "@/domain/tracker/repository";
 
 function toDomain(row: typeof trackers.$inferSelect): Tracker {
   return {
@@ -14,7 +16,7 @@ function toDomain(row: typeof trackers.$inferSelect): Tracker {
   };
 }
 
-export class DrizzleTrackerRepository implements TrackerRepository {
+export class DrizzleTrackerRepository implements TrackerRepository, TrackerAdminRepository {
   async findById(id: string): Promise<Tracker | null> {
     const [row] = await db.select().from(trackers).where(eq(trackers.id, id)).limit(1);
     return row ? toDomain(row) : null;
@@ -27,7 +29,8 @@ export class DrizzleTrackerRepository implements TrackerRepository {
   }
 
   async listAll(): Promise<Tracker[]> {
-    const rows = await db.select().from(trackers).orderBy(trackers.position);
+    // See DrizzleIssueStatusRepository#listAll for why the id tiebreak is needed.
+    const rows = await db.select().from(trackers).orderBy(trackers.position, trackers.id);
     return rows.map(toDomain);
   }
 
@@ -42,5 +45,26 @@ export class DrizzleTrackerRepository implements TrackerRepository {
       })
       .returning();
     return toDomain(row);
+  }
+
+  async update(id: string, changes: Pick<Tracker, "name" | "defaultStatusId" | "isInRoadmap">): Promise<Tracker> {
+    const [row] = await db.update(trackers).set(changes).where(eq(trackers.id, id)).returning();
+    return toDomain(row);
+  }
+
+  async delete(id: string): Promise<void> {
+    // workflow rows, project_trackers and custom_fields_trackers all cascade on their tracker FK.
+    await db.delete(trackers).where(eq(trackers.id, id));
+  }
+
+  async countIssuesUsing(id: string): Promise<number> {
+    const [row] = await db.select({ value: count() }).from(issues).where(eq(issues.trackerId, id));
+    return row?.value ?? 0;
+  }
+
+  async updatePositions(positions: Positioned[]): Promise<void> {
+    for (const { id, position } of positions) {
+      await db.update(trackers).set({ position }).where(eq(trackers.id, id));
+    }
   }
 }

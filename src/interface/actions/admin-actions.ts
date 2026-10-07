@@ -22,39 +22,6 @@ import type { AdminActionState } from "./admin-action-state";
 
 export type { AdminActionState } from "./admin-action-state";
 
-const createTrackerSchema = z.object({
-  name: z.string().min(1),
-  defaultStatusId: z.string().uuid("既定のステータスを選択してください。"),
-});
-
-export async function createTrackerAction(
-  _prevState: AdminActionState,
-  formData: FormData,
-): Promise<AdminActionState> {
-  const authError = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const parsed = createTrackerSchema.safeParse({
-    name: formData.get("name"),
-    defaultStatusId: formData.get("defaultStatusId"),
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
-  }
-
-  await new DrizzleTrackerRepository().create({
-    name: parsed.data.name,
-    defaultStatusId: parsed.data.defaultStatusId,
-    position: 0,
-    isInRoadmap: true,
-  });
-
-  revalidatePath("/admin/trackers");
-  return { error: null };
-}
-
 const updateWorkflowSchema = z.object({
   trackerId: z.string().uuid(),
   roleId: z.string().uuid(),
