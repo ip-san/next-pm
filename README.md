@@ -3,11 +3,12 @@
 next-pmは[Redmine](https://www.redmine.org/) — オープンソースのプロジェクト管理ツール — を、Next.js 16(App Router)・React 19・PostgreSQL・Drizzle ORMで再実装するプロジェクトです。目標はRedmineに似たアプリをゼロから作ることではなく、Redmineの実際の挙動(見た目上の機能一覧だけでなく、個別のビジネスルールまで)を再現することにあります。
 
 - 機能・ドメインモデルの正本: 本家Redmine(`../redmine`)
-- 副次参照: `../artisan-pm`(同じRedmine再実装のLaravel版。`docs/parity-checklist.md`を機能パリティのチェックリストとして参照している)
+- 機能パリティの現状: [`docs/parity-checklist.md`](docs/parity-checklist.md)(next-pm自身の実装状況をRedmine本家と突き合わせた表)
+- 副次参照: `../artisan-pm`(同じRedmine再実装のLaravel版。同名の`docs/parity-checklist.md`を持つが、あちらのステータス欄はLaravel版の状態でありnext-pmには当てはまらない)
 
 ## 実装済みの機能
 
-課題管理(トラッカー・ステータス・ワークフロー・フィールド必須/読取専用ルール・カスタムフィールド・関連・ウォッチャー)、ガントチャートとカレンダー、Wiki(版歴・マクロ・ページ名変更時のリダイレクト付き)、フォーラム、News、工数管理、複数種のSCMリポジトリ(Git/Subversion/Mercurial)のブラウジング/差分/blame閲覧とコミットメッセージ経由のチケット自動更新(`fixes #id`等)、保存済みクエリ、プロジェクト階層、ロールベースの権限、LDAP認証、二要素認証(TOTP+バックアップコード)、メール通知(課題の作成/更新、フォーラム投稿、Wiki編集、News投稿/コメント)、REST API v1、PDF/CSV/ZIPエクスポート(課題・Wiki・ガント)、プロジェクト横断のアクティビティフィード・検索・Atomフィード、ブロック式にカスタマイズ可能なマイページ、管理画面からの一部アプリケーション設定変更。各機能がRedmine本家とどこまで一致しているかは`../artisan-pm/docs/parity-checklist.md`を参照。
+課題管理(トラッカー・ステータス・ワークフロー・フィールド必須/読取専用ルール・カスタムフィールド・関連・ウォッチャー)、ガントチャートとカレンダー、Wiki(版歴・マクロ・ページ名変更時のリダイレクト付き)、フォーラム、News、工数管理、複数種のSCMリポジトリ(Git/Subversion/Mercurial)のブラウジング/差分/blame閲覧とコミットメッセージ経由のチケット自動更新(`fixes #id`等)、保存済みクエリ、プロジェクト階層、ロールベースの権限、LDAP認証、二要素認証(TOTP+バックアップコード)、メール通知(課題の作成/更新、フォーラム投稿、Wiki編集、News投稿/コメント)、REST API v1、PDF/CSV/ZIPエクスポート(課題・Wiki・ガント)、プロジェクト横断のアクティビティフィード・検索・Atomフィード、ブロック式にカスタマイズ可能なマイページ、管理画面からの一部アプリケーション設定変更。各機能がRedmine本家とどこまで一致しているか(および未実装の機能)は[`docs/parity-checklist.md`](docs/parity-checklist.md)を参照。
 
 ## 技術スタック
 
