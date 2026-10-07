@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { describeJournalDetail } from "@/domain/journal/detail-label";
+import { describeJournalDetail, summariseJournalDetail } from "@/domain/journal/detail-label";
 import { memberUserIds } from "@/domain/member/entity";
 import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
@@ -325,10 +325,7 @@ export default async function IssueDetailPage({
                   });
                   return (
                     <p key={index} className="text-xs text-gray-600">
-                      {described.kind === "updated" ? `${described.label} を更新` : null}
-                      {described.kind === "changed" ? `${described.label}: ${described.from} → ${described.to}` : null}
-                      {described.kind === "added" ? `${described.label} ${described.value} を追加` : null}
-                      {described.kind === "removed" ? `${described.label} ${described.value} を削除` : null}
+                      {summariseJournalDetail(described)}
                     </p>
                   );
                 })}

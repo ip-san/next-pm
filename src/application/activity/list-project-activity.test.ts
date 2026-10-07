@@ -2,7 +2,7 @@ import { describe, expect, it, mock } from "bun:test";
 import { listProjectActivity, type ListProjectActivityRepositories } from "./list-project-activity";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
-import type { Journal } from "@/domain/journal/entity";
+import type { Journal, JournalDetail } from "@/domain/journal/entity";
 import type { Role } from "@/domain/role/entity";
 
 const activeProject: ProjectAuthorizationContext = {
@@ -337,5 +337,38 @@ describe("listProjectActivity", () => {
     const events = await listProjectActivity(repositories, baseInput({ actor: { kind: "member", roles: [noRepositoryRole] } }));
     expect(events).toEqual([]);
     expect(repositories.scmRepositoryRepository.findByProject).not.toHaveBeenCalled();
+  });
+});
+
+describe("listProjectActivity — attribute-only journals", () => {
+  function withJournal(notes: string, details: JournalDetail[]) {
+    return makeRepositories({
+      issueRepository: {
+        listByProject: mock(async () => [issue({ createdAt: new Date("2000-01-01") })]),
+      } as unknown as ListProjectActivityRepositories["issueRepository"],
+      journalRepository: {
+        listByProject: mock(async () => [journal({ notes, details })]),
+      } as unknown as ListProjectActivityRepositories["journalRepository"],
+    });
+  }
+
+  it("describes the change when the journal carries no note", async () => {
+    // Regression: a status change with no comment produced a dated activity entry whose
+    // description was empty.
+    const repositories = withJournal("", [{ property: "attr", fieldName: "statusId", oldValue: "open", newValue: "closed" }]);
+
+    const events = await listProjectActivity(repositories, baseInput());
+
+    expect(events.find((event) => event.type === "issue_updated")?.excerpt).toBe("ステータス: open → closed");
+  });
+
+  it("prefers the note when there is one", async () => {
+    const repositories = withJournal("a real comment", [
+      { property: "attr", fieldName: "statusId", oldValue: "open", newValue: "closed" },
+    ]);
+
+    const events = await listProjectActivity(repositories, baseInput());
+
+    expect(events.find((event) => event.type === "issue_updated")?.excerpt).toBe("a real comment");
   });
 });

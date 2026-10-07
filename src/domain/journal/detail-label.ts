@@ -94,3 +94,17 @@ function looksLikeId(raw: string): boolean {
 function shortId(raw: string): string {
   return `#${raw.slice(0, 8)}`;
 }
+
+/** One-line rendering of a described detail, for places with no room for markup. */
+export function summariseJournalDetail(described: JournalDetailDescription): string {
+  switch (described.kind) {
+    case "updated":
+      return `${described.label} を更新`;
+    case "changed":
+      return `${described.label}: ${described.from} → ${described.to}`;
+    case "added":
+      return `${described.label} ${described.value} を追加`;
+    case "removed":
+      return `${described.label} ${described.value} を削除`;
+  }
+}
