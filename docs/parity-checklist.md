@@ -184,7 +184,7 @@
 | フォーラム(ボード自体の管理) | done | 作成・編集・削除・並べ替え・親フォーラム(`manage_boards`)。本家 `acts_as_tree :dependent => :nullify` と同じく、削除したボードの子ボードはプロジェクト直下へ繰り上がり、トピックと添付だけが消える。並び順は `acts_as_positioned :scope => [:project_id, :parent_id]` と同じく兄弟集合内で 1 始まりの連番 |
 | トピックのロック/固定表示(sticky) | done | 本家 `Message#locked` / `sticky`。トピック編集時に `edit_messages` を持つ場合だけ設定できる(本家の条件付き `safe_attributes` と同じで `edit_own_messages` だけでは不可)。ロック中のトピックは返信フォームと引用リンクを出さず、`postMessage` も拒否する。一覧は sticky を先頭に固定(第二キーは本家の `COALESCE(last_reply_id, id)` 相当を持たないため作成日時) |
 | トピックのウォッチャー管理 | done | `view_message_watchers` / `add_message_watchers` / `delete_message_watchers`。本家 `WatchersController#authorize_for_watchable_type` と同じく root トピックだけが対象で、追加できるのはプロジェクトメンバーのみ |
-| News | partial | 作成・削除・コメント追加・ウォッチ。**編集とコメント削除が無い** |
+| News | done | 作成・編集・削除・添付・コメント追加/削除・ウォッチ。編集/削除/添付/コメント削除はすべて `manage_news`(本家 preparation.rb は `comments#destroy` も `manage_news` 配下に置き、「自分のコメント」例外は無い)。コメント追加は `comment_news`。横断一覧 `/news` は本家 `NewsController#index`(プロジェクト無し)と同じく `view_news` を持つプロジェクトを新しい順に 10 件 |
 | 文書(Documents) | partial | 作成・削除・添付。**編集ができない**(`edit_documents` 権限だけが存在する) |
 | ファイル(Files モジュール) | done | `/projects/[identifier]/files`。プロジェクト直下とバージョン単位のファイルを本家 `FilesController#index` と同じ区分け(プロジェクト → バージョンの逆順)で一覧し、ファイル名/日付/サイズ/DL 数でソート、ダイジェストと説明を表示する。追加・削除は `manage_files`、ダウンロードのたびに `attachments.downloads` を加算(本家と同じく Project/Version のみ)。ファイルを持つバージョンは `Version#deletable?` と同じく削除できない |
 
@@ -237,8 +237,8 @@
 | memberships | partial | 一覧・作成・削除。PUT(ロール変更)が無い |
 | time_entries | partial | 一覧・作成のみ。個別 GET / PUT / DELETE が無い |
 | versions / wiki / issue_categories / groups / relations | done | CRUD の主要部分は実装済み |
-| news | partial | 一覧・作成・取得・削除。**PUT(更新)が無い**(本家 API は更新に対応) |
-| messages / documents | partial | 作成と削除のみ。個別の取得・更新が無い |
+| news | done | `GET /api/v1/news`(`project_id` 無しなら本家の `GET /news.json` と同じ横断スコープ)・`POST`・`GET /api/v1/news/[id]`・`PUT`・`DELETE`。本家 `NewsController` の `accept_api_auth :index, :show, :create, :update, :destroy` と一致 |
+| messages / documents | out-of-scope | 本家の `MessagesController` / `DocumentsController` / `CommentsController` には `accept_api_auth` も `*.api.rsb` も無く、REST API 自体が存在しない。next-pm が持つ `POST` / `DELETE` は本家に無い独自拡張なので、これ以上は広げない |
 | trackers / issue_statuses / enumerations / custom_fields / roles / queries / search | done | 読み取り専用エンドポイント |
 | attachments | done | `/api/attachments/[id]`(ダウンロード、API キー可)と `/api/attachments/[id]/thumbnail`、`/api/v1/uploads`、`/api/v1/attachments/[id]` の GET / PATCH(PUT エイリアス有り)/ DELETE |
 | files | done | `GET /api/v1/projects/[identifier]/files`(バージョン情報・ダイジェスト・DL 数付き)と `POST`(`uploads` のトークンを `version_id` / `description` 付きで引き換え) |
