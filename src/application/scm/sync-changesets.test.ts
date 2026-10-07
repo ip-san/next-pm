@@ -68,8 +68,13 @@ function makeTimeEntryRepository(): TimeEntryRepository {
   return {
     listForProject: mock(async () => []),
     listForIssue: mock(async () => []),
+    findById: mock(async () => null),
+    create: mock(async (entry) => ({ ...entry, id: "te-1", createdAt: new Date(), updatedAt: new Date() })),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => {}),
     reassignProjectForIssues: mock(async () => undefined),
-    create: mock(async (entry) => ({ ...entry, id: "te-1", createdAt: new Date() })),
   };
 }
 

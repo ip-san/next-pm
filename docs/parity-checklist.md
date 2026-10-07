@@ -34,7 +34,7 @@
 | 3 | 横断画面(`/issues`, `/time_entries`, `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
 | 4 | 管理画面の更新・削除 | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
 | 5 | プライベート注記・注記の編集/削除 | `journals` にフラグ列追加 + 権限 3 種の追加が前提 | §1, §4 |
-| 6 | 工数の編集・削除 | `edit_time_entries` 権限だけあって操作が無く、権限が空振りしている | §9 |
+| 6 | ~~工数の編集・削除~~(対応済み) | 編集/削除・他ユーザー名義の記録・工数カスタムフィールド・CSV 入出力・REST の個別操作まで実装 | §9 |
 | 7 | アカウントのセルフ登録・有効化・自動ログイン | 運用開始時に管理者が全ユーザーを手作りする必要がある | §5 |
 | 8 | カスタムフィールドの書式追加と対象拡大 | `user`/`version`/複数選択が無く、実運用の型が表現できない | §1 |
 | 9 | 課題のコピー・削除・親子の付け替え | 本家の日常操作で頻度が高い | §1 |
@@ -68,9 +68,9 @@
 | 変更履歴の記録 | done | `journal_details.property` は `attr` / `cf` / `relation` / `attachment` の 4 種。`attr` はトラッカー・説明・親課題を含む(本家と同じ)。添付の追加/削除は本家の `Journal#journalize_attachment` と同じ形(`prop_key` = 添付 ID、ファイル名を追加時は `value`・削除時は `old_value`)で記録する。課題作成時に同時に添付したファイルは本家同様に履歴を作らない(その時点で journal が無い)。単票の履歴表示は属性名をそのまま出すため、添付行は添付 ID が見えたままになっている |
 | 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)は課題・Wiki・文書・ファイルのアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。課題・Wiki・文書の添付一覧は共通コンポーネント(`app/(dashboard)/projects/attachment-list.tsx`)で、画像はサムネイルをインライン表示する。注記への添付は無い |
 | リアクション | done | journal への 👍(本家 6.1 の Reaction 相当) |
-| CSV インポート | partial | 課題のみ(`issue-import-actions.ts`)。権限 `import_issues` は未定義、工数のインポート(`import_time_entries`)も無い |
+| CSV インポート | partial | 課題(`issue-import-actions.ts`)と工数(`time-entry-import-actions.ts`、`import_time_entries`)。課題側の権限 `import_issues` は未定義のまま |
 | カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` の 7 種のみ。本家の `user` / `version` / `link` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
-| カスタムフィールド: 対象 | partial | `Issue` と `Project` のみ。User / Group / TimeEntry / Version が無い |
+| カスタムフィールド: 対象 | partial | `Issue` / `Project` / `TimeEntry`。User / Group / Version が無い |
 | カスタムフィールド: 適用範囲 | partial | トラッカー単位の紐付け + プロジェクト設定での有効化。ロール別の可視/編集可否(本家の `visible` / `role_ids`)が無い |
 | カスタムフィールド: 課題での値の入力 | done | 作成/更新フォームと REST API の双方から設定可能。7 書式それぞれの入力欄を `issues/custom-field-inputs.tsx` が描画し、トラッカーの紐付けで絞り込む。更新時は属性変更と同じ 1 件の journal に `property = 'cf'` の明細として記録(本家 Journal と同じ)。値の検証は課題行を書き換える前に行うため、不正値で中途半端な更新が残らない |
 | カスタムフィールド: プロジェクトでの値の入力 | done | プロジェクト設定画面から編集可能 |
@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 46。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 47(`permission-registry.ts` 実数)。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -191,13 +191,15 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| 工数の記録 | done | 課題単票の `log-time-form` から |
-| 工数の編集・削除 | missing | `edit_time_entries` / `edit_own_time_entries` 権限だけが存在し、対応する操作が無い |
+| 工数の記録 | done | 課題単票の `log-time-form` と、チケット任意のプロジェクト単位フォーム(`time-entries/new`、本家 `timelog/new` 相当) |
+| 工数の編集・削除 | done | 一覧・課題単票からの編集画面(`time-entries/[entryId]/edit`)と削除。`editable_by?`(visible かつ 自分の工数+`edit_own_time_entries` または `edit_time_entries`)を `domain/time-entry/visibility.ts` に実装。削除権限は本家同様に編集権限と同一 |
+| 工数の可視性(ロール設定) | done | `time_entries_visibility` が `own` のロールは自分名義の工数しか見えない(`TimeEntry#visible?` 相当)。一覧・レポート・課題単票・CSV エクスポート・REST API(一覧/個別)・編集/削除のすべてが同じ述語(`interface/http/time-entry-access.ts` の `canAccessTimeEntry`)を通る。活動(`application/activity/list-project-activity.ts`)だけは Application 層から Interface 層を参照できないため、同じ 3 条件をインラインで適用している |
 | プロジェクトの工数一覧 | partial | 一覧と集計レポートあり。フィルタ・列選択・ソートは §2 の制約 |
 | 横断の工数一覧 | missing | 本家 `/time_entries` |
-| 他ユーザー名義での記録 | missing | `log_time_for_other_users` |
-| 工数のカスタムフィールド | missing | |
-| 工数の CSV エクスポート・インポート | missing | |
+| 他ユーザー名義での記録 | done | `log_time_for_other_users`。対象は `TimeEntry#assignable_users`(= `log_time` を持つロールの有効なメンバー + 自分)に限定され、権限が無ければ選択欄自体を出さずサーバ側でも拒否 |
+| 工数の一括編集 | missing | 本家 `TimelogController#bulk_edit` / `bulk_update` |
+| 工数のカスタムフィールド | partial | 対象 `TimeEntry` のカスタムフィールドを管理画面から作成でき、記録・編集フォームと REST API から値を設定できる。ロール別の可視/編集可否は §1 と同じ制約 |
+| 工数の CSV エクスポート・インポート | partial | エクスポート(`/api/projects/[identifier]/time-entries/csv`)とインポート(`import_time_entries`、`time-entries/import`)。列構成は相互に一致。本家の多段マッピングウィザードは対象外で、単一ステップのアップロード(課題インポートと同じ設計) |
 | コミットメッセージからの工数記録 | done | `@2h` 記法(`commit_logtime_enabled`) |
 
 ## 10. リポジトリ(SCM)
@@ -234,7 +236,7 @@
 | projects | partial | GET / POST / PUT。DELETE・アーカイブ操作が無い |
 | users | partial | GET / POST。PUT / DELETE が無い |
 | memberships | partial | 一覧・作成・削除。PUT(ロール変更)が無い |
-| time_entries | partial | 一覧・作成のみ。個別 GET / PUT / DELETE が無い |
+| time_entries | done | 一覧・作成(`user_id` / `custom_field_values` 対応)・個別 GET / PUT / DELETE |
 | versions / wiki / issue_categories / groups / relations | done | CRUD の主要部分は実装済み |
 | news | partial | 一覧・作成・取得・削除。**PUT(更新)が無い**(本家 API は更新に対応) |
 | messages / documents | partial | 作成と削除のみ。個別の取得・更新が無い |

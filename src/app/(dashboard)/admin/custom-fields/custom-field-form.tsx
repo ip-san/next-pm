@@ -20,6 +20,7 @@ const FORMAT_OPTIONS = [
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
   { value: "Issue", label: "チケット" },
   { value: "Project", label: "プロジェクト" },
+  { value: "TimeEntry", label: "作業時間" },
 ];
 
 export function CustomFieldForm({ trackers }: { trackers: Tracker[] }) {

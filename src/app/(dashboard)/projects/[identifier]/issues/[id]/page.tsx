@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
+import { canEditTimeEntry } from "@/domain/time-entry/visibility";
+import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { otherIssueId, relationLabelFor } from "@/application/issues/create-issue-relation";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
@@ -18,6 +20,7 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
@@ -34,7 +37,9 @@ import {
   toAuthorizationProject,
   visibleIssueFilter,
 } from "@/interface/http/resolve-actor";
+import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { AttachmentList } from "../../../attachment-list";
+import { DeleteTimeEntryButton } from "../../time-entries/delete-time-entry-button";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueEditForm } from "./issue-edit-form";
@@ -124,6 +129,34 @@ export default async function IssueDetailPage({
   );
   const customFields = allCustomFields.filter((field) => field.trackerIds.includes(issue.trackerId));
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
+  // Spent time is its own permission in Redmine, and a role with time_entries_visibility
+  // == "own" only ever sees its own rows — being able to see the issue is not enough.
+  const visibleTimeEntries = filterAccessibleTimeEntries(timeEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext: toAuthorizationProject(project),
+    issueById: new Map([[issue.id, issue]]),
+  });
+  const canEditTimeEntries = can({ permission: "edit_time_entries", project: toAuthorizationProject(project), actor });
+  const canEditOwnTimeEntries = can({ permission: "edit_own_time_entries", project: toAuthorizationProject(project), actor });
+  const timeEntryCustomFields = canLogTime
+    ? await new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry")
+    : [];
+  const timeEntryAssignableUsers =
+    canLogTime && user && can({ permission: "log_time_for_other_users", project: toAuthorizationProject(project), actor })
+      ? (
+          await listAssignableTimeEntryUsers(
+            {
+              memberRepository: new DrizzleMemberRepository(),
+              roleRepository: new DrizzleRoleRepository(),
+              userRepository: new DrizzleUserRepository(),
+            },
+            project.id,
+            user,
+          )
+        ).map((candidate) => ({ id: candidate.id, name: `${candidate.lastname} ${candidate.firstname}` }))
+      : [];
   const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
   const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
   const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
@@ -156,7 +189,7 @@ export default async function IssueDetailPage({
   const relatedIssues = (
     await Promise.all(relations.map(async (relation) => ({ relation, issue: await issueRepository.findById(otherIssueId(relation, issue.id)) })))
   ).filter(({ issue: other }) => other && isVisibleToActor(other));
-  const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
+  const totalHours = visibleTimeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const customValueByFieldId = new Map(customValues.map((cv) => [cv.customFieldId, cv.value]));
   const customFieldNameById = new Map(allCustomFields.map((field) => [field.id, field.name]));
@@ -318,14 +351,36 @@ export default async function IssueDetailPage({
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">工数（合計 {totalHours}h）</h2>
         <ul className="flex flex-col gap-1 text-sm">
-          {timeEntries.map((entry) => (
-            <li key={entry.id}>
-              {entry.spentOn} — {entry.hours}h {entry.comments ? `(${entry.comments})` : null}
+          {visibleTimeEntries.map((entry) => (
+            <li key={entry.id} className="flex items-center gap-2">
+              <span>
+                {entry.spentOn} — {entry.hours}h {entry.comments ? `(${entry.comments})` : null}
+              </span>
+              {canEditTimeEntry({
+                entry,
+                userId: user?.id ?? null,
+                visible: true,
+                canEditTimeEntries,
+                canEditOwnTimeEntries,
+              }) ? (
+                <>
+                  <Link href={`/projects/${identifier}/time-entries/${entry.id}/edit`} className="text-xs underline">
+                    編集
+                  </Link>
+                  <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} />
+                </>
+              ) : null}
             </li>
           ))}
         </ul>
         {canLogTime ? (
-          <LogTimeForm issueId={issue.id} projectIdentifier={identifier} activities={activities} />
+          <LogTimeForm
+            issueId={issue.id}
+            projectIdentifier={identifier}
+            activities={activities}
+            customFields={timeEntryCustomFields}
+            assignableUsers={timeEntryAssignableUsers}
+          />
         ) : null}
       </section>
 

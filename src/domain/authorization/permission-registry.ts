@@ -21,6 +21,8 @@ export type PermissionKey =
   | "log_time"
   | "edit_time_entries"
   | "edit_own_time_entries"
+  | "log_time_for_other_users"
+  | "import_time_entries"
   | "view_wiki_pages"
   | "edit_wiki_pages"
   | "manage_wiki"
@@ -80,6 +82,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   log_time: { module: "time_tracking", readOnly: false },
   edit_time_entries: { module: "time_tracking", readOnly: false },
   edit_own_time_entries: { module: "time_tracking", readOnly: false },
+  log_time_for_other_users: { module: "time_tracking", readOnly: false },
+  import_time_entries: { module: "time_tracking", readOnly: false },
 
   view_wiki_pages: { module: "wiki", readOnly: true },
   edit_wiki_pages: { module: "wiki", readOnly: false },

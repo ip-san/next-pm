@@ -70,6 +70,7 @@ function timeEntry(overrides: Partial<import("@/domain/time-entry/entity").TimeE
     comments: "Worked on it",
     spentOn: "2026-07-15",
     createdAt: inside,
+    updatedAt: inside,
     ...overrides,
   };
 }
@@ -123,6 +124,7 @@ function baseInput(overrides: Partial<Parameters<typeof listProjectActivity>[1]>
     userId: "user-1",
     userGroupIds: [],
     issueVisibilityRoles: [managerRole],
+    timeEntryVisibilityRoles: [managerRole],
     from,
     to,
     ...overrides,
@@ -248,6 +250,23 @@ describe("listProjectActivity", () => {
     });
     const events = await listProjectActivity(repositories, baseInput());
     expect(events).toEqual([{ type: "time_entry", id: "entry-1", authorId: "user-1", title: "2h", excerpt: "Worked on it", occurredAt: inside }]);
+  });
+
+  it("hides another user's time entry from a role scoped to its own time", async () => {
+    const ownTimeOnly = { ...managerRole, timeEntriesVisibility: "own" as const };
+    const repositories = makeRepositories({
+      timeEntryRepository: {
+        listForProject: mock(async () => [
+          timeEntry({ id: "mine", userId: "user-1", issueId: null, createdAt: inside }),
+          timeEntry({ id: "theirs", userId: "user-2", issueId: null, createdAt: inside }),
+        ]),
+      } as unknown as ListProjectActivityRepositories["timeEntryRepository"],
+    });
+    const events = await listProjectActivity(
+      repositories,
+      baseInput({ actor: { kind: "member", roles: [ownTimeOnly] }, timeEntryVisibilityRoles: [ownTimeOnly] }),
+    );
+    expect(events.map((e) => e.id)).toEqual(["mine"]);
   });
 
   it("includes a time entry linked to a visible issue", async () => {
