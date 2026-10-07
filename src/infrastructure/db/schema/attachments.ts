@@ -4,9 +4,10 @@ import { users } from "./users";
 export const attachments = pgTable("attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
   /**
-   * Polymorphic target discriminator ("Issue" | "Message" | "News" | "Document") — same caveat
-   * as journals.journalizedType. Null together with containerId for a pending upload (created
-   * via POST /api/v1/uploads) that hasn't been attached to anything yet.
+   * Polymorphic target discriminator ("Issue" | "Message" | "News" | "Document" | "WikiPage" |
+   * "Project" | "Version") — same caveat as journals.journalizedType. Null together with
+   * containerId for a pending upload (created via POST /api/v1/uploads) that hasn't been
+   * attached to anything yet. Project/Version are the Files module's containers.
    */
   containerType: text("container_type"),
   containerId: uuid("container_id"),
@@ -21,5 +22,9 @@ export const attachments = pgTable("attachments", {
   fileSize: integer("file_size").notNull(),
   /** SHA-256 hex digest of the file content — the second half of the upload token (id.digest). */
   digest: text("digest").notNull(),
+  /** Free-text caption shown next to the filename (Redmine attachments.description). */
+  description: text("description").notNull().default(""),
+  /** Download counter — only incremented for Project/Version containers, like Redmine's. */
+  downloads: integer("downloads").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

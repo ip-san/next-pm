@@ -18,7 +18,7 @@ export const journalDetails = pgTable("journal_details", {
   journalId: uuid("journal_id")
     .notNull()
     .references(() => journals.id, { onDelete: "cascade" }),
-  property: text("property", { enum: ["attr", "cf", "relation"] }).notNull(),
+  property: text("property", { enum: ["attr", "cf", "relation", "attachment"] }).notNull(),
   fieldName: text("field_name").notNull(),
   oldValue: text("old_value"),
   newValue: text("new_value"),

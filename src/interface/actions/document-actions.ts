@@ -120,6 +120,7 @@ export type UploadDocumentAttachmentActionState = {
 const uploadDocumentAttachmentSchema = z.object({
   documentId: z.string().uuid(),
   projectIdentifier: z.string().min(1),
+  description: z.string().default(""),
   file: z.instanceof(File),
 });
 
@@ -130,6 +131,7 @@ export async function uploadDocumentAttachmentAction(
   const parsed = uploadDocumentAttachmentSchema.safeParse({
     documentId: formData.get("documentId"),
     projectIdentifier: formData.get("projectIdentifier"),
+    description: formData.get("description") ?? "",
     file: formData.get("file"),
   });
   if (!parsed.success) {
@@ -173,6 +175,7 @@ export async function uploadDocumentAttachmentAction(
         authorId: user.id,
         filename: parsed.data.file.name,
         contentType: parsed.data.file.type,
+        description: parsed.data.description,
         data: buffer,
       },
     );

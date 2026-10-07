@@ -2,7 +2,7 @@ import { computeDigest } from "@/domain/attachment/digest";
 import type { Attachment, AttachmentContainerType } from "@/domain/attachment/entity";
 import { PENDING_UPLOAD_EXPIRY_MS } from "@/domain/attachment/pending-upload";
 import type { AttachmentRepository, AttachmentStorage } from "@/domain/attachment/repository";
-import { validateAttachmentInput } from "@/domain/attachment/validate";
+import { validateAttachmentFilename, validateAttachmentInput } from "@/domain/attachment/validate";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import { prunePendingUploads } from "@/application/attachments/prune-pending-uploads";
@@ -21,6 +21,7 @@ export interface CreatePendingUploadInput {
   filename: string;
   contentType: string;
   data: Buffer;
+  description?: string;
 }
 
 /**
@@ -47,6 +48,7 @@ export async function createPendingUpload(
     contentType: input.contentType || "application/octet-stream",
     fileSize: input.data.byteLength,
     digest: computeDigest(input.data),
+    description: input.description ?? "",
   });
 }
 
@@ -56,6 +58,9 @@ export interface RedeemUploadTokenInput {
   uploaderId: string;
   containerType: AttachmentContainerType;
   containerId: string;
+  /** Redmine's attach_files also applies the params' filename/description at redemption time. */
+  filename?: string;
+  description?: string;
 }
 
 /**
@@ -89,6 +94,18 @@ export async function redeemUploadToken(
     throw new InvalidUploadTokenError("token expired");
   }
 
+  const metadata: { filename?: string; description?: string } = {};
+  if (input.filename !== undefined && input.filename.trim().length > 0) {
+    validateAttachmentFilename(input.filename);
+    metadata.filename = input.filename;
+  }
+  if (input.description !== undefined) {
+    metadata.description = input.description;
+  }
+
   await repositories.attachmentRepository.attachToContainer(id, input.containerType, input.containerId);
+  if (Object.keys(metadata).length > 0) {
+    return repositories.attachmentRepository.update(id, metadata);
+  }
   return { ...attachment, containerType: input.containerType, containerId: input.containerId };
 }

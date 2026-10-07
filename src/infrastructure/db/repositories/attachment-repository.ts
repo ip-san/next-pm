@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { attachments } from "@/infrastructure/db/schema/attachments";
 import type { Attachment, AttachmentContainerType } from "@/domain/attachment/entity";
@@ -15,6 +15,8 @@ function toDomain(row: typeof attachments.$inferSelect): Attachment {
     contentType: row.contentType,
     fileSize: row.fileSize,
     digest: row.digest,
+    description: row.description,
+    downloads: row.downloads,
     createdAt: row.createdAt,
   };
 }
@@ -29,12 +31,24 @@ export class DrizzleAttachmentRepository implements AttachmentRepository {
     return rows.map(toDomain);
   }
 
+  async listByContainers(containerType: AttachmentContainerType, containerIds: string[]): Promise<Attachment[]> {
+    if (containerIds.length === 0) {
+      return [];
+    }
+    const rows = await db
+      .select()
+      .from(attachments)
+      .where(and(eq(attachments.containerType, containerType), inArray(attachments.containerId, containerIds)))
+      .orderBy(attachments.createdAt);
+    return rows.map(toDomain);
+  }
+
   async findById(id: string): Promise<Attachment | null> {
     const [row] = await db.select().from(attachments).where(eq(attachments.id, id)).limit(1);
     return row ? toDomain(row) : null;
   }
 
-  async create(attachment: Omit<Attachment, "id" | "createdAt">): Promise<Attachment> {
+  async create(attachment: Omit<Attachment, "id" | "createdAt" | "downloads">): Promise<Attachment> {
     const [row] = await db
       .insert(attachments)
       .values({
@@ -46,9 +60,22 @@ export class DrizzleAttachmentRepository implements AttachmentRepository {
         contentType: attachment.contentType,
         fileSize: attachment.fileSize,
         digest: attachment.digest,
+        description: attachment.description,
       })
       .returning();
     return toDomain(row);
+  }
+
+  async update(id: string, changes: { filename?: string; description?: string }): Promise<Attachment> {
+    const [row] = await db.update(attachments).set(changes).where(eq(attachments.id, id)).returning();
+    return toDomain(row);
+  }
+
+  async incrementDownloads(id: string): Promise<void> {
+    await db
+      .update(attachments)
+      .set({ downloads: sql`${attachments.downloads} + 1` })
+      .where(eq(attachments.id, id));
   }
 
   async attachToContainer(id: string, containerType: AttachmentContainerType, containerId: string): Promise<void> {

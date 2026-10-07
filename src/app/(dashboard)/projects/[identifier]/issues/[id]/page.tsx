@@ -28,6 +28,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { AttachmentList } from "../../../attachment-list";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueEditForm } from "./issue-edit-form";
@@ -341,16 +342,7 @@ export default async function IssueDetailPage({
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">添付ファイル</h2>
-        <ul className="flex flex-col gap-1 text-sm">
-          {attachments.map((attachment) => (
-            <li key={attachment.id}>
-              <a href={`/api/attachments/${attachment.id}`} className="underline">
-                {attachment.filename}
-              </a>{" "}
-              <span className="text-gray-500 text-xs">({Math.ceil(attachment.fileSize / 1024)} KB)</span>
-            </li>
-          ))}
-        </ul>
+        <AttachmentList attachments={attachments} />
         {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} /> : null}
       </section>
 

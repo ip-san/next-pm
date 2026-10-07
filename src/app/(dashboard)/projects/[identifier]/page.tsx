@@ -26,6 +26,7 @@ const NAV_LINKS: { module: string; path: string; label: string }[] = [
   { module: "boards", path: "boards", label: "フォーラム" },
   { module: "news", path: "news", label: "ニュース" },
   { module: "documents", path: "documents", label: "ドキュメント" },
+  { module: "files", path: "files", label: "ファイル" },
   { module: "repository", path: "repository", label: "リポジトリ" },
 ];
 

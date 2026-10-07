@@ -4,6 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { deleteVersion, VersionNotDeletableError } from "@/application/versions/delete-version";
 import { InvalidVersionError } from "@/application/versions/create-version";
 import { updateVersion } from "@/application/versions/update-version";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
@@ -130,7 +131,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ v
   }
 
   try {
-    await deleteVersion({ versionRepository }, versionId);
+    await deleteVersion({ versionRepository, attachmentRepository: new DrizzleAttachmentRepository() }, versionId);
   } catch (error) {
     if (error instanceof VersionNotDeletableError) {
       return NextResponse.json({ error: "not_deletable", message: error.message }, { status: 422 });

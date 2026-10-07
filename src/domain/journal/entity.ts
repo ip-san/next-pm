@@ -1,5 +1,6 @@
 export interface JournalDetail {
-  property: "attr" | "cf" | "relation";
+  /** "attachment" carries the attachment id in fieldName and its filename in old/newValue. */
+  property: "attr" | "cf" | "relation" | "attachment";
   fieldName: string;
   oldValue: string | null;
   newValue: string | null;
