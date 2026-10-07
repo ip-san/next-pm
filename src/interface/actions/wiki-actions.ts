@@ -8,6 +8,7 @@ import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { triggerWikiPageWebhook } from "@/interface/http/webhook-trigger";
 import { WikiPageNotFoundError, WikiTitleConflictError, renameWikiPage } from "@/application/wiki/rename-wiki-page";
 import { saveWikiPage } from "@/application/wiki/save-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
@@ -95,6 +96,7 @@ export async function saveWikiPageAction(
       body: parsed.data.text,
     },
   );
+  await triggerWikiPageWebhook(project, { ...page, text: parsed.data.text });
 
   redirect(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
 }

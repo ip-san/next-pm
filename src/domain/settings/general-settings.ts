@@ -15,6 +15,7 @@ export const GENERAL_SETTING_KEYS = [
   "repository_log_display_limit",
   "cross_project_issue_relations",
   "issue_done_ratio",
+  "webhooks_enabled",
 ] as const;
 
 export const ISSUE_DONE_RATIO_VALUES = ["issue_field", "issue_status"] as const;
@@ -43,6 +44,9 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // next-pm previously never derived done_ratio from status at all (only the SCM commit-hook
   // path did) — "issue_field" (manual, Redmine's own default too) preserves that.
   issue_done_ratio: "issue_field",
+  // Redmine's own default too (settings.yml webhooks_enabled: 0) — an outbound HTTP channel
+  // stays off until an admin turns it on.
+  webhooks_enabled: "0",
 };
 
 export interface GeneralSettings {
@@ -54,6 +58,7 @@ export interface GeneralSettings {
   repositoryLogDisplayLimit: number;
   crossProjectIssueRelations: boolean;
   issueDoneRatio: IssueDoneRatioMode;
+  webhooksEnabled: boolean;
 }
 
 function positiveIntOr(raw: string | undefined, fallback: number): number {
@@ -76,5 +81,6 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
     issueDoneRatio: ISSUE_DONE_RATIO_VALUES.includes(overrides.issue_done_ratio as IssueDoneRatioMode)
       ? (overrides.issue_done_ratio as IssueDoneRatioMode)
       : (GENERAL_SETTING_DEFAULTS.issue_done_ratio as IssueDoneRatioMode),
+    webhooksEnabled: (overrides.webhooks_enabled ?? GENERAL_SETTING_DEFAULTS.webhooks_enabled) === "1",
   };
 }

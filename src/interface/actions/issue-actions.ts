@@ -15,6 +15,7 @@ import { IssueAttributeNotAssignableError } from "@/application/issues/validate-
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { issueMailSubject } from "@/domain/mail/subject";
+import { triggerIssueWebhook } from "@/interface/http/webhook-trigger";
 import {
   BlockedIssueCloseError,
   InvalidParentIssueError,
@@ -217,6 +218,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
       body: issue.description,
     },
   );
+  await triggerIssueWebhook("issue.created", project, issue);
 
   return { ok: true, issueId: issue.id };
 }
@@ -445,6 +447,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
       body: parsed.data.notes.trim().length > 0 ? parsed.data.notes : "チケットが更新されました。",
     },
   );
+  await triggerIssueWebhook("issue.updated", project, updated);
 
   revalidatePath(`/projects/${project.identifier}/issues/${parsed.data.issueId}`);
   return { ok: true, issueId: parsed.data.issueId };

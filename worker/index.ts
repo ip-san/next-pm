@@ -2,8 +2,16 @@ import * as Sentry from "@sentry/node";
 import { dispatchJob } from "@/application/jobs/dispatch-job";
 import { loadSmtpConfigFromEnv } from "@/domain/mailer/smtp-config";
 import type { Mailer } from "@/domain/mailer/port";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleWebhookRepository } from "@/infrastructure/db/repositories/webhook-repository";
+import { NodeWebhookSender } from "@/infrastructure/http/webhook-sender";
 import { ConsoleMailer } from "@/infrastructure/mail/console-mailer";
 import { NodemailerMailer } from "@/infrastructure/mail/nodemailer-mailer";
 import { startHealthServer } from "./health-server";
@@ -19,9 +27,22 @@ const MAX_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 30000;
 
 const jobRepository = new DrizzleJobRepository();
-const userRepository = new DrizzleUserRepository();
 const smtpConfig = loadSmtpConfigFromEnv(process.env);
 const mailer: Mailer = smtpConfig ? new NodemailerMailer(smtpConfig) : new ConsoleMailer();
+
+/** Everything any job type might need; dispatchJob picks what the claimed job calls for. */
+const handlers = {
+  mailer,
+  userRepository: new DrizzleUserRepository(),
+  webhookRepository: new DrizzleWebhookRepository(),
+  webhookSender: new NodeWebhookSender(),
+  issueRepository: new DrizzleIssueRepository(),
+  issueStatusRepository: new DrizzleIssueStatusRepository(),
+  projectRepository: new DrizzleProjectRepository(),
+  memberRepository: new DrizzleMemberRepository(),
+  roleRepository: new DrizzleRoleRepository(),
+  groupRepository: new DrizzleGroupRepository(),
+};
 
 /** Drains the queue until it's empty — the outer loop's sleep only kicks in once there's nothing left to claim. */
 async function drainOnce() {
@@ -31,7 +52,7 @@ async function drainOnce() {
       return;
     }
     try {
-      await dispatchJob({ mailer, userRepository }, job);
+      await dispatchJob(handlers, job);
       await jobRepository.markDone(job.id);
     } catch (error) {
       Sentry.captureException(error);

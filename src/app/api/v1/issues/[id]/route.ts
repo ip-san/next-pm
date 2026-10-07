@@ -12,6 +12,7 @@ import {
 } from "@/application/issues/update-issue";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
+import { triggerIssueWebhook } from "@/interface/http/webhook-trigger";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -182,6 +183,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         },
       },
     );
+
+    await triggerIssueWebhook("issue.updated", project, issue);
 
     return NextResponse.json({ issue });
   } catch (error) {

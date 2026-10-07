@@ -4,6 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { createNews, InvalidNewsError } from "@/application/news/create-news";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { triggerNewsWebhook } from "@/interface/http/webhook-trigger";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
@@ -102,6 +103,8 @@ export async function POST(request: Request) {
       body: created.description,
     },
   );
+
+  await triggerNewsWebhook(project, created);
 
   return NextResponse.json({ news: created }, { status: 201 });
 }

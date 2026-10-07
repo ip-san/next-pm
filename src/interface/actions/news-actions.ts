@@ -8,6 +8,7 @@ import { filterMembersWithPermission, memberUserIds } from "@/domain/member/enti
 import { addNewsComment, InvalidNewsCommentError } from "@/application/news/add-news-comment";
 import { createNews, InvalidNewsError } from "@/application/news/create-news";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { triggerNewsWebhook } from "@/interface/http/webhook-trigger";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleNewsCommentRepository, DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
@@ -87,6 +88,7 @@ export async function createNewsAction(_prevState: CreateNewsActionState, formDa
       body: created.description,
     },
   );
+  await triggerNewsWebhook(project, created);
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/news`);
   redirect(`/projects/${parsed.data.projectIdentifier}/news/${created.id}`);

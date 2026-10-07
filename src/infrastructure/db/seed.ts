@@ -41,6 +41,7 @@ async function seed() {
       name: "Manager",
       permissions: [
         "view_project",
+        "use_webhooks",
         "view_issues",
         "add_issues",
         "edit_issues",

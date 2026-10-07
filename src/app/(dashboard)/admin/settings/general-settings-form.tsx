@@ -74,6 +74,10 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
           <option value="issue_status">チケットのステータスから算出する</option>
         </select>
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="webhooksEnabled" defaultChecked={settings.webhooksEnabled} />
+        Webhookを有効にする
+      </label>
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">

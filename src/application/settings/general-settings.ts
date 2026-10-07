@@ -15,6 +15,7 @@ export interface UpdateGeneralSettingsInput {
   repositoryLogDisplayLimit: number;
   crossProjectIssueRelations: boolean;
   issueDoneRatio: IssueDoneRatioMode;
+  webhooksEnabled: boolean;
 }
 
 export async function updateGeneralSettings(
@@ -30,5 +31,6 @@ export async function updateGeneralSettings(
     repository_log_display_limit: String(Math.round(input.repositoryLogDisplayLimit)),
     cross_project_issue_relations: input.crossProjectIssueRelations ? "1" : "0",
     issue_done_ratio: input.issueDoneRatio,
+    webhooks_enabled: input.webhooksEnabled ? "1" : "0",
   });
 }

@@ -69,6 +69,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "./resolve-actor";
+import { triggerIssueWebhook } from "./webhook-trigger";
 
 /**
  * next-pm's MailHandler — the port of Redmine's `MailHandler#receive` / `#dispatch`. It lives
@@ -611,6 +612,7 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
   if (!base.options.noNotification) {
     await notifyIssueRecipients(project, issue, base.sender.id, issue.description);
   }
+  await triggerIssueWebhook("issue.created", project, issue);
 
   return { status: 201, body: { result: "issue_created", issue, attachments: savedAttachments } };
 }
@@ -693,6 +695,8 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
       keywords.body.length > 0 ? keywords.body : "チケットが更新されました。",
     );
   }
+
+  await triggerIssueWebhook("issue.updated", project, issue);
 
   return { status: 201, body: { result: "note_added", issue, attachments: savedAttachments } };
 }

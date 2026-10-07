@@ -4,6 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { createIssue } from "@/application/issues/create-issue";
+import { triggerIssueWebhook } from "@/interface/http/webhook-trigger";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
 import { InvalidUploadTokenError, redeemUploadToken } from "@/application/attachments/upload-token";
@@ -204,6 +205,8 @@ export async function POST(request: Request) {
       throw error;
     }
   }
+
+  await triggerIssueWebhook("issue.created", project, issue);
 
   return NextResponse.json(failedUploads.length > 0 ? { issue, failed_uploads: failedUploads } : { issue }, { status: 201 });
 }

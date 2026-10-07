@@ -3,6 +3,7 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { triggerWikiPageWebhook } from "@/interface/http/webhook-trigger";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { saveWikiPage } from "@/application/wiki/save-wiki-page";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
@@ -123,6 +124,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
       body: parsed.data.text,
     },
   );
+  await triggerWikiPageWebhook(project, { ...page, text: parsed.data.text });
 
   return new NextResponse(null, { status: 204 });
 }

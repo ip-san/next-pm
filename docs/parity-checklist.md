@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 46。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 47(`use_webhooks` を追加)。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -221,8 +221,8 @@
 | フォーラム投稿 / Wiki 編集 / News 投稿・コメントの通知 | done | |
 | 通知先の決定 | partial | 候補プールを union して一括フィルタする一本道。本家の `mail_notification` ティア(all / selected / only_my_events 等)と `notified_events` によるイベント別オプトインは対象外(§15) |
 | 受信メールからの課題作成・返信 | done | `interface/http/mail-handler.ts` が本家 `MailHandler#receive`/`#dispatch` に対応。MIME のマルチパート(text/plain 優先、`mail_handler_preferred_body_part` で html 優先に切替、html は本文をテキスト化)・base64/quoted-printable・パートごとの charset(ISO-2022-JP / Shift_JIS 含む)・RFC 2047 の件名・RFC 2231 の添付ファイル名を `domain/mail/mime.ts` で解釈する。添付の保存(`attachment_max_size` と `mail_handler_excluded_filenames` を尊重)、To/Cc のユーザーをウォッチャーに追加(`add_issue_watchers` 権限が必要)、本文のキーワード抽出(Project/Tracker/Status/Priority/Category/Assignee/Fixed version/Start date/Due date/Done ratio/Estimated hours/プライベート/カスタムフィールド、`allow_override` に挙げた項目のみ・英語名と日本語ラベルの両方を受け付ける)、`mail_handler_body_delimiters` と `mail_handler_enable_regex_delimiters` による署名・引用の切り落とし、`redmine+project@` のサブアドレス振り分け、フォーラム投稿への返信(`[... msg1a2b3c4d]`)、`no_permission_check` / `no_account_notice` / `no_notification` / `default_group`、`mail_handler_api_enabled` と `mail_handler_api_key`(管理画面の「受信メール」セクション)に対応。書き込みはすべて `createIssue` / `updateIssue` / `postMessage` を通すため、ワークフロー・必須項目・属性の割当可否は UI や REST API と同じ経路で検証される。**本家との差**: (1) `unknown_user=accept` は非対応(本家は匿名ユーザーのレコードに紐づけるが next-pm には匿名「ロール」しか無く `issues.author_id` は実在ユーザーへの FK)。422 を返して黙って降格しない。(2) `unknown_user=create` は生成パスワードの平文送付ではなくパスワード再設定リンクを送る(通知本文は `jobs.payload` に保存されるため)。(3) 返信の宛先判定は件名トークンのみ(本家は自分が付けた `Message-ID` でも判定するが、Mailer ポートにヘッダを設定する口が無い)。この件名トークンを機能させるため、課題とフォーラムの通知件名を `[プロジェクト #eb0b2d1a]` / `[プロジェクト - msg1a2b3c4d]` に変更した(`domain/mail/subject.ts`)。(4) ニュースへの返信は未対応(本家も `Message-ID` 経由のみ) |
-| リマインダーメール | missing | 本家は rake タスク + cron。next-pm には時刻トリガーが無い(§15) |
-| Webhook | missing | 本家 6.1 の `use_webhooks` |
+| リマインダーメール | partial | 本家 `Mailer.reminders`(`rake redmine:send_reminders`)の選定ロジックを `application/jobs/send-reminders.ts` に移植: アクティブなプロジェクトの未完了・担当者あり・期日が N 日以内のチケットを担当者ごとにまとめ、グループ担当はメンバーに展開し、受信者自身の可視性で絞ってからメールする。**時刻トリガーは無いまま**(§15)で、管理 > 設定の「リマインダーメール」から `reminders` ジョブを登録する手動実行。外部スケジューラから叩く場合もこの Server Action(または `jobs` への直接 INSERT)を呼ぶ |
+| Webhook | done | 本家 6.1 の `use_webhooks` 相当。ユーザーごとの Webhook を `/my/webhooks` で CRUD(URL・シークレット・有効/無効・イベント・対象プロジェクト)、権限 `use_webhooks` と設定 `webhooks_enabled` の両方で制御する。イベントは `issue.created` / `issue.updated` / `news.created` / `wiki_page.updated` の4種(本家は Issue/News/WikiPage/TimeEntry/Version × created/updated/deleted。**提供するのは実際に発火させているものだけ**にしてある)。発火箇所は本家のモデルコールバックに対して next-pm は呼び出し側で、チケットは単票フォーム・REST API の POST/PATCH・受信メール、ニュースは作成アクションと REST API、Wiki は編集アクションと REST API。**未配線**: 一括編集・プロジェクト間移動・CSV インポート・コミットフックによるチケット更新。ペイロードは `{type, timestamp, data}` で発火時に確定させ、所有者が見られるかどうか(プライベートチケットの可視性 + 発火時点の `use_webhooks`)を Webhook ごとに判定してからジョブに積む。配信はジョブワーカー経由で、シークレットがあれば本家と同じ `X-Redmine-Signature-256: sha256=<hex>` を付ける。再試行はワーカー既定のバックオフに乗せ、5xx・タイムアウト・通信エラーのみ再試行(4xx・リダイレクト・ブロックされたアドレスは再試行しない。本家は再試行しない)。SSRF 対策として `http`/`https` 以外と WHATWG の bad ports を拒否し、ホスト名を自分で名前解決して **解決後のアドレス** を検査(ループバック・リンクローカル・マルチキャスト・RFC1918・CGNAT・ULA・IPv4射影 IPv6 を遮断。本家は RFC1918 を遮断せず設定ファイル頼み)、検査を通ったアドレスに直接接続するため DNS リバインディングの隙が無く、リダイレクトは一切追わない |
 
 ## 12. REST API v1
 
@@ -273,7 +273,7 @@
 
 | 項目 | 理由 |
 |---|---|
-| 時刻トリガーの非同期処理(cron 相当) | README「注目すべき設計判断」参照。SCM の自動フェッチ・添付の定期 GC・リマインダーメールはいずれも「操作時に同期実行」か「次に触れた時の遅延実行」で代替している。本物のスケジューラが要る機能を足す場合は `worker/` のポーリングループに `jobType` を追加するだけでは実現できない |
+| 時刻トリガーの非同期処理(cron 相当) | README「注目すべき設計判断」参照。SCM の自動フェッチ・添付の定期 GC は「操作時に同期実行」か「次に触れた時の遅延実行」で代替している。リマインダーメールは §11 のとおり送信ロジック自体は実装済みで、管理画面のボタン(= `reminders` ジョブの登録)で随時実行する形にしてある。**定時に自動で走らせる仕組みは依然として無い**ため、毎朝送りたい場合は外部の cron からこの操作を叩く必要がある |
 | 通知の `mail_notification` ティアとイベント別オプトイン | README 記載。候補者プールを union して一括フィルタする一本道のロジックのみを持つ |
 | マイページのドラッグ&ドロップ | README 記載。上下/列移動を独立したフォームのボタンにしてキーボードだけで完結させる判断 |
 | CVS / Bazaar / Filesystem の SCM アダプタ | 大型据え置き(artisan-pm 側と同じ判断) |

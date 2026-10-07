@@ -6,6 +6,7 @@ export type PermissionKey =
   | "manage_members"
   | "manage_versions"
   | "add_subprojects"
+  | "use_webhooks"
   | "view_issues"
   | "add_issues"
   | "edit_issues"
@@ -63,6 +64,12 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_members: { module: null, readOnly: false },
   manage_versions: { module: null, readOnly: false },
   add_subprojects: { module: null, readOnly: false },
+  // Redmine declares this one `:require => :member` (lib/redmine/preparation.rb), i.e. a
+  // non-member or anonymous role can never hold it. next-pm's PermissionDefinition has no
+  // `require` field yet, so that restriction is enforced where it matters instead: the
+  // webhook screens require a logged-in user, and a hook only fires for a project whose
+  // owner still passes `can("use_webhooks")` there.
+  use_webhooks: { module: null, readOnly: false },
 
   view_issues: { module: "issue_tracking", readOnly: true },
   add_issues: { module: "issue_tracking", readOnly: false },
