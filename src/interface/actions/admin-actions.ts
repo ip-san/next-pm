@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { generateSalt, hashPassword } from "@/domain/user/password";
-import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
@@ -114,72 +112,3 @@ export async function updateFieldPermissionsAction(
   return { error: null };
 }
 
-const createUserSchema = z.object({
-  login: z.string().min(1).max(30),
-  mail: z.string().email("正しいメールアドレスを入力してください。"),
-  firstname: z.string().min(1),
-  lastname: z.string().min(1),
-  password: z.string().min(8, "パスワードは8文字以上で入力してください。"),
-  isAdmin: z.coerce.boolean().default(false),
-});
-
-export async function createUserAction(
-  _prevState: AdminActionState,
-  formData: FormData,
-): Promise<AdminActionState> {
-  const authError = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const parsed = createUserSchema.safeParse({
-    login: formData.get("login"),
-    mail: formData.get("mail"),
-    firstname: formData.get("firstname"),
-    lastname: formData.get("lastname"),
-    password: formData.get("password"),
-    isAdmin: formData.get("isAdmin") === "on",
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
-  }
-
-  const userRepository = new DrizzleUserRepository();
-  const existingByLogin = await userRepository.findByLogin(parsed.data.login);
-  if (existingByLogin) {
-    return { error: "そのログインIDは既に使用されています。" };
-  }
-
-  const salt = generateSalt();
-  try {
-    await userRepository.create({
-      login: parsed.data.login,
-      mail: parsed.data.mail,
-      firstname: parsed.data.firstname,
-      lastname: parsed.data.lastname,
-      isAdmin: parsed.data.isAdmin,
-      status: "active",
-      passwordSalt: salt,
-      passwordHash: hashPassword(parsed.data.password, salt),
-      mustChangePassword: true,
-      apiKey: null,
-      atomKey: null,
-      authSource: null,
-      twofaScheme: null,
-      twofaTotpKey: null,
-      twofaTotpLastUsedStep: null,
-    });
-  } catch (error) {
-    // The mail column also carries a unique constraint (checked only at insert time,
-    // unlike login above). drizzle-orm wraps the raw pg driver error in `.cause` rather
-    // than surfacing its code/message directly, so unwrap that to detect it.
-    const pgError = error instanceof Error && error.cause instanceof Error ? error.cause : error;
-    if (pgError instanceof Error && "code" in pgError && pgError.code === "23505") {
-      return { error: "そのメールアドレスは既に使用されています。" };
-    }
-    throw error;
-  }
-
-  revalidatePath("/admin/users");
-  return { error: null };
-}
