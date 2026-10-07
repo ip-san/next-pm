@@ -185,7 +185,7 @@
 | トピックのロック/固定表示(sticky) | done | 本家 `Message#locked` / `sticky`。トピック編集時に `edit_messages` を持つ場合だけ設定できる(本家の条件付き `safe_attributes` と同じで `edit_own_messages` だけでは不可)。ロック中のトピックは返信フォームと引用リンクを出さず、`postMessage` も拒否する。一覧は sticky を先頭に固定(第二キーは本家の `COALESCE(last_reply_id, id)` 相当を持たないため作成日時) |
 | トピックのウォッチャー管理 | done | `view_message_watchers` / `add_message_watchers` / `delete_message_watchers`。本家 `WatchersController#authorize_for_watchable_type` と同じく root トピックだけが対象で、追加できるのはプロジェクトメンバーのみ |
 | News | done | 作成・編集・削除・添付・コメント追加/削除・ウォッチ。編集/削除/添付/コメント削除はすべて `manage_news`(本家 preparation.rb は `comments#destroy` も `manage_news` 配下に置き、「自分のコメント」例外は無い)。コメント追加は `comment_news`。横断一覧 `/news` は本家 `NewsController#index`(プロジェクト無し)と同じく `view_news` を持つプロジェクトを新しい順に 10 件 |
-| 文書(Documents) | partial | 作成・削除・添付。**編集ができない**(`edit_documents` 権限だけが存在する) |
+| 文書(Documents) | done | 作成(`add_documents`)・編集(`edit_documents`、本家 `safe_attributes 'category_id', 'title', 'description'`)・削除(`delete_documents`)・添付。添付の追加は本家 preparation.rb が `documents#add_attachment` を `add_documents` と `edit_documents` の両方に載せているのに合わせてどちらでも可、削除は `acts_as_attachable :delete_permission => :delete_documents` のとおり `delete_documents`。一覧はカテゴリ/日付/タイトル/投稿者でグループ化(本家 `DocumentsController#index` の `sort_by`) |
 | ファイル(Files モジュール) | done | `/projects/[identifier]/files`。プロジェクト直下とバージョン単位のファイルを本家 `FilesController#index` と同じ区分け(プロジェクト → バージョンの逆順)で一覧し、ファイル名/日付/サイズ/DL 数でソート、ダイジェストと説明を表示する。追加・削除は `manage_files`、ダウンロードのたびに `attachments.downloads` を加算(本家と同じく Project/Version のみ)。ファイルを持つバージョンは `Version#deletable?` と同じく削除できない |
 
 ## 9. 工数管理

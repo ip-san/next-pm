@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
-import { createDocument, InvalidDocumentError } from "@/application/documents/create-document";
+import { createDocument } from "@/application/documents/create-document";
+import { updateDocument } from "@/application/documents/update-document";
+import { InvalidDocumentError } from "@/domain/document/validate";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
@@ -67,6 +69,69 @@ export async function createDocumentAction(_prevState: CreateDocumentActionState
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/documents`);
   redirect(`/projects/${parsed.data.projectIdentifier}/documents/${created.id}`);
+}
+
+export type UpdateDocumentActionState = {
+  error: string | null;
+};
+
+const updateDocumentSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  documentId: z.string().uuid(),
+  categoryId: z.string().uuid(),
+  title: z.string().min(1),
+  description: z.string().default(""),
+});
+
+/** DocumentsController#update — `edit_documents` in preparation.rb; there is no "own document" rule. */
+export async function updateDocumentAction(_prevState: UpdateDocumentActionState, formData: FormData): Promise<UpdateDocumentActionState> {
+  const parsed = updateDocumentSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    documentId: formData.get("documentId"),
+    categoryId: formData.get("categoryId"),
+    title: formData.get("title"),
+    description: formData.get("description") ?? "",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const documentRepository = new DrizzleDocumentRepository();
+  const document = await documentRepository.findById(parsed.data.documentId);
+  if (!document || document.projectId !== project.id) {
+    return { error: "ドキュメントが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "edit_documents", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  try {
+    await updateDocument(
+      { documentRepository },
+      { documentId: document.id, categoryId: parsed.data.categoryId, title: parsed.data.title, description: parsed.data.description },
+    );
+  } catch (error) {
+    if (error instanceof InvalidDocumentError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/documents`);
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/documents/${document.id}`);
+  return { error: null };
 }
 
 export type DeleteDocumentActionState = {
@@ -157,7 +222,13 @@ export async function uploadDocumentAttachmentAction(
   }
 
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_documents", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  // preparation.rb lists documents#add_attachment under *both* add_documents and
+  // edit_documents, so either permission may attach a file to an existing document.
+  const canAttach =
+    can({ permission: "edit_documents", project: projectContext, actor }) ||
+    can({ permission: "add_documents", project: projectContext, actor });
+  if (!canAttach) {
     return { error: "この操作を行う権限がありません。" };
   }
 
