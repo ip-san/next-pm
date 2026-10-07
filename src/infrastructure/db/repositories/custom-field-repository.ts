@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { customFields, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
 import type { CustomField, CustomizedType } from "@/domain/custom-field/entity";
-import type { CustomFieldRepository } from "@/domain/custom-field/repository";
+import type { Positioned } from "@/domain/ordering/positioned";
+import type { CustomFieldAdminRepository, CustomFieldRepository } from "@/domain/custom-field/repository";
 
 async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Promise<CustomField[]> {
   const result: CustomField[] = [];
@@ -26,9 +27,10 @@ async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Pro
   return result;
 }
 
-export class DrizzleCustomFieldRepository implements CustomFieldRepository {
+export class DrizzleCustomFieldRepository implements CustomFieldRepository, CustomFieldAdminRepository {
   async listAll(): Promise<CustomField[]> {
-    const rows = await db.select().from(customFields);
+    // See DrizzleIssueStatusRepository#listAll for why the id tiebreak is needed.
+    const rows = await db.select().from(customFields).orderBy(customFields.position, customFields.id);
     return attachTrackerIds(rows);
   }
 
@@ -74,5 +76,43 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository {
     }
 
     return { ...field, id: row.id };
+  }
+
+  async update(
+    id: string,
+    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds">,
+  ): Promise<CustomField> {
+    const [row] = await db
+      .update(customFields)
+      .set({
+        name: changes.name,
+        isRequired: changes.isRequired,
+        defaultValue: changes.defaultValue,
+        possibleValues: changes.possibleValues,
+      })
+      .where(eq(customFields.id, id))
+      .returning();
+
+    await db.delete(customFieldsTrackers).where(eq(customFieldsTrackers.customFieldId, id));
+    if (changes.trackerIds.length > 0) {
+      await db
+        .insert(customFieldsTrackers)
+        .values(changes.trackerIds.map((trackerId) => ({ customFieldId: id, trackerId })));
+    }
+
+    const [withTrackers] = await attachTrackerIds([row]);
+    return withTrackers;
+  }
+
+  async delete(id: string): Promise<void> {
+    // custom_values and custom_fields_trackers both cascade on their custom_field FK, which is
+    // Redmine's `dependent: :delete_all` — deleting a field discards its stored values.
+    await db.delete(customFields).where(eq(customFields.id, id));
+  }
+
+  async updatePositions(positions: Positioned[]): Promise<void> {
+    for (const { id, position } of positions) {
+      await db.update(customFields).set({ position }).where(eq(customFields.id, id));
+    }
   }
 }
