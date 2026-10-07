@@ -38,6 +38,7 @@ export function makeIssueRepositoryMock(overrides: Partial<IssueRepository> = {}
     findByAssignee: mock(async () => []),
     findByAuthor: mock(async () => []),
     findByIds: mock(async () => []),
+    listByFixedVersionIds: mock(async () => []),
     search: mock(async () => []),
     create: mock(async () => {
       throw new Error("not used");

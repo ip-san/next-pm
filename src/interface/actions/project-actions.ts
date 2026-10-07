@@ -8,10 +8,20 @@ import { can } from "@/domain/authorization/authorization-service";
 import { copyProject } from "@/application/projects/copy-project";
 import { createProject } from "@/application/projects/create-project";
 import { CustomFieldValidationError, setProjectCustomFieldValues } from "@/application/projects/set-project-custom-field-values";
+import {
+  archiveProject,
+  closeProject,
+  ProjectArchiveBlockedError,
+  ProjectStatusChangeNotPermittedError,
+  reopenProject,
+  unarchiveProject,
+} from "@/application/projects/project-status";
 import { updateProject } from "@/application/projects/update-project";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -197,4 +207,83 @@ export async function updateProjectSettingsAction(
   revalidatePath(`/projects/${parsed.data.projectIdentifier}`);
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/settings`);
   return { error: null };
+}
+
+export type ProjectStatusActionState = {
+  error: string | null;
+};
+
+const projectStatusSchema = z.object({ projectIdentifier: z.string().min(1) });
+
+/**
+ * One body for the four status transitions, because the Server Action plumbing around them
+ * is identical and only the use case differs — the rules themselves (who may act, which
+ * projects move, what they move to) all live in application/projects/project-status.ts.
+ * Each transition still gets its own exported `async function`: a `use server` module may
+ * only export those, not a value a factory returned.
+ */
+async function changeProjectStatus(
+  transition: "archive" | "unarchive" | "close" | "reopen",
+  formData: FormData,
+): Promise<ProjectStatusActionState> {
+  const parsed = projectStatusSchema.safeParse({ projectIdentifier: formData.get("projectIdentifier") });
+  if (!parsed.success) {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+
+  try {
+    if (transition === "archive") {
+      await archiveProject(
+        { projectRepository, versionRepository: new DrizzleVersionRepository(), issueRepository: new DrizzleIssueRepository() },
+        { projectId: project.id, isAdmin: user.isAdmin },
+      );
+    } else if (transition === "unarchive") {
+      await unarchiveProject({ projectRepository }, { projectId: project.id, isAdmin: user.isAdmin });
+    } else {
+      const { actor } = await resolveActor(user, project.id);
+      const change = transition === "close" ? closeProject : reopenProject;
+      await change({ projectRepository }, { projectId: project.id, actor });
+    }
+  } catch (error) {
+    if (error instanceof ProjectStatusChangeNotPermittedError) {
+      return { error: "この操作を行う権限がありません。" };
+    }
+    if (error instanceof ProjectArchiveBlockedError) {
+      return { error: "このプロジェクトのバージョンを使用しているチケットが配下以外のプロジェクトにあるため、アーカイブできません。" };
+    }
+    throw error;
+  }
+
+  // A status change moves a whole subtree and governs what every page under it may do, so
+  // the dashboard segment is revalidated wholesale rather than the one project's paths.
+  revalidatePath("/admin");
+  revalidatePath("/projects", "layout");
+  return { error: null };
+}
+
+export async function archiveProjectAction(_prevState: ProjectStatusActionState, formData: FormData): Promise<ProjectStatusActionState> {
+  return changeProjectStatus("archive", formData);
+}
+
+export async function unarchiveProjectAction(_prevState: ProjectStatusActionState, formData: FormData): Promise<ProjectStatusActionState> {
+  return changeProjectStatus("unarchive", formData);
+}
+
+export async function closeProjectAction(_prevState: ProjectStatusActionState, formData: FormData): Promise<ProjectStatusActionState> {
+  return changeProjectStatus("close", formData);
+}
+
+export async function reopenProjectAction(_prevState: ProjectStatusActionState, formData: FormData): Promise<ProjectStatusActionState> {
+  return changeProjectStatus("reopen", formData);
 }

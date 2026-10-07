@@ -23,6 +23,7 @@ function makeVersion(overrides: Partial<Version> = {}): Version {
 function makeRepo(version: Version | null, siblings: Version[] = []): VersionRepository {
   return {
     listByProject: mock(async () => siblings),
+    listByProjects: mock(async () => []),
     listSharedWith: mock(async () => siblings),
     findById: mock(async () => version),
     create: mock(async () => {

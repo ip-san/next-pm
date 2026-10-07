@@ -14,6 +14,7 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { ProjectStatusButton } from "../project-status-button";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -50,6 +51,10 @@ export default async function ProjectPage({
   }
 
   const canEditProject = can({ permission: "edit_project", project: toAuthorizationProject(project), actor });
+  // Redmine renders 閉鎖/再開 in the project action menu, gated by close_project — which is a
+  // read permission, so it stays available on an already-closed project (that is how it is
+  // reopened at all). Archive/unarchive are admin-only and live on the admin projects list.
+  const canCloseProject = can({ permission: "close_project", project: toAuthorizationProject(project), actor });
   const canManageIssueCategories =
     project.enabledModules.includes("issue_tracking") &&
     can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor });
@@ -69,7 +74,17 @@ export default async function ProjectPage({
     new DrizzleTrackerRepository().listAll(),
     new DrizzleIssueStatusRepository().listAll(),
   ]);
-  const subprojects = subprojectCandidates.filter((p) => p.parentId === project.id);
+  // Each child gets its own resolveActor/can: membership is per project, so a subproject can
+  // be private to this viewer even when its parent is not — and an archived one must drop out
+  // of the box entirely, which `can` already does for every permission including view_project.
+  const subprojects: typeof subprojectCandidates = [];
+  for (const candidate of subprojectCandidates) {
+    if (candidate.parentId !== project.id) continue;
+    const { actor: childActor } = await resolveActor(user, candidate.id);
+    if (can({ permission: "view_project", project: toAuthorizationProject(candidate), actor: childActor })) {
+      subprojects.push(candidate);
+    }
+  }
 
   const [roles, users, groups] = await Promise.all([
     new DrizzleRoleRepository().findByIds(members.flatMap((m) => m.roleIds)),
@@ -143,7 +158,13 @@ export default async function ProjectPage({
             コピー
           </Link>
         ) : null}
+        {canCloseProject ? (
+          <ProjectStatusButton projectIdentifier={identifier} transition={project.status === "closed" ? "reopen" : "close"} />
+        ) : null}
       </nav>
+      {project.status === "closed" ? (
+        <p className="text-sm text-amber-700">このプロジェクトは閉鎖されています。参照はできますが、変更はできません。</p>
+      ) : null}
       <p className="text-sm text-gray-600">{project.description}</p>
       <dl className="text-sm flex flex-col gap-1">
         <div>

@@ -1,4 +1,4 @@
-import type { Project } from "./entity";
+import type { Project, ProjectStatus } from "./entity";
 import type { NestedSetNode } from "./nested-set";
 
 export interface ProjectSettingsUpdate {
@@ -27,6 +27,12 @@ export interface ProjectRepository {
    * (archive/close have their own cascading semantics) — mirrors Redmine's settings tab.
    */
   updateSettings(id: string, settings: ProjectSettingsUpdate): Promise<Project>;
+  /**
+   * Sets `status` on every listed project in one statement — the archive/unarchive/close/
+   * reopen actions each resolve the projects they touch first (domain/project/status-change.ts)
+   * and then apply the whole set at once, like Redmine's `update_all` on a nested-set scope.
+   */
+  updateStatus(projectIds: string[], status: ProjectStatus): Promise<void>;
   /**
    * Mirrors Redmine's Project#copy, scoped to what this codebase calls the project
    * "skeleton" — members, issue categories, and versions. Everything else Redmine's copy

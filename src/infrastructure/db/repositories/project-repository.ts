@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { projects } from "@/infrastructure/db/schema/projects";
 import { enabledModules } from "@/infrastructure/db/schema/enabled-modules";
@@ -6,7 +6,7 @@ import { issueCategories } from "@/infrastructure/db/schema/issue-categories";
 import { memberRoles, members } from "@/infrastructure/db/schema/members";
 import { projectTrackers } from "@/infrastructure/db/schema/trackers";
 import { versions } from "@/infrastructure/db/schema/versions";
-import type { Project } from "@/domain/project/entity";
+import type { Project, ProjectStatus } from "@/domain/project/entity";
 import type { ProjectRepository, ProjectSettingsUpdate } from "@/domain/project/repository";
 import { isWithinSubtree, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
 
@@ -171,6 +171,11 @@ export class DrizzleProjectRepository implements ProjectRepository {
         trackerIds: settings.trackerIds,
       };
     });
+  }
+
+  async updateStatus(projectIds: string[], status: ProjectStatus): Promise<void> {
+    if (projectIds.length === 0) return;
+    await db.update(projects).set({ status }).where(inArray(projects.id, projectIds));
   }
 
   async copySkeletonFrom(

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { ProjectStatusButton } from "../projects/project-status-button";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -63,6 +64,7 @@ export default async function AdminIndexPage() {
               <th className="pr-4 py-1">親プロジェクト</th>
               <th className="pr-4 py-1">状態</th>
               <th className="pr-4 py-1">公開</th>
+              <th className="pr-4 py-1" />
             </tr>
           </thead>
           <tbody>
@@ -77,6 +79,16 @@ export default async function AdminIndexPage() {
                 <td className="pr-4 py-1">{project.parentId ? (projectsById.get(project.parentId)?.name ?? "-") : "-"}</td>
                 <td className="pr-4 py-1">{STATUS_LABEL[project.status] ?? project.status}</td>
                 <td className="pr-4 py-1">{project.isPublic ? "公開" : "非公開"}</td>
+                <td className="pr-4 py-1">
+                  <span className="flex gap-3">
+                    {/* Redmine's Admin::ProjectsController offers archive/unarchive here and
+                        nowhere else — both are require_admin, unlike close/reopen. */}
+                    <ProjectStatusButton
+                      projectIdentifier={project.identifier}
+                      transition={project.status === "archived" ? "unarchive" : "archive"}
+                    />
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>

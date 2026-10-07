@@ -6,6 +6,7 @@ import type { VersionRepository } from "@/domain/version/repository";
 function makeRepo(existing: Version[] = []): VersionRepository {
   return {
     listByProject: mock(async () => existing),
+    listByProjects: mock(async () => []),
     listSharedWith: mock(async () => existing),
     findById: mock(async () => null),
     create: mock(async (version) => ({ ...version, id: "version-1", createdAt: new Date(), updatedAt: new Date() }) as Version),

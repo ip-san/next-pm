@@ -98,7 +98,7 @@
 | 作成・編集 | done | 名称/識別子/説明/公開設定/親プロジェクト |
 | 階層(サブプロジェクト) | done | nested set(`lft`/`rgt`)で実装 |
 | モジュールの有効/無効 | done | `enabled_modules` + 設定画面あり。`calendar` / `gantt` も権限レジストリに登録済みで、他モジュールと同じく個別に切り替えられる |
-| ステータス(active/closed/archived) | partial | ドメイン判定は実装済み(読み取り専用権限のみ closed で許可)。**アーカイブ/クローズを切り替える管理 UI が無い** |
+| ステータス(active/closed/archived) | done | ドメイン判定に加えて切り替え操作を実装。アーカイブ/解除は管理画面のプロジェクト一覧(本家同様 admin 限定)、閉鎖/再開はプロジェクト概要(`close_project`)。本家の連鎖規則もそのまま: アーカイブは配下全体、解除は自分と祖先のみ(配下は解除しない)、閉鎖/再開は配下の該当ステータスのみ。配下以外のチケットが配下のバージョンを使っている場合はアーカイブを拒否する |
 | プロジェクトの削除 | missing | 権限 `delete_project` ごと無い |
 | プロジェクトのコピー | done | `copyProjectAction` |
 | 新規プロジェクト作成権限 | missing | 本家の `add_project`(非管理者にプロジェクト作成を許可)が無い |
@@ -233,7 +233,7 @@
 | 認証 | done | API キー、`rest_api_enabled` 設定で全体を無効化可能 |
 | ページネーション封筒 | done | |
 | issues | partial | GET / POST / PATCH(PUT エイリアス有り)。**DELETE が無い**。journals の更新、`include=` パラメータ各種も無い |
-| projects | partial | GET / POST / PUT。DELETE・アーカイブ操作が無い |
+| projects | partial | GET / POST / PUT、`archive` / `unarchive` / `close` / `reopen`(本家 5.1 の API、POST / PUT 両対応で 204)。DELETE が無い |
 | users | partial | GET / POST。PUT / DELETE が無い |
 | memberships | partial | 一覧・作成・削除。PUT(ロール変更)が無い |
 | time_entries | partial | 一覧・作成のみ。個別 GET / PUT / DELETE が無い |
