@@ -105,7 +105,7 @@ export interface UpdateIssueRepositories extends IssueAttributeRepositories {
 }
 
 export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<Issue> {
-  const after = await applyIssueUpdate(repositories, input, {
+  const { after, appliedChanges } = await applyIssueUpdate(repositories, input, {
     skipTransitionCheck: false,
     skipBlockedCheck: false,
     skipFieldPermissions: false,
@@ -116,7 +116,10 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
   // chains of duplicates. Uses update_attribute in Redmine — validations are bypassed for the
   // cascade, which is why closeDuplicate below skips the transition/blocked checks but still
   // goes through applyIssueUpdate for the journal entry, done_ratio derivation, and auto-watch.
-  if (input.changes.statusId && after.statusId === input.changes.statusId) {
+  // Keyed on `appliedChanges`, not the submitted payload: a field the actor wasn't allowed
+  // to set (notes-only actor, or a workflow read-only rule) is stripped before the write, and
+  // must not still trigger a cascade that rewrites *other* issues.
+  if (appliedChanges.statusId && after.statusId === appliedChanges.statusId) {
     const targetStatus = await repositories.issueStatusRepository.findById(after.statusId);
     if (targetStatus?.isClosed) {
       await closeDuplicates(repositories, input.issueId, after.statusId, input.actingUserId, input.actorRoleIds, new Set([input.issueId]));
@@ -126,8 +129,8 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
   // Mirrors Redmine's Issue#reschedule_following_issues, invoked from after_save whenever
   // start_date or due_date actually changed: every "precedes" successor gets pushed forward
   // to keep up, cascading through chains.
-  const startDateChanged = input.changes.startDate !== undefined && after.startDate === input.changes.startDate;
-  const dueDateChanged = input.changes.dueDate !== undefined && after.dueDate === input.changes.dueDate;
+  const startDateChanged = appliedChanges.startDate !== undefined && after.startDate === appliedChanges.startDate;
+  const dueDateChanged = appliedChanges.dueDate !== undefined && after.dueDate === appliedChanges.dueDate;
   if (startDateChanged || dueDateChanged) {
     await rescheduleFollowingIssues(repositories, input.issueId, input.actingUserId, new Set([input.issueId]));
   }
@@ -259,18 +262,26 @@ async function applyIssueUpdate(
   repositories: UpdateIssueRepositories,
   input: UpdateIssueInput,
   options: { skipTransitionCheck: boolean; skipBlockedCheck: boolean; skipFieldPermissions: boolean },
-): Promise<Issue> {
+): Promise<{ after: Issue; appliedChanges: IssueUpdate }> {
   const before = await repositories.issueRepository.findById(input.issueId);
   if (!before) {
     throw new Error(`Issue ${input.issueId} not found`);
   }
 
+  // Permission filtering happens before anything else reads the payload. Mirrors Redmine's
+  // Issue#safe_attributes: the attribute block is gated on attributes_editable? and `notes`
+  // separately on notes_addable?, so a user with only add_issue_notes can comment without
+  // being able to change anything — including which tracker's workflow is consulted.
+  const requested = input.canEditAttributes === false ? ({} as IssueUpdate) : { ...input.changes };
+  const notes = input.canAddNotes === false ? "" : input.notes;
+  const customFieldValues = input.canEditAttributes === false ? undefined : input.customFieldValues;
+
   // Mirrors Redmine's Issue#safe_attributes=, which assigns tracker_id from the submitted
   // params *before* resolving workflow transitions and field permissions — a request that
   // changes the tracker is governed by the new tracker's workflow, not the old one's.
-  const targetTrackerId = input.changes.trackerId ?? before.trackerId;
+  const targetTrackerId = requested.trackerId ?? before.trackerId;
 
-  if (!options.skipTransitionCheck && input.changes.statusId && input.changes.statusId !== before.statusId) {
+  if (!options.skipTransitionCheck && requested.statusId && requested.statusId !== before.statusId) {
     const transitions = await repositories.workflowRepository.listForTracker(targetTrackerId);
     const allowed = canTransitionTo(
       transitions,
@@ -281,10 +292,10 @@ async function applyIssueUpdate(
         isAuthor: input.isAuthor,
         isAssignee: input.isAssignee,
       },
-      input.changes.statusId,
+      requested.statusId,
     );
     if (!allowed) {
-      throw new WorkflowTransitionDeniedError(before.statusId, input.changes.statusId);
+      throw new WorkflowTransitionDeniedError(before.statusId, requested.statusId);
     }
   }
 
@@ -293,7 +304,7 @@ async function applyIssueUpdate(
   // workflow_rule_by_attribute — see the doc comment on WorkflowFieldPermission).
   const fieldPermissionQuery = {
     trackerId: targetTrackerId,
-    statusId: input.changes.statusId ?? before.statusId,
+    statusId: requested.statusId ?? before.statusId,
     roleIds: input.actorRoleIds,
   };
   // Skipped for cascades with no real acting-user role behind them (rescheduleFollowingIssues)
@@ -303,9 +314,7 @@ async function applyIssueUpdate(
   // Mirrors Issue#safe_attributes: the attribute block is gated on attributes_editable?
   // and `notes` separately on notes_addable?, so a user with only add_issue_notes can
   // comment without being able to change anything.
-  const changes = input.canEditAttributes === false ? ({} as IssueUpdate) : { ...input.changes };
-  const notes = input.canAddNotes === false ? "" : input.notes;
-  const customFieldValues = input.canEditAttributes === false ? undefined : input.customFieldValues;
+  const changes = requested;
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     delete changes[field];
   }
@@ -484,5 +493,5 @@ async function applyIssueUpdate(
     await recalculateParents(repositories, input.issueId, [before.parentId]);
   }
 
-  return after;
+  return { after, appliedChanges: changes };
 }

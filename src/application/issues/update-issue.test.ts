@@ -1573,3 +1573,84 @@ describe("updateIssue — private notes", () => {
     expect(created[0].privateNotes).toBe(false);
   });
 });
+
+describe("updateIssue — a notes-only actor cannot drive the cascades", () => {
+  it("does not close duplicates when a notes-only actor echoes the issue's current closed status", async () => {
+    // Regression: the cascade triggers used to read the raw payload, so submitting a
+    // statusId equal to the issue's existing (closed) status satisfied
+    // `after.statusId === input.changes.statusId` even though the change was stripped —
+    // closing every duplicate of it with no permission to change anything.
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical", statusId: "closed" }), cascadeIssue({ id: "dup" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "just commenting",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: true,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("new");
+  });
+
+  it("does not reschedule successors when a notes-only actor echoes the issue's current dates", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "predecessor", startDate: "2026-01-01", dueDate: "2026-01-10" }),
+        // Starts before the predecessor's due date, so a cascade would actually move it.
+        cascadeIssue({ id: "successor", startDate: "2026-01-05", dueDate: "2026-01-20" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "predecessor", issueToId: "successor", relationType: "precedes", delay: 0 }],
+      transitions: [],
+    });
+
+    await updateIssue(repos, {
+      issueId: "predecessor",
+      expectedLockVersion: 0,
+      changes: { startDate: "2026-01-01", dueDate: "2026-01-10" },
+      notes: "just commenting",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: true,
+    });
+
+    expect(issuesById.get("successor")?.startDate).toBe("2026-01-05");
+  });
+
+  it("does not close duplicates on a status the workflow stripped as read-only", async () => {
+    // The same class of bug for an ordinary editor: a field dropped by a read-only rule
+    // must not trigger a cascade either.
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical", statusId: "closed" }), cascadeIssue({ id: "dup" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: false,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("new");
+  });
+});
