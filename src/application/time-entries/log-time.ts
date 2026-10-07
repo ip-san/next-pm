@@ -18,19 +18,24 @@ export interface LogTimeInput {
 
 /**
  * Mirrors TimeEntry's validates_numericality_of :hours plus Redmine's `timelog_accept_0_hours`
- * setting (default: reject 0h unless explicitly allowed).
+ * setting (default: reject 0h unless explicitly allowed). Shared with updateTimeEntry so an
+ * edit can't put an entry into a state creating it would have rejected.
  */
-export async function logTime(
-  repositories: { timeEntryRepository: TimeEntryRepository; settingsRepository: SettingsRepository },
-  input: LogTimeInput,
-): Promise<TimeEntry> {
-  const { timelogAccept0Hours } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
-  const invalid = !Number.isFinite(input.hours) || input.hours < 0 || (input.hours === 0 && !timelogAccept0Hours);
+export async function assertValidHours(settingsRepository: SettingsRepository, hours: number): Promise<void> {
+  const { timelogAccept0Hours } = resolveGeneralSettings(await settingsRepository.getAll());
+  const invalid = !Number.isFinite(hours) || hours < 0 || (hours === 0 && !timelogAccept0Hours);
   if (invalid) {
     throw new InvalidTimeEntryError(
       timelogAccept0Hours ? "作業時間は0以上の数値を入力してください。" : "作業時間は0より大きい数値を入力してください。",
     );
   }
+}
+
+export async function logTime(
+  repositories: { timeEntryRepository: TimeEntryRepository; settingsRepository: SettingsRepository },
+  input: LogTimeInput,
+): Promise<TimeEntry> {
+  await assertValidHours(repositories.settingsRepository, input.hours);
 
   return repositories.timeEntryRepository.create({
     projectId: input.projectId,

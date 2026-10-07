@@ -2,7 +2,7 @@ import { boolean, integer, jsonb, pgTable, primaryKey, text, uuid } from "drizzl
 import { trackers } from "./trackers";
 
 export const customFieldFormatEnum = ["string", "text", "int", "float", "date", "bool", "list"] as const;
-export const customizedTypeEnum = ["Issue", "Project"] as const;
+export const customizedTypeEnum = ["Issue", "Project", "TimeEntry"] as const;
 
 export const customFields = pgTable("custom_fields", {
   id: uuid("id").primaryKey().defaultRandom(),

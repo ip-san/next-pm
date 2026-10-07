@@ -8,7 +8,12 @@ function makeRepo(settings: Record<string, string> = {}) {
   const timeEntryRepository: TimeEntryRepository = {
     listForProject: mock(async () => []),
     listForIssue: mock(async () => []),
-    create: mock(async (entry) => ({ ...entry, id: "entry-1", createdAt: new Date() }) as TimeEntry),
+    findById: mock(async () => null),
+    create: mock(async (entry) => ({ ...entry, id: "entry-1", createdAt: new Date(), updatedAt: new Date() }) as TimeEntry),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => {}),
   };
   const settingsRepository: SettingsRepository = {
     getAll: mock(async () => settings),

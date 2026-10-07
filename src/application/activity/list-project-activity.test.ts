@@ -70,6 +70,7 @@ function timeEntry(overrides: Partial<import("@/domain/time-entry/entity").TimeE
     comments: "Worked on it",
     spentOn: "2026-07-15",
     createdAt: inside,
+    updatedAt: inside,
     ...overrides,
   };
 }
