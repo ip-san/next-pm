@@ -113,7 +113,7 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| ロール定義 | partial | 作成と権限付与のみ。編集・削除・複製、builtin ロール(非メンバー/匿名)の編集画面が無い |
+| ロール定義 | done | 作成/編集/削除/複製/並べ替え、builtin ロールの編集画面あり。本家 `Role#setable_permissions` 準拠で、非メンバーには `:require => :member`、匿名にはさらに `:require => :loggedin` の権限を提示しない |
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
@@ -151,7 +151,7 @@
 |---|---|---|
 | ユーザー | partial | 作成のみ。編集・ロック/有効化・削除・所属プロジェクト編集(本家 `principal_memberships`)が無い |
 | グループ | done | 作成/削除/メンバー増減 |
-| ロール | partial | 作成と権限更新のみ。編集/削除/複製が無い |
+| ロール | done | 作成/編集/削除/複製、組み込みロール(非メンバー/匿名)の権限編集、並べ替え、ワークフローのコピー。削除は本家 `Role#check_deletable` 準拠で、組み込みロールと割り当て済みロールは拒否 |
 | トラッカー | partial | 作成/編集/削除/並べ替え/ワークフローのコピー。削除は本家 `Tracker#check_integrity` 準拠で、チケットが1件でもあれば拒否。標準フィールドの無効化(本家 `core_fields`)が未対応 |
 | 課題ステータス | done | 作成/編集(名称・説明・完了フラグ・既定の進捗率)/削除/並べ替え。削除は本家 `IssueStatus#check_integrity` 準拠で、使用中のチケットまたは既定ステータスにしているトラッカーがあれば拒否 |
 | ワークフロー | done | 遷移とフィールド権限の編集 |

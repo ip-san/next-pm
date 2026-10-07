@@ -42,6 +42,14 @@ export type PermissionKey =
   | "view_changesets"
   | "manage_repository";
 
+/**
+ * Mirrors the `:require` option of Redmine's `map.permission` (lib/redmine/preparation.rb):
+ * "member" means the permission is meaningless outside a project membership, "loggedin" means
+ * it at least needs an account. `Role#setable_permissions` uses this to hide members-only
+ * permissions from the builtin Non member role and logged-in-only ones from Anonymous.
+ */
+export type PermissionRequirement = "member" | "loggedin" | null;
+
 interface PermissionDefinition {
   /** Module this permission belongs to; null means it's core (not gated by EnabledModule). */
   module: string | null;
@@ -50,56 +58,58 @@ interface PermissionDefinition {
    * allowed on closed (but not archived) projects; everything else requires an active project.
    */
   readOnly: boolean;
+  /** Null when any principal, including an anonymous visitor, may hold the permission. */
+  require: PermissionRequirement;
 }
 
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
-  view_project: { module: null, readOnly: true },
-  edit_project: { module: null, readOnly: false },
-  close_project: { module: null, readOnly: false },
-  select_project_modules: { module: null, readOnly: false },
-  manage_members: { module: null, readOnly: false },
-  manage_versions: { module: null, readOnly: false },
-  add_subprojects: { module: null, readOnly: false },
+  view_project: { module: null, readOnly: true, require: null },
+  edit_project: { module: null, readOnly: false, require: "member" },
+  close_project: { module: null, readOnly: false, require: "member" },
+  select_project_modules: { module: null, readOnly: false, require: "member" },
+  manage_members: { module: null, readOnly: false, require: "member" },
+  manage_versions: { module: null, readOnly: false, require: "member" },
+  add_subprojects: { module: null, readOnly: false, require: "member" },
 
-  view_issues: { module: "issue_tracking", readOnly: true },
-  add_issues: { module: "issue_tracking", readOnly: false },
-  edit_issues: { module: "issue_tracking", readOnly: false },
-  edit_own_issues: { module: "issue_tracking", readOnly: false },
-  manage_issue_relations: { module: "issue_tracking", readOnly: false },
-  manage_issue_categories: { module: "issue_tracking", readOnly: false },
-  add_issue_watchers: { module: "issue_tracking", readOnly: false },
-  delete_issue_watchers: { module: "issue_tracking", readOnly: false },
+  view_issues: { module: "issue_tracking", readOnly: true, require: null },
+  add_issues: { module: "issue_tracking", readOnly: false, require: null },
+  edit_issues: { module: "issue_tracking", readOnly: false, require: null },
+  edit_own_issues: { module: "issue_tracking", readOnly: false, require: null },
+  manage_issue_relations: { module: "issue_tracking", readOnly: false, require: null },
+  manage_issue_categories: { module: "issue_tracking", readOnly: false, require: "member" },
+  add_issue_watchers: { module: "issue_tracking", readOnly: false, require: null },
+  delete_issue_watchers: { module: "issue_tracking", readOnly: false, require: null },
 
-  view_time_entries: { module: "time_tracking", readOnly: true },
-  log_time: { module: "time_tracking", readOnly: false },
-  edit_time_entries: { module: "time_tracking", readOnly: false },
-  edit_own_time_entries: { module: "time_tracking", readOnly: false },
+  view_time_entries: { module: "time_tracking", readOnly: true, require: null },
+  log_time: { module: "time_tracking", readOnly: false, require: "loggedin" },
+  edit_time_entries: { module: "time_tracking", readOnly: false, require: "member" },
+  edit_own_time_entries: { module: "time_tracking", readOnly: false, require: "loggedin" },
 
-  view_wiki_pages: { module: "wiki", readOnly: true },
-  edit_wiki_pages: { module: "wiki", readOnly: false },
-  manage_wiki: { module: "wiki", readOnly: false },
-  export_wiki_pages: { module: "wiki", readOnly: true },
+  view_wiki_pages: { module: "wiki", readOnly: true, require: null },
+  edit_wiki_pages: { module: "wiki", readOnly: false, require: null },
+  manage_wiki: { module: "wiki", readOnly: false, require: "member" },
+  export_wiki_pages: { module: "wiki", readOnly: true, require: null },
 
-  manage_boards: { module: "boards", readOnly: false },
-  view_messages: { module: "boards", readOnly: true },
-  add_messages: { module: "boards", readOnly: false },
-  edit_messages: { module: "boards", readOnly: false },
-  edit_own_messages: { module: "boards", readOnly: false },
-  delete_messages: { module: "boards", readOnly: false },
-  delete_own_messages: { module: "boards", readOnly: false },
+  manage_boards: { module: "boards", readOnly: false, require: "member" },
+  view_messages: { module: "boards", readOnly: true, require: null },
+  add_messages: { module: "boards", readOnly: false, require: null },
+  edit_messages: { module: "boards", readOnly: false, require: "member" },
+  edit_own_messages: { module: "boards", readOnly: false, require: "loggedin" },
+  delete_messages: { module: "boards", readOnly: false, require: "member" },
+  delete_own_messages: { module: "boards", readOnly: false, require: "loggedin" },
 
-  view_news: { module: "news", readOnly: true },
-  manage_news: { module: "news", readOnly: false },
-  comment_news: { module: "news", readOnly: false },
-  view_documents: { module: "documents", readOnly: true },
-  add_documents: { module: "documents", readOnly: false },
-  edit_documents: { module: "documents", readOnly: false },
-  delete_documents: { module: "documents", readOnly: false },
-  view_files: { module: "files", readOnly: true },
-  manage_files: { module: "files", readOnly: false },
-  browse_repository: { module: "repository", readOnly: true },
-  view_changesets: { module: "repository", readOnly: true },
-  manage_repository: { module: "repository", readOnly: false },
+  view_news: { module: "news", readOnly: true, require: null },
+  manage_news: { module: "news", readOnly: false, require: "member" },
+  comment_news: { module: "news", readOnly: false, require: null },
+  view_documents: { module: "documents", readOnly: true, require: null },
+  add_documents: { module: "documents", readOnly: false, require: "loggedin" },
+  edit_documents: { module: "documents", readOnly: false, require: "loggedin" },
+  delete_documents: { module: "documents", readOnly: false, require: "loggedin" },
+  view_files: { module: "files", readOnly: true, require: null },
+  manage_files: { module: "files", readOnly: false, require: "loggedin" },
+  browse_repository: { module: "repository", readOnly: true, require: null },
+  view_changesets: { module: "repository", readOnly: true, require: null },
+  manage_repository: { module: "repository", readOnly: false, require: "member" },
 };
 
 export function isPermissionRegistered(key: string): key is PermissionKey {

@@ -2,13 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isPermissionRegistered } from "@/domain/authorization/permission-registry";
 import { generateSalt, hashPassword } from "@/domain/user/password";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
-import { parseRolePermissionEntries } from "@/domain/role/parse-role-permissions";
 import { parseFieldPermissionEntries } from "@/domain/workflow/parse-field-permissions";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
@@ -183,84 +181,5 @@ export async function createUserAction(
   }
 
   revalidatePath("/admin/users");
-  return { error: null };
-}
-
-const createRoleSchema = z.object({
-  name: z.string().min(1).max(30),
-  issuesVisibility: z.enum(["all", "default", "own"]).default("default"),
-  permissions: z.array(z.string()),
-});
-
-export async function createRoleAction(
-  _prevState: AdminActionState,
-  formData: FormData,
-): Promise<AdminActionState> {
-  const authError = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const parsed = createRoleSchema.safeParse({
-    name: formData.get("name"),
-    issuesVisibility: formData.get("issuesVisibility") ?? "default",
-    permissions: formData.getAll("permissions"),
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
-  }
-
-  const invalidPermission = parsed.data.permissions.find((p) => !isPermissionRegistered(p));
-  if (invalidPermission) {
-    return { error: `不明な権限が指定されました: ${invalidPermission}` };
-  }
-  const permissions = parsed.data.permissions.filter(isPermissionRegistered);
-
-  await new DrizzleRoleRepository().create({
-    name: parsed.data.name,
-    builtin: 0,
-    position: 0,
-    permissions,
-    issuesVisibility: parsed.data.issuesVisibility,
-    timeEntriesVisibility: "all",
-    usersVisibility: "all",
-    assignable: true,
-  });
-
-  revalidatePath("/admin/roles");
-  return { error: null };
-}
-
-export async function updateRolePermissionsAction(
-  _prevState: AdminActionState,
-  formData: FormData,
-): Promise<AdminActionState> {
-  const authError = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const entries: Array<[string, string]> = [];
-  for (const [key, value] of formData.entries()) {
-    if (typeof value === "string") entries.push([key, value]);
-  }
-  const parsed = parseRolePermissionEntries(entries);
-  if (!parsed.ok) {
-    return { error: parsed.error };
-  }
-
-  const roleRepository = new DrizzleRoleRepository();
-  const roleIds = Array.from(parsed.permissionsByRoleId.keys());
-  const roles = await roleRepository.findByIds(roleIds);
-  if (roles.length !== roleIds.length) {
-    return { error: "存在しないロールが指定されました。" };
-  }
-
-  for (const [roleId, permissions] of parsed.permissionsByRoleId) {
-    await roleRepository.updatePermissions(roleId, permissions);
-  }
-
-  revalidatePath("/admin/roles");
-  revalidatePath("/admin/roles/permissions");
   return { error: null };
 }
