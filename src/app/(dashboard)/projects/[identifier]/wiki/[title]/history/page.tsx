@@ -56,14 +56,22 @@ export default async function WikiHistoryPage({
               バージョン {version.version} · {version.createdAt.toISOString()}
               {version.comments ? ` — ${version.comments}` : ""}
             </span>
-            {index + 1 < versions.length ? (
+            <span className="flex items-center gap-3">
               <Link
-                href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/diff?from=${versions[index + 1].version}&to=${version.version}`}
+                href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/annotate?version=${version.version}`}
                 className="underline"
               >
-                前バージョンとの差分
+                注釈
               </Link>
-            ) : null}
+              {index + 1 < versions.length ? (
+                <Link
+                  href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/diff?from=${versions[index + 1].version}&to=${version.version}`}
+                  className="underline"
+                >
+                  前バージョンとの差分
+                </Link>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>

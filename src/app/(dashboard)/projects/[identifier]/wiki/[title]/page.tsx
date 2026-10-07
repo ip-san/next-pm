@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { filterMembersWithPermission } from "@/domain/member/entity";
 import { ancestorChain, childrenOf } from "@/domain/wiki/hierarchy";
 import { expandMacros, extractHeadings } from "@/domain/wiki/macros";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import {
   DrizzleWikiContentRepository,
@@ -18,6 +22,7 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 import { DeleteWikiAttachmentButton } from "./delete-wiki-attachment-button";
 import { WikiAttachmentUploadForm } from "./wiki-attachment-upload-form";
 import { WikiProtectToggleForm } from "./wiki-protect-toggle-form";
+import { WikiWatcherManager } from "./wiki-watcher-manager";
 import { WikiWatchToggleForm } from "./wiki-watch-toggle-form";
 
 export default async function WikiPageView({
@@ -43,6 +48,9 @@ export default async function WikiPageView({
   const canProtect = can({ permission: "protect_wiki_pages", project: projectContext, actor });
   const canViewEdits = can({ permission: "view_wiki_edits", project: projectContext, actor });
   const canDelete = can({ permission: "delete_wiki_pages", project: projectContext, actor });
+  const canViewWatchers = can({ permission: "view_wiki_page_watchers", project: projectContext, actor });
+  const canAddWatchers = can({ permission: "add_wiki_page_watchers", project: projectContext, actor });
+  const canRemoveWatchers = can({ permission: "delete_wiki_page_watchers", project: projectContext, actor });
   const canDeleteAttachments = can({ permission: "delete_wiki_pages_attachments", project: projectContext, actor });
   const canRenameOrManage =
     can({ permission: "rename_wiki_pages", project: projectContext, actor }) ||
@@ -69,6 +77,22 @@ export default async function WikiPageView({
   const attachments = wikiPage ? await new DrizzleAttachmentRepository().listByContainer("WikiPage", wikiPage.id) : [];
   const isWatching =
     user && wikiPage ? await new DrizzleWatcherRepository().isWatching("WikiPage", wikiPage.id, user.id) : false;
+
+  // Redmine's show.html.erb renders the watcher box when the actor can add watchers, or
+  // when there are watchers to show and the actor can view them.
+  const watcherUserIds =
+    wikiPage && (canViewWatchers || canAddWatchers)
+      ? await new DrizzleWatcherRepository().listWatcherUserIds("WikiPage", wikiPage.id)
+      : [];
+  const showWatchers = wikiPage !== null && (canAddWatchers || (watcherUserIds.length > 0 && canViewWatchers));
+  // Principal.assignable_watchers: members who can actually read this wiki.
+  const watcherCandidateMembers = showWatchers && canAddWatchers ? await assignableWatchers(project.id) : [];
+  const watcherUsers = showWatchers
+    ? await new DrizzleUserRepository().findByIds([
+        ...new Set([...watcherUserIds, ...watcherCandidateMembers]),
+      ])
+    : [];
+  const watcherLabelById = new Map(watcherUsers.map((u) => [u.id, `${u.lastname} ${u.firstname}`]));
 
   const allPages = wikiPage ? await wikiPageRepository.listForProject(project.id) : [];
   const children = wikiPage ? childrenOf(allPages, wikiPage.id) : [];
@@ -185,6 +209,20 @@ export default async function WikiPageView({
             </section>
           ) : null}
 
+          {showWatchers && wikiPage ? (
+            <WikiWatcherManager
+              pageId={wikiPage.id}
+              title={title}
+              projectIdentifier={identifier}
+              watchers={watcherUserIds.map((id) => ({ id, label: watcherLabelById.get(id) ?? id }))}
+              candidates={watcherCandidateMembers
+                .filter((id) => !watcherUserIds.includes(id))
+                .map((id) => ({ id, label: watcherLabelById.get(id) ?? id }))}
+              canAdd={canAddWatchers}
+              canRemove={canRemoveWatchers}
+            />
+          ) : null}
+
           <section className="flex flex-col gap-2">
             <h2 className="font-medium text-sm">添付ファイル</h2>
             <ul className="flex flex-col gap-1 text-sm">
@@ -220,4 +258,15 @@ export default async function WikiPageView({
       )}
     </main>
   );
+}
+
+/** Redmine's Principal.assignable_watchers for a wiki page: members who can view the wiki. */
+async function assignableWatchers(projectId: string): Promise<string[]> {
+  const members = await new DrizzleMemberRepository().listByProject(projectId);
+  const rolesById = new Map(
+    (await new DrizzleRoleRepository().findByIds([...new Set(members.flatMap((m) => m.roleIds))])).map((role) => [role.id, role]),
+  );
+  return filterMembersWithPermission(members, rolesById, "view_wiki_pages")
+    .map((member) => member.userId)
+    .filter((userId): userId is string => userId !== null);
 }

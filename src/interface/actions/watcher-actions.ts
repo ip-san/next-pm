@@ -3,11 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { filterMembersWithPermission } from "@/domain/member/entity";
+import type { Project } from "@/domain/project/entity";
+import type { WikiPage } from "@/domain/wiki/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { toggleWatch } from "@/application/watchers/toggle-watch";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -292,5 +296,92 @@ export async function toggleWikiPageWatchAction(_prevState: ToggleWatchActionSta
   await toggleWatch({ watcherRepository: new DrizzleWatcherRepository() }, "WikiPage", page.id, user.id);
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(parsed.data.title)}`);
+  return { error: null };
+}
+
+const wikiPageWatcherSchema = z.object({
+  pageId: z.string().uuid(),
+  title: z.string().min(1),
+  projectIdentifier: z.string().min(1),
+  userId: z.string().uuid(),
+});
+
+/**
+ * Mirrors WatchersController#create for a wiki page: add_wiki_page_watchers, and the target
+ * must be one of Principal.assignable_watchers — a project member who can actually read the
+ * thing being watched, so adding someone never hands them a notification about a wiki their
+ * roles don't let them open.
+ */
+type WikiPageWatcherRequest =
+  | { ok: false; error: string }
+  | { ok: true; data: z.infer<typeof wikiPageWatcherSchema>; page: WikiPage; project: Project };
+
+async function resolveWikiPageWatcherRequest(
+  formData: FormData,
+  permission: "add_wiki_page_watchers" | "delete_wiki_page_watchers",
+): Promise<WikiPageWatcherRequest> {
+  const parsed = wikiPageWatcherSchema.safeParse({
+    pageId: formData.get("pageId"),
+    title: formData.get("title"),
+    projectIdentifier: formData.get("projectIdentifier"),
+    userId: formData.get("userId"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { ok: false, error: "ログインしてください。" };
+  }
+
+  const page = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
+  if (!page) {
+    return { ok: false, error: "Wikiページが見つかりません。" };
+  }
+
+  const project = await new DrizzleProjectRepository().findById(page.projectId);
+  if (!project) {
+    return { ok: false, error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission, project: toAuthorizationProject(project), actor })) {
+    return { ok: false, error: "この操作を行う権限がありません。" };
+  }
+
+  return { ok: true, data: parsed.data, page, project };
+}
+
+export async function addWikiPageWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
+  const resolved = await resolveWikiPageWatcherRequest(formData, "add_wiki_page_watchers");
+  if (!resolved.ok) {
+    return { error: resolved.error };
+  }
+
+  const members = await new DrizzleMemberRepository().listByProject(resolved.project.id);
+  const rolesById = new Map(
+    (await new DrizzleRoleRepository().findByIds([...new Set(members.flatMap((m) => m.roleIds))])).map((role) => [role.id, role]),
+  );
+  const eligible = filterMembersWithPermission(members, rolesById, "view_wiki_pages");
+  if (!eligible.some((member) => member.userId === resolved.data.userId)) {
+    return { error: "指定されたユーザーはこのプロジェクトの Wiki を閲覧できません。" };
+  }
+
+  await new DrizzleWatcherRepository().watch("WikiPage", resolved.page.id, resolved.data.userId);
+
+  revalidatePath(`/projects/${resolved.data.projectIdentifier}/wiki/${encodeURIComponent(resolved.data.title)}`);
+  return { error: null };
+}
+
+export async function removeWikiPageWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
+  const resolved = await resolveWikiPageWatcherRequest(formData, "delete_wiki_page_watchers");
+  if (!resolved.ok) {
+    return { error: resolved.error };
+  }
+
+  await new DrizzleWatcherRepository().unwatch("WikiPage", resolved.page.id, resolved.data.userId);
+
+  revalidatePath(`/projects/${resolved.data.projectIdentifier}/wiki/${encodeURIComponent(resolved.data.title)}`);
   return { error: null };
 }
