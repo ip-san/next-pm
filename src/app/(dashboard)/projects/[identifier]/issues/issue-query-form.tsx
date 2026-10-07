@@ -64,6 +64,13 @@ export interface IssueQueryFormProps {
   /** Carried through unchanged so applying a filter doesn't reset the sort. */
   sortCriteria: SortCriterion[];
   perPage: string;
+  /**
+   * The saved query being viewed, if any. Carried through so that changing the filters or
+   * columns stays *inside* that query — without it, applying a change would detach to an
+   * ad-hoc list and the "update this query" form would vanish, leaving a saved query's
+   * filters permanently uneditable.
+   */
+  queryId?: string;
 }
 
 interface FilterRow {
@@ -111,6 +118,7 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
   return (
     <form method="get" action={props.action} className="border rounded p-4 flex flex-col gap-4 text-sm">
       <input type="hidden" name="set_filter" value="1" />
+      {props.queryId ? <input type="hidden" name="query_id" value={props.queryId} /> : null}
       <input type="hidden" name="sort" value={serializeSortCriteria(props.sortCriteria)} />
       <input type="hidden" name="per_page" value={props.perPage} />
 

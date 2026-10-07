@@ -190,6 +190,11 @@ function compileFilter(condition: FilterCondition, context: FilterContext): Comp
       return relativeDays(field, context, null, numberValue(condition, 0));
     case "t+":
       return relativeDays(field, context, numberValue(condition, 0), numberValue(condition, 0));
+    default:
+      // Unreachable for a well-typed caller, but filter rows also arrive from a query
+      // string, so an unrecognised operator must drop the row rather than fall off the end
+      // of the switch and hand `undefined` back to compileFilters.
+      return null;
   }
 }
 

@@ -86,7 +86,7 @@
 | 表示列の選択 | done | `queries.column_names`。既定は本家 `Setting.issue_list_default_columns` と同じ 6 列。`spent_hours` は `view_time_entries` 保持者にのみ提示(本家 `IssueQuery#initialize_available_columns` 準拠) |
 | グルーピング | done | `queries.group_by`。グループ見出しに件数と小計を表示。件数・小計はページではなく絞り込み結果全体に対して SQL で集計するため、グループがページ境界で分割されても正しい。グループの並び順は本家同様その列のソート式(ステータスなら `position`)に従う |
 | ソート | done | `queries.sort_criteria`。列見出しクリックで多段ソート(本家同様 3 キーまで、クリックした列が先頭へ)。UUID 主キーには順序が無いため `id` 列のソートは `created_at` に対応付け、ページングが安定するよう常に `id` を最終キーに付ける |
-| 合計行(予定工数/作業時間などの total) | done | 本家 `options[:totalable_names]` 相当を `queries.totalable_names` に保持。予定工数・作業時間・数値カスタムフィールドの合計を、全体とグループ単位の両方で SQL 集計 |
+| 合計行(予定工数/作業時間などの total) | done | 本家 `options[:totalable_names]` 相当を `queries.totalable_names` に保持。予定工数・作業時間・数値カスタムフィールドの合計を、全体とグループ単位の両方で SQL 集計。作業時間の列と合計は `view_time_entries` 保持者にのみ出すが、本家の `TimeEntry.visible_condition` 相当(ロールの `time_entries_visibility` が `own` の場合に自分の分だけ数える)は効かせていない — §4 の通りこの設定は next-pm 全体でまだ未適用 |
 | ページネーション | done | 件数・行・グループ集計・合計すべて SQL 側で処理し、1 ページ分しかメモリに載せない。プライベート課題の可視性も `Array#filter` ではなく WHERE 句で効かせてあるため、件数と合計が可視範囲とずれない。ページサイズは本家 `Setting.per_page_options`(既定 `25,50,100`)。範囲外のページ番号は最終ページに丸める |
 | CSV エクスポート | partial | 課題のみ(`/api/projects/[identifier]/issues/csv`)。工数・ユーザーの CSV が無い。一覧と同じ URL 契約・同じユースケースを使うため、選択した表示列・フィルタ・ソートをそのまま反映する(行数の上限は本家同様 `issues_export_limit`、既定 500) |
 | PDF エクスポート | done | 課題一覧・Wiki・ガント |
@@ -114,7 +114,7 @@
 | 機能 | 状態 | 備考 |
 |---|---|---|
 | ロール定義 | partial | 作成と権限付与のみ。編集・削除・複製、builtin ロール(非メンバー/匿名)の編集画面が無い |
-| 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
+| 可視性設定 | partial | 3 種とも列と管理 UI はあるが、実際に効いているのは `issues_visibility` のみ。`time_entries_visibility` / `users_visibility` は保存されるだけで、読み取り側がどこも参照していない |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
 | 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 45。下表参照 |

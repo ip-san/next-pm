@@ -6,8 +6,10 @@ import type { SortCriterion } from "./sort";
  * The private-issue rule from `domain/issue/visibility.ts`, reduced to the three facts a
  * SQL `WHERE` clause needs. Pagination has to happen in the database, so the rule cannot
  * stay a post-fetch `Array#filter` the way the old all-rows issue list applied it — see
- * `issueVisibilityScope` in interface/http/resolve-actor.ts for the actor mapping, and
- * `visibility-clause.test.ts` for the test pinning the two forms together.
+ * `issueVisibilityScope` in interface/http/resolve-actor.ts for the actor mapping.
+ *
+ * The SQL form of the rule lives in `issueVisibilityClause`; the two are kept in step by
+ * hand, since next-pm has no database-backed test harness to pin them together.
  */
 export interface IssueVisibilityScope {
   userId: string | null;

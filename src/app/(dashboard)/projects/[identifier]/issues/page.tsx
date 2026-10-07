@@ -222,6 +222,7 @@ export default async function ProjectIssuesPage({
         initialTotalableKeys={result.effective.totalableNames}
         sortCriteria={result.effective.sortCriteria}
         perPage={String(result.pagination.perPage)}
+        queryId={savedQuery?.id}
       />
 
       <SaveQueryForm

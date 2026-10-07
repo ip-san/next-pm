@@ -13,6 +13,7 @@ import { compileFilters, DEFAULT_FIRST_DAY_OF_WEEK, type FilterCondition } from 
 import type { IssueSearchRepository, IssueSearchResult, IssueVisibilityScope } from "@/domain/query/issue-search";
 import { paginate, resolvePerPage, type Pagination } from "@/domain/query/pagination";
 import { resolveSortCriteria } from "@/domain/query/sort";
+import { validFilters } from "@/domain/query/validate-filters";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { IssueListParams } from "@/interface/query/issue-query-params";
@@ -81,7 +82,10 @@ export async function listProjectIssues(
 
   const requested = resolveQueryOptions(input);
   const effective: QueryOptions = {
-    filters: requested.filters,
+    // Filters come from a hand-editable query string (or from a saved query that may name
+    // a since-deleted custom field), so they're validated against this viewer's own column
+    // catalog before anything builds SQL from them.
+    filters: validFilters(availableColumns, requested.filters),
     columnNames: requested.columnNames,
     groupBy: requested.groupBy && findColumn(availableColumns, requested.groupBy)?.groupable ? requested.groupBy : null,
     sortCriteria: resolveSortCriteria(availableColumns, requested.sortCriteria),
@@ -157,14 +161,26 @@ function resolveQueryOptions(input: ListProjectIssuesInput): QueryOptions {
   const { params, savedQuery } = input;
 
   if (savedQuery) {
+    // `set_filter=1` alongside a `query_id` is the filter form submitting changes while
+    // still pointing at the saved query: the params then describe the query wholesale, so
+    // that clearing the grouping or unticking every total actually clears them. Without
+    // it, the stored settings apply, with `sort` still overridable per request the way
+    // Redmine lets `params[:sort]` win.
+    if (params.setFilter) {
+      return {
+        filters: params.filters,
+        columnNames: params.columnKeys,
+        groupBy: params.groupBy,
+        sortCriteria: params.sortCriteria,
+        totalableNames: params.totalableKeys,
+      };
+    }
     return {
-      // A saved query's own sort/grouping can still be overridden per request, the way
-      // Redmine lets `params[:sort]` win over the stored criteria.
       filters: savedQuery.filters,
-      columnNames: params.columnKeys.length > 0 ? params.columnKeys : savedQuery.columnNames,
-      groupBy: params.groupBy ?? savedQuery.groupBy,
+      columnNames: savedQuery.columnNames,
+      groupBy: savedQuery.groupBy,
       sortCriteria: params.sortCriteria.length > 0 ? params.sortCriteria : savedQuery.sortCriteria,
-      totalableNames: params.totalableKeys.length > 0 ? params.totalableKeys : savedQuery.totalableNames,
+      totalableNames: savedQuery.totalableNames,
     };
   }
 

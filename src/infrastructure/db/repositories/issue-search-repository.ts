@@ -23,7 +23,13 @@ import type { SortCriterion } from "@/domain/query/sort";
  * `asg` groups (assignee), `cat` issue_categories, `v` versions.
  */
 
-type OperandType = "id" | "text" | "date" | "timestamp" | "number" | "bool";
+/**
+ * `dateText` is `start_date` / `due_date`, which next-pm stores as `text`, not `date`. They
+ * have to be compared against plain string literals: an explicit `'…'::date` on the other
+ * side makes Postgres look for a `text >= date` operator, which doesn't exist. ISO-8601
+ * dates sort lexicographically, so plain text comparison is still correct.
+ */
+type OperandType = "id" | "text" | "dateText" | "timestamp" | "number" | "bool";
 
 interface Operand {
   sql: SQL;
@@ -89,8 +95,8 @@ const FILTER_OPERANDS: Record<string, Operand> = {
   category_id: { sql: sql`i.category_id`, type: "id" },
   fixed_version_id: { sql: sql`i.fixed_version_id`, type: "id" },
   subject: { sql: sql`i.subject`, type: "text" },
-  start_date: { sql: sql`i.start_date`, type: "date" },
-  due_date: { sql: sql`i.due_date`, type: "date" },
+  start_date: { sql: sql`i.start_date`, type: "dateText" },
+  due_date: { sql: sql`i.due_date`, type: "dateText" },
   created_on: { sql: sql`i.created_at`, type: "timestamp" },
   updated_on: { sql: sql`i.updated_at`, type: "timestamp" },
   estimated_hours: { sql: sql`i.estimated_hours`, type: "number" },
@@ -108,8 +114,10 @@ const FILTER_OPERANDS: Record<string, Operand> = {
 const NUMERIC_VALUE = sql`(case when cv.value ~ '^[+-]?[0-9]+(\\.[0-9]+)?$' then cv.value::numeric end)`;
 
 /**
- * SQL form of `isPrivateIssueVisible` (domain/issue/visibility.ts). The two must agree —
- * `visibility-clause.test.ts` runs both over the same fixtures.
+ * SQL form of `isPrivateIssueVisible` (domain/issue/visibility.ts). The two must agree, and
+ * are kept in step by hand — note `is distinct from 'group'` rather than `<> 'group'`, so
+ * a row with no assignee type behaves the way the JS `!== "group"` does instead of
+ * collapsing the whole disjunct to NULL.
  */
 export function issueVisibilityClause(scope: IssueVisibilityScope): SQL {
   if (scope.seesAllPrivateIssues) return sql`true`;
@@ -120,7 +128,7 @@ export function issueVisibilityClause(scope: IssueVisibilityScope): SQL {
       ? sql` or (i.assigned_to_type = 'group' and i.assigned_to_id in ${idList(scope.userGroupIds)})`
       : sql``;
 
-  return sql`(i.is_private = false or i.author_id = ${scope.userId}::uuid or (i.assigned_to_type <> 'group' and i.assigned_to_id = ${scope.userId}::uuid)${groupClause})`;
+  return sql`(i.is_private = false or i.author_id = ${scope.userId}::uuid or (i.assigned_to_type is distinct from 'group' and i.assigned_to_id = ${scope.userId}::uuid)${groupClause})`;
 }
 
 function idList(ids: string[]): SQL {
@@ -188,7 +196,6 @@ function literal(value: string, type: OperandType): SQL {
       return sql`${value}::uuid`;
     case "number":
       return sql`${Number(value)}`;
-    case "date":
     case "timestamp":
       return sql`${value}::date`;
     case "bool":
@@ -295,8 +302,16 @@ const GROUP_ORDER_EXPRESSIONS: Record<string, SQL> = {
   fixed_version: SORT_EXPRESSIONS.fixed_version,
 };
 
-function groupOrderExpression(key: string, customFieldFormats: Map<string, string>): SQL | undefined {
-  return GROUP_ORDER_EXPRESSIONS[key] ?? groupExpression(key, customFieldFormats);
+/**
+ * The ordering expression *when it differs from the group key itself*, which is only the
+ * case for the association columns above. Undefined means "order by the group key", and
+ * the callers then order by the output column rather than by a second copy of the
+ * expression — two separately-built copies of the same correlated subquery are not
+ * recognised as the same expression by Postgres, which rejects the select-list copy with
+ * "subquery uses ungrouped column".
+ */
+function distinctGroupOrderExpression(key: string): SQL | undefined {
+  return GROUP_ORDER_EXPRESSIONS[key];
 }
 
 function orderByClause(sortCriteria: SortCriterion[], groupOrder: SQL | undefined, customFieldFormats: Map<string, string>): SQL {
@@ -407,13 +422,14 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     // The key the rows are bucketed by and the expression the buckets are *ordered* by are
     // not the same thing: grouping by status buckets on status_id but orders on the
     // status's position, so the groups come out in workflow order.
-    const groupOrder = group && criteria.groupBy ? (groupOrderExpression(criteria.groupBy, customFieldFormats) ?? group) : undefined;
+    const distinctGroupOrder = criteria.groupBy ? distinctGroupOrderExpression(criteria.groupBy) : undefined;
+    const rowGroupOrder = distinctGroupOrder ?? group;
     const totalKeys = criteria.totalableKeys.filter((key) => totalExpression(key, customFieldFormats) !== undefined);
 
     const [summary, groups, rows] = await Promise.all([
       this.loadSummary(where, totalKeys, customFieldFormats),
-      group && groupOrder ? this.loadGroups(where, group, groupOrder, totalKeys, customFieldFormats) : Promise.resolve(null),
-      this.loadRows(where, criteria, groupOrder, customFieldFormats, limit, offset),
+      group ? this.loadGroups(where, group, distinctGroupOrder, totalKeys, customFieldFormats) : Promise.resolve(null),
+      this.loadRows(where, criteria, rowGroupOrder, customFieldFormats, limit, offset),
     ]);
 
     // Both of these are bounded by the page size, so they stay one extra round trip each
@@ -442,17 +458,25 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
   private async loadGroups(
     where: SQL,
     group: SQL,
-    groupOrder: SQL,
+    distinctGroupOrder: SQL | undefined,
     totalKeys: string[],
     customFieldFormats: Map<string, string>,
   ): Promise<IssueGroup[]> {
     const totalSelects = totalKeys.map((key, index) => sql`${totalExpression(key, customFieldFormats)} as ${sql.raw(`total_${index}`)}`);
     const selects = sql.join([sql`${group} as group_value`, sql`count(*) as row_count`, ...totalSelects], sql`, `);
-    // The ordering expression has to be grouped too — it's functionally dependent on the
-    // group key, but Postgres only infers that through a primary key, not through a join.
-    const result = await db.execute<Record<string, unknown>>(
-      sql`select ${selects} ${BASE_FROM} ${where} group by ${group}, ${groupOrder} order by ${groupOrder} asc nulls last`,
-    );
+    // `group by 1` rather than by a second copy of the expression: a custom-field group key
+    // is a correlated subquery whose custom_field_id is a bound parameter, so re-emitting
+    // it here would allocate a *different* placeholder and Postgres would no longer
+    // recognise it as the same expression as the one in the select list ("subquery uses
+    // ungrouped column"). The output-column ordinal matches by construction.
+    //
+    // When the groups are ordered by something other than the key they're bucketed on (the
+    // association columns), that expression has to be grouped as well — it's functionally
+    // dependent on the key, but Postgres only infers that through a primary key, not
+    // through a join.
+    const grouping = distinctGroupOrder ? sql`group by 1, ${distinctGroupOrder}` : sql`group by 1`;
+    const ordering = distinctGroupOrder ? sql`order by ${distinctGroupOrder} asc nulls last` : sql`order by group_value asc nulls last`;
+    const result = await db.execute<Record<string, unknown>>(sql`select ${selects} ${BASE_FROM} ${where} ${grouping} ${ordering}`);
     return result.rows.map((row) => ({
       value: row.group_value === null || row.group_value === undefined ? null : String(row.group_value),
       count: toNumber(row.row_count),

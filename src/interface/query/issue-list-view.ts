@@ -17,6 +17,12 @@ export interface IssueRowContext {
   /** Keyed `${issueId}:${customFieldId}`, as the search repository returns it. */
   customValues: Map<string, string>;
   spentHours: Map<string, number>;
+  /**
+   * Render the `#` column as the full UUID rather than the 8-character display shorthand.
+   * The HTML list wants the shorthand it links by; an export wants the only stable key,
+   * since a prefix can collide.
+   */
+  fullIds?: boolean;
 }
 
 function assigneeName(issue: Issue, lookups: IssueListLookups): string {
@@ -41,7 +47,7 @@ export function issueColumnValue(column: QueryColumn, issue: Issue, context: Iss
 
   switch (column.key) {
     case "id":
-      return issue.id.slice(0, 8);
+      return context.fullIds ? issue.id : issue.id.slice(0, 8);
     case "tracker":
       return context.lookups.trackers.get(issue.trackerId) ?? "";
     case "status":

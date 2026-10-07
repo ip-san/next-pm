@@ -96,7 +96,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     categories: new Map(categories.map((category) => [category.id, category.name])),
     versions: new Map(versions.map((version) => [version.id, version.name])),
   };
-  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours };
+  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours, fullIds: true };
 
   const rows = [
     result.displayColumns.map((column) => column.label),
