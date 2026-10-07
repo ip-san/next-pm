@@ -39,6 +39,11 @@ export class DrizzleNewsRepository implements NewsRepository {
     return toDomain(row);
   }
 
+  async update(id: string, changes: { title?: string; summary?: string; description?: string }): Promise<News> {
+    const [row] = await db.update(news).set(changes).where(eq(news.id, id)).returning();
+    return toDomain(row);
+  }
+
   async delete(id: string): Promise<void> {
     await db.delete(news).where(eq(news.id, id));
   }
@@ -64,8 +69,17 @@ export class DrizzleNewsCommentRepository implements NewsCommentRepository {
     return rows.map(commentToDomain);
   }
 
+  async findById(id: string): Promise<NewsComment | null> {
+    const [row] = await db.select().from(newsComments).where(eq(newsComments.id, id)).limit(1);
+    return row ? commentToDomain(row) : null;
+  }
+
   async create(input: Omit<NewsComment, "id" | "createdAt">): Promise<NewsComment> {
     const [row] = await db.insert(newsComments).values({ newsId: input.newsId, authorId: input.authorId, content: input.content }).returning();
     return commentToDomain(row);
+  }
+
+  async delete(id: string): Promise<void> {
+    await db.delete(newsComments).where(eq(newsComments.id, id));
   }
 }

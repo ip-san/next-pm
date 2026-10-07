@@ -52,6 +52,9 @@ export type PermissionKey =
   | "edit_own_messages"
   | "delete_messages"
   | "delete_own_messages"
+  | "view_message_watchers"
+  | "add_message_watchers"
+  | "delete_message_watchers"
   | "view_news"
   | "manage_news"
   | "comment_news"
@@ -156,6 +159,10 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_own_messages: { module: "boards", readOnly: false, require: "loggedin" },
   delete_messages: { module: "boards", readOnly: false, require: "member" },
   delete_own_messages: { module: "boards", readOnly: false, require: "loggedin" },
+  // preparation.rb#L153-155: view is `:read => true`, and none of the three carry a `:require`.
+  view_message_watchers: { module: "boards", readOnly: true, require: null },
+  add_message_watchers: { module: "boards", readOnly: false, require: null },
+  delete_message_watchers: { module: "boards", readOnly: false, require: null },
 
   view_news: { module: "news", readOnly: true, require: null },
   manage_news: { module: "news", readOnly: false, require: "member" },

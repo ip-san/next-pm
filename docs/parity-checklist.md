@@ -21,7 +21,7 @@
 | 課題の識別子 | 本家は全体で一意の連番(`#123`)。next-pm は UUID の先頭 8 桁(`#eb0b2d1a`)を表示・参照の shorthand に使う。メール件名の返信検出(`domain/mail/parse-email.ts`)やコミットメッセージ走査(`domain/scm/keyword-scan.ts`)もこの表記に合わせてある。移行するなら全機能横断の変更になる |
 | クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。現時点の適用先はプロジェクトの課題一覧のみで、工数一覧(§9)と横断一覧(§13)への再利用は未着手(`type` 列と `IssueSearchRepository` の分離はそのための下地) |
 | 課題の更新経路 | 解消済み。単票の編集フォームからドメイン層の全項目(トラッカー・親課題・カスタム値を含む)に到達できるようになった。残る穴は一括編集の対応項目(§1)とコンテキストメニュー |
-| 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm はプロジェクト配下のみで、横断は検索(`/search`)と REST API v1 に限られる |
+| 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm の横断画面は検索(`/search`)・ニュース(`/news`)・マイページ(`/my`)と REST API v1 だけで、課題・工数・活動はプロジェクト配下のみ |
 | 管理画面の CRUD | ユーザー/ロール/トラッカー/課題ステータス/カスタムフィールド/列挙項目の編集・削除・並べ替えを実装済み。残るのはボード(§8)と、列挙項目のプロジェクト単位の上書き編集 |
 | 国際化 | 本家は約 50 言語のロケールファイル + ユーザーごとの言語設定。next-pm は文言がコンポーネントに直書きで i18n 基盤自体が無い |
 
@@ -116,12 +116,12 @@
 | 可視性設定 | partial | `issues_visibility` と `time_entries_visibility` は読み取り側で効いている。`users_visibility` は列と管理 UI だけで、参照している読み取り経路がまだ無い |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 65(`permission-registry.ts` 実数)。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 68(`permission-registry.ts` 実数)。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_message_watchers`, `add_project`, `commit_access`, `delete_message_watchers`, `delete_project`, `import_issues`, `manage_project_activities`, `manage_related_issues`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_members`, `view_message_watchers`
+`add_project`, `commit_access`, `delete_project`, `import_issues`, `manage_project_activities`, `manage_related_issues`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_members`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -180,11 +180,12 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| フォーラム(トピック/返信) | done | 投稿・編集・削除、ウォッチ |
-| フォーラム(ボード自体の管理) | partial | 作成のみ(`board-actions.ts` は `createBoardAction` だけ)。編集・削除・並べ替えが無い |
-| トピックのロック/固定表示(sticky) | missing | 本家 `Message#locked` / `sticky` |
-| News | partial | 作成・削除・コメント追加・ウォッチ。**編集とコメント削除が無い** |
-| 文書(Documents) | partial | 作成・削除・添付。**編集ができない**(`edit_documents` 権限だけが存在する) |
+| フォーラム(トピック/返信) | done | 投稿・編集・削除、ウォッチ、引用返信(本家 `MessagesController#quote` と同じ `RE:` 付与と `> ` 引用)、添付(`acts_as_attachable` 既定どおり追加は `Message#editable_by?`、削除は `edit_messages`)、別ボードへのトピック移動(`edit_messages`。本家 `update_messages_board` と同じく返信も一緒に移る) |
+| フォーラム(ボード自体の管理) | done | 作成・編集・削除・並べ替え・親フォーラム(`manage_boards`)。本家 `acts_as_tree :dependent => :nullify` と同じく、削除したボードの子ボードはプロジェクト直下へ繰り上がり、トピックと添付だけが消える。並び順は `acts_as_positioned :scope => [:project_id, :parent_id]` と同じく兄弟集合内で 1 始まりの連番 |
+| トピックのロック/固定表示(sticky) | done | 本家 `Message#locked` / `sticky`。トピック編集時に `edit_messages` を持つ場合だけ設定できる(本家の条件付き `safe_attributes` と同じで `edit_own_messages` だけでは不可)。ロック中のトピックは返信フォームと引用リンクを出さず、`postMessage` も拒否する。一覧は sticky を先頭に固定(第二キーは本家の `COALESCE(last_reply_id, id)` 相当を持たないため作成日時) |
+| トピックのウォッチャー管理 | done | `view_message_watchers` / `add_message_watchers` / `delete_message_watchers`。本家 `WatchersController#authorize_for_watchable_type` と同じく root トピックだけが対象で、追加できるのはプロジェクトメンバーのみ。本家 `watchers/_watchers.html.erb` と同じく「追加」操作と「一覧の表示」は別のゲートで、`add_message_watchers` だけのユーザーには追加フォームだけが出て名前の一覧は出ない |
+| News | done | 作成・編集・削除・添付・コメント追加/削除・ウォッチ。編集/削除/添付/コメント削除はすべて `manage_news`(本家 preparation.rb は `comments#destroy` も `manage_news` 配下に置き、「自分のコメント」例外は無い)。コメント追加は `comment_news`。横断一覧 `/news` は本家 `NewsController#index`(プロジェクト無し)と同じく `view_news` を持つプロジェクトを新しい順に 10 件 |
+| 文書(Documents) | done | 作成(`add_documents`)・編集(`edit_documents`、本家 `safe_attributes 'category_id', 'title', 'description'`)・削除(`delete_documents`)・添付。添付の追加は本家 preparation.rb が `documents#add_attachment` を `add_documents` と `edit_documents` の両方に載せているのに合わせてどちらでも可、削除は `acts_as_attachable :delete_permission => :delete_documents` のとおり `delete_documents`。一覧はカテゴリ/日付/タイトル/投稿者でグループ化(本家 `DocumentsController#index` の `sort_by`) |
 | ファイル(Files モジュール) | done | `/projects/[identifier]/files`。プロジェクト直下とバージョン単位のファイルを本家 `FilesController#index` と同じ区分け(プロジェクト → バージョンの逆順)で一覧し、ファイル名/日付/サイズ/DL 数でソート、ダイジェストと説明を表示する。追加・削除は `manage_files`、ダウンロードのたびに `attachments.downloads` を加算(本家と同じく Project/Version のみ)。ファイルを持つバージョンは `Version#deletable?` と同じく削除できない |
 
 ## 9. 工数管理
@@ -238,8 +239,8 @@
 | memberships | partial | 一覧・作成・削除。PUT(ロール変更)が無い |
 | time_entries | done | 一覧・作成(`user_id` / `custom_field_values` 対応)・個別 GET / PUT / DELETE |
 | versions / wiki / issue_categories / groups / relations | done | CRUD の主要部分は実装済み |
-| news | partial | 一覧・作成・取得・削除。**PUT(更新)が無い**(本家 API は更新に対応) |
-| messages / documents | partial | 作成と削除のみ。個別の取得・更新が無い |
+| news | done | `GET /api/v1/news`(`project_id` 無しなら本家の `GET /news.json` と同じ横断スコープ)・`POST`・`GET /api/v1/news/[id]`・`PUT`・`DELETE`。本家 `NewsController` の `accept_api_auth :index, :show, :create, :update, :destroy` と一致 |
+| messages / documents | out-of-scope | 本家の `MessagesController` / `DocumentsController` / `CommentsController` には `accept_api_auth` も `*.api.rsb` も無く、REST API 自体が存在しない。next-pm が持つ `POST` / `DELETE` は本家に無い独自拡張なので、これ以上は広げない |
 | trackers / issue_statuses / enumerations / custom_fields / roles / queries / search | done | 読み取り専用エンドポイント |
 | attachments | done | `/api/attachments/[id]`(ダウンロード、API キー可)と `/api/attachments/[id]/thumbnail`、`/api/v1/uploads`、`/api/v1/attachments/[id]` の GET / PATCH(PUT エイリアス有り)/ DELETE |
 | files | done | `GET /api/v1/projects/[identifier]/files`(バージョン情報・ダイジェスト・DL 数付き)と `POST`(`uploads` のトークンを `version_id` / `description` 付きで引き換え) |
