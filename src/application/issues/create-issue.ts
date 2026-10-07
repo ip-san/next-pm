@@ -30,6 +30,14 @@ export interface CreateIssueInput {
   dueDate: string | null;
   /** The author's roles on the project — feeds required-field enforcement (mirrors `roles_for_workflow`). */
   actorRoleIds: string[];
+  /**
+   * `set_issues_private`, or `set_own_issues_private` — on create the actor is always the
+   * author, so the "own" variant always applies. False silently drops `isPrivate`, the way
+   * Redmine's safe_attributes omits an attribute the actor may not set.
+   */
+  canSetPrivate: boolean;
+  /** `manage_subtasks`; false silently drops `parentId`. */
+  canManageSubtasks: boolean;
 }
 
 export async function createIssue(
@@ -57,6 +65,12 @@ export async function createIssue(
     },
   });
 
+  // Redmine lists is_private and parent_issue_id in safe_attributes only when the actor
+  // holds the matching permission, and silently discards them otherwise rather than
+  // failing the save — same here.
+  const isPrivate = input.canSetPrivate ? input.isPrivate : false;
+  const parentId = input.canManageSubtasks ? input.parentId : null;
+
   const tracker = await repositories.trackerRepository.findById(input.trackerId);
   if (!tracker) {
     throw new Error(`Tracker ${input.trackerId} not found`);
@@ -81,7 +95,7 @@ export async function createIssue(
     dueDate: input.dueDate,
     doneRatio: input.doneRatio,
     estimatedHours: input.estimatedHours,
-    isPrivate: input.isPrivate,
+    isPrivate,
   };
   for (const field of required) {
     if (isFieldBlank(candidate[field])) {
@@ -99,10 +113,10 @@ export async function createIssue(
     authorId: input.authorId,
     assignedToId: input.assignedToId,
     assignedToType: input.assignedToType,
-    parentId: input.parentId,
+    parentId,
     fixedVersionId: input.fixedVersionId,
     categoryId: input.categoryId,
-    isPrivate: input.isPrivate,
+    isPrivate,
     doneRatio: input.doneRatio,
     estimatedHours: input.estimatedHours,
     startDate: input.startDate,

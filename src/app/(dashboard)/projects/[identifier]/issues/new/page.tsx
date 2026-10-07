@@ -29,7 +29,8 @@ export default async function NewIssuePage({
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "add_issues", project: projectContext, actor })) {
     notFound();
   }
 
@@ -74,6 +75,11 @@ export default async function NewIssuePage({
           versions={versions}
           customFields={customFields}
           doneRatioEditable={resolveGeneralSettings(settings).issueDoneRatio === "issue_field"}
+          canSetPrivate={
+            can({ permission: "set_issues_private", project: projectContext, actor }) ||
+            can({ permission: "set_own_issues_private", project: projectContext, actor })
+          }
+          canManageSubtasks={can({ permission: "manage_subtasks", project: projectContext, actor })}
         />
       )}
     </main>

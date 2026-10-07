@@ -1191,6 +1191,7 @@ describe("updateIssue — parent issue invariants", () => {
       actorRoleIds: ["role-1"],
       isAuthor: false,
       isAssignee: false,
+      canManageSubtasks: true,
     });
 
     expect(result.parentId).toBe("parent");
@@ -1215,6 +1216,7 @@ describe("updateIssue — parent issue invariants", () => {
         actorRoleIds: ["role-1"],
         isAuthor: false,
         isAssignee: false,
+        canManageSubtasks: true,
       }),
     ).rejects.toThrow(InvalidParentIssueError);
     expect(repos.issueRepository.update).not.toHaveBeenCalled();
@@ -1234,6 +1236,7 @@ describe("updateIssue — parent issue invariants", () => {
         actorRoleIds: ["role-1"],
         isAuthor: false,
         isAssignee: false,
+        canManageSubtasks: true,
       }),
     ).rejects.toThrow(InvalidParentIssueError);
     expect(repos.issueRepository.update).not.toHaveBeenCalled();
@@ -1255,6 +1258,7 @@ describe("updateIssue — parent issue invariants", () => {
         actorRoleIds: ["role-1"],
         isAuthor: false,
         isAssignee: false,
+        canManageSubtasks: true,
       }),
     ).rejects.toThrow(InvalidParentIssueError);
     expect(repos.issueRepository.update).not.toHaveBeenCalled();
@@ -1273,6 +1277,7 @@ describe("updateIssue — parent issue invariants", () => {
       actorRoleIds: ["role-1"],
       isAuthor: false,
       isAssignee: false,
+      canManageSubtasks: true,
     });
 
     expect(result.parentId).toBeNull();
@@ -1338,5 +1343,68 @@ describe("updateIssue — assignable attribute validation", () => {
         isAssignee: false,
       }),
     ).rejects.toThrow(IssueAttributeNotAssignableError);
+  });
+});
+
+describe("updateIssue — permission-gated attributes", () => {
+  it("drops is_private when the actor holds neither set_issues_private permission", async () => {
+    // Mirrors Redmine's safe_attributes, which omits the attribute rather than refusing
+    // the save, so an edit that also touches other fields still goes through.
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", isPrivate: false });
+    const repos = makeRepositories({ issue });
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "Edited", isPrivate: true },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canSetPrivate: false,
+    });
+
+    expect(result.isPrivate).toBe(false);
+    expect(result.subject).toBe("Edited");
+  });
+
+  it("applies is_private when the actor is allowed to set it", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", isPrivate: false });
+    const repos = makeRepositories({ issue });
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { isPrivate: true },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canSetPrivate: true,
+    });
+
+    expect(result.isPrivate).toBe(true);
+  });
+
+  it("drops parentId without manage_subtasks, leaving the existing parent in place", async () => {
+    const issue = makeIssue({ id: "child", projectId: "proj-1", statusId: "new", priorityId: "normal", parentId: "old-parent" });
+    const repos = makeRepositories({ issue });
+
+    const result = await updateIssue(repos, {
+      issueId: "child",
+      expectedLockVersion: 0,
+      changes: { parentId: "new-parent" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canManageSubtasks: false,
+    });
+
+    expect(result.parentId).toBe("old-parent");
+    expect(repos.issueRepository.listByProject).not.toHaveBeenCalled();
   });
 });

@@ -64,6 +64,16 @@ export interface UpdateIssueInput {
   actorRoleIds: string[];
   isAuthor: boolean;
   isAssignee: boolean;
+  /**
+   * `set_issues_private`, or `set_own_issues_private` when the actor is the author. False
+   * silently drops `isPrivate` from the update, mirroring Redmine's safe_attributes
+   * omitting an attribute the actor may not set rather than rejecting the whole save.
+   * Optional because the internal cascades below carry no actor permissions and never
+   * touch either field.
+   */
+  canSetPrivate?: boolean;
+  /** `manage_subtasks`; false silently drops `parentId`. */
+  canManageSubtasks?: boolean;
 }
 
 export interface UpdateIssueRepositories extends IssueAttributeRepositories {
@@ -280,6 +290,9 @@ async function applyIssueUpdate(
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     delete changes[field];
   }
+  // Permission-gated attributes, dropped the same silent way Redmine's safe_attributes does.
+  if (!input.canSetPrivate) delete changes.isPrivate;
+  if (!input.canManageSubtasks) delete changes.parentId;
 
   // Resolved up front so the status branch below doesn't re-read the settings table. Note
   // Redmine keeps 'done_ratio' in safe_attributes regardless of this setting — only the views

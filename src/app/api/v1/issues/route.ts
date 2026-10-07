@@ -100,6 +100,7 @@ export async function POST(request: Request) {
   }
 
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
+  const projectContext = toAuthorizationProject(project);
   if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -165,6 +166,10 @@ export async function POST(request: Request) {
         startDate: parsed.data.start_date,
         dueDate: parsed.data.due_date,
         actorRoleIds: roleIds,
+        canSetPrivate:
+          can({ permission: "set_issues_private", project: projectContext, actor }) ||
+          can({ permission: "set_own_issues_private", project: projectContext, actor }),
+        canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
       },
     );
   } catch (error) {

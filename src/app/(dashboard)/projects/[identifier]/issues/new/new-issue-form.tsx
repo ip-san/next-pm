@@ -27,6 +27,8 @@ export function NewIssueForm({
   versions,
   customFields,
   doneRatioEditable,
+  canSetPrivate,
+  canManageSubtasks,
 }: {
   identifier: string;
   projectId: string;
@@ -39,6 +41,10 @@ export function NewIssueForm({
   customFields: CustomField[];
   /** False when the `issue_done_ratio` setting derives the ratio from the status. */
   doneRatioEditable: boolean;
+  /** `set_issues_private` or `set_own_issues_private` — the author is the actor on create. */
+  canSetPrivate: boolean;
+  /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
+  canManageSubtasks: boolean;
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -193,18 +199,20 @@ export function NewIssueForm({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="parentId" className="text-sm font-medium">
-          親チケット
-        </label>
-        <IssueAutocomplete
-          projectIdentifier={identifier}
-          inputId="parentId"
-          inputName="parentId"
-          onSelect={(issueId) => setValue("parentId", issueId)}
-        />
-        {errors.parentId ? <p className="text-sm text-red-600">{errors.parentId.message}</p> : null}
-      </div>
+      {canManageSubtasks ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="parentId" className="text-sm font-medium">
+            親チケット
+          </label>
+          <IssueAutocomplete
+            projectIdentifier={identifier}
+            inputId="parentId"
+            inputName="parentId"
+            onSelect={(issueId) => setValue("parentId", issueId)}
+          />
+          {errors.parentId ? <p className="text-sm text-red-600">{errors.parentId.message}</p> : null}
+        </div>
+      ) : null}
 
       <div className="flex gap-4">
         <div className="flex flex-col gap-1">
@@ -243,10 +251,12 @@ export function NewIssueForm({
         ) : null}
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" {...register("isPrivate")} />
-        プライベートチケットにする
-      </label>
+      {canSetPrivate ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" {...register("isPrivate")} />
+          プライベートチケットにする
+        </label>
+      ) : null}
 
       <CustomFieldInputs
         fields={applicableCustomFields}

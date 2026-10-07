@@ -145,6 +145,9 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
         notes: body,
         actingUserId: sender.id,
         actorRoleIds: roleIds,
+        // The mail handler never submits either attribute, so no permission lookup is needed.
+        canSetPrivate: false,
+        canManageSubtasks: false,
         isAuthor,
         isAssignee,
         changes: {},
@@ -229,6 +232,9 @@ async function handleCreate(sender: User, projectIdentifier: string, subject: st
         startDate: null,
         dueDate: null,
         actorRoleIds: roleIds,
+        // The mail handler never submits either attribute, so no permission lookup is needed.
+        canSetPrivate: false,
+        canManageSubtasks: false,
       },
     );
     return NextResponse.json({ result: "issue_created", issue }, { status: 201 });

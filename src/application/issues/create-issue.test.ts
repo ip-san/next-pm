@@ -31,6 +31,8 @@ const baseInput: CreateIssueInput = {
   startDate: null,
   dueDate: null,
   actorRoleIds: ["role-1"],
+  canSetPrivate: true,
+  canManageSubtasks: true,
 };
 
 function makeTrackerRepository(tracker: Tracker | null): TrackerRepository {

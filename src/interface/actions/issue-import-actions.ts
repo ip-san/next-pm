@@ -219,6 +219,10 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
           startDate: null,
           dueDate: null,
           actorRoleIds: roleIds,
+          canSetPrivate:
+            can({ permission: "set_issues_private", project: projectContext, actor }) ||
+            can({ permission: "set_own_issues_private", project: projectContext, actor }),
+          canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
         },
       );
       created++;

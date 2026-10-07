@@ -278,6 +278,11 @@ export default async function IssueDetailPage({
             customFields={allCustomFields}
             customValues={Object.fromEntries(customValues.map((cv) => [cv.customFieldId, cv.value ?? ""]))}
             doneRatioEditable={resolveGeneralSettings(settings).issueDoneRatio === "issue_field"}
+            canSetPrivate={
+              can({ permission: "set_issues_private", project: toAuthorizationProject(project), actor }) ||
+              (isAuthor && can({ permission: "set_own_issues_private", project: toAuthorizationProject(project), actor }))
+            }
+            canManageSubtasks={can({ permission: "manage_subtasks", project: toAuthorizationProject(project), actor })}
           />
         </section>
       ) : null}

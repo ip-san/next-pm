@@ -45,6 +45,8 @@ async function seed() {
         "add_issues",
         "edit_issues",
         "edit_own_issues",
+        "set_issues_private",
+        "manage_subtasks",
         "manage_issue_relations",
         "manage_issue_categories",
         "view_time_entries",

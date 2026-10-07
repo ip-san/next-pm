@@ -69,6 +69,8 @@ export function IssueEditForm({
   customFields,
   customValues,
   doneRatioEditable,
+  canSetPrivate,
+  canManageSubtasks,
 }: {
   issue: Issue;
   parentIssueLabel: string | null;
@@ -94,6 +96,10 @@ export function IssueEditForm({
   customValues: Record<string, string>;
   /** False when the `issue_done_ratio` setting derives the ratio from the status. */
   doneRatioEditable: boolean;
+  /** `set_issues_private`, or `set_own_issues_private` when the viewer authored the issue. */
+  canSetPrivate: boolean;
+  /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
+  canManageSubtasks: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<FormState>({
@@ -177,7 +183,7 @@ export function IssueEditForm({
         applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]),
       ),
     };
-    if (parentId !== null) values.parentId = parentId;
+    if (canManageSubtasks && parentId !== null) values.parentId = parentId;
     if (allowedStatuses.length > 0) values.statusId = selectedStatusId;
     if (!isReadOnly("subject")) values.subject = state.subject;
     if (!isReadOnly("description")) values.description = state.description;
@@ -188,7 +194,7 @@ export function IssueEditForm({
     if (!isReadOnly("startDate")) values.startDate = state.startDate;
     if (!isReadOnly("dueDate")) values.dueDate = state.dueDate;
     if (!isReadOnly("estimatedHours")) values.estimatedHours = state.estimatedHours;
-    if (!isReadOnly("isPrivate")) values.isPrivate = state.isPrivate;
+    if (canSetPrivate && !isReadOnly("isPrivate")) values.isPrivate = state.isPrivate;
     if (doneRatioEditable && !isReadOnly("doneRatio")) values.doneRatio = state.doneRatio;
 
     const result = await updateIssueFormAction(values);
@@ -389,18 +395,20 @@ export function IssueEditForm({
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="parentId" className="text-sm font-medium">
-          親チケット
-        </label>
-        <IssueAutocomplete
-          projectIdentifier={projectIdentifier}
-          inputId="parentId"
-          inputName="parentId"
-          initialLabel={parentIssueLabel ?? ""}
-          onSelect={(issueId) => setParentId(issueId)}
-        />
-      </div>
+      {canManageSubtasks ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="parentId" className="text-sm font-medium">
+            親チケット
+          </label>
+          <IssueAutocomplete
+            projectIdentifier={projectIdentifier}
+            inputId="parentId"
+            inputName="parentId"
+            initialLabel={parentIssueLabel ?? ""}
+            onSelect={(issueId) => setParentId(issueId)}
+          />
+        </div>
+      ) : null}
 
       <div className="flex gap-4 flex-wrap">
         {isReadOnly("startDate") ? (
@@ -480,7 +488,7 @@ export function IssueEditForm({
         )}
       </div>
 
-      {isReadOnly("isPrivate") ? (
+      {!canSetPrivate || isReadOnly("isPrivate") ? (
         <ReadOnlyField label="プライベート" value={issue.isPrivate ? "はい" : "いいえ"} />
       ) : (
         <label className="flex items-center gap-2 text-sm">

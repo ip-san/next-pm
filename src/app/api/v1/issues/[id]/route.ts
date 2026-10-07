@@ -161,6 +161,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         actorRoleIds: roleIds,
         isAuthor,
         isAssignee,
+        canSetPrivate:
+          can({ permission: "set_issues_private", project: projectContext, actor }) ||
+          (isAuthor && can({ permission: "set_own_issues_private", project: projectContext, actor })),
+        canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
         changes: {
           statusId: parsed.data.status_id,
           priorityId: parsed.data.priority_id,

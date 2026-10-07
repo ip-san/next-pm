@@ -81,7 +81,8 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   }
 
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "add_issues", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "add_issues", project: projectContext, actor })) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
 
@@ -163,6 +164,11 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
         startDate: parsed.data.startDate || null,
         dueDate: parsed.data.dueDate || null,
         actorRoleIds: roleIds,
+        // On create the actor is the author, so the "own" variant always applies too.
+        canSetPrivate:
+          can({ permission: "set_issues_private", project: projectContext, actor }) ||
+          can({ permission: "set_own_issues_private", project: projectContext, actor }),
+        canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
       },
     );
   } catch (error) {
@@ -348,6 +354,12 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
         actorRoleIds: roleIds,
         isAuthor,
         isAssignee,
+        // Mirrors Redmine: the broad permission, or the "own" one when the actor authored
+        // the issue. Without either, a submitted is_private is dropped rather than refused.
+        canSetPrivate:
+          can({ permission: "set_issues_private", project: projectContext, actor }) ||
+          (isAuthor && can({ permission: "set_own_issues_private", project: projectContext, actor })),
+        canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
       },
     );
   } catch (error) {
