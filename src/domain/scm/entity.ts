@@ -54,6 +54,12 @@ export interface Changeset {
   revision: string;
   /** Raw committer identity as reported by the SCM (e.g. "Alice <alice@example.com>" or just a name). */
   committerIdentity: string;
+  /**
+   * The next-pm user this commit is attributed to, or null when the committer matches nobody.
+   * Resolved on ingest and re-pointed in bulk when an admin edits the repository's committer
+   * mapping — see domain/scm/committer.ts and application/scm/map-committers.ts.
+   */
+  userId: string | null;
   committedOn: Date;
   comments: string;
   createdAt: Date;

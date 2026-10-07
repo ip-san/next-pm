@@ -6,6 +6,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import type { Project } from "@/domain/project/entity";
 import type { ScmRepository } from "@/domain/scm/entity";
 import { connectRepository, InvalidRepositoryError } from "@/application/scm/connect-repository";
+import { mapCommitters } from "@/application/scm/map-committers";
 import { updateRepository } from "@/application/scm/update-repository";
 import { syncChangesets } from "@/application/scm/sync-changesets";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
@@ -175,6 +176,49 @@ export async function deleteRepositoryAction(_prevState: ScmActionState, formDat
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/repositories`);
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/repository`);
+  return { error: null };
+}
+
+const mapCommittersSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  scmRepositoryId: z.string().uuid(),
+  /** One entry per committer row: the raw committer string and the chosen user id ("" unmaps). */
+  assignments: z.array(z.object({ committerIdentity: z.string().min(1), userId: z.string().uuid().nullable() })),
+});
+
+/**
+ * Redmine's RepositoriesController#committers (POST). The form submits one hidden committer
+ * string plus one user select per row; an empty select unmaps that committer.
+ */
+export async function mapCommittersAction(_prevState: ScmActionState, formData: FormData): Promise<ScmActionState> {
+  const committerIdentities = formData.getAll("committerIdentity").map(String);
+  const parsed = mapCommittersSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    scmRepositoryId: formData.get("scmRepositoryId"),
+    assignments: committerIdentities.map((committerIdentity) => {
+      const raw = String(formData.get(`userId:${committerIdentity}`) ?? "");
+      return { committerIdentity, userId: raw.length > 0 ? raw : null };
+    }),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const authorized = await authorizeManageRepository(parsed.data.projectIdentifier);
+  if ("error" in authorized) {
+    return authorized;
+  }
+  if (!(await findOwnRepository(authorized.project.id, parsed.data.scmRepositoryId))) {
+    return { error: "リポジトリが見つかりません。" };
+  }
+
+  await mapCommitters(
+    { changesetRepository: new DrizzleChangesetRepository() },
+    { scmRepositoryId: parsed.data.scmRepositoryId, assignments: parsed.data.assignments },
+  );
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/repositories/${parsed.data.scmRepositoryId}/committers`);
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/activity`);
   return { error: null };
 }
 

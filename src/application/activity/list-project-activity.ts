@@ -154,7 +154,10 @@ export async function listProjectActivity(
           // Unique across repositories: two of a project's repositories can legitimately hold
           // the same revision string (a fork, or the same backend registered twice).
           id: `${scmRepository.id}:${changeset.revision}`,
-          authorId: null,
+          // The committer's mapped user, when there is one — Redmine's activity view shows
+          // Changeset#author, which is the mapped user falling back to the raw committer name
+          // (still rendered in the excerpt below for the unmapped case).
+          authorId: changeset.userId,
           title: changeset.comments.split("\n")[0] || changeset.revision.slice(0, 8),
           excerpt: `${changeset.committerIdentity} — ${changeset.revision.slice(0, 8)}`,
           occurredAt: changeset.committedOn,

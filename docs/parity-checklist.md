@@ -210,7 +210,7 @@
 | リビジョン一覧・詳細 | done | |
 | 1 プロジェクトに複数リポジトリ | done | `scm_repositories` に `identifier` / `is_default` を追加し、unique 制約を `(project_id, identifier)` + 「1 プロジェクトに既定リポジトリは 1 つ」の部分 unique index に置き換えた。識別子の検証は本家 `Repository` と同じ(英小文字・数字・`-`・`_` のみ、数字だけは不可、255 文字まで、予約語 11 種 + next-pm 固有の `blame`、空文字も含めてプロジェクト内で一意、一度付けたら変更不可)。URL は既定リポジトリが `/projects/:id/repository`、それ以外が `/projects/:id/repository/:repositoryId`(本家の `identifier_param` と同じく識別子、無ければ ID)。プロジェクト設定に「リポジトリ」タブを追加し、追加・更新(識別子とメイン指定のみ。本家 `safe_attributes` と同じくパス・種類は作成時限定)・削除ができる。最初の 1 件は本家 `set_as_default?` と同じく強制的にメインになり、メインを外しても別のリポジトリが自動昇格しないのも本家どおり(表示は先頭のリポジトリにフォールバックする) |
 | リポジトリの自動フェッチ | out-of-scope | cron 相当の仕組みを持たない設計判断(§15) |
-| コミッターとユーザーの紐付け | missing | `changesets.committer_identity` は文字列のまま。本家は `users` へのマッピングを持つ |
+| コミッターとユーザーの紐付け | done | 本家と同じく `changesets.user_id` 自体が紐付けの実体で、専用テーブルも `extra_info` も使わない。取り込み時に本家 `Repository#find_committer_user` と同じ順序で解決する(① そのコミッター文字列を持つ最新 changeset に既にユーザーが入っていればそれ、② `Name <email>` を分解してログイン一致、③ メール一致)。リポジトリ設定の「コミッタの紐付け」画面(本家 `RepositoriesController#committers`)で付け替えると、本家 `committer_ids=` と同じく そのリポジトリの既存 changeset を一括で書き換え、既存の journal・工数は書き換えない。以降の同期は①の経路で同じユーザーに解決される。コミットキーワードの工数記録は本家同様に紐付いたユーザー名義で行い、紐付かない場合は本家の `TimeEntry` 検証失敗と同じく記録をスキップする。**差分**: ログイン一致は完全一致のみ(本家は大文字小文字を無視するフォールバックを持つが、next-pm の `findByLogin` はログイン認証と共用のため緩めていない。大小が違うコミッターはこの画面で一度紐付ければ①の経路で固定される) |
 | `commit_access` 権限(WS 経由の認可) | missing | 本家 `SysController` によるリポジトリ認証連携ごと無い |
 
 ## 11. 通知・メール

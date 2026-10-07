@@ -80,6 +80,7 @@ function changeset(overrides: Partial<import("@/domain/scm/entity").Changeset> =
     scmRepositoryId: "repo-1",
     revision: "abcdef1234567890",
     committerIdentity: "Alice <alice@example.com>",
+    userId: null,
     committedOn: inside,
     comments: "Fix login bug\n\nLonger body.",
     createdAt: inside,

@@ -5,14 +5,14 @@ import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
-import type { Changeset, ScmRepository } from "@/domain/scm/entity";
+import type { Changeset, Commit, ScmRepository } from "@/domain/scm/entity";
 import { scanCommitMessage, type KeywordScanOptions } from "@/domain/scm/keyword-scan";
 import type { ScmBrowser } from "@/domain/scm/scm-browser";
 import { resolveCommitKeywordSettings } from "@/domain/settings/commit-keywords";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
-import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
+import { resolveCommitterUser } from "./resolve-committer-user";
 
 export interface SyncChangesetsRepositories {
   scmBrowser: ScmBrowser;
@@ -43,9 +43,9 @@ export interface SyncChangesetsResult {
   timeLogged: number;
 }
 
-async function resolveCommitterUser(userRepository: UserRepository, authorEmail: string): Promise<User | null> {
-  if (!authorEmail) return null;
-  return userRepository.findByMail(authorEmail);
+/** Redmine's Changeset#committer: "Name <email>" when the SCM reports one, otherwise the bare name. */
+function committerIdentityOf(commit: Commit): string {
+  return commit.authorEmail ? `${commit.author} <${commit.authorEmail}>` : commit.author;
 }
 
 /** Mirrors Changeset#fix_issue: no-op on an already-closed issue; moves to the lowest-position closed status. */
@@ -136,10 +136,17 @@ export async function syncChangesets(
     if (existing) continue;
 
     const committedOn = new Date(commit.date);
+    const committerIdentity = committerIdentityOf(commit);
+    // Resolved for every commit, including a historical import: the import cutoff below
+    // suppresses the *actions* a commit message triggers, not who the commit belongs to.
+    // Redmine does the same — before_create_cs assigns the user unconditionally, and only
+    // scan_comment_for_issue_ids consults repository.created_on.
+    const committerUser = await resolveCommitterUser(repositories, scmRepository.id, committerIdentity);
     const changeset = await repositories.changesetRepository.create({
       scmRepositoryId: scmRepository.id,
       revision: commit.hash,
-      committerIdentity: commit.authorEmail ? `${commit.author} <${commit.authorEmail}>` : commit.author,
+      committerIdentity,
+      userId: committerUser?.id ?? null,
       committedOn,
       comments: commit.message,
     });
@@ -151,7 +158,6 @@ export async function syncChangesets(
     // Mirrors the guard in scan_comment_for_issue_ids against replaying fix/time-log actions
     // when a repository's pre-existing history is first imported.
     const isHistoricalImport = committedOn < scmRepository.createdAt;
-    const committerUser = isHistoricalImport ? null : await resolveCommitterUser(repositories.userRepository, commit.authorEmail);
 
     const seenIssueIds = new Set<string>();
     for (const match of matches) {
