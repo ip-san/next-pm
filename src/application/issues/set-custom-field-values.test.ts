@@ -59,9 +59,9 @@ describe("setIssueCustomFieldValues", () => {
     // Regression: a PATCH updating one field must not be rejected because some other
     // already-set required custom field wasn't resent in this call.
     const repos = makeRepos([makeField({ id: "field-1", isRequired: true }), makeField({ id: "field-2", name: "Other" })]);
-    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", { "field-2": "" });
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", { "field-2": "High" });
     expect(repos.customValueRepository.set).toHaveBeenCalledTimes(1);
-    expect(repos.customValueRepository.set).toHaveBeenCalledWith("field-2", "Issue", "issue-1", null);
+    expect(repos.customValueRepository.set).toHaveBeenCalledWith("field-2", "Issue", "issue-1", "High");
   });
 
   it("treats a required field as invalid when explicitly present but blank", async () => {

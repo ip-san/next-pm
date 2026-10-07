@@ -24,6 +24,7 @@ const baseInput: CreateIssueInput = {
   fixedVersionId: null,
   categoryId: null,
   isPrivate: false,
+  doneRatio: 0,
   estimatedHours: null,
   startDate: null,
   dueDate: null,

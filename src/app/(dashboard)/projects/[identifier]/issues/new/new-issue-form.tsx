@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { createIssueFormAction } from "@/interface/actions/issue-actions";
 import { createIssueFormSchema, type CreateIssueFormValues } from "@/interface/actions/issue-schemas";
 import { IssueAutocomplete } from "../issue-autocomplete";
+import { CustomFieldInputs } from "../custom-field-inputs";
+import type { CustomField } from "@/domain/custom-field/entity";
 import type { Tracker } from "@/domain/tracker/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
 import type { IssueCategory } from "@/domain/issue-category/entity";
@@ -23,6 +25,8 @@ export function NewIssueForm({
   groups,
   categories,
   versions,
+  customFields,
+  doneRatioEditable,
 }: {
   identifier: string;
   projectId: string;
@@ -32,13 +36,18 @@ export function NewIssueForm({
   groups: Group[];
   categories: IssueCategory[];
   versions: Version[];
+  customFields: CustomField[];
+  /** False when the `issue_done_ratio` setting derives the ratio from the status. */
+  doneRatioEditable: boolean;
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const {
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<CreateIssueFormValues>({
     resolver: zodResolver(createIssueFormSchema),
@@ -54,16 +63,33 @@ export function NewIssueForm({
       parentId: "",
       isPrivate: false,
       estimatedHours: "",
+      doneRatio: "0",
       startDate: "",
       dueDate: "",
+      // Mirrors Redmine's IssuesController#build_new_issue_from_params seeding a new issue
+      // with each applicable custom field's default_value.
+      customFieldValues: Object.fromEntries(customFields.map((field) => [field.id, field.defaultValue ?? ""])),
     },
   });
 
+  const selectedTrackerId = useWatch({ control, name: "trackerId" });
+  const customFieldValues = useWatch({ control, name: "customFieldValues" });
+  const applicableCustomFields = customFields.filter((field) => field.trackerIds.includes(selectedTrackerId));
+
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
-    const result = await createIssueFormAction(values);
+    setFieldErrors({});
+    const result = await createIssueFormAction({
+      ...values,
+      // Only the selected tracker's fields are submitted — a value typed before switching
+      // trackers isn't applicable any more and would be dropped server-side anyway.
+      customFieldValues: Object.fromEntries(
+        applicableCustomFields.map((field) => [field.id, values.customFieldValues[field.id] ?? ""]),
+      ),
+    });
     if (!result.ok) {
       setServerError(result.error);
+      setFieldErrors(result.fieldErrors ?? {});
       return;
     }
     router.push(`/projects/${identifier}/issues/${result.issueId}`);
@@ -199,12 +225,38 @@ export function NewIssueForm({
           </label>
           <input id="estimatedHours" type="number" min="0" step="0.1" {...register("estimatedHours")} className="border rounded px-3 py-2" />
         </div>
+        {doneRatioEditable ? (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="doneRatio" className="text-sm font-medium">
+              進捗率
+            </label>
+            {/* Mirrors Redmine's `Issue.use_field_for_done_ratio?` guard, with its default
+                issue_done_ratio_interval of 10 (next-pm has no setting for the interval). */}
+            <select id="doneRatio" {...register("doneRatio")} className="border rounded px-3 py-2">
+              {Array.from({ length: 11 }, (_, index) => index * 10).map((ratio) => (
+                <option key={ratio} value={String(ratio)}>
+                  {ratio} %
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" {...register("isPrivate")} />
         プライベートチケットにする
       </label>
+
+      <CustomFieldInputs
+        fields={applicableCustomFields}
+        values={customFieldValues}
+        errors={fieldErrors}
+        idPrefix="new"
+        onChange={(customFieldId, value) =>
+          setValue("customFieldValues", { ...customFieldValues, [customFieldId]: value })
+        }
+      />
 
       {serverError ? <p className="text-sm text-red-600">{serverError}</p> : null}
 

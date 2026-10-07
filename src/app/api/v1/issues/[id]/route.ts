@@ -4,7 +4,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
-import { CustomFieldValidationError, setIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
+import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -147,11 +147,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         issueStatusRepository: new DrizzleIssueStatusRepository(),
         issueRelationRepository: new DrizzleIssueRelationRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
+        customFieldRepository: new DrizzleCustomFieldRepository(),
+        customValueRepository: new DrizzleCustomValueRepository(),
       },
       {
         issueId: id,
         expectedLockVersion: parsed.data.lock_version,
         notes: parsed.data.notes,
+        customFieldValues: parsed.data.custom_field_values,
         actingUserId: user.id,
         actorRoleIds: roleIds,
         isAuthor,
@@ -174,25 +177,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       },
     );
 
-    if (Object.keys(parsed.data.custom_field_values).length > 0) {
-      try {
-        await setIssueCustomFieldValues(
-          { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
-          issue.trackerId,
-          issue.id,
-          parsed.data.custom_field_values,
-        );
-      } catch (customFieldError) {
-        if (customFieldError instanceof CustomFieldValidationError) {
-          return NextResponse.json(
-            { issue, error: "invalid_custom_field_values", details: customFieldError.fieldErrors },
-            { status: 422 },
-          );
-        }
-        throw customFieldError;
-      }
-    }
-
     return NextResponse.json({ issue });
   } catch (error) {
     if (error instanceof StaleIssueError) {
@@ -206,6 +190,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (error instanceof BlockedIssueCloseError) {
       return NextResponse.json({ error: "blocked_issue" }, { status: 422 });
+    }
+    // Raised before the issue row is written, so a rejected custom value no longer leaves a
+    // partially applied update behind the way the previous save-then-validate order did.
+    if (error instanceof CustomFieldValidationError) {
+      return NextResponse.json({ error: "invalid_custom_field_values", details: error.fieldErrors }, { status: 422 });
     }
     throw error;
   }

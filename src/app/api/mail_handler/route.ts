@@ -9,6 +9,7 @@ import type { User } from "@/domain/user/entity";
 import { createIssue } from "@/application/issues/create-issue";
 import { updateIssue, WorkflowRequiredFieldError } from "@/application/issues/update-issue";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
@@ -132,6 +133,8 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
         settingsRepository: new DrizzleSettingsRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
+        customFieldRepository: new DrizzleCustomFieldRepository(),
+        customValueRepository: new DrizzleCustomValueRepository(),
       },
       {
         issueId: existing.id,
@@ -212,6 +215,7 @@ async function handleCreate(sender: User, projectIdentifier: string, subject: st
         fixedVersionId: null,
         categoryId: null,
         isPrivate: false,
+        doneRatio: 0,
         estimatedHours: null,
         startDate: null,
         dueDate: null,

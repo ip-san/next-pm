@@ -1,5 +1,10 @@
 import { describe, expect, it, mock } from "bun:test";
 import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "./update-issue";
+import { CustomFieldValidationError } from "./set-custom-field-values";
+import type { CustomField } from "@/domain/custom-field/entity";
+import type { CustomFieldRepository } from "@/domain/custom-field/repository";
+import type { CustomValue } from "@/domain/custom-value/entity";
+import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import type { Issue } from "@/domain/issue/entity";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
@@ -25,6 +30,8 @@ function makeRepositories(
     otherIssues?: Issue[];
     settings?: Record<string, string>;
     userPreferences?: UserPreferences | null;
+    customFields?: CustomField[];
+    customValues?: CustomValue[];
   } = {},
 ) {
   const issue = overrides.issue ?? makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" });
@@ -79,6 +86,25 @@ function makeRepositories(
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
   } satisfies WatcherRepository;
+  const customFieldRepository: CustomFieldRepository = {
+    listAll: mock(async () => overrides.customFields ?? []),
+    listForTracker: mock(async () => overrides.customFields ?? []),
+    listForCustomizedType: mock(async () => overrides.customFields ?? []),
+    findById: mock(async (id) => (overrides.customFields ?? []).find((f) => f.id === id) ?? null),
+    create: mock(async () => {
+      throw new Error("not used");
+    }),
+  };
+  const customValueRepository: CustomValueRepository = {
+    listForCustomized: mock(async () => overrides.customValues ?? []),
+    set: mock(async (customFieldId, customizedType, customizedId, value) => ({
+      id: `cv-${customFieldId}`,
+      customFieldId,
+      customizedType,
+      customizedId,
+      value,
+    })),
+  };
   return {
     issueRepository,
     journalRepository,
@@ -89,6 +115,8 @@ function makeRepositories(
     settingsRepository,
     userPreferencesRepository,
     watcherRepository,
+    customFieldRepository,
+    customValueRepository,
   };
 }
 
@@ -608,6 +636,21 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
   } satisfies WatcherRepository;
+  const customFieldRepository: CustomFieldRepository = {
+    listAll: mock(async () => []),
+    listForTracker: mock(async () => []),
+    listForCustomizedType: mock(async () => []),
+    findById: mock(async () => null),
+    create: mock(async () => {
+      throw new Error("not used");
+    }),
+  };
+  const customValueRepository: CustomValueRepository = {
+    listForCustomized: mock(async () => []),
+    set: mock(async () => {
+      throw new Error("not used");
+    }),
+  };
 
   return {
     repos: {
@@ -620,6 +663,8 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
       settingsRepository,
       userPreferencesRepository,
       watcherRepository,
+      customFieldRepository,
+      customValueRepository,
     },
     issuesById,
     journalEntries,
@@ -948,5 +993,168 @@ describe("updateIssue — reschedule following issues", () => {
     });
 
     expect(issuesById.get("succ")?.startDate).toBe("2026-01-06");
+  });
+});
+
+function customField(overrides: Partial<CustomField> = {}): CustomField {
+  return {
+    id: "cf-1",
+    name: "Severity",
+    customizedType: "Issue",
+    fieldFormat: "list",
+    isRequired: false,
+    defaultValue: null,
+    possibleValues: ["Low", "High"],
+    position: 1,
+    trackerIds: ["tracker-1"],
+    ...overrides,
+  };
+}
+
+describe("updateIssue — custom field values", () => {
+  it("writes the value and journals it alongside the attribute changes in a single entry", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }),
+      customFields: [customField()],
+      customValues: [{ id: "cv-1", customFieldId: "cf-1", customizedType: "Issue", customizedId: "issue-1", value: "Low" }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      customFieldValues: { "cf-1": "High" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(repos.customValueRepository.set).toHaveBeenCalledWith("cf-1", "Issue", "issue-1", "High");
+    expect(repos.journalRepository.create).toHaveBeenCalledTimes(1);
+    const journal = (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(journal.details).toEqual([
+      { property: "attr", fieldName: "subject", oldValue: "Before", newValue: "After" },
+      { property: "cf", fieldName: "cf-1", oldValue: "Low", newValue: "High" },
+    ]);
+  });
+
+  it("records nothing for a custom value that is resubmitted unchanged", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }),
+      customFields: [customField()],
+      customValues: [{ id: "cv-1", customFieldId: "cf-1", customizedType: "Issue", customizedId: "issue-1", value: "Low" }],
+    });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      customFieldValues: { "cf-1": "Low" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(repos.customValueRepository.set).not.toHaveBeenCalled();
+    expect(repos.journalRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid custom value before the issue row is written, leaving no partial update", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }),
+      customFields: [customField()],
+    });
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "issue-1",
+        expectedLockVersion: 0,
+        changes: { subject: "After" },
+        customFieldValues: { "cf-1": "Critical" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(CustomFieldValidationError);
+
+    expect(repos.issueRepository.update).not.toHaveBeenCalled();
+    expect(repos.customValueRepository.set).not.toHaveBeenCalled();
+  });
+
+  it("resolves the applicable fields against the tracker the update switches to", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", trackerId: "tracker-1", statusId: "new", priorityId: "normal" }),
+      customFields: [customField({ trackerIds: ["tracker-2"] })],
+    });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { trackerId: "tracker-2" },
+      customFieldValues: { "cf-1": "High" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(repos.customFieldRepository.listForTracker).toHaveBeenCalledWith("tracker-2");
+  });
+});
+
+describe("updateIssue — tracker changes", () => {
+  it("validates the status transition against the tracker the update switches to", async () => {
+    // Mirrors Issue#safe_attributes=, which assigns tracker_id before resolving the workflow:
+    // the transition exists for tracker-2 only, so the same request must be allowed.
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", trackerId: "tracker-1", statusId: "new", priorityId: "normal" }),
+      transitions: [
+        { id: "t1", trackerId: "tracker-2", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+      statuses: [{ id: "closed", name: "Closed", description: "", isClosed: false, defaultDoneRatio: null, position: 2 }],
+    });
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { trackerId: "tracker-2", statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(result.statusId).toBe("closed");
+    expect(repos.workflowRepository.listForTracker).toHaveBeenCalledWith("tracker-2");
+  });
+
+  it("rejects a transition that only the tracker being left behind allowed", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", trackerId: "tracker-1", statusId: "new", priorityId: "normal" }),
+      transitions: [
+        { id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false },
+      ],
+    });
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "issue-1",
+        expectedLockVersion: 0,
+        changes: { trackerId: "tracker-2", statusId: "closed" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(WorkflowTransitionDeniedError);
   });
 });

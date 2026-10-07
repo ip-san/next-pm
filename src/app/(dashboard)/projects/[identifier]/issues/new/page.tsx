@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
@@ -30,13 +33,22 @@ export default async function NewIssuePage({
     notFound();
   }
 
-  const [trackers, priorities, categories, versions, projectMembers] = await Promise.all([
+  const [trackers, priorities, categories, versions, projectMembers, settings] = await Promise.all([
     new DrizzleTrackerRepository().findByIds(project.trackerIds),
     new DrizzleEnumerationRepository().listByType("IssuePriority"),
     new DrizzleIssueCategoryRepository().listByProject(project.id),
     new DrizzleVersionRepository().listSharedWith(project.id),
     new DrizzleMemberRepository().listByProject(project.id),
+    new DrizzleSettingsRepository().getAll(),
   ]);
+  // Every tracker's fields are sent down once; the form narrows them to the selected tracker,
+  // so switching trackers doesn't need a round trip (Redmine reloads the form instead).
+  const customFieldsByTracker = await Promise.all(
+    project.trackerIds.map((trackerId) => new DrizzleCustomFieldRepository().listForTracker(trackerId)),
+  );
+  const customFields = [...new Map(customFieldsByTracker.flat().map((field) => [field.id, field])).values()].sort(
+    (a, b) => a.position - b.position,
+  );
   const members = await new DrizzleUserRepository().findByIds(memberUserIds(projectMembers));
   const projectGroupIds = new Set(projectMembers.flatMap((member) => (member.groupId ? [member.groupId] : [])));
   const groups = (await new DrizzleGroupRepository().listAll()).filter((group) => projectGroupIds.has(group.id));
@@ -60,6 +72,8 @@ export default async function NewIssuePage({
           groups={groups}
           categories={categories}
           versions={versions}
+          customFields={customFields}
+          doneRatioEditable={resolveGeneralSettings(settings).issueDoneRatio === "issue_field"}
         />
       )}
     </main>

@@ -2,12 +2,14 @@ import type { CompiledPredicate } from "@/domain/query/filter-builder";
 import type { Issue } from "./entity";
 
 export interface IssueUpdate {
+  trackerId?: string;
   statusId?: string;
   priorityId?: string;
   subject?: string;
   description?: string;
   assignedToId?: string | null;
   assignedToType?: "user" | "group" | null;
+  parentId?: string | null;
   fixedVersionId?: string | null;
   categoryId?: string | null;
   isPrivate?: boolean;

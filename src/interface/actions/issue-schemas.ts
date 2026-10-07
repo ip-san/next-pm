@@ -21,8 +21,41 @@ export const createIssueFormSchema = z.object({
   parentId: z.string().uuid().or(z.literal("")),
   isPrivate: z.boolean(),
   estimatedHours: z.string(),
+  doneRatio: z.string(),
   startDate: z.string(),
   dueDate: z.string(),
+  /** customFieldId -> raw input; coerced and format-checked server-side by the custom-field domain. */
+  customFieldValues: z.record(z.string(), z.string()),
 });
 
 export type CreateIssueFormValues = z.infer<typeof createIssueFormSchema>;
+
+/**
+ * Every attribute is optional on purpose: a field the workflow marks read-only (or that the
+ * actor may not set at all) is never rendered, so the form omits its key entirely. An absent
+ * key must read as "untouched" — the server merges only the keys it receives, and an empty
+ * string means "cleared" only for the fields that are nullable to begin with.
+ */
+export const updateIssueFormSchema = z.object({
+  issueId: z.string().uuid(),
+  lockVersion: z.number().int(),
+  trackerId: z.string().uuid().optional(),
+  statusId: z.string().uuid().optional(),
+  priorityId: z.string().uuid().optional(),
+  subject: z.string().min(1, "件名を入力してください。").optional(),
+  description: z.string().optional(),
+  /** A bare uuid (user) or "group:<uuid>" (group); "" unassigns. */
+  assignedToId: z.string().optional(),
+  categoryId: z.string().uuid().or(z.literal("")).optional(),
+  fixedVersionId: z.string().uuid().or(z.literal("")).optional(),
+  parentId: z.string().uuid().or(z.literal("")).optional(),
+  isPrivate: z.boolean().optional(),
+  estimatedHours: z.string().optional(),
+  doneRatio: z.string().optional(),
+  startDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  notes: z.string(),
+  customFieldValues: z.record(z.string(), z.string()),
+});
+
+export type UpdateIssueFormValues = z.infer<typeof updateIssueFormSchema>;

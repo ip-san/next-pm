@@ -3,10 +3,13 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import type { JournalDetail } from "./entity";
 
 const TRACKED_FIELDS: (keyof IssueUpdate & keyof Issue)[] = [
+  "trackerId",
   "statusId",
   "priorityId",
   "subject",
+  "description",
   "assignedToId",
+  "parentId",
   "fixedVersionId",
   "categoryId",
   "isPrivate",

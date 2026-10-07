@@ -4,11 +4,13 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { otherIssueId, relationLabelFor } from "@/application/issues/create-issue-relation";
-import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
+import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
@@ -16,20 +18,22 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
+import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 import { AttachmentUploadForm } from "./attachment-upload-form";
 import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
+import { IssueEditForm } from "./issue-edit-form";
 import { IssueRelationForm } from "./issue-relation-form";
 import { LogTimeForm } from "./log-time-form";
 import { ReactionButton } from "./reaction-button";
-import { StatusUpdateForm } from "./status-update-form";
 import { WatcherManager } from "./watcher-manager";
 import { WatchToggleForm } from "./watch-toggle-form";
 
@@ -78,16 +82,39 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const [transitions, customFields, customValues, timeEntries, activities, attachments, isWatching, versions] = await Promise.all([
-    new DrizzleWorkflowRepository().listForTracker(issue.trackerId),
-    new DrizzleCustomFieldRepository().listForTracker(issue.trackerId),
-    new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
-    new DrizzleTimeEntryRepository().listForIssue(issue.id),
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
-    new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
-    user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
-    new DrizzleVersionRepository().listSharedWith(project.id),
+  const [customValues, timeEntries, activities, attachments, isWatching, versions, trackers, priorities, categories, settings] =
+    await Promise.all([
+      new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
+      new DrizzleTimeEntryRepository().listForIssue(issue.id),
+      new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+      new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
+      user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
+      new DrizzleVersionRepository().listSharedWith(project.id),
+      new DrizzleTrackerRepository().findByIds(project.trackerIds),
+      new DrizzleEnumerationRepository().listByType("IssuePriority"),
+      new DrizzleIssueCategoryRepository().listByProject(project.id),
+      new DrizzleSettingsRepository().getAll(),
+    ]);
+
+  // The edit form can switch the tracker, and workflow transitions, field permissions and
+  // applicable custom fields are all keyed on it — so every tracker in the project is loaded
+  // up front rather than round-tripping to the server on each change (Redmine reloads the
+  // whole form instead). The issue's own tracker is included even if the project dropped it,
+  // so an existing issue's rules stay resolvable.
+  const relevantTrackerIds = [...new Set([issue.trackerId, ...project.trackerIds])];
+  const [transitionsByTracker, fieldPermissionsByTracker, customFieldsByTracker] = await Promise.all([
+    Promise.all(relevantTrackerIds.map((trackerId) => new DrizzleWorkflowRepository().listForTracker(trackerId))),
+    Promise.all(
+      relevantTrackerIds.map((trackerId) => new DrizzleWorkflowFieldPermissionRepository().listForTracker(trackerId)),
+    ),
+    Promise.all(relevantTrackerIds.map((trackerId) => new DrizzleCustomFieldRepository().listForTracker(trackerId))),
   ]);
+  const transitions = transitionsByTracker.flat();
+  const fieldPermissions = fieldPermissionsByTracker.flat();
+  const allCustomFields = [...new Map(customFieldsByTracker.flat().map((field) => [field.id, field])).values()].sort(
+    (a, b) => a.position - b.position,
+  );
+  const customFields = allCustomFields.filter((field) => field.trackerIds.includes(issue.trackerId));
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
   const canEditIssues = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
   const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
@@ -122,16 +149,40 @@ export default async function IssueDetailPage({
     await Promise.all(relations.map(async (relation) => ({ relation, issue: await issueRepository.findById(otherIssueId(relation, issue.id)) })))
   ).filter(({ issue: other }) => other && isVisibleToActor(other));
   const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
-  const allowedStatusIds = allowedNewStatusIds(transitions, {
-    trackerId: issue.trackerId,
-    roleIds,
-    currentStatusId: issue.statusId,
-    isAuthor: user?.id === issue.authorId,
-    isAssignee: user?.id === issue.assignedToId,
-  });
-  const allowedStatuses = statuses.filter((s) => allowedStatusIds.includes(s.id));
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const customValueByFieldId = new Map(customValues.map((cv) => [cv.customFieldId, cv.value]));
+  const customFieldNameById = new Map(allCustomFields.map((field) => [field.id, field.name]));
+
+  // Group assignment counts as being the assignee for workflow purposes, exactly as the
+  // update action resolves it — keying the form off `assignedToId === user.id` alone would
+  // offer fewer transitions than the server would actually accept.
+  const isAuthor = issue.authorId === user?.id;
+  const isAssignee =
+    issue.assignedToType === "group"
+      ? issue.assignedToId !== null && userGroupIds.includes(issue.assignedToId)
+      : issue.assignedToId !== null && issue.assignedToId === user?.id;
+  const canEditThisIssue = canEditIssues || (canEditOwnIssues && isAuthor);
+  const assignableGroupIds = new Set(members.flatMap((member) => (member.groupId ? [member.groupId] : [])));
+  const assignableGroups = canEditThisIssue
+    ? (await new DrizzleGroupRepository().listAll()).filter((group) => assignableGroupIds.has(group.id))
+    : [];
+  // Mirrors Issue#assignable_users: only project members are offerable. The stored assignee
+  // may have left since, so their name is resolved separately for the label the form keeps
+  // in the dropdown — the update action skips re-validating an unchanged assignee.
+  const assignableUsers = relevantUsers.filter((candidate) => projectMemberUserIds.includes(candidate.id));
+  const assigneeUser =
+    issue.assignedToId && issue.assignedToType === "user"
+      ? (userLabelById.get(issue.assignedToId) ?? (await new DrizzleUserRepository().findById(issue.assignedToId)))
+      : null;
+  const currentAssigneeLabel = !issue.assignedToId
+    ? "(未割当)"
+    : issue.assignedToType === "group"
+      ? `${assignableGroups.find((group) => group.id === issue.assignedToId)?.name ?? issue.assignedToId}（グループ）`
+      : typeof assigneeUser === "string"
+        ? assigneeUser
+        : assigneeUser
+          ? `${assigneeUser.lastname} ${assigneeUser.firstname}`
+          : issue.assignedToId;
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -181,7 +232,16 @@ export default async function IssueDetailPage({
                 {journal.notes ? <p>{journal.notes}</p> : null}
                 {journal.details.map((detail, index) => (
                   <p key={index} className="text-xs text-gray-600">
-                    {detail.fieldName}: {detail.oldValue ?? "(なし)"} → {detail.newValue ?? "(なし)"}
+                    {detail.property === "cf" ? (customFieldNameById.get(detail.fieldName) ?? detail.fieldName) : detail.fieldName}:{" "}
+                    {detail.fieldName === "description" ? (
+                      // Mirrors Redmine's details_to_strings, which reports a description edit
+                      // as "updated" rather than dumping both revisions into the history list.
+                      <>更新</>
+                    ) : (
+                      <>
+                        {detail.oldValue ?? "(なし)"} → {detail.newValue ?? "(なし)"}
+                      </>
+                    )}
                   </p>
                 ))}
                 {user ? (
@@ -195,21 +255,32 @@ export default async function IssueDetailPage({
         </ul>
       </section>
 
-      <section>
-        <h2 className="font-medium mb-2">ステータス更新</h2>
-        {allowedStatuses.length > 0 ? (
-          <StatusUpdateForm
-            issueId={issue.id}
-            lockVersion={issue.lockVersion}
-            currentStatusId={issue.statusId}
-            currentFixedVersionId={issue.fixedVersionId}
-            allowedStatuses={allowedStatuses}
+      {canEditThisIssue ? (
+        <section>
+          <h2 className="font-medium mb-2">チケットの編集</h2>
+          <IssueEditForm
+            issue={issue}
+            parentIssueLabel={visibleParentIssue ? `#${visibleParentIssue.id.slice(0, 8)} ${visibleParentIssue.subject}` : null}
+            projectIdentifier={identifier}
+            trackers={trackers}
+            statuses={statuses}
+            transitions={transitions}
+            fieldPermissions={fieldPermissions}
+            roleIds={roleIds}
+            isAuthor={isAuthor}
+            isAssignee={isAssignee}
+            priorities={priorities}
+            categories={categories}
             versions={versions}
+            members={assignableUsers}
+            groups={assignableGroups}
+            currentAssigneeLabel={currentAssigneeLabel}
+            customFields={allCustomFields}
+            customValues={Object.fromEntries(customValues.map((cv) => [cv.customFieldId, cv.value ?? ""]))}
+            doneRatioEditable={resolveGeneralSettings(settings).issueDoneRatio === "issue_field"}
           />
-        ) : (
-          <p className="text-sm text-gray-500">このステータスから遷移できるワークフロー設定がありません。</p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">工数（合計 {totalHours}h）</h2>

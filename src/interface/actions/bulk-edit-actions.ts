@@ -7,6 +7,8 @@ import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueUpdate } from "@/domain/issue/repository";
 import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
@@ -103,6 +105,8 @@ export async function bulkUpdateIssuesAction(
   const settingsRepository = new DrizzleSettingsRepository();
   const userPreferencesRepository = new DrizzleUserPreferencesRepository();
   const watcherRepository = new DrizzleWatcherRepository();
+  const customFieldRepository = new DrizzleCustomFieldRepository();
+  const customValueRepository = new DrizzleCustomValueRepository();
   const visibilityRoles = issuesVisibilityRoles(actor);
 
   let updated = 0;
@@ -133,6 +137,8 @@ export async function bulkUpdateIssuesAction(
           settingsRepository,
           userPreferencesRepository,
           watcherRepository,
+          customFieldRepository,
+          customValueRepository,
         },
         {
           issueId: issue.id,

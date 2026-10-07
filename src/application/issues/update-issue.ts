@@ -1,3 +1,5 @@
+import type { CustomFieldRepository } from "@/domain/custom-field/repository";
+import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import { diffIssueChanges } from "@/domain/journal/diff-issue";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
@@ -11,6 +13,7 @@ import type { UserPreferencesRepository } from "@/domain/user-preferences/reposi
 import type { WatcherRepository } from "@/domain/watcher/repository";
 import { isFieldBlank } from "@/domain/workflow/blank";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
+import { applyIssueCustomFieldValues, prepareIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
 import { readOnlyAttributeNames, requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import { canTransitionTo } from "@/domain/workflow/transition-rules";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
@@ -41,6 +44,12 @@ export interface UpdateIssueInput {
   issueId: string;
   expectedLockVersion: number;
   changes: IssueUpdate;
+  /**
+   * customFieldId -> raw string input, partial-update semantics (omitted field = untouched).
+   * Validated before the issue row is written and journalled in the same entry as `changes`,
+   * mirroring Redmine's single Journal carrying both `attr` and `cf` details.
+   */
+  customFieldValues?: Record<string, string>;
   notes: string;
   actingUserId: string;
   actorRoleIds: string[];
@@ -58,6 +67,8 @@ export interface UpdateIssueRepositories {
   settingsRepository: SettingsRepository;
   userPreferencesRepository: UserPreferencesRepository;
   watcherRepository: WatcherRepository;
+  customFieldRepository: CustomFieldRepository;
+  customValueRepository: CustomValueRepository;
 }
 
 export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<Issue> {
@@ -221,12 +232,17 @@ async function applyIssueUpdate(
     throw new Error(`Issue ${input.issueId} not found`);
   }
 
+  // Mirrors Redmine's Issue#safe_attributes=, which assigns tracker_id from the submitted
+  // params *before* resolving workflow transitions and field permissions — a request that
+  // changes the tracker is governed by the new tracker's workflow, not the old one's.
+  const targetTrackerId = input.changes.trackerId ?? before.trackerId;
+
   if (!options.skipTransitionCheck && input.changes.statusId && input.changes.statusId !== before.statusId) {
-    const transitions = await repositories.workflowRepository.listForTracker(before.trackerId);
+    const transitions = await repositories.workflowRepository.listForTracker(targetTrackerId);
     const allowed = canTransitionTo(
       transitions,
       {
-        trackerId: before.trackerId,
+        trackerId: targetTrackerId,
         roleIds: input.actorRoleIds,
         currentStatusId: before.statusId,
         isAuthor: input.isAuthor,
@@ -243,18 +259,24 @@ async function applyIssueUpdate(
   // (mirrors Redmine's Issue#safe_attributes=, which assigns status_id before computing
   // workflow_rule_by_attribute — see the doc comment on WorkflowFieldPermission).
   const fieldPermissionQuery = {
-    trackerId: before.trackerId,
+    trackerId: targetTrackerId,
     statusId: input.changes.statusId ?? before.statusId,
     roleIds: input.actorRoleIds,
   };
   // Skipped for cascades with no real acting-user role behind them (rescheduleFollowingIssues)
   // — Redmine's raw model save for these has no equivalent of workflow field permissions.
-  const fieldPermissions = options.skipFieldPermissions ? [] : await repositories.workflowFieldPermissionRepository.listForTracker(before.trackerId);
+  const fieldPermissions = options.skipFieldPermissions ? [] : await repositories.workflowFieldPermissionRepository.listForTracker(targetTrackerId);
 
   const changes = { ...input.changes };
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     delete changes[field];
   }
+
+  // Resolved up front so the status branch below doesn't re-read the settings table. Note
+  // Redmine keeps 'done_ratio' in safe_attributes regardless of this setting — only the views
+  // hide the field — so a submitted value is still honoured unless the target status carries
+  // a default_done_ratio to override it.
+  const { issueDoneRatio } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
 
   if (changes.statusId && changes.statusId !== before.statusId) {
     const targetStatus = await repositories.issueStatusRepository.findById(changes.statusId);
@@ -282,7 +304,6 @@ async function applyIssueUpdate(
     // SCM commit-hook path (sync-changesets.ts) already applies unconditionally. Applied after
     // the read-only stripping above since this is a model-level side effect of the status
     // change itself, not a field the actor is directly setting.
-    const { issueDoneRatio } = resolveGeneralSettings(await repositories.settingsRepository.getAll());
     if (issueDoneRatio === "issue_status" && targetStatus?.defaultDoneRatio != null) {
       changes.doneRatio = targetStatus.defaultDoneRatio;
     }
@@ -302,9 +323,21 @@ async function applyIssueUpdate(
     }
   }
 
+  // Validated before the issue row is touched so an invalid custom value can't leave a
+  // half-applied edit behind; the write itself happens after, once the issue is safely
+  // stored, so both land in the single journal below.
+  const preparedCustomFieldValues =
+    input.customFieldValues && Object.keys(input.customFieldValues).length > 0
+      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, input.customFieldValues)
+      : null;
+
   const after = await repositories.issueRepository.update(input.issueId, input.expectedLockVersion, changes);
 
-  const details = diffIssueChanges(before, changes);
+  const customFieldDetails = preparedCustomFieldValues
+    ? await applyIssueCustomFieldValues(repositories, input.issueId, preparedCustomFieldValues)
+    : [];
+
+  const details = [...diffIssueChanges(before, changes), ...customFieldDetails];
   if (details.length > 0 || input.notes.trim().length > 0) {
     await repositories.journalRepository.create({
       journalizedType: "Issue",

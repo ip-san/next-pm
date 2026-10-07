@@ -23,6 +23,7 @@ export interface CreateIssueInput {
   fixedVersionId: string | null;
   categoryId: string | null;
   isPrivate: boolean;
+  doneRatio: number;
   estimatedHours: number | null;
   startDate: string | null;
   dueDate: string | null;
@@ -62,7 +63,7 @@ export async function createIssue(
     fixedVersionId: input.fixedVersionId,
     startDate: input.startDate,
     dueDate: input.dueDate,
-    doneRatio: 0,
+    doneRatio: input.doneRatio,
     estimatedHours: input.estimatedHours,
     isPrivate: input.isPrivate,
   };
@@ -86,7 +87,7 @@ export async function createIssue(
     fixedVersionId: input.fixedVersionId,
     categoryId: input.categoryId,
     isPrivate: input.isPrivate,
-    doneRatio: 0,
+    doneRatio: input.doneRatio,
     estimatedHours: input.estimatedHours,
     startDate: input.startDate,
     dueDate: input.dueDate,

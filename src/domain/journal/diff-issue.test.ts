@@ -73,6 +73,16 @@ describe("diffIssueChanges", () => {
     ]);
   });
 
+  it("records a tracker, parent and description change (Redmine journals all three)", () => {
+    const issue = makeIssue({ trackerId: "tracker-1", parentId: null, description: "old text" });
+    const details = diffIssueChanges(issue, { trackerId: "tracker-2", parentId: "issue-9", description: "new text" });
+    expect(details).toEqual([
+      { property: "attr", fieldName: "trackerId", oldValue: "tracker-1", newValue: "tracker-2" },
+      { property: "attr", fieldName: "description", oldValue: "old text", newValue: "new text" },
+      { property: "attr", fieldName: "parentId", oldValue: null, newValue: "issue-9" },
+    ]);
+  });
+
   it("records multiple changed fields", () => {
     const issue = makeIssue({ statusId: "new", doneRatio: 0 });
     const details = diffIssueChanges(issue, { statusId: "closed", doneRatio: 100 });

@@ -165,6 +165,7 @@ export async function POST(request: Request) {
         fixedVersionId: parsed.data.fixed_version_id,
         categoryId: parsed.data.category_id,
         isPrivate: parsed.data.is_private,
+        doneRatio: 0,
         estimatedHours: parsed.data.estimated_hours,
         startDate: parsed.data.start_date,
         dueDate: parsed.data.due_date,

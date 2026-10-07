@@ -20,7 +20,7 @@
 |---|---|
 | 課題の識別子 | 本家は全体で一意の連番(`#123`)。next-pm は UUID の先頭 8 桁(`#eb0b2d1a`)を表示・参照の shorthand に使う。メール件名の返信検出(`domain/mail/parse-email.ts`)やコミットメッセージ走査(`domain/scm/keyword-scan.ts`)もこの表記に合わせてある。移行するなら全機能横断の変更になる |
 | クエリエンジン | 本家 `Query` はフィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つ。next-pm の `queries` テーブルは `filters` のみで、他の 5 要素が存在しない。課題一覧・工数一覧・横断一覧すべてがこの制約を受けている |
-| 課題の更新経路 | ドメイン/ユースケース層(`application/issues/update-issue.ts`)は任意フィールドの更新・ワークフロー検証・journal 生成まで対応済みだが、UI から到達できるのはステータス/対象バージョン/注記のみ。**多くの「課題の未実装機能」は実際には UI 層だけの穴** |
+| 課題の更新経路 | 解消済み。単票の編集フォームからドメイン層の全項目(トラッカー・親課題・カスタム値を含む)に到達できるようになった。残る穴は一括編集の対応項目(§1)とコンテキストメニュー |
 | 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm はプロジェクト配下のみで、横断は検索(`/search`)と REST API v1 に限られる |
 | 管理画面の CRUD | `interface/actions/admin-actions.ts` は作成系のみ。マスタの編集・削除・並べ替えが全般的に無い |
 | 国際化 | 本家は約 50 言語のロケールファイル + ユーザーごとの言語設定。next-pm は文言がコンポーネントに直書きで i18n 基盤自体が無い |
@@ -29,7 +29,7 @@
 
 | # | 項目 | 理由 | 参照 |
 |---|---|---|---|
-| 1 | 課題の単票編集フォーム | ドメイン層が揃っているため UI + Server Action のみで済む割に、体感差が最大 | §1 |
+| 1 | ~~課題の単票編集フォーム~~ (対応済み) | ドメイン層が揃っているため UI + Server Action のみで済む割に、体感差が最大 | §1 |
 | 2 | クエリの表示列・ソート・グルーピング・合計・ページング | 一覧系すべての基盤。ここが無いと課題数が増えた時点で実用に耐えない | §2 |
 | 3 | 横断画面(`/issues`, `/time_entries`, `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
 | 4 | 管理画面の更新・削除 | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
@@ -50,15 +50,15 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| 課題の作成 | partial | トラッカー・優先度・担当(ユーザー/グループ)・カテゴリ・対象バージョン・親課題・日付・予定工数・プライベート指定に対応(`issue-schemas.ts`)。カスタムフィールド値と進捗率は入力できない |
+| 課題の作成 | done | トラッカー・優先度・担当(ユーザー/グループ)・カテゴリ・対象バージョン・親課題・日付・予定工数・進捗率・プライベート指定・カスタムフィールド値に対応(`issue-schemas.ts`)。カスタム値はトラッカーで絞り込み、既定値をプリセット、作成前に一括検証する |
 | 課題の更新(ドメイン層) | done | ワークフロー遷移検証・必須/読取専用フィールド・ブロック中課題のクローズ拒否・precedes による後続日程の再計算まで実装(`application/issues/update-issue.ts`) |
-| 課題の更新(UI) | partial | 単票画面のフォームはステータス・対象バージョン・注記のみ(`issues/[id]/status-update-form.tsx`)。件名/説明/トラッカー/優先度/担当/カテゴリ/日付/予定工数/進捗率/親課題/カスタム値を画面から変更できない |
+| 課題の更新(UI) | done | 単票画面の `issue-edit-form.tsx` が件名・説明・トラッカー・ステータス・優先度・担当(ユーザー/グループ)・カテゴリ・対象バージョン・親課題・日付・予定工数・進捗率・プライベート・カスタム値・注記を 1 フォームで更新(`updateIssueFormAction` → `update-issue.ts`)。ワークフローの読取専用項目は入力欄を出さず送信もしない、必須項目は `*` 表示、ステータス選択肢は許可された遷移のみ。トラッカー/ステータスを変えると権限表示をブラウザ側で再計算する(サーバ側でも再判定)。進捗率は `issue_done_ratio` が `issue_field` のときのみ表示(本家 `Issue.use_field_for_done_ratio?` と同じくビューのみの制御) |
 | 一括編集 | partial | ステータス・優先度・担当・進捗率・プロジェクトのみ(`bulk-edit-actions.ts`)。本家はトラッカー・バージョン・カテゴリ・日付・カスタムフィールド・注記の一括付与にも対応 |
 | コンテキストメニュー(一覧の右クリック) | missing | 本家 `ContextMenusController` 相当 |
 | 課題の削除 | missing | 権限 `delete_issues` ごと無い。REST API にも DELETE が無い |
 | 課題のコピー | missing | 権限 `copy_issues` ごと無い |
 | 別プロジェクトへの移動 | partial | 一括編集の `projectId` 経由でのみ可能。単票からの移動 UI は無い |
-| サブタスク(親子) | partial | 作成時に `parentId` を設定でき、スキーマにも列がある。更新での付け替え UI・権限 `manage_subtasks`・親課題の集計値(進捗率/日付/工数のロールアップ)・一覧のツリー表示が無い |
+| サブタスク(親子) | partial | 作成・更新の双方で `parentId` を設定でき、付け替え時は自分自身/子孫を親にする循環を拒否する(`domain/issue/parent.ts`、本家 `Issue#validate_parent_issue`)。権限 `manage_subtasks`・親課題の集計値(進捗率/日付/工数のロールアップ)・一覧のツリー表示が無い |
 | 課題の関連 | done | precedes/follows(遅延日数と後続の再スケジュール)・blocks/blocked・duplicates/duplicated(canonical のクローズで重複も自動クローズ)・relates・copied_to/copied_from の 9 種を定義、循環参照ガードあり(copied_* は課題のコピー機能が未実装のため実際には生成されない) |
 | 関連の権限分離 | partial | `manage_issue_relations` のみ。本家の `manage_related_issues`(別プロジェクト側の課題に関連を張る権限)が無い |
 | ウォッチャー | done | 追加/削除/自己トグル、作成・担当・コメント時の自動ウォッチ(`user_preferences.auto_watch_on`) |
@@ -66,14 +66,14 @@
 | 注記(journal) | partial | 追加は更新フォーム経由で可能。**編集・削除ができない**(`add_issue_notes` / `edit_issue_notes` / `edit_own_issue_notes` 権限ごと無い) |
 | プライベート注記 | missing | `journals` にフラグ列が無い。`set_notes_private` / `view_private_notes` も無い |
 | プライベート課題 | partial | `issues.is_private` と可視性判定(`domain/issue/visibility.ts`)は実装済み。`set_issues_private` / `set_own_issues_private` 権限による設定可否の制御が無い |
-| 変更履歴の記録 | partial | `journal_details.property` は `attr` / `cf` / `relation` の 3 種。本家にある添付ファイルの追加/削除履歴(`attachment`)が記録されない |
+| 変更履歴の記録 | partial | `journal_details.property` は `attr` / `cf` / `relation` の 3 種。`attr` はトラッカー・説明・親課題を含む(本家と同じ)。本家にある添付ファイルの追加/削除履歴(`attachment`)が記録されない |
 | 添付ファイル | partial | 課題・Wiki・文書に添付可能。**説明(description)列が無い**、サムネイル/画像プレビュー無し、注記への添付が無い |
 | リアクション | done | journal への 👍(本家 6.1 の Reaction 相当) |
 | CSV インポート | partial | 課題のみ(`issue-import-actions.ts`)。権限 `import_issues` は未定義、工数のインポート(`import_time_entries`)も無い |
 | カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` の 7 種のみ。本家の `user` / `version` / `link` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
 | カスタムフィールド: 対象 | partial | `Issue` と `Project` のみ。User / Group / TimeEntry / Version が無い |
 | カスタムフィールド: 適用範囲 | partial | トラッカー単位の紐付け + プロジェクト設定での有効化。ロール別の可視/編集可否(本家の `visible` / `role_ids`)が無い |
-| カスタムフィールド: 課題での値の入力 | partial | REST API(`POST /api/v1/issues`, `PATCH /api/v1/issues/[id]`)からのみ設定可能。**課題の作成/更新フォームに入力欄が無い**(`application/issues/set-custom-field-values.ts` は UI から呼ばれていない)。単票画面での表示は done |
+| カスタムフィールド: 課題での値の入力 | done | 作成/更新フォームと REST API の双方から設定可能。7 書式それぞれの入力欄を `issues/custom-field-inputs.tsx` が描画し、トラッカーの紐付けで絞り込む。更新時は属性変更と同じ 1 件の journal に `property = 'cf'` の明細として記録(本家 Journal と同じ)。値の検証は課題行を書き換える前に行うため、不正値で中途半端な更新が残らない |
 | カスタムフィールド: プロジェクトでの値の入力 | done | プロジェクト設定画面から編集可能 |
 | カスタムフィールドによる絞り込み・表示列 | missing | §2 のクエリエンジン側の制約 |
 
