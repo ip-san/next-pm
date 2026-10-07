@@ -20,3 +20,27 @@ export function isQueryVisible(
       return true;
   }
 }
+
+/**
+ * Faithful port of Redmine's `Query#editable_by?` (query.rb#L550):
+ *
+ *   return true if user.admin? || (is_private? && self.user_id == user.id)
+ *   is_public? && !is_global? && user.allowed_to?(:manage_public_queries, project)
+ *
+ * Three consequences worth spelling out, because they're easy to "fix" by accident:
+ * - owning a *private* query is enough on its own; `save_queries` is not re-checked here
+ *   (Redmine's QueriesController#find_query runs no permission check beyond this method);
+ * - `is_public?` in Redmine means "not private", so a roles-scoped query follows the same
+ *   branch as a fully public one;
+ * - a global (project-less) public query is editable by admins only, which is what keeps
+ *   `manage_public_queries` — a per-project permission — from leaking across projects.
+ */
+export function isQueryEditable(
+  query: Pick<SavedQuery, "visibility" | "userId" | "projectId">,
+  actor: { userId: string | null; isAdmin: boolean; canManagePublicQueries: boolean },
+): boolean {
+  if (!actor.userId) return false;
+  if (actor.isAdmin) return true;
+  if (query.visibility === "private") return query.userId === actor.userId;
+  return query.projectId !== null && actor.canManagePublicQueries;
+}

@@ -6,6 +6,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import type { IssueVisibilityScope } from "@/domain/query/issue-search";
 import type { IssuesVisibility } from "@/domain/role/entity";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -61,6 +62,24 @@ export async function resolveActor(user: User | null, projectId: string): Promis
  */
 export function issuesVisibilityRoles(actor: AuthorizationActor): { issuesVisibility: IssuesVisibility }[] {
   return actorIssuesVisibilityRoles(actor);
+}
+
+/**
+ * The same rule as `visibleIssueFilter`, expressed as data rather than a predicate, for the
+ * issue list's SQL-side visibility clause — a list that paginates in the database can't
+ * filter its rows in JavaScript afterwards without breaking the row count and the totals.
+ * `seesAllPrivateIssues` collapses the role scan the in-memory version does per issue.
+ */
+export function issueVisibilityScope(
+  userId: string | null,
+  actor: AuthorizationActor,
+  userGroupIds: string[],
+): IssueVisibilityScope {
+  return {
+    userId,
+    userGroupIds,
+    seesAllPrivateIssues: issuesVisibilityRoles(actor).some((role) => role.issuesVisibility === "all"),
+  };
 }
 
 /**
