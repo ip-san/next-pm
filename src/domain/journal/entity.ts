@@ -21,4 +21,8 @@ export interface Journal {
   privateNotes: boolean;
   details: JournalDetail[];
   createdAt: Date;
+  /** Equal to createdAt until the note is edited (Redmine backfills updated_on the same way). */
+  updatedAt: Date;
+  /** Who last edited the note; null while it is still the original. */
+  updatedById: string | null;
 }

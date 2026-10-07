@@ -11,6 +11,8 @@ export type PermissionKey =
   | "edit_issues"
   | "edit_own_issues"
   | "add_issue_notes"
+  | "edit_issue_notes"
+  | "edit_own_issue_notes"
   | "set_notes_private"
   | "view_private_notes"
   | "delete_issues"
@@ -81,6 +83,10 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_issues: { module: "issue_tracking", readOnly: false },
   edit_own_issues: { module: "issue_tracking", readOnly: false },
   add_issue_notes: { module: "issue_tracking", readOnly: false },
+  // Redmine marks both of these `:require => :loggedin`; left unclassified here so the
+  // `require` taxonomy stays owned by one place once the admin branch merges.
+  edit_issue_notes: { module: "issue_tracking", readOnly: false },
+  edit_own_issue_notes: { module: "issue_tracking", readOnly: false },
   set_notes_private: { module: "issue_tracking", readOnly: false, require: "member" },
   view_private_notes: { module: "issue_tracking", readOnly: true, require: "member" },
   delete_issues: { module: "issue_tracking", readOnly: false },

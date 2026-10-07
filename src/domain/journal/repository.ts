@@ -11,5 +11,9 @@ export interface JournalRepository {
   listForIssue(issueId: string, viewer: JournalViewer): Promise<Journal[]>;
   /** Every journal across every issue in the project — activity feed. */
   listByProject(projectId: string, viewer: JournalViewer): Promise<Journal[]>;
-  create(journal: Omit<Journal, "id" | "createdAt">): Promise<Journal>;
+  create(journal: Omit<Journal, "id" | "createdAt" | "updatedAt" | "updatedById">): Promise<Journal>;
+  /** Edits the note body and its private flag, stamping who changed it (Redmine's updated_by_id). */
+  update(id: string, changes: { notes: string; privateNotes: boolean; updatedById: string }): Promise<Journal>;
+  /** Removes the journal and any reactions pointing at it. */
+  delete(id: string): Promise<void>;
 }

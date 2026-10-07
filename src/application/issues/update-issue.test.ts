@@ -53,7 +53,11 @@ function makeRepositories(
     findById: mock(async () => null),
     listForIssue: mock(async () => []),
     listByProject: mock(async () => []),
-    create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date() })),
+    create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date(), updatedAt: new Date(), updatedById: null })),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => undefined),
   };
   const workflowRepository: WorkflowRepository = {
     listForTracker: mock(async () => (overrides.transitions as never) ?? []),
@@ -604,8 +608,12 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
     listByProject: mock(async () => []),
     create: mock(async (j) => {
       journalEntries.push({ journalizedId: j.journalizedId, userId: j.userId, details: j.details });
-      return { ...j, id: `journal-${journalEntries.length}`, createdAt: new Date() };
+      return { ...j, id: `journal-${journalEntries.length}`, createdAt: new Date(), updatedAt: new Date(), updatedById: null };
     }),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => undefined),
   };
   const workflowRepository: WorkflowRepository = {
     listForTracker: mock(async () => (options.transitions as never) ?? []),

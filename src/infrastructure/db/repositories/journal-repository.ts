@@ -2,6 +2,7 @@ import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { issues } from "@/infrastructure/db/schema/issues";
 import { journalDetails, journals } from "@/infrastructure/db/schema/journals";
+import { reactions } from "@/infrastructure/db/schema/reactions";
 import type { Journal } from "@/domain/journal/entity";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { JournalViewer } from "@/domain/journal/visibility";
@@ -50,6 +51,8 @@ async function withDetails(rows: (typeof journals.$inferSelect)[]): Promise<Jour
       newValue: d.newValue,
     })),
     createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    updatedById: row.updatedById,
   }));
 }
 
@@ -84,7 +87,7 @@ export class DrizzleJournalRepository implements JournalRepository {
     return withDetails(rows.map((r) => r.journal));
   }
 
-  async create(journal: Omit<Journal, "id" | "createdAt">): Promise<Journal> {
+  async create(journal: Omit<Journal, "id" | "createdAt" | "updatedAt" | "updatedById">): Promise<Journal> {
     const [row] = await db
       .insert(journals)
       .values({
@@ -117,6 +120,27 @@ export class DrizzleJournalRepository implements JournalRepository {
       privateNotes: row.privateNotes,
       details: journal.details,
       createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      updatedById: row.updatedById,
     };
+  }
+
+  async update(id: string, changes: { notes: string; privateNotes: boolean; updatedById: string }): Promise<Journal> {
+    const [row] = await db
+      .update(journals)
+      .set({ notes: changes.notes, privateNotes: changes.privateNotes, updatedAt: new Date(), updatedById: changes.updatedById })
+      .where(eq(journals.id, id))
+      .returning();
+    const [journal] = await withDetails([row]);
+    return journal;
+  }
+
+  async delete(id: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Reactions point at journals polymorphically, so they have to go explicitly.
+      await tx.delete(reactions).where(and(eq(reactions.reactableType, "Journal"), eq(reactions.reactableId, id)));
+      // journal_details cascades from journals in the schema.
+      await tx.delete(journals).where(eq(journals.id, id));
+    });
   }
 }

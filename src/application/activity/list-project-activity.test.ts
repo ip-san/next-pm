@@ -94,6 +94,8 @@ function journal(overrides: Partial<Journal>): Journal {
     journalizedId: "issue-1",
     userId: "user-1",
     privateNotes: false,
+    updatedAt: inside,
+    updatedById: null,
     notes: "",
     details: [],
     createdAt: inside,

@@ -12,6 +12,9 @@ export const journals = pgTable("journals", {
   notes: text("notes").notNull().default(""),
   /** Redmine's journals.private_notes — the note is visible only to view_private_notes holders (and its author). */
   privateNotes: boolean("private_notes").notNull().default(false),
+  /** Mirrors Redmine's journals.updated_on (backfilled from created_on) and updated_by_id. */
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedById: uuid("updated_by_id").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

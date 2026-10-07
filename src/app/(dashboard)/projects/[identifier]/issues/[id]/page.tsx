@@ -41,6 +41,7 @@ import { DeleteIssueRelationButton } from "./delete-issue-relation-button";
 import { IssueEditForm } from "./issue-edit-form";
 import { CopyIssueForm } from "./copy-issue-form";
 import { IssueRelationForm } from "./issue-relation-form";
+import { JournalEditForm } from "./journal-edit-form";
 import { MoveIssueForm } from "./move-issue-form";
 import { LogTimeForm } from "./log-time-form";
 import { ReactionButton } from "./reaction-button";
@@ -135,6 +136,9 @@ export default async function IssueDetailPage({
   const canDeleteIssues = can({ permission: "delete_issues", project: toAuthorizationProject(project), actor });
   const canCopyIssues = can({ permission: "copy_issues", project: toAuthorizationProject(project), actor });
   const canAddNotes = can({ permission: "add_issue_notes", project: toAuthorizationProject(project), actor });
+  const canSetNotesPrivate = can({ permission: "set_notes_private", project: toAuthorizationProject(project), actor });
+  const canEditAnyNote = can({ permission: "edit_issue_notes", project: toAuthorizationProject(project), actor });
+  const canEditOwnNote = can({ permission: "edit_own_issue_notes", project: toAuthorizationProject(project), actor });
   const canAddWatchers = can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor });
   const canDeleteWatchers = can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor });
 
@@ -262,6 +266,7 @@ export default async function IssueDetailPage({
                 <p className="text-gray-500 text-xs">
                   {journal.createdAt.toISOString()}
                   {journal.privateNotes ? <span className="ml-2 text-amber-700">（プライベート注記）</span> : null}
+                  {journal.updatedById ? <span className="ml-2">（編集済み）</span> : null}
                 </p>
                 {journal.notes ? <p>{journal.notes}</p> : null}
                 {journal.details.map((detail, index) => (
@@ -278,6 +283,15 @@ export default async function IssueDetailPage({
                     )}
                   </p>
                 ))}
+                {canEditAnyNote || (canEditOwnNote && journal.userId === user?.id) ? (
+                  <JournalEditForm
+                    journalId={journal.id}
+                    notes={journal.notes}
+                    privateNotes={journal.privateNotes}
+                    hasDetails={journal.details.length > 0}
+                    canSetNotesPrivate={canSetNotesPrivate}
+                  />
+                ) : null}
                 {user ? (
                   <ReactionButton journalId={journal.id} count={reaction.count} reacted={reaction.reacted} />
                 ) : reaction.count > 0 ? (
@@ -345,7 +359,7 @@ export default async function IssueDetailPage({
             }
             canManageSubtasks={can({ permission: "manage_subtasks", project: toAuthorizationProject(project), actor })}
             canEditAttributes={canEditThisIssue}
-            canSetNotesPrivate={can({ permission: "set_notes_private", project: toAuthorizationProject(project), actor })}
+            canSetNotesPrivate={canSetNotesPrivate}
             derivedFields={{
               // The parent_issue_* settings only bite on an issue that actually has subtasks.
               dates: childIssues.length > 0 && resolveGeneralSettings(settings).parentIssueDates === "derived",
