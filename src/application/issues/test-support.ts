@@ -22,7 +22,7 @@ export function makeIssueAttributeRepositoriesMock(
     categoryIds?: string[];
     versionIds?: string[];
     members?: Pick<Member, "userId" | "groupId" | "roleIds">[];
-    roles?: Pick<Role, "id" | "assignable">[];
+    roles?: (Pick<Role, "id" | "assignable"> & Partial<Pick<Role, "builtin" | "permissions" | "issuesVisibility">>)[];
     users?: Pick<User, "id" | "status">[];
   } = {},
 ): IssueAttributeRepositories {
@@ -52,6 +52,9 @@ export function makeIssueAttributeRepositoriesMock(
     } as unknown as IssueAttributeRepositories["memberRepository"],
     roleRepository: {
       findByIds: mock(async () => roles as Role[]),
+      findBuiltinNonMember: mock(
+        async () => ({ id: "role-non-member", builtin: 1, permissions: [], issuesVisibility: "default" }) as unknown as Role,
+      ),
     } as unknown as IssueAttributeRepositories["roleRepository"],
     userRepository: {
       findByIds: mock(async () => users as User[]),
