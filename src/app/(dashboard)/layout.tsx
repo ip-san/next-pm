@@ -25,6 +25,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/projects" className="hover:underline">
             プロジェクト
           </Link>
+          {/* `view_project` is public in Redmine, so the activity entry has no `:if` guard. */}
+          <Link href="/activity" className="hover:underline">
+            活動
+          </Link>
           {issueProjects.length > 0 ? (
             <Link href="/issues" className="hover:underline">
               チケット
