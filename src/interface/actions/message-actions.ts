@@ -7,6 +7,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { canDeleteMessage, canEditMessage } from "@/domain/message/authorization";
 import { memberUserIds } from "@/domain/member/entity";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { messageMailSubject } from "@/domain/mail/subject";
 import { InvalidMessageError, LockedTopicError, postMessage } from "@/application/messages/post-message";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
@@ -85,7 +86,7 @@ export async function postMessageAction(_prevState: PostMessageActionState, form
     {
       recipientGroups: [memberUserIds(members), watcherUserIds],
       excludeUserId: user.id,
-      subject: `[${project.name}] ${message.subject}`,
+      subject: messageMailSubject(project.name, topicId, message.subject),
       body: message.content,
     },
   );

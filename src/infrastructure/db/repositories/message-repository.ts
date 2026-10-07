@@ -26,6 +26,16 @@ export class DrizzleMessageRepository implements MessageRepository {
     return row ? toDomain(row) : null;
   }
 
+  async findByIdPrefix(prefix: string): Promise<Message[]> {
+    // Same shorthand as issue-repository.ts's findByIdPrefix — the first 8 characters of the
+    // uuid, which is what the "msg1a2b3c4d" token in a forum notification subject carries.
+    const rows = await db
+      .select()
+      .from(messages)
+      .where(sql`${messages.id}::text like ${prefix.toLowerCase() + "%"}`);
+    return rows.map(toDomain);
+  }
+
   async listTopicsByBoard(boardId: string): Promise<Message[]> {
     const rows = await db
       .select()

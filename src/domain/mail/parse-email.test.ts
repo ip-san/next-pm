@@ -1,61 +1,85 @@
 import { describe, expect, it } from "bun:test";
-import { extractIssueReplyIdPrefix, parseEmail, UnsupportedMailFormatError } from "./parse-email";
+import {
+  extractIssueReplyIdPrefix,
+  extractMessageReplyIdPrefix,
+  isAutoSubmitted,
+  parseEmail,
+  plainTextBody,
+  projectIdentifierFromSubaddress,
+  stripMessageReplyToken,
+} from "./parse-email";
 
-describe("parseEmail", () => {
-  it("parses sender, subject, and body from a plain message", () => {
-    const raw = ["From: Alice <alice@example.com>", "Subject: Something broke", "", "It broke when I clicked the button.", ""].join(
-      "\r\n",
-    );
-    const parsed = parseEmail(raw);
-    expect(parsed.fromEmail).toBe("alice@example.com");
-    expect(parsed.subject).toBe("Something broke");
-    expect(parsed.body).toBe("It broke when I clicked the button.");
+function message(lines: string[]): string {
+  return lines.join("\r\n");
+}
+
+describe("plainTextBody", () => {
+  const multipart = message([
+    "From: a@example.com",
+    "Subject: Hi",
+    'Content-Type: multipart/alternative; boundary="b"',
+    "",
+    "--b",
+    "Content-Type: text/plain",
+    "",
+    "plain version",
+    "--b",
+    "Content-Type: text/html",
+    "",
+    "<p>html <b>version</b></p>",
+    "--b--",
+    "",
+  ]);
+
+  it("prefers the text/plain part by default", () => {
+    expect(plainTextBody(parseEmail(multipart), "plain")).toBe("plain version");
   });
 
-  it("extracts the address from a From header with no display name", () => {
-    const raw = "From: alice@example.com\nSubject: Hi\n\nBody text";
-    expect(parseEmail(raw).fromEmail).toBe("alice@example.com");
+  it("prefers the html part converted to text when configured to", () => {
+    expect(plainTextBody(parseEmail(multipart), "html")).toBe("html version");
   });
 
-  it("lowercases the extracted sender address", () => {
-    const raw = "From: Alice@Example.com\nSubject: Hi\n\nBody";
-    expect(parseEmail(raw).fromEmail).toBe("alice@example.com");
+  it("falls back to the html part when there is no plain part", () => {
+    const htmlOnly = message(["From: a@example.com", "Subject: Hi", "Content-Type: text/html", "", "<p>only html</p>", ""]);
+    expect(plainTextBody(parseEmail(htmlOnly), "plain")).toBe("only html");
   });
 
-  it("unfolds a continuation-line subject", () => {
-    const raw = "From: alice@example.com\nSubject: This is a long\n  subject line\n\nBody";
-    expect(parseEmail(raw).subject).toBe("This is a long subject line");
+  it("returns an empty string for a mail that carries only an attachment", () => {
+    const attachmentOnly = message([
+      "From: a@example.com",
+      "Subject: Hi",
+      'Content-Type: multipart/mixed; boundary="b"',
+      "",
+      "--b",
+      "Content-Type: application/pdf",
+      "Content-Disposition: attachment; filename=x.pdf",
+      "",
+      "data",
+      "--b--",
+      "",
+    ]);
+    expect(plainTextBody(parseEmail(attachmentOnly), "plain")).toBe("");
+  });
+});
+
+describe("isAutoSubmitted", () => {
+  it("detects the Auto-Submitted header", () => {
+    const raw = "From: a@example.com\nAuto-Submitted: auto-replied\nSubject: Out of office\n\nBody";
+    expect(isAutoSubmitted(parseEmail(raw))).toBe(true);
   });
 
-  it("rejects a message with no From header", () => {
-    const raw = "Subject: Hi\n\nBody";
-    expect(() => parseEmail(raw)).toThrow(UnsupportedMailFormatError);
+  it("detects X-Autoreply", () => {
+    expect(isAutoSubmitted(parseEmail("From: a@example.com\nX-Autoreply: yes\nSubject: Hi\n\nBody"))).toBe(true);
   });
 
-  it("rejects a non-text/plain content type", () => {
-    const raw = "From: alice@example.com\nSubject: Hi\nContent-Type: multipart/mixed; boundary=x\n\nBody";
-    expect(() => parseEmail(raw)).toThrow(UnsupportedMailFormatError);
-  });
-
-  it("accepts an explicit text/plain content type", () => {
-    const raw = "From: alice@example.com\nSubject: Hi\nContent-Type: text/plain; charset=utf-8\n\nBody";
-    expect(parseEmail(raw).body).toBe("Body");
-  });
-
-  it("rejects an unsupported transfer encoding", () => {
-    const raw = "From: alice@example.com\nSubject: Hi\nContent-Transfer-Encoding: base64\n\nQm9keQ==";
-    expect(() => parseEmail(raw)).toThrow(UnsupportedMailFormatError);
-  });
-
-  it("accepts 7bit/8bit transfer encodings", () => {
-    const raw = "From: alice@example.com\nSubject: Hi\nContent-Transfer-Encoding: 8bit\n\nBody";
-    expect(parseEmail(raw).body).toBe("Body");
+  it("leaves ordinary mail alone", () => {
+    expect(isAutoSubmitted(parseEmail("From: a@example.com\nAuto-Submitted: no\nSubject: Hi\n\nBody"))).toBe(false);
   });
 });
 
 describe("extractIssueReplyIdPrefix", () => {
   it("extracts the 8-hex-char prefix from a reply-style subject", () => {
-    expect(extractIssueReplyIdPrefix("Re: [MyProject #eb0b2d1a] Something broke")).toBe("eb0b2d1a");
+    expect(extractIssueReplyIdPrefix("Re: [MyProject - Bug #eb0b2d1a] Something broke")).toBe("eb0b2d1a");
   });
 
   it("lowercases the extracted prefix", () => {
@@ -68,5 +92,43 @@ describe("extractIssueReplyIdPrefix", () => {
 
   it("returns null for a bracketed subject with no # prefix", () => {
     expect(extractIssueReplyIdPrefix("[MyProject] Something broke")).toBeNull();
+  });
+});
+
+describe("extractMessageReplyIdPrefix", () => {
+  it("extracts the forum message prefix", () => {
+    expect(extractMessageReplyIdPrefix("Re: [MyProject - General - msg1a2b3c4d] Topic")).toBe("1a2b3c4d");
+  });
+
+  it("is not confused by an issue reply subject", () => {
+    expect(extractMessageReplyIdPrefix("Re: [MyProject #eb0b2d1a] Something")).toBeNull();
+  });
+
+  it("strips the routing token from the reply subject", () => {
+    expect(stripMessageReplyToken("Re: [MyProject - General - msg1a2b3c4d] Topic")).toBe("Topic");
+  });
+});
+
+describe("projectIdentifierFromSubaddress", () => {
+  const mail = (to: string) => parseEmail(`From: a@example.com\nTo: ${to}\nSubject: Hi\n\nBody`);
+
+  it("reads the project identifier out of a plus-addressed recipient", () => {
+    expect(projectIdentifierFromSubaddress(mail("redmine+myproject@example.com"), "redmine@example.com")).toBe("myproject");
+  });
+
+  it("ignores a recipient on another domain", () => {
+    expect(projectIdentifierFromSubaddress(mail("redmine+myproject@other.com"), "redmine@example.com")).toBeNull();
+  });
+
+  it("ignores a plain recipient with no sub-address", () => {
+    expect(projectIdentifierFromSubaddress(mail("redmine@example.com"), "redmine@example.com")).toBeNull();
+  });
+
+  it("ignores a sub-address with more than one segment", () => {
+    expect(projectIdentifierFromSubaddress(mail("redmine+a+b@example.com"), "redmine@example.com")).toBeNull();
+  });
+
+  it("returns null when no sub-address is configured", () => {
+    expect(projectIdentifierFromSubaddress(mail("redmine+myproject@example.com"), "")).toBeNull();
   });
 });

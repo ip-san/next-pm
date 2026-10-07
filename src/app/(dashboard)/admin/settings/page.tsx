@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { loadMailHandlerSettings } from "@/application/settings/mail-handler-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { CommitKeywordSettingsForm } from "./commit-keyword-settings-form";
 import { GeneralSettingsForm } from "./general-settings-form";
+import { MailHandlerSettingsForm } from "./mail-handler-settings-form";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -18,6 +20,7 @@ export default async function SettingsPage() {
   const settingsRepository = new DrizzleSettingsRepository();
   const commitKeywordSettings = await loadCommitKeywordSettings(settingsRepository);
   const generalSettings = await loadGeneralSettings(settingsRepository);
+  const mailHandlerSettings = await loadMailHandlerSettings(settingsRepository);
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -25,6 +28,13 @@ export default async function SettingsPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">全般</h2>
         <GeneralSettingsForm settings={generalSettings} />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">受信メール</h2>
+        <p className="text-sm text-gray-500">
+          メールからチケットを登録・更新するための設定です（POST /api/mail_handler）。
+        </p>
+        <MailHandlerSettingsForm settings={mailHandlerSettings} />
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">リポジトリ</h2>

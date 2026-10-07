@@ -6,6 +6,7 @@ import type { MessageRepository } from "@/domain/message/repository";
 function makeRepo(overrides: Partial<MessageRepository> = {}): MessageRepository {
   return {
     findById: mock(async () => null),
+    findByIdPrefix: mock(async () => []),
     listTopicsByBoard: mock(async () => []),
     listByProject: mock(async () => []),
     listReplies: mock(async () => []),

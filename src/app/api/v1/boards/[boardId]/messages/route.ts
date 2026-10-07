@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { messageMailSubject } from "@/domain/mail/subject";
 import { InvalidMessageError, LockedTopicError, postMessage } from "@/application/messages/post-message";
 import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
@@ -104,7 +105,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boa
     {
       recipientGroups: [memberUserIds(members), watcherUserIds],
       excludeUserId: user.id,
-      subject: `[${project.name}] ${message.subject}`,
+      subject: messageMailSubject(project.name, topicId, message.subject),
       body: message.content,
     },
   );

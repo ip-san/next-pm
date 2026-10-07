@@ -2,6 +2,8 @@ import type { Message } from "./entity";
 
 export interface MessageRepository {
   findById(id: string): Promise<Message | null>;
+  /** Messages whose uuid starts with `prefix` — the "msg1a2b3c4d" token a mail reply carries. */
+  findByIdPrefix(prefix: string): Promise<Message[]>;
   listTopicsByBoard(boardId: string): Promise<Message[]>;
   /** Every message (topic or reply) across every board in the project — activity feed. */
   listByProject(projectId: string): Promise<Message[]>;

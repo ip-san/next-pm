@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { updateCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { updateGeneralSettings } from "@/application/settings/general-settings";
+import { updateMailHandlerSettings } from "@/application/settings/mail-handler-settings";
 import { parseKeywordList } from "@/domain/settings/commit-keywords";
 import { ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
+import { PREFERRED_BODY_PART_VALUES } from "@/domain/settings/mail-handler-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 
@@ -91,6 +93,44 @@ export async function updateGeneralSettingsAction(
     crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
     issueDoneRatio: parsed.data.issueDoneRatio,
   });
+
+  revalidatePath("/admin/settings");
+  return { error: null };
+}
+
+const updateMailHandlerSettingsSchema = z.object({
+  apiEnabled: z.coerce.boolean().default(false),
+  apiKey: z.string().max(255, "APIキーは255文字以内で入力してください。"),
+  bodyDelimiters: z.string(),
+  enableRegexDelimiters: z.coerce.boolean().default(false),
+  excludedFilenames: z.string(),
+  enableRegexExcludedFilenames: z.coerce.boolean().default(false),
+  preferredBodyPart: z.enum(PREFERRED_BODY_PART_VALUES).default("plain"),
+});
+
+export async function updateMailHandlerSettingsAction(
+  _prevState: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = updateMailHandlerSettingsSchema.safeParse({
+    apiEnabled: formData.get("apiEnabled") === "on",
+    apiKey: formData.get("apiKey"),
+    bodyDelimiters: formData.get("bodyDelimiters"),
+    enableRegexDelimiters: formData.get("enableRegexDelimiters") === "on",
+    excludedFilenames: formData.get("excludedFilenames"),
+    enableRegexExcludedFilenames: formData.get("enableRegexExcludedFilenames") === "on",
+    preferredBodyPart: formData.get("preferredBodyPart"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  await updateMailHandlerSettings(new DrizzleSettingsRepository(), parsed.data);
 
   revalidatePath("/admin/settings");
   return { error: null };

@@ -14,6 +14,7 @@ import { moveIssue, MoveIssueNotPermittedError, ProjectHasNoTrackerError } from 
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { issueMailSubject } from "@/domain/mail/subject";
 import {
   BlockedIssueCloseError,
   InvalidParentIssueError,
@@ -212,7 +213,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
     {
       recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers)],
       excludeUserId: user.id,
-      subject: `[${project.name}] ${issue.subject}`,
+      subject: issueMailSubject(project.name, issue.id, issue.subject),
       body: issue.description,
     },
   );
@@ -440,7 +441,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     {
       recipientGroups: [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds],
       excludeUserId: user.id,
-      subject: `[${project.name}] ${updated.subject}`,
+      subject: issueMailSubject(project.name, updated.id, updated.subject),
       body: parsed.data.notes.trim().length > 0 ? parsed.data.notes : "チケットが更新されました。",
     },
   );

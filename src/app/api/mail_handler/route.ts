@@ -1,252 +1,89 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { can } from "@/domain/authorization/authorization-service";
-import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { extractIssueReplyIdPrefix, parseEmail, UnsupportedMailFormatError } from "@/domain/mail/parse-email";
-import type { User } from "@/domain/user/entity";
-import { createIssue } from "@/application/issues/create-issue";
-import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
-import { updateIssue, WorkflowRequiredFieldError } from "@/application/issues/update-issue";
-import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
-import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
-import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
-import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
-import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
-import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
-import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
-import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
-import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { resolveMailHandlerSettings } from "@/domain/settings/mail-handler-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
-import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
-import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
-import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
-import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
-import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { receiveEmail } from "@/interface/http/mail-handler";
 
+/**
+ * Redmine's MailHandlerController#index. Everything the reference `rdm-mailhandler.rb` script
+ * submits is accepted here, under the same names, so the same script can post to this endpoint.
+ * The dispatch itself lives in interface/http/mail-handler.ts.
+ */
 const requestSchema = z.object({
   key: z.string(),
   email: z.string(),
+  allow_override: z.string().optional(),
+  unknown_user: z.enum(["ignore", "accept", "create"]).optional(),
+  default_group: z.string().optional(),
+  no_account_notice: z.union([z.string(), z.boolean()]).optional(),
+  no_notification: z.union([z.string(), z.boolean()]).optional(),
+  no_permission_check: z.union([z.string(), z.boolean()]).optional(),
+  project_from_subaddress: z.string().optional(),
+  // `project` stays accepted at the top level: it is what next-pm's own handler took before
+  // the Redmine-shaped `issue` hash existed, and dropping it would break existing callers.
   project: z.string().optional(),
+  issue: z
+    .object({
+      project: z.string().optional(),
+      status: z.string().optional(),
+      tracker: z.string().optional(),
+      category: z.string().optional(),
+      priority: z.string().optional(),
+      assigned_to: z.string().optional(),
+      fixed_version: z.string().optional(),
+      is_private: z.string().optional(),
+    })
+    .optional(),
 });
+
+/** Redmine's `'1' == value.to_s` option parsing. */
+function flag(value: string | boolean | undefined): boolean {
+  return value === true || value === "1";
+}
 
 /**
  * Constant-time key check — this endpoint has no session/API-key user auth of its own (mirrors
  * Redmine's mail_handler route, gated only by a shared secret compared with secure_compare).
- * An unset MAIL_HANDLER_API_KEY means the feature is disabled, never an always-accept key.
+ * The key comes from the `mail_handler_api_key` setting, falling back to MAIL_HANDLER_API_KEY
+ * for deployments configured before that setting existed. Neither set means the feature is
+ * disabled, never an always-accept key.
  */
-function keyMatches(provided: string): boolean {
-  const expected = process.env.MAIL_HANDLER_API_KEY;
+function keyMatches(provided: string, configured: string): boolean {
+  const expected = configured || process.env.MAIL_HANDLER_API_KEY || "";
   if (!expected) return false;
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-// Mirrors Redmine's MailHandlerController + MailHandler#dispatch, scoped down to what's
-// verifiable without a real mail server or a MIME test corpus: single-part text/plain messages
-// only (see domain/mail/parse-email.ts for exactly what's rejected), and two dispatch paths —
-// reply-to-an-existing-issue (via a "[... #eb0b2d1a]" subject, next-pm's id-prefix shorthand in
-// place of Redmine's sequential issue number) or create-a-new-issue in an explicitly named
-// project. NOT covered, same as real Redmine's fuller feature: attachments, watchers from
-// To/Cc, keyword-extracted fields (Status:/Priority:/etc.), unknown-sender account creation,
-// project-from-subaddress routing, replies to wiki/news/message/forum content.
 export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 422 });
   }
 
-  if (!keyMatches(parsed.data.key)) {
+  const settings = resolveMailHandlerSettings(await new DrizzleSettingsRepository().getAll());
+  if (!settings.apiEnabled || !keyMatches(parsed.data.key, settings.apiKey)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let parsedEmail;
-  try {
-    parsedEmail = parseEmail(parsed.data.email);
-  } catch (error) {
-    if (error instanceof UnsupportedMailFormatError) {
-      return NextResponse.json({ error: "unsupported_mail_format", message: error.message }, { status: 422 });
-    }
-    throw error;
+  const issueDefaults = { ...parsed.data.issue };
+  if (parsed.data.project && !issueDefaults.project) {
+    issueDefaults.project = parsed.data.project;
   }
 
-  const sender = await new DrizzleUserRepository().findByMail(parsedEmail.fromEmail);
-  if (!sender || sender.status !== "active") {
-    // Matches Redmine's own default: emails from unknown or inactive senders are silently
-    // ignored, not an error — this is the expected outcome for e.g. spam or bounce traffic.
-    return NextResponse.json({ result: "ignored", reason: "unknown_or_inactive_sender" }, { status: 200 });
-  }
+  const result = await receiveEmail(parsed.data.email, {
+    allowOverride: parsed.data.allow_override,
+    unknownUser: parsed.data.unknown_user,
+    defaultGroup: parsed.data.default_group,
+    noAccountNotice: flag(parsed.data.no_account_notice),
+    noNotification: flag(parsed.data.no_notification),
+    noPermissionCheck: flag(parsed.data.no_permission_check),
+    projectFromSubaddress: parsed.data.project_from_subaddress,
+    issue: issueDefaults,
+    appOrigin: new URL(request.url).origin,
+  });
 
-  const replyPrefix = extractIssueReplyIdPrefix(parsedEmail.subject);
-  if (replyPrefix) {
-    return handleReply(sender, replyPrefix, parsedEmail.body);
-  }
-
-  if (!parsed.data.project) {
-    return NextResponse.json({ error: "missing_project" }, { status: 422 });
-  }
-  return handleCreate(sender, parsed.data.project, parsedEmail.subject, parsedEmail.body);
-}
-
-async function handleReply(sender: User, issueIdPrefix: string, body: string) {
-  const issueRepository = new DrizzleIssueRepository();
-  const candidates = await issueRepository.findByIdPrefix(issueIdPrefix);
-  if (candidates.length !== 1) {
-    return NextResponse.json({ result: "ignored", reason: "no_matching_issue" }, { status: 200 });
-  }
-  const existing = candidates[0];
-
-  const project = await new DrizzleProjectRepository().findById(existing.projectId);
-  if (!project) {
-    return NextResponse.json({ result: "ignored", reason: "no_matching_issue" }, { status: 200 });
-  }
-
-  const { actor, roleIds, userGroupIds } = await resolveActor(sender, project.id);
-  if (!isPrivateIssueVisible(existing, sender.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    // Same "don't confirm existence" rule as everywhere else a private issue might be reached.
-    return NextResponse.json({ result: "ignored", reason: "no_matching_issue" }, { status: 200 });
-  }
-  const projectContext = toAuthorizationProject(project);
-  const isAuthor = existing.authorId === sender.id;
-  const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
-  const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!canEditAny && !canEditOwn) {
-    return NextResponse.json({ result: "ignored", reason: "insufficient_permissions" }, { status: 200 });
-  }
-
-  const isAssignee =
-    existing.assignedToType === "group"
-      ? existing.assignedToId !== null && userGroupIds.includes(existing.assignedToId)
-      : existing.assignedToId === sender.id;
-
-  try {
-    const issue = await updateIssue(
-      {
-        ...drizzleIssueAttributeRepositories(),
-        issueRepository,
-        journalRepository: new DrizzleJournalRepository(),
-        workflowRepository: new DrizzleWorkflowRepository(),
-        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
-        issueStatusRepository: new DrizzleIssueStatusRepository(),
-        issueRelationRepository: new DrizzleIssueRelationRepository(),
-        settingsRepository: new DrizzleSettingsRepository(),
-        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
-        watcherRepository: new DrizzleWatcherRepository(),
-        customFieldRepository: new DrizzleCustomFieldRepository(),
-        customValueRepository: new DrizzleCustomValueRepository(),
-      },
-      {
-        issueId: existing.id,
-        expectedLockVersion: existing.lockVersion,
-        notes: body,
-        actingUserId: sender.id,
-        actorRoleIds: roleIds,
-        // The mail handler never submits either attribute, so no permission lookup is needed.
-        canSetPrivate: false,
-        canManageSubtasks: false,
-        isAuthor,
-        isAssignee,
-        changes: {},
-      },
-    );
-    return NextResponse.json({ result: "note_added", issue }, { status: 201 });
-  } catch (error) {
-    if (error instanceof WorkflowRequiredFieldError) {
-      return NextResponse.json({ result: "ignored", reason: "workflow_required_field" }, { status: 200 });
-    }
-    // Same "silently ignore, don't bounce" posture the handler already takes for mail it
-    // can't act on — an unusable attribute is not something the sender can be told about.
-    if (error instanceof IssueAttributeNotAssignableError) {
-      return NextResponse.json({ result: "ignored", reason: "invalid_issue_attribute", field: error.field }, { status: 200 });
-    }
-    throw error;
-  }
-}
-
-async function handleCreate(sender: User, projectIdentifier: string, subject: string, body: string) {
-  const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
-  if (!project) {
-    return NextResponse.json({ error: "unknown_project" }, { status: 422 });
-  }
-
-  const { actor, roleIds } = await resolveActor(sender, project.id);
-  const projectContext = toAuthorizationProject(project);
-  if (!can({ permission: "add_issues", project: projectContext, actor })) {
-    return NextResponse.json({ result: "ignored", reason: "insufficient_permissions" }, { status: 200 });
-  }
-
-  const trackerId = project.trackerIds[0];
-  if (!trackerId) {
-    return NextResponse.json({ error: "no_tracker_available" }, { status: 422 });
-  }
-  const priorities = await new DrizzleEnumerationRepository().listByType("IssuePriority");
-  const priority = priorities.find((p) => p.isDefault) ?? priorities[0];
-  if (!priority) {
-    return NextResponse.json({ error: "no_priority_available" }, { status: 422 });
-  }
-
-  // Mail never supplies custom field values (keyword extraction is out of scope for this
-  // pass — see the module doc comment), but a required custom field with nothing to fill it
-  // still must block creation, exactly as it would in real Redmine (Issue#save! raising
-  // RecordInvalid, rescued and logged as a silent failure at the dispatch level) and in this
-  // app's own REST API (POST /api/v1/issues).
-  const applicableFields = await new DrizzleCustomFieldRepository().listForTracker(trackerId);
-  const { fieldErrors } = validateCustomFieldValues(
-    applicableFields,
-    Object.fromEntries(applicableFields.map((field) => [field.id, ""])),
-  );
-  if (Object.keys(fieldErrors).length > 0) {
-    return NextResponse.json({ result: "ignored", reason: "required_custom_field_missing" }, { status: 200 });
-  }
-
-  const trimmedSubject = subject.trim().slice(0, 255);
-  try {
-    const issue = await createIssue(
-      {
-        ...drizzleIssueAttributeRepositories(),
-        issueRepository: new DrizzleIssueRepository(),
-        trackerRepository: new DrizzleTrackerRepository(),
-        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
-        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
-        watcherRepository: new DrizzleWatcherRepository(),
-      },
-      {
-        projectId: project.id,
-        trackerId,
-        priorityId: priority.id,
-        subject: trimmedSubject.length > 0 ? trimmedSubject : "(no subject)",
-        description: body,
-        authorId: sender.id,
-        assignedToId: null,
-        assignedToType: null,
-        parentId: null,
-        fixedVersionId: null,
-        categoryId: null,
-        isPrivate: false,
-        doneRatio: 0,
-        estimatedHours: null,
-        startDate: null,
-        dueDate: null,
-        actorRoleIds: roleIds,
-        // The mail handler never submits either attribute, so no permission lookup is needed.
-        canSetPrivate: false,
-        canManageSubtasks: false,
-      },
-    );
-    return NextResponse.json({ result: "issue_created", issue }, { status: 201 });
-  } catch (error) {
-    if (error instanceof WorkflowRequiredFieldError) {
-      return NextResponse.json({ result: "ignored", reason: "workflow_required_field" }, { status: 200 });
-    }
-    // Same "silently ignore, don't bounce" posture the handler already takes for mail it
-    // can't act on — an unusable attribute is not something the sender can be told about.
-    if (error instanceof IssueAttributeNotAssignableError) {
-      return NextResponse.json({ result: "ignored", reason: "invalid_issue_attribute", field: error.field }, { status: 200 });
-    }
-    throw error;
-  }
+  return NextResponse.json(result.body, { status: result.status });
 }
