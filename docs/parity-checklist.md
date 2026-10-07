@@ -116,12 +116,12 @@
 | 可視性設定 | partial | `issues_visibility` と `time_entries_visibility` は読み取り側で効いている。`users_visibility` は列と管理 UI だけで、参照している読み取り経路がまだ無い |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 57(`permission-registry.ts` 実数)。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 65(`permission-registry.ts` 実数)。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `import_issues`, `manage_project_activities`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_members`, `view_message_watchers`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_message_watchers`, `add_project`, `commit_access`, `delete_message_watchers`, `delete_project`, `import_issues`, `manage_project_activities`, `manage_related_issues`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_members`, `view_message_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -164,17 +164,17 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| 閲覧・編集・版歴・差分 | done | |
-| ページ名変更(リダイレクト付き) | done | 権限は `manage_wiki` に統合。本家の `rename_wiki_pages` は独立権限 |
-| マクロ | partial | `toc` / `include` / `child_pages` の 3 種のみ(`domain/wiki/macros.ts`)。本家の `collapse` / `thumbnail` / `issue` / `macro_list` 等が無い |
+| 閲覧・編集・版歴・差分・注釈 | done | 注釈(blame)を追加(`wiki/[title]/annotate`、本家 `WikiAnnotate`)。各行を最初に導入したバージョンと著者を表示し、履歴の各行からたどれる |
+| ページ名変更(リダイレクト付き) | done | 権限は本家と同じく `rename_wiki_pages` または `manage_wiki`(本家 `preparation.rb` は `wiki#rename` を両方に割り当てている)。保護ページは `protect_wiki_pages` が無いと改名できない |
+| マクロ | done | テキストを返す `toc` / `include` / `child_pages`(`domain/wiki/macros.ts`)に加え、描画を伴う `collapse` / `thumbnail` / `issue` / `macro_list` / `recent_pages` を追加(`domain/wiki/macro-blocks.ts`)。本家 `MACROS_RE` と同じ記法(ブロック引数・`key=value` オプション・`!` によるエスケープ)を解釈する。ドメイン側はブロックの配列を返すだけで、HTML 文字列は組み立てない(描画は `wiki-content.tsx`)。`issue` は閲覧できないチケットを `#id` だけにフォールバックし件名を出さない、`thumbnail` はそのページ自身の添付のみを参照する。`hello_world` は不要なため未実装 |
 | エクスポート | done | HTML / PDF / ZIP |
-| 添付 | done | |
-| ページ削除 | partial | REST API(`DELETE /api/v1/projects/[identifier]/wiki/[title]`)にはあるが **UI に無い**。権限 `delete_wiki_pages` も未定義 |
-| 保護ページ | partial | `wiki_pages.is_protected` 列はあるが切り替え UI と `protect_wiki_pages` 権限が無い |
-| 親子階層 | partial | `parent_id` 列はあるが設定 UI・目次表示が無い |
-| Wiki の開始ページ設定・Wiki 自体の削除 | missing | 本家 `WikisController` |
-| ウォッチ | done | ページ単位のウォッチ |
-| 版歴の閲覧権限 | missing | 本家の `view_wiki_edits` が無い |
+| 添付 | done | 追加は `edit_wiki_pages`、削除は本家と同じ専用権限 `delete_wiki_pages_attachments`(`acts_as_attachable :delete_permission`)。いずれも保護ページでは `protect_wiki_pages` が必要 |
+| ページ削除 | done | `delete_wiki_pages` を追加し、確認画面(`wiki/[title]/destroy`)で本家 `WikiController#destroy` の 3 択(子をトップレベルへ/子も削除/別ページへ付け替え)を提供。REST の DELETE も同権限 + `?todo=` に対応(既定は本家と同じ nullify)。ページ削除時に添付・ウォッチャー・そのページ宛てリダイレクトも併せて削除する(本家 `delete_redirects` と acts_as_attachable/watchable の dependent destroy 相当) |
+| 保護ページ | done | ページ画面の保護/解除トグル(`protect_wiki_pages`)。保護ページの編集・改名・添付の追加/削除は同権限が無いと拒否(本家 `WikiPage#editable_by?` を `domain/wiki/protection.ts` に再実装)。`Sidebar` は作成時に自動で保護(本家 `DEFAULT_PROTECTED_PAGES`) |
+| 親子階層 | done | 目次(`wiki/index`、本家 `index` の親子ツリー)と日付順目次(`wiki/date_index`)、ページ画面のパンくず・子ページ一覧(`domain/wiki/hierarchy.ts`)。親ページの選択は編集フォーム(新規ページ)と改名フォームから行い、自分自身・子孫・他プロジェクトのページは拒否(本家 `WikiPage#validate_parent_title`)。本家の safe_attributes に合わせ、既存ページのタイトルと親の変更は `rename_wiki_pages` 保持者のみ(`manage_wiki` だけでは画面に入れても変更できない) |
+| Wiki の開始ページ設定・Wiki 自体の削除 | done | プロジェクト設定に Wiki タブを追加(`manage_wiki`)。開始ページを保存すると `/projects/:id/wiki` の遷移先が変わる。開始ページを改名すると設定も追従し、`manage_wiki` 保持者は改名フォームのチェックボックスで別ページを開始ページにできる(本家 `WikiPage#update_wiki_start_page` / `is_start_page`)。Wiki の削除(本家 `WikisController#destroy`)は全ページ・版歴・添付・リダイレクトを削除し、開始ページを既定値へ戻す(本家 `Wiki.create_default` 相当) |
+| ウォッチ | done | ページ単位のウォッチに加え、ウォッチャー一覧と他ユーザーの追加/削除を本家と同じ 3 権限(`view_wiki_page_watchers` / `add_wiki_page_watchers` / `delete_wiki_page_watchers`)で制御。追加できる相手は `view_wiki_pages` を持つプロジェクトメンバーのみ(本家 `Principal.assignable_watchers`) |
+| 版歴の閲覧権限 | done | `view_wiki_edits` を追加し、履歴・差分ページと活動フィードの Wiki 更新(本家 `WikiContentVersion` の `acts_as_activity_provider`)を同権限で制御 |
 
 ## 8. フォーラム・News・文書・ファイル
 

@@ -68,6 +68,7 @@ function makeWatcherRepository() {
     unwatch: mock(async () => {}),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
 }
 

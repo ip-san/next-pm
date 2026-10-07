@@ -10,12 +10,16 @@ function makeRepos(pages: WikiPage[], redirects: WikiRedirect[]) {
     findByTitle: async (projectId, title) => pages.find((p) => p.projectId === projectId && p.title === title) ?? null,
     create: async (p) => ({ ...p, id: "new-page" }),
     rename: async (id, newTitle) => ({ ...(pages.find((p) => p.id === id) as WikiPage), title: newTitle }),
+    setParent: async (id, parentId) => ({ ...(pages.find((p) => p.id === id) as WikiPage), parentId }),
+    setProtected: async (id, isProtected) => ({ ...(pages.find((p) => p.id === id) as WikiPage), isProtected }),
     delete: async () => {},
   };
   const wikiRedirectRepository: WikiRedirectRepository = {
     findByTitle: async (projectId, title) => redirects.find((r) => r.projectId === projectId && r.title === title) ?? null,
     retarget: async () => {},
     deleteByTitle: async () => {},
+    deleteByTarget: async () => {},
+    deleteAllForProject: async () => {},
     create: async (entry) => ({ ...entry, id: "redirect-1", createdAt: new Date() }),
   };
   return { wikiPageRepository, wikiRedirectRepository };

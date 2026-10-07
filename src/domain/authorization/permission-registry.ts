@@ -34,7 +34,15 @@ export type PermissionKey =
   | "log_time_for_other_users"
   | "import_time_entries"
   | "view_wiki_pages"
+  | "view_wiki_edits"
   | "edit_wiki_pages"
+  | "rename_wiki_pages"
+  | "delete_wiki_pages"
+  | "delete_wiki_pages_attachments"
+  | "protect_wiki_pages"
+  | "view_wiki_page_watchers"
+  | "add_wiki_page_watchers"
+  | "delete_wiki_page_watchers"
   | "manage_wiki"
   | "export_wiki_pages"
   | "manage_boards"
@@ -125,10 +133,21 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   log_time_for_other_users: { module: "time_tracking", readOnly: false, require: "member" },
   import_time_entries: { module: "time_tracking", readOnly: false, require: null },
 
+  // preparation.rb#L124-135. The `:read => true` keys are read-only; only rename, delete,
+  // protect and manage carry `:require => :member`. delete_wiki_pages_attachments
+  // deliberately carries none, so a non-member role may hold it.
   view_wiki_pages: { module: "wiki", readOnly: true, require: null },
-  edit_wiki_pages: { module: "wiki", readOnly: false, require: null },
-  manage_wiki: { module: "wiki", readOnly: false, require: "member" },
+  view_wiki_edits: { module: "wiki", readOnly: true, require: null },
   export_wiki_pages: { module: "wiki", readOnly: true, require: null },
+  edit_wiki_pages: { module: "wiki", readOnly: false, require: null },
+  rename_wiki_pages: { module: "wiki", readOnly: false, require: "member" },
+  delete_wiki_pages: { module: "wiki", readOnly: false, require: "member" },
+  delete_wiki_pages_attachments: { module: "wiki", readOnly: false, require: null },
+  protect_wiki_pages: { module: "wiki", readOnly: false, require: "member" },
+  view_wiki_page_watchers: { module: "wiki", readOnly: true, require: null },
+  add_wiki_page_watchers: { module: "wiki", readOnly: false, require: null },
+  delete_wiki_page_watchers: { module: "wiki", readOnly: false, require: null },
+  manage_wiki: { module: "wiki", readOnly: false, require: "member" },
 
   manage_boards: { module: "boards", readOnly: false, require: "member" },
   view_messages: { module: "boards", readOnly: true, require: null },
