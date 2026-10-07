@@ -277,7 +277,11 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   const projectContext = toAuthorizationProject(project);
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!canEditAny && !canEditOwn) {
+  const canEditAttributes = canEditAny || canEditOwn;
+  // Redmine's notes_addable? is its own permission: a user may comment without being able
+  // to change anything about the issue.
+  const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  if (!canEditAttributes && !canAddNotes) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
 
@@ -376,6 +380,8 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
           can({ permission: "set_issues_private", project: projectContext, actor }) ||
           (isAuthor && can({ permission: "set_own_issues_private", project: projectContext, actor })),
         canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
+        canEditAttributes,
+        canAddNotes,
       },
     );
   } catch (error) {

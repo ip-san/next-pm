@@ -139,7 +139,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!canEditAny && !canEditOwn) {
+  const canEditAttributes = canEditAny || canEditOwn;
+  const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  if (!canEditAttributes && !canAddNotes) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -175,6 +177,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           can({ permission: "set_issues_private", project: projectContext, actor }) ||
           (isAuthor && can({ permission: "set_own_issues_private", project: projectContext, actor })),
         canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
+        canEditAttributes,
+        canAddNotes,
         changes: {
           statusId: parsed.data.status_id,
           priorityId: parsed.data.priority_id,

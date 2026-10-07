@@ -45,6 +45,7 @@ async function seed() {
         "add_issues",
         "edit_issues",
         "edit_own_issues",
+        "add_issue_notes",
         "delete_issues",
         "copy_issues",
         "set_issues_private",

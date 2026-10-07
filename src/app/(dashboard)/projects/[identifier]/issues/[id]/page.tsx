@@ -131,6 +131,7 @@ export default async function IssueDetailPage({
   const canManageRelations = can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor });
   const canDeleteIssues = can({ permission: "delete_issues", project: toAuthorizationProject(project), actor });
   const canCopyIssues = can({ permission: "copy_issues", project: toAuthorizationProject(project), actor });
+  const canAddNotes = can({ permission: "add_issue_notes", project: toAuthorizationProject(project), actor });
   const canAddWatchers = can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor });
   const canDeleteWatchers = can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor });
 
@@ -309,9 +310,9 @@ export default async function IssueDetailPage({
         </section>
       ) : null}
 
-      {canEditThisIssue ? (
+      {canEditThisIssue || canAddNotes ? (
         <section>
-          <h2 className="font-medium mb-2">チケットの編集</h2>
+          <h2 className="font-medium mb-2">{canEditThisIssue ? "チケットの編集" : "コメントの追加"}</h2>
           <IssueEditForm
             issue={issue}
             parentIssueLabel={visibleParentIssue ? `#${visibleParentIssue.id.slice(0, 8)} ${visibleParentIssue.subject}` : null}
@@ -337,6 +338,7 @@ export default async function IssueDetailPage({
               (isAuthor && can({ permission: "set_own_issues_private", project: toAuthorizationProject(project), actor }))
             }
             canManageSubtasks={can({ permission: "manage_subtasks", project: toAuthorizationProject(project), actor })}
+            canEditAttributes={canEditThisIssue}
             derivedFields={{
               // The parent_issue_* settings only bite on an issue that actually has subtasks.
               dates: childIssues.length > 0 && resolveGeneralSettings(settings).parentIssueDates === "derived",

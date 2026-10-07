@@ -225,6 +225,13 @@
       "when": 1791351122214,
       "tag": "0031_stale_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791353874211,
+      "tag": "0032_grant_add_issue_notes",
+      "breakpoints": true
     }
   ]
 }

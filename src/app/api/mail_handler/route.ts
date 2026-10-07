@@ -112,9 +112,9 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
   }
   const projectContext = toAuthorizationProject(project);
   const isAuthor = existing.authorId === sender.id;
-  const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
-  const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!canEditAny && !canEditOwn) {
+  // A reply only ever adds a note, so it needs `add_issue_notes` — Redmine's
+  // receive_issue_reply goes through notes_addable?, not the edit permissions.
+  if (!can({ permission: "add_issue_notes", project: projectContext, actor })) {
     return NextResponse.json({ result: "ignored", reason: "insufficient_permissions" }, { status: 200 });
   }
 
@@ -150,6 +150,9 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
         canManageSubtasks: false,
         isAuthor,
         isAssignee,
+        // A reply is a note and nothing else.
+        canEditAttributes: false,
+        canAddNotes: true,
         changes: {},
       },
     );
