@@ -1,6 +1,7 @@
 import type { User } from "@/domain/user/entity";
 import { actorIssuesVisibilityRoles, can, projectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { PermissionKey } from "@/domain/authorization/permission-registry";
+import type { JournalViewer } from "@/domain/journal/visibility";
 import type { Project } from "@/domain/project/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
@@ -103,4 +104,19 @@ export async function listProjectsWithPermission(
     }
   }
   return allowed;
+}
+
+/**
+ * The viewer a journal read needs: who is asking, and whether they hold `view_private_notes`
+ * on the project whose journals they're reading.
+ */
+export function journalViewerFor(
+  userId: string | null,
+  actor: AuthorizationActor,
+  project: { status: string; isPublic: boolean; enabledModules: string[] },
+): JournalViewer {
+  return {
+    userId,
+    canViewPrivateNotes: can({ permission: "view_private_notes", project: toAuthorizationProject(project), actor }),
+  };
 }

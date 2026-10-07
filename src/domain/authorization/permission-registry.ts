@@ -11,6 +11,8 @@ export type PermissionKey =
   | "edit_issues"
   | "edit_own_issues"
   | "add_issue_notes"
+  | "set_notes_private"
+  | "view_private_notes"
   | "delete_issues"
   | "copy_issues"
   | "set_issues_private"
@@ -56,6 +58,13 @@ interface PermissionDefinition {
    * allowed on closed (but not archived) projects; everything else requires an active project.
    */
   readOnly: boolean;
+  /**
+   * Mirrors `Redmine::AccessControl`'s `:require` option, enforced in `Role#setable_permissions`:
+   * a "member" permission can't be granted to the builtin Non-member or Anonymous roles, and a
+   * "loggedin" one can't be granted to Anonymous. Without this, an admin could hand
+   * `view_private_notes` to Anonymous and publish every private note.
+   */
+  require?: "member" | "loggedin";
 }
 
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
@@ -72,6 +81,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_issues: { module: "issue_tracking", readOnly: false },
   edit_own_issues: { module: "issue_tracking", readOnly: false },
   add_issue_notes: { module: "issue_tracking", readOnly: false },
+  set_notes_private: { module: "issue_tracking", readOnly: false, require: "member" },
+  view_private_notes: { module: "issue_tracking", readOnly: true, require: "member" },
   delete_issues: { module: "issue_tracking", readOnly: false },
   copy_issues: { module: "issue_tracking", readOnly: false },
   set_issues_private: { module: "issue_tracking", readOnly: false },
@@ -116,4 +127,17 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
 
 export function isPermissionRegistered(key: string): key is PermissionKey {
   return key in PERMISSION_REGISTRY;
+}
+
+/**
+ * Port of `Role#setable_permissions`: which permissions a role of this builtin kind may be
+ * granted at all. Keeps a members-only permission off the Non-member and Anonymous roles
+ * however the role is edited.
+ */
+export function isPermissionSetableForBuiltin(permission: PermissionKey, builtin: number): boolean {
+  const required = PERMISSION_REGISTRY[permission].require;
+  if (!required) return true;
+  if (builtin === 2) return false; // Anonymous: neither member nor logged in
+  if (builtin === 1) return required !== "member"; // Non-member is logged in but not a member
+  return true;
 }

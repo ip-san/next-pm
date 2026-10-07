@@ -36,7 +36,7 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, journalViewerFor, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 
 const ISSUE_ATTRIBUTE_ERROR_CODES: Record<string, string> = {
@@ -78,7 +78,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const [journals, customValues] = await Promise.all([
-    new DrizzleJournalRepository().listForIssue(id),
+    new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project)),
     new DrizzleCustomValueRepository().listForCustomized("Issue", id),
   ]);
   return NextResponse.json({ issue, journals, customValues });

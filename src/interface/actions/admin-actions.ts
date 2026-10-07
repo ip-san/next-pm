@@ -11,6 +11,7 @@ import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/c
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
+import { isPermissionSetableForBuiltin } from "@/domain/authorization/permission-registry";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { parseRolePermissionEntries } from "@/domain/role/parse-role-permissions";
@@ -452,8 +453,14 @@ export async function updateRolePermissionsAction(
     return { error: "存在しないロールが指定されました。" };
   }
 
+  const roleById = new Map(roles.map((role) => [role.id, role]));
   for (const [roleId, permissions] of parsed.permissionsByRoleId) {
-    await roleRepository.updatePermissions(roleId, permissions);
+    // Mirrors Role#setable_permissions: a members-only permission (view_private_notes,
+    // set_notes_private) must never land on the builtin Non-member or Anonymous role,
+    // which would publish private notes to everyone who can see the project.
+    const builtin = roleById.get(roleId)?.builtin ?? 0;
+    const setable = permissions.filter((permission) => isPermissionSetableForBuiltin(permission, builtin));
+    await roleRepository.updatePermissions(roleId, setable);
   }
 
   revalidatePath("/admin/roles");

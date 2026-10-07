@@ -63,7 +63,7 @@
 | ウォッチャー | done | 追加/削除/自己トグル、作成・担当・コメント時の自動ウォッチ(`user_preferences.auto_watch_on`) |
 | ウォッチャー一覧の閲覧権限 | missing | 本家の `view_issue_watchers` が無く、閲覧可否が追加権限と一体になっている |
 | 注記(journal) | partial | `add_issue_notes` 権限で注記のみの更新が可能(本家 `Issue#notes_addable?` と同じく編集権限とは独立。メール返信もこの権限で判定)。**編集・削除ができない**(`edit_issue_notes` / `edit_own_issue_notes` が未実装) |
-| プライベート注記 | missing | `journals` にフラグ列が無い。`set_notes_private` / `view_private_notes` も無い |
+| プライベート注記 | done | `journals.private_notes` 列 + `set_notes_private` / `view_private_notes` 権限。可視判定は本家 `Journal.visible_notes_condition` に準拠(公開 / 自分が書いた / 権限あり)で SQL 側に適用。注記が属性変更を伴う場合は本家 `split_private_notes` と同じく 2 件の journal に分割して変更履歴は公開のまま保つ。空の注記はプライベートにならない。通知もプライベート注記のときは権限保持者だけに本文を送り、他の宛先には汎用文のみ送る。`view_private_notes` / `set_notes_private` は本家同様メンバー専用で、非メンバー/匿名ロールには付与できない |
 | プライベート課題 | done | `issues.is_private` と可視性判定(`domain/issue/visibility.ts`)に加え、`set_issues_private` / `set_own_issues_private`(own = 作成者)による設定可否の制御を実装。権限が無い場合は本家 `safe_attributes` と同じく送信値を黙って捨て、フォームにも項目を出さない |
 | 変更履歴の記録 | done | `journal_details.property` は `attr` / `cf` / `relation` / `attachment` の 4 種。`attr` はトラッカー・説明・親課題を含む(本家と同じ)。添付の追加/削除は本家の `Journal#journalize_attachment` と同じ形(`prop_key` = 添付 ID、ファイル名を追加時は `value`・削除時は `old_value`)で記録する。課題作成時に同時に添付したファイルは本家同様に履歴を作らない(その時点で journal が無い)。単票の履歴表示は属性名をそのまま出すため、添付行は添付 ID が見えたままになっている |
 | 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)は課題・Wiki・文書・ファイルのアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。課題・Wiki・文書の添付一覧は共通コンポーネント(`app/(dashboard)/projects/attachment-list.tsx`)で、画像はサムネイルをインライン表示する。注記への添付は無い |
@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 49。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 51。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_notes_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 

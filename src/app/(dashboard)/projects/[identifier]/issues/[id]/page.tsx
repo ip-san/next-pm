@@ -29,6 +29,7 @@ import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/work
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import {
   issuesVisibilityRoles,
+  journalViewerFor,
   listProjectsWithPermission,
   resolveActor,
   toAuthorizationProject,
@@ -61,16 +62,26 @@ export default async function IssueDetailPage({
     notFound();
   }
 
-  const [project, tracker, journals, user] = await Promise.all([
+  const [project, tracker, user] = await Promise.all([
     new DrizzleProjectRepository().findByIdentifier(identifier),
     new DrizzleTrackerRepository().findById(issue.trackerId),
-    new DrizzleJournalRepository().listForIssue(id),
     currentUserFromCookies(),
   ]);
   if (!project) {
     notFound();
   }
 
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
+  if (
+    !can({ permission: "view_issues", project: toAuthorizationProject(project), actor }) ||
+    !isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))
+  ) {
+    notFound();
+  }
+
+  // Loaded only once the actor is known: the repository filters private notes in SQL, so a
+  // note this viewer may not read never reaches the page (nor its reaction counts).
+  const journals = await new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project));
   const reactions = await new DrizzleReactionRepository().listForReactables(
     "Journal",
     journals.map((journal) => journal.id),
@@ -81,14 +92,6 @@ export default async function IssueDetailPage({
     entry.count += 1;
     if (reaction.userId === user?.id) entry.reacted = true;
     reactionsByJournalId.set(reaction.reactableId, entry);
-  }
-
-  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
-  if (
-    !can({ permission: "view_issues", project: toAuthorizationProject(project), actor }) ||
-    !isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))
-  ) {
-    notFound();
   }
 
   const [customValues, timeEntries, activities, attachments, isWatching, versions, trackers, priorities, categories, settings] =
@@ -256,7 +259,10 @@ export default async function IssueDetailPage({
             const reaction = reactionsByJournalId.get(journal.id) ?? { count: 0, reacted: false };
             return (
               <li key={journal.id} className="border rounded p-2 flex flex-col gap-1">
-                <p className="text-gray-500 text-xs">{journal.createdAt.toISOString()}</p>
+                <p className="text-gray-500 text-xs">
+                  {journal.createdAt.toISOString()}
+                  {journal.privateNotes ? <span className="ml-2 text-amber-700">（プライベート注記）</span> : null}
+                </p>
                 {journal.notes ? <p>{journal.notes}</p> : null}
                 {journal.details.map((detail, index) => (
                   <p key={index} className="text-xs text-gray-600">
@@ -339,6 +345,7 @@ export default async function IssueDetailPage({
             }
             canManageSubtasks={can({ permission: "manage_subtasks", project: toAuthorizationProject(project), actor })}
             canEditAttributes={canEditThisIssue}
+            canSetNotesPrivate={can({ permission: "set_notes_private", project: toAuthorizationProject(project), actor })}
             derivedFields={{
               // The parent_issue_* settings only bite on an issue that actually has subtasks.
               dates: childIssues.length > 0 && resolveGeneralSettings(settings).parentIssueDates === "derived",

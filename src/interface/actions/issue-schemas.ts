@@ -55,6 +55,8 @@ export const updateIssueFormSchema = z.object({
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   notes: z.string(),
+  /** Mark this note private; honoured only with `set_notes_private`. */
+  privateNotes: z.boolean().optional(),
   customFieldValues: z.record(z.string(), z.string()),
 });
 

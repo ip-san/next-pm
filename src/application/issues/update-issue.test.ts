@@ -1478,3 +1478,96 @@ describe("updateIssue — notes-only updates", () => {
     expect(repos.journalRepository.create).not.toHaveBeenCalled();
   });
 });
+
+describe("updateIssue — private notes", () => {
+  function journalsCreated(repos: ReturnType<typeof makeRepositories>) {
+    return (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls.map((call) => call[0]);
+  }
+
+  it("ignores the private flag without set_notes_private", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: false,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(journalsCreated(repos)[0].privateNotes).toBe(false);
+  });
+
+  it("marks a note private with the permission", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    const created = journalsCreated(repos);
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ notes: "secret", privateNotes: true });
+  });
+
+  it("splits a private note that accompanies an attribute change, keeping the change public", async () => {
+    // Redmine's split_private_notes: otherwise marking the note private would also hide the
+    // subject change from everyone without view_private_notes.
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    const created = journalsCreated(repos);
+    expect(created).toHaveLength(2);
+    expect(created[0]).toMatchObject({ notes: "", privateNotes: false });
+    expect(created[0].details).toHaveLength(1);
+    expect(created[1]).toMatchObject({ notes: "secret", privateNotes: true });
+    expect(created[1].details).toEqual([]);
+  });
+
+  it("does not mark an attribute-only change private", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    const created = journalsCreated(repos);
+    expect(created).toHaveLength(1);
+    expect(created[0].privateNotes).toBe(false);
+  });
+});

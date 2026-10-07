@@ -10,6 +10,7 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { resolveProjectActors } from "@/application/authorization/project-actors";
 import { copyIssue, CopyIssueNotPermittedError } from "@/application/issues/copy-issue";
 import { deleteIssue, DeleteIssueNotPermittedError, InvalidTimeEntryTargetError } from "@/application/issues/delete-issue";
 import { moveIssue, MoveIssueNotPermittedError, ProjectHasNoTrackerError } from "@/application/issues/move-issue";
@@ -281,6 +282,10 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   // Redmine's notes_addable? is its own permission: a user may comment without being able
   // to change anything about the issue.
   const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  const canSetNotesPrivate = can({ permission: "set_notes_private", project: projectContext, actor });
+  // A blank note is never private (Journal#split_private_notes), so this also decides
+  // whether the notification below has to be split.
+  const noteIsPrivate = canSetNotesPrivate && parsed.data.privateNotes === true && parsed.data.notes.trim().length > 0;
   if (!canEditAttributes && !canAddNotes) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
@@ -382,6 +387,8 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
         canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
         canEditAttributes,
         canAddNotes,
+        privateNotes: parsed.data.privateNotes === true,
+        canSetNotesPrivate,
       },
     );
   } catch (error) {
@@ -452,15 +459,44 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   );
   const notifiableWatcherUserIds = filterUserIdsVisibleToPrivateIssue(updated, watcherUserIds, rolesByUserId);
 
-  await enqueueNotification(
-    { jobRepository: new DrizzleJobRepository() },
-    {
-      recipientGroups: [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds],
-      excludeUserId: user.id,
-      subject: `[${project.name}] ${updated.subject}`,
-      body: parsed.data.notes.trim().length > 0 ? parsed.data.notes : "チケットが更新されました。",
-    },
-  );
+  const noteBody = parsed.data.notes.trim();
+  const genericBody = "チケットが更新されました。";
+  const recipientGroups = [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds];
+
+  if (noteIsPrivate && noteBody.length > 0) {
+    // Mirrors Journal#notified_users, which selects down to view_private_notes holders for
+    // a private note. The note body goes only to them; everyone else who would have been
+    // told about this update gets the generic message, so the change is still announced
+    // without the note leaking — the same shape as Redmine's split into two journals.
+    const candidates = [...new Set(recipientGroups.flat().flatMap((id) => (id ? [id] : [])))];
+    const actors = await resolveProjectActors(drizzleIssueAttributeRepositories(), project.id, candidates);
+    const permitted = candidates.filter((candidateId) => {
+      const candidateActor = actors.get(candidateId);
+      return candidateActor !== undefined && can({ permission: "view_private_notes", project: projectContext, actor: candidateActor });
+    });
+    const others = candidates.filter((candidateId) => !permitted.includes(candidateId));
+
+    await enqueueNotification(
+      { jobRepository: new DrizzleJobRepository() },
+      { recipientGroups: [permitted], excludeUserId: user.id, subject: `[${project.name}] ${updated.subject}`, body: noteBody },
+    );
+    if (others.length > 0) {
+      await enqueueNotification(
+        { jobRepository: new DrizzleJobRepository() },
+        { recipientGroups: [others], excludeUserId: user.id, subject: `[${project.name}] ${updated.subject}`, body: genericBody },
+      );
+    }
+  } else {
+    await enqueueNotification(
+      { jobRepository: new DrizzleJobRepository() },
+      {
+        recipientGroups,
+        excludeUserId: user.id,
+        subject: `[${project.name}] ${updated.subject}`,
+        body: noteBody.length > 0 ? noteBody : genericBody,
+      },
+    );
+  }
 
   revalidatePath(`/projects/${project.identifier}/issues/${parsed.data.issueId}`);
   return { ok: true, issueId: parsed.data.issueId };
