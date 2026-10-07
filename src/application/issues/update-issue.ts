@@ -15,6 +15,7 @@ import { wouldCreateParentCycle } from "@/domain/issue/parent";
 import { isFieldBlank } from "@/domain/workflow/blank";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { applyIssueCustomFieldValues, prepareIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
+import { assertIssueAttributesAssignable, type IssueAttributeRepositories } from "@/application/issues/validate-issue-attributes";
 import { readOnlyAttributeNames, requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import { canTransitionTo } from "@/domain/workflow/transition-rules";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
@@ -65,7 +66,7 @@ export interface UpdateIssueInput {
   isAssignee: boolean;
 }
 
-export interface UpdateIssueRepositories {
+export interface UpdateIssueRepositories extends IssueAttributeRepositories {
   issueRepository: IssueRepository;
   journalRepository: JournalRepository;
   workflowRepository: WorkflowRepository;
@@ -330,6 +331,31 @@ async function applyIssueUpdate(
       throw new WorkflowRequiredFieldError(field);
     }
   }
+
+  // Only the ids this request actually changes are re-checked — an unchanged assignee who
+  // has since left the project, or a version that stopped being shared, must not block an
+  // edit to some other field (Redmine guards the same validations with `_changed?`).
+  const assigneeChanged =
+    changes.assignedToId !== undefined &&
+    (changes.assignedToId !== before.assignedToId || (changes.assignedToType ?? null) !== before.assignedToType);
+  await assertIssueAttributesAssignable(repositories, {
+    projectId: before.projectId,
+    authorId: before.authorId,
+    currentAssignee:
+      before.assignedToId && before.assignedToType ? { id: before.assignedToId, type: before.assignedToType } : null,
+    candidate: {
+      trackerId: changes.trackerId !== undefined && changes.trackerId !== before.trackerId ? changes.trackerId : undefined,
+      priorityId: changes.priorityId !== undefined && changes.priorityId !== before.priorityId ? changes.priorityId : undefined,
+      assignedTo: assigneeChanged
+        ? changes.assignedToId && changes.assignedToType
+          ? { id: changes.assignedToId, type: changes.assignedToType }
+          : null
+        : undefined,
+      categoryId: changes.categoryId !== undefined && changes.categoryId !== before.categoryId ? changes.categoryId : undefined,
+      fixedVersionId:
+        changes.fixedVersionId !== undefined && changes.fixedVersionId !== before.fixedVersionId ? changes.fixedVersionId : undefined,
+    },
+  });
 
   // Parent re-assignment is checked here rather than only in the calling action, because
   // `parentId` is a plain field of `IssueUpdate` that any caller can set: a cross-project or

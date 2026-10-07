@@ -11,6 +11,8 @@ import {
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
+import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
+import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -20,14 +22,20 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
-import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+
+const ISSUE_ATTRIBUTE_ERROR_CODES: Record<string, string> = {
+  trackerId: "invalid_tracker_id",
+  priorityId: "invalid_priority_id",
+  assignedToId: "invalid_assigned_to_id",
+  categoryId: "invalid_category_id",
+  fixedVersionId: "invalid_fixed_version",
+};
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -125,25 +133,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  if (parsed.data.fixed_version_id) {
-    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
-    // shared with (not just owned by) this issue's project, per its sharing setting.
-    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
-    if (!sharedVersions.some((version) => version.id === parsed.data.fixed_version_id)) {
-      return NextResponse.json({ error: "invalid_fixed_version" }, { status: 422 });
-    }
-  }
-
-  if (parsed.data.assigned_to_id) {
-    const assignee = await new DrizzleUserRepository().findById(parsed.data.assigned_to_id);
-    if (!assignee) {
-      return NextResponse.json({ error: "invalid_assigned_to_id" }, { status: 422 });
-    }
-  }
-
+  // Tracker, priority, assignee, category and version are validated against the project by
+  // updateIssue itself and reported through the catch below — previously this route checked
+  // only that the assignee was *some* user and never looked at the category at all.
   try {
     const issue = await updateIssue(
       {
+        ...drizzleIssueAttributeRepositories(),
         issueRepository: new DrizzleIssueRepository(),
         journalRepository: new DrizzleJournalRepository(),
         workflowRepository: new DrizzleWorkflowRepository(),
@@ -196,6 +192,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (error instanceof BlockedIssueCloseError) {
       return NextResponse.json({ error: "blocked_issue" }, { status: 422 });
+    }
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return NextResponse.json({ error: ISSUE_ATTRIBUTE_ERROR_CODES[error.field] ?? "invalid_request" }, { status: 422 });
     }
     if (error instanceof InvalidParentIssueError) {
       return NextResponse.json({ error: "invalid_parent_id", reason: error.reason }, { status: 422 });

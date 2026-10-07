@@ -1,5 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createIssue, type CreateIssueInput } from "./create-issue";
+import { makeIssueAttributeRepositoriesMock } from "./test-support";
+import { IssueAttributeNotAssignableError } from "./validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "./update-issue";
 import type { Issue } from "@/domain/issue/entity";
 import { makeIssueRepositoryMock } from "@/domain/issue/test-support";
@@ -76,6 +78,7 @@ describe("createIssue", () => {
 
     const issue = await createIssue(
       {
+        ...makeIssueAttributeRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -89,10 +92,27 @@ describe("createIssue", () => {
     expect(issue.doneRatio).toBe(0);
   });
 
-  it("throws when the tracker does not exist", async () => {
+  it("rejects a tracker that is not enabled on the project", async () => {
     await expect(
       createIssue(
         {
+          ...makeIssueAttributeRepositoriesMock({ trackerIds: ["tracker-1"] }),
+          issueRepository: makeIssueRepositoryMock(),
+          trackerRepository: makeTrackerRepository(null),
+          workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+          userPreferencesRepository: makeUserPreferencesRepository(),
+          watcherRepository: makeWatcherRepository(),
+        },
+        { ...baseInput, trackerId: "tracker-2" },
+      ),
+    ).rejects.toThrow(IssueAttributeNotAssignableError);
+  });
+
+  it("throws when the tracker row is missing even though the project enables it", async () => {
+    await expect(
+      createIssue(
+        {
+          ...makeIssueAttributeRepositoriesMock({ trackerIds: ["missing"] }),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(null),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -102,6 +122,59 @@ describe("createIssue", () => {
         { ...baseInput, trackerId: "missing" },
       ),
     ).rejects.toThrow(/not found/);
+  });
+
+  it("rejects a priority that is not an IssuePriority enumeration", async () => {
+    // The column's FK reaches `enumerations`, which also holds TimeEntryActivity rows — only
+    // the type filter keeps an activity id out of an issue's priority.
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    await expect(
+      createIssue(
+        {
+          ...makeIssueAttributeRepositoriesMock({ priorityIds: ["normal"] }),
+          issueRepository: makeIssueRepositoryMock(),
+          trackerRepository: makeTrackerRepository(tracker),
+          workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+          userPreferencesRepository: makeUserPreferencesRepository(),
+          watcherRepository: makeWatcherRepository(),
+        },
+        { ...baseInput, priorityId: "an-activity-enumeration" },
+      ),
+    ).rejects.toThrow(IssueAttributeNotAssignableError);
+  });
+
+  it("rejects an assignee who is not an assignable member of the project", async () => {
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    await expect(
+      createIssue(
+        {
+          ...makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }),
+          issueRepository: makeIssueRepositoryMock(),
+          trackerRepository: makeTrackerRepository(tracker),
+          workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+          userPreferencesRepository: makeUserPreferencesRepository(),
+          watcherRepository: makeWatcherRepository(),
+        },
+        { ...baseInput, assignedToId: "outsider", assignedToType: "user" },
+      ),
+    ).rejects.toThrow(IssueAttributeNotAssignableError);
+  });
+
+  it("rejects a category that belongs to another project", async () => {
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    await expect(
+      createIssue(
+        {
+          ...makeIssueAttributeRepositoriesMock({ categoryIds: ["category-here"] }),
+          issueRepository: makeIssueRepositoryMock(),
+          trackerRepository: makeTrackerRepository(tracker),
+          workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+          userPreferencesRepository: makeUserPreferencesRepository(),
+          watcherRepository: makeWatcherRepository(),
+        },
+        { ...baseInput, categoryId: "category-elsewhere" },
+      ),
+    ).rejects.toThrow(IssueAttributeNotAssignableError);
   });
 
   it("rejects a blank field the tracker's default status requires for this role", async () => {
@@ -118,6 +191,7 @@ describe("createIssue", () => {
     await expect(
       createIssue(
         {
+          ...makeIssueAttributeRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository([permission]),
@@ -145,6 +219,7 @@ describe("createIssue", () => {
 
     const issue = await createIssue(
       {
+        ...makeIssueAttributeRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository([permission]),
@@ -166,6 +241,7 @@ describe("createIssue", () => {
 
     const issue = await createIssue(
       {
+        ...makeIssueAttributeRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -187,6 +263,7 @@ describe("createIssue", () => {
 
     const issue = await createIssue(
       {
+        ...makeIssueAttributeRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -212,6 +289,7 @@ describe("createIssue", () => {
 
     await createIssue(
       {
+        ...makeIssueAttributeRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),

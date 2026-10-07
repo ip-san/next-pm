@@ -8,6 +8,7 @@ import type { WorkflowEligibleField } from "@/domain/workflow/entity";
 import { requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import type { WorkflowFieldPermissionRepository } from "@/domain/workflow/repository";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
+import { assertIssueAttributesAssignable, type IssueAttributeRepositories } from "./validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "./update-issue";
 
 export interface CreateIssueInput {
@@ -32,7 +33,7 @@ export interface CreateIssueInput {
 }
 
 export async function createIssue(
-  repositories: {
+  repositories: IssueAttributeRepositories & {
     issueRepository: IssueRepository;
     trackerRepository: TrackerRepository;
     workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
@@ -41,6 +42,21 @@ export async function createIssue(
   },
   input: CreateIssueInput,
 ): Promise<Issue> {
+  // Every id has to belong to this project — enforced here rather than per-caller so the
+  // REST route, the CSV import and the mail handler can't each miss a different check.
+  await assertIssueAttributesAssignable(repositories, {
+    projectId: input.projectId,
+    authorId: input.authorId,
+    currentAssignee: null,
+    candidate: {
+      trackerId: input.trackerId,
+      priorityId: input.priorityId,
+      assignedTo: input.assignedToId && input.assignedToType ? { id: input.assignedToId, type: input.assignedToType } : null,
+      categoryId: input.categoryId,
+      fixedVersionId: input.fixedVersionId,
+    },
+  });
+
   const tracker = await repositories.trackerRepository.findById(input.trackerId);
   if (!tracker) {
     throw new Error(`Tracker ${input.trackerId} not found`);

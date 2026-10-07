@@ -4,8 +4,10 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { createIssue } from "@/application/issues/create-issue";
+import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
 import { InvalidUploadTokenError, redeemUploadToken } from "@/application/attachments/upload-token";
+import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -13,8 +15,6 @@ import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-r
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
-import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
@@ -53,6 +53,14 @@ export async function GET(request: Request) {
   const { items: issues, total_count, offset, limit } = paginate(visibleIssues, parsePagination(url));
   return NextResponse.json({ issues, total_count, offset, limit });
 }
+
+const ISSUE_ATTRIBUTE_ERROR_CODES: Record<string, string> = {
+  trackerId: "invalid_tracker_id",
+  priorityId: "invalid_priority_id",
+  assignedToId: "invalid_assigned_to_id",
+  categoryId: "invalid_category_id",
+  fixedVersionId: "invalid_fixed_version",
+};
 
 const createIssueSchema = z.object({
   project_id: z.string().uuid(),
@@ -112,22 +120,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_custom_field_values", details: fieldErrors }, { status: 422 });
   }
 
-  if (parsed.data.fixed_version_id) {
-    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
-    // shared with (not just owned by) this issue's project, per its sharing setting.
-    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
-    if (!sharedVersions.some((version) => version.id === parsed.data.fixed_version_id)) {
-      return NextResponse.json({ error: "invalid_fixed_version" }, { status: 422 });
-    }
-  }
-
-  if (parsed.data.assigned_to_id) {
-    const assignee = await new DrizzleUserRepository().findById(parsed.data.assigned_to_id);
-    if (!assignee) {
-      return NextResponse.json({ error: "invalid_assigned_to_id" }, { status: 422 });
-    }
-  }
-
+  // Tracker, priority, assignee, category and version are validated against the project by
+  // createIssue itself and reported through the catch below.
   if (parsed.data.parent_id) {
     // Must exist, be in the same project, and be visible to this actor — otherwise
     // creating the link would both confirm a private/cross-project issue's existence and
@@ -146,6 +140,7 @@ export async function POST(request: Request) {
   try {
     issue = await createIssue(
       {
+        ...drizzleIssueAttributeRepositories(),
         issueRepository: new DrizzleIssueRepository(),
         trackerRepository: new DrizzleTrackerRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
@@ -175,6 +170,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof WorkflowRequiredFieldError) {
       return NextResponse.json({ error: "workflow_required_field", field: error.fieldName }, { status: 422 });
+    }
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return NextResponse.json({ error: ISSUE_ATTRIBUTE_ERROR_CODES[error.field] ?? "invalid_request" }, { status: 422 });
     }
     throw error;
   }

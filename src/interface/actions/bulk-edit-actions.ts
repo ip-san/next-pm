@@ -7,6 +7,8 @@ import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueUpdate } from "@/domain/issue/repository";
 import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
+import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -128,6 +130,7 @@ export async function bulkUpdateIssuesAction(
     try {
       await updateIssue(
         {
+          ...drizzleIssueAttributeRepositories(),
           issueRepository,
           journalRepository,
           workflowRepository,
@@ -156,7 +159,14 @@ export async function bulkUpdateIssuesAction(
       );
       updated++;
     } catch (error) {
-      if (error instanceof WorkflowTransitionDeniedError || error instanceof WorkflowRequiredFieldError || error instanceof BlockedIssueCloseError) {
+      // A value that isn't assignable in one of the selected issues' projects is a
+      // per-issue outcome in a bulk edit, not a reason to abort the whole batch.
+      if (
+        error instanceof WorkflowTransitionDeniedError ||
+        error instanceof WorkflowRequiredFieldError ||
+        error instanceof BlockedIssueCloseError ||
+        error instanceof IssueAttributeNotAssignableError
+      ) {
         skipped++;
         continue;
       }

@@ -10,6 +10,7 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import {
@@ -19,10 +20,10 @@ import {
   WorkflowRequiredFieldError,
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
+import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
-import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
@@ -34,7 +35,6 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
-import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
@@ -48,6 +48,18 @@ import {
 } from "./issue-schemas";
 
 /** `{ ok: false }` carries `fieldErrors` keyed by custom field id when the custom values are what failed. */
+const ISSUE_ATTRIBUTE_MESSAGES: Record<string, string> = {
+  trackerId: "トラッカーが見つかりません。",
+  priorityId: "優先度が見つかりません。",
+  assignedToId: "担当者が見つかりません。",
+  categoryId: "カテゴリが見つかりません。",
+  fixedVersionId: "バージョンが見つかりません。",
+};
+
+function issueAttributeErrorMessage(error: IssueAttributeNotAssignableError): string {
+  return ISSUE_ATTRIBUTE_MESSAGES[error.field] ?? "入力内容を確認してください。";
+}
+
 export type IssueFormActionResult =
   | { ok: true; issueId: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
@@ -73,37 +85,11 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
 
-  if (!project.trackerIds.includes(parsed.data.trackerId)) {
-    return { ok: false, error: "トラッカーが見つかりません。" };
-  }
-
+  // Tracker, priority, assignee, category and version all belong to `createIssue` now
+  // (application/issues/validate-issue-attributes.ts), so every entry point enforces the
+  // same rules; only the parent's visibility stays here, since it needs the acting user.
   const members = await new DrizzleMemberRepository().listByProject(project.id);
   const assignee = parseAssigneeValue(parsed.data.assignedToId);
-  if (assignee) {
-    const isValidAssignee =
-      assignee.type === "user"
-        ? members.some((member) => member.userId === assignee.id)
-        : members.some((member) => member.groupId === assignee.id);
-    if (!isValidAssignee) {
-      return { ok: false, error: "担当者が見つかりません。" };
-    }
-  }
-
-  if (parsed.data.categoryId) {
-    const categories = await new DrizzleIssueCategoryRepository().listByProject(project.id);
-    if (!categories.some((category) => category.id === parsed.data.categoryId)) {
-      return { ok: false, error: "カテゴリが見つかりません。" };
-    }
-  }
-
-  if (parsed.data.fixedVersionId) {
-    // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
-    // shared with (not just owned by) this issue's project, per its sharing setting.
-    const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
-    if (!sharedVersions.some((version) => version.id === parsed.data.fixedVersionId)) {
-      return { ok: false, error: "バージョンが見つかりません。" };
-    }
-  }
 
   if (parsed.data.parentId) {
     const parentIssue = await new DrizzleIssueRepository().findById(parsed.data.parentId);
@@ -152,6 +138,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   try {
     issue = await createIssue(
       {
+        ...drizzleIssueAttributeRepositories(),
         issueRepository: new DrizzleIssueRepository(),
         trackerRepository: new DrizzleTrackerRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
@@ -181,6 +168,9 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   } catch (error) {
     if (error instanceof WorkflowRequiredFieldError) {
       return { ok: false, error: "このステータスでは必須項目が未入力です。入力内容を確認してください。" };
+    }
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return { ok: false, error: issueAttributeErrorMessage(error) };
     }
     throw error;
   }
@@ -271,12 +261,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
 
   const changes: IssueUpdate = {};
 
-  if (parsed.data.trackerId !== undefined) {
-    if (!project.trackerIds.includes(parsed.data.trackerId)) {
-      return { ok: false, error: "トラッカーが見つかりません。" };
-    }
-    changes.trackerId = parsed.data.trackerId;
-  }
+  if (parsed.data.trackerId !== undefined) changes.trackerId = parsed.data.trackerId;
   if (parsed.data.statusId !== undefined) changes.statusId = parsed.data.statusId;
   if (parsed.data.priorityId !== undefined) changes.priorityId = parsed.data.priorityId;
   if (parsed.data.subject !== undefined) changes.subject = parsed.data.subject;
@@ -285,50 +270,16 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   if (parsed.data.startDate !== undefined) changes.startDate = parsed.data.startDate || null;
   if (parsed.data.dueDate !== undefined) changes.dueDate = parsed.data.dueDate || null;
 
-  // Each lookup below only runs when the submitted value actually differs from what the
-  // issue already holds — mirroring Redmine, whose validations are guarded by `_changed?`
-  // (and whose `assignable_versions` keeps the current version even once it stops
-  // qualifying). Re-checking an unchanged value would make an issue whose assignee left the
-  // project, or whose version stopped being shared, impossible to edit at all.
-  const currentAssigneeValue =
-    existing.assignedToId === null ? "" : existing.assignedToType === "group" ? `group:${existing.assignedToId}` : existing.assignedToId;
-  if (parsed.data.assignedToId !== undefined && parsed.data.assignedToId !== currentAssigneeValue) {
+  // Assignee, category and version are validated by `updateIssue` against the project (and
+  // only when they actually change, as Redmine's `_changed?`-guarded validations do), so
+  // this action just maps the submitted strings onto the update.
+  if (parsed.data.assignedToId !== undefined) {
     const assignee = parseAssigneeValue(parsed.data.assignedToId);
-    if (assignee) {
-      const members = await new DrizzleMemberRepository().listByProject(project.id);
-      const isValidAssignee =
-        assignee.type === "user"
-          ? members.some((member) => member.userId === assignee.id)
-          : members.some((member) => member.groupId === assignee.id);
-      if (!isValidAssignee) {
-        return { ok: false, error: "担当者が見つかりません。" };
-      }
-    }
     changes.assignedToId = assignee?.id ?? null;
     changes.assignedToType = assignee?.type ?? null;
   }
-
-  if (parsed.data.categoryId !== undefined && parsed.data.categoryId !== (existing.categoryId ?? "")) {
-    if (parsed.data.categoryId) {
-      const categories = await new DrizzleIssueCategoryRepository().listByProject(project.id);
-      if (!categories.some((category) => category.id === parsed.data.categoryId)) {
-        return { ok: false, error: "カテゴリが見つかりません。" };
-      }
-    }
-    changes.categoryId = parsed.data.categoryId || null;
-  }
-
-  if (parsed.data.fixedVersionId !== undefined && parsed.data.fixedVersionId !== (existing.fixedVersionId ?? "")) {
-    if (parsed.data.fixedVersionId) {
-      // Mirrors Redmine's Issue#validate_fixed_version — a version is assignable if it's
-      // shared with (not just owned by) this issue's project, per its sharing setting.
-      const sharedVersions = await new DrizzleVersionRepository().listSharedWith(project.id);
-      if (!sharedVersions.some((version) => version.id === parsed.data.fixedVersionId)) {
-        return { ok: false, error: "バージョンが見つかりません。" };
-      }
-    }
-    changes.fixedVersionId = parsed.data.fixedVersionId || null;
-  }
+  if (parsed.data.categoryId !== undefined) changes.categoryId = parsed.data.categoryId || null;
+  if (parsed.data.fixedVersionId !== undefined) changes.fixedVersionId = parsed.data.fixedVersionId || null;
 
   if (parsed.data.parentId !== undefined && parsed.data.parentId !== (existing.parentId ?? "")) {
     if (parsed.data.parentId) {
@@ -374,6 +325,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   try {
     updated = await updateIssue(
       {
+        ...drizzleIssueAttributeRepositories(),
         issueRepository,
         journalRepository: new DrizzleJournalRepository(),
         workflowRepository: new DrizzleWorkflowRepository(),
@@ -410,6 +362,9 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     }
     if (error instanceof BlockedIssueCloseError) {
       return { ok: false, error: "このチケットは未完了の「ブロック」関連があるためクローズできません。" };
+    }
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return { ok: false, error: issueAttributeErrorMessage(error) };
     }
     if (error instanceof InvalidParentIssueError) {
       return {

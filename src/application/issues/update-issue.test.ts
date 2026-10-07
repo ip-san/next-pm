@@ -7,6 +7,8 @@ import {
   WorkflowTransitionDeniedError,
 } from "./update-issue";
 import { CustomFieldValidationError } from "./set-custom-field-values";
+import { makeIssueAttributeRepositoriesMock } from "./test-support";
+import { IssueAttributeNotAssignableError } from "./validate-issue-attributes";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValue } from "@/domain/custom-value/entity";
@@ -112,6 +114,7 @@ function makeRepositories(
     })),
   };
   return {
+    ...makeIssueAttributeRepositoriesMock(),
     issueRepository,
     journalRepository,
     workflowRepository,
@@ -660,6 +663,7 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
 
   return {
     repos: {
+      ...makeIssueAttributeRepositoriesMock(),
       issueRepository,
       journalRepository,
       workflowRepository,
@@ -1273,5 +1277,66 @@ describe("updateIssue — parent issue invariants", () => {
 
     expect(result.parentId).toBeNull();
     expect(repos.issueRepository.listByProject).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateIssue — assignable attribute validation", () => {
+  it("rejects a version that is not shared with the issue's project", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ versionIds: ["version-shared"] }));
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "issue-1",
+        expectedLockVersion: 0,
+        changes: { fixedVersionId: "version-elsewhere" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(IssueAttributeNotAssignableError);
+    expect(repos.issueRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("leaves an unchanged assignee who has since left the project alone", async () => {
+    // Regression: re-validating values this request doesn't touch made an issue whose
+    // assignee left unsavable. Redmine guards the same validations with `_changed?`.
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: "departed", assignedToType: "user" });
+    const repos = makeRepositories({ issue });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }));
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "Still editable", assignedToId: "departed", assignedToType: "user" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(result.subject).toBe("Still editable");
+  });
+
+  it("still accepts re-assigning back to the stored assignee's id after they lost membership", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: "departed", assignedToType: "user" });
+    const repos = makeRepositories({ issue });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }));
+
+    await expect(
+      updateIssue(repos, {
+        issueId: "issue-1",
+        expectedLockVersion: 0,
+        changes: { assignedToId: "someone-else", assignedToType: "user" },
+        notes: "",
+        actingUserId: "user-1",
+        actorRoleIds: ["role-1"],
+        isAuthor: false,
+        isAssignee: false,
+      }),
+    ).rejects.toThrow(IssueAttributeNotAssignableError);
   });
 });

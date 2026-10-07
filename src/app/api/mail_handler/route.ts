@@ -7,7 +7,9 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { extractIssueReplyIdPrefix, parseEmail, UnsupportedMailFormatError } from "@/domain/mail/parse-email";
 import type { User } from "@/domain/user/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { updateIssue, WorkflowRequiredFieldError } from "@/application/issues/update-issue";
+import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -124,6 +126,7 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
   try {
     const issue = await updateIssue(
       {
+        ...drizzleIssueAttributeRepositories(),
         issueRepository,
         journalRepository: new DrizzleJournalRepository(),
         workflowRepository: new DrizzleWorkflowRepository(),
@@ -151,6 +154,11 @@ async function handleReply(sender: User, issueIdPrefix: string, body: string) {
   } catch (error) {
     if (error instanceof WorkflowRequiredFieldError) {
       return NextResponse.json({ result: "ignored", reason: "workflow_required_field" }, { status: 200 });
+    }
+    // Same "silently ignore, don't bounce" posture the handler already takes for mail it
+    // can't act on — an unusable attribute is not something the sender can be told about.
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return NextResponse.json({ result: "ignored", reason: "invalid_issue_attribute", field: error.field }, { status: 200 });
     }
     throw error;
   }
@@ -196,6 +204,7 @@ async function handleCreate(sender: User, projectIdentifier: string, subject: st
   try {
     const issue = await createIssue(
       {
+        ...drizzleIssueAttributeRepositories(),
         issueRepository: new DrizzleIssueRepository(),
         trackerRepository: new DrizzleTrackerRepository(),
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
@@ -226,6 +235,11 @@ async function handleCreate(sender: User, projectIdentifier: string, subject: st
   } catch (error) {
     if (error instanceof WorkflowRequiredFieldError) {
       return NextResponse.json({ result: "ignored", reason: "workflow_required_field" }, { status: 200 });
+    }
+    // Same "silently ignore, don't bounce" posture the handler already takes for mail it
+    // can't act on — an unusable attribute is not something the sender can be told about.
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return NextResponse.json({ result: "ignored", reason: "invalid_issue_attribute", field: error.field }, { status: 200 });
     }
     throw error;
   }

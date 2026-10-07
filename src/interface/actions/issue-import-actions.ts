@@ -5,7 +5,9 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { parseCsv } from "@/domain/csv/decode";
 import { createIssue } from "@/application/issues/create-issue";
+import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
+import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -198,7 +200,7 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
 
     try {
       await createIssue(
-        { issueRepository, trackerRepository, workflowFieldPermissionRepository, userPreferencesRepository, watcherRepository },
+        { ...drizzleIssueAttributeRepositories(), issueRepository, trackerRepository, workflowFieldPermissionRepository, userPreferencesRepository, watcherRepository },
         {
           projectId: project.id,
           trackerId: tracker.id,
@@ -223,6 +225,10 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
     } catch (error) {
       if (error instanceof WorkflowRequiredFieldError) {
         rowErrors.push(`${rowNumber}行目: このステータスでは必須項目が未入力です。`);
+        continue;
+      }
+      if (error instanceof IssueAttributeNotAssignableError) {
+        rowErrors.push(`${rowNumber}行目: 「${error.field}」にこのプロジェクトで使用できない値が指定されています。`);
         continue;
       }
       rowErrors.push(`${rowNumber}行目: ${error instanceof Error ? error.message : "作成に失敗しました。"}`);
