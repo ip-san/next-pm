@@ -225,6 +225,13 @@
       "when": 1791351122214,
       "tag": "0031_stale_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791353254105,
+      "tag": "0032_mute_mandroid",
+      "breakpoints": true
     }
   ]
 }
