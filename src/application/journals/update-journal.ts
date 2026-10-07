@@ -1,5 +1,11 @@
-import { can, projectAuthorizationContext, type AuthorizationActor } from "@/domain/authorization/authorization-service";
+import {
+  actorIssuesVisibilityRoles,
+  can,
+  projectAuthorizationContext,
+  type AuthorizationActor,
+} from "@/domain/authorization/authorization-service";
 import type { IssueRepository } from "@/domain/issue/repository";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { Journal } from "@/domain/journal/entity";
 import type { JournalRepository } from "@/domain/journal/repository";
 import { isJournalVisible, type JournalViewer } from "@/domain/journal/visibility";
@@ -26,6 +32,8 @@ export interface UpdateJournalInput {
   actingUserId: string;
   actor: AuthorizationActor;
   viewer: JournalViewer;
+  /** Groups the acting user belongs to, for the group-assignee branch of issue visibility. */
+  actorGroupIds?: string[];
 }
 
 export type UpdateJournalResult = { deleted: true; issueId: string } | { deleted: false; journal: Journal };
@@ -63,6 +71,19 @@ export async function updateJournal(
     throw new JournalNotEditableError();
   }
   const projectContext = projectAuthorizationContext(project);
+
+  // Issue-level visibility, not just project-level. A private issue's notes would otherwise
+  // be readable and writable by anyone with edit_issue_notes who knows a journal id — the
+  // edit form hands back the note body. Redmine reaches the same place by loading the
+  // journal through Journal.visible, which joins the issue's own visible_condition.
+  if (!can({ permission: "view_issues", project: projectContext, actor: input.actor })) {
+    throw new JournalNotEditableError();
+  }
+  if (
+    !isPrivateIssueVisible(issue, input.actingUserId, input.actorGroupIds ?? [], actorIssuesVisibilityRoles(input.actor))
+  ) {
+    throw new JournalNotEditableError();
+  }
 
   const mayEdit =
     can({ permission: "edit_issue_notes", project: projectContext, actor: input.actor }) ||

@@ -2,13 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { can } from "@/domain/authorization/authorization-service";
 import { JournalNotEditableError, updateJournal } from "@/application/journals/update-journal";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { journalViewerFor, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { journalViewerFor, resolveActor } from "@/interface/http/resolve-actor";
 
 const updateJournalSchema = z.object({
   journalId: z.string().uuid(),
@@ -50,10 +49,9 @@ export async function updateJournalAction(values: {
     return { ok: false, error: "コメントが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
-    return { ok: false, error: "コメントが見つかりません。" };
-  }
+  // Visibility — project, issue and private-note alike — is decided inside updateJournal,
+  // so there is one place to read and no way for a caller to skip a layer.
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
 
   let result;
   try {
@@ -66,6 +64,7 @@ export async function updateJournalAction(values: {
         actingUserId: user.id,
         actor,
         viewer: journalViewerFor(user.id, actor, project),
+        actorGroupIds: userGroupIds,
       },
     );
   } catch (error) {

@@ -7,15 +7,15 @@ import type { Project } from "@/domain/project/entity";
 
 const editor: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["edit_issue_notes"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes"], issuesVisibility: "all" }],
 };
 const ownEditor: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["edit_own_issue_notes"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues", "edit_own_issue_notes"], issuesVisibility: "all" }],
 };
 const privacyEditor: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["edit_issue_notes", "set_notes_private"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes", "set_notes_private"], issuesVisibility: "all" }],
 };
 const bystander: AuthorizationActor = { kind: "member", roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all" }] };
 
@@ -35,7 +35,7 @@ function journal(overrides: Partial<Journal> = {}): Journal {
   };
 }
 
-function makeRepositories(stored: Journal | null) {
+function makeRepositories(stored: Journal | null, issueOverrides: Partial<ReturnType<typeof makeIssue>> = {}) {
   const updates: { id: string; changes: Record<string, unknown> }[] = [];
   const deletes: string[] = [];
 
@@ -56,7 +56,7 @@ function makeRepositories(stored: Journal | null) {
       }),
     },
     issueRepository: makeIssueRepositoryMock({
-      findById: mock(async () => makeIssue({ id: "issue-1", projectId: "proj-1" })),
+      findById: mock(async () => makeIssue({ id: "issue-1", projectId: "proj-1", ...issueOverrides })),
     }),
     projectRepository: {
       findById: mock(async (id: string) => ({ id, status: "active", isPublic: true, enabledModules: ["issue_tracking"] }) as unknown as Project),
@@ -225,5 +225,65 @@ describe("updateJournal", () => {
     });
 
     expect(updates[0].changes.privateNotes).toBe(false);
+  });
+});
+
+describe("updateJournal — issue-level visibility", () => {
+  const noteEditor: AuthorizationActor = {
+    kind: "member",
+    roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes"], issuesVisibility: "default" }],
+  };
+
+  it("refuses to edit a note on a private issue the actor cannot see", async () => {
+    // Regression: the action checked view_issues on the project but never the issue's own
+    // privacy, so edit_issue_notes plus a journal id was enough to read (via the edit form)
+    // and rewrite notes on an issue the actor had no access to.
+    const { repositories, updates } = makeRepositories(journal(), { isPrivate: true, authorId: "someone-else" });
+
+    await expect(
+      updateJournal(repositories, {
+        journalId: "journal-1",
+        notes: "revised",
+        privateNotes: false,
+        actingUserId: "outsider",
+        actor: noteEditor,
+        viewer: { userId: "outsider", canViewPrivateNotes: true },
+      }),
+    ).rejects.toThrow(JournalNotEditableError);
+    expect(updates).toEqual([]);
+  });
+
+  it("allows the issue's author to edit notes on their own private issue", async () => {
+    const { repositories, updates } = makeRepositories(journal(), { isPrivate: true, authorId: "author-1" });
+
+    await updateJournal(repositories, {
+      journalId: "journal-1",
+      notes: "revised",
+      privateNotes: false,
+      actingUserId: "author-1",
+      actor: noteEditor,
+      viewer: { userId: "author-1", canViewPrivateNotes: true },
+    });
+
+    expect(updates).toHaveLength(1);
+  });
+
+  it("refuses when the actor cannot view issues in the project at all", async () => {
+    const noViewIssues: AuthorizationActor = {
+      kind: "member",
+      roles: [{ builtin: 0, permissions: ["edit_issue_notes"], issuesVisibility: "all" }],
+    };
+    const { repositories } = makeRepositories(journal());
+
+    await expect(
+      updateJournal(repositories, {
+        journalId: "journal-1",
+        notes: "revised",
+        privateNotes: false,
+        actingUserId: "editor-1",
+        actor: noViewIssues,
+        viewer,
+      }),
+    ).rejects.toThrow(JournalNotEditableError);
   });
 });
