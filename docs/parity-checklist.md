@@ -35,10 +35,9 @@
 | 4 | 管理画面の更新・削除 | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
 | 5 | プライベート注記・注記の編集/削除 | `journals` にフラグ列追加 + 権限 3 種の追加が前提 | §1, §4 |
 | 6 | 工数の編集・削除 | `edit_time_entries` 権限だけあって操作が無く、権限が空振りしている | §9 |
-| 7 | Files モジュール | 権限だけ登録済みで実体が無い(空モジュール状態) | §8 |
-| 8 | アカウントのセルフ登録・有効化・自動ログイン | 運用開始時に管理者が全ユーザーを手作りする必要がある | §5 |
-| 9 | カスタムフィールドの書式追加と対象拡大 | `user`/`version`/複数選択が無く、実運用の型が表現できない | §1 |
-| 10 | 課題のコピー・削除・親子の付け替え | 本家の日常操作で頻度が高い | §1 |
+| 7 | アカウントのセルフ登録・有効化・自動ログイン | 運用開始時に管理者が全ユーザーを手作りする必要がある | §5 |
+| 8 | カスタムフィールドの書式追加と対象拡大 | `user`/`version`/複数選択が無く、実運用の型が表現できない | §1 |
+| 9 | 課題のコピー・削除・親子の付け替え | 本家の日常操作で頻度が高い | §1 |
 
 ### 0.3 意図的スコープ外(README「注目すべき設計判断」に記載済み)
 
@@ -66,8 +65,8 @@
 | 注記(journal) | partial | 追加は更新フォーム経由で可能。**編集・削除ができない**(`add_issue_notes` / `edit_issue_notes` / `edit_own_issue_notes` 権限ごと無い) |
 | プライベート注記 | missing | `journals` にフラグ列が無い。`set_notes_private` / `view_private_notes` も無い |
 | プライベート課題 | partial | `issues.is_private` と可視性判定(`domain/issue/visibility.ts`)は実装済み。`set_issues_private` / `set_own_issues_private` 権限による設定可否の制御が無い |
-| 変更履歴の記録 | partial | `journal_details.property` は `attr` / `cf` / `relation` の 3 種。本家にある添付ファイルの追加/削除履歴(`attachment`)が記録されない |
-| 添付ファイル | partial | 課題・Wiki・文書に添付可能。**説明(description)列が無い**、サムネイル/画像プレビュー無し、注記への添付が無い |
+| 変更履歴の記録 | done | `journal_details.property` は `attr` / `cf` / `relation` / `attachment` の 4 種。添付の追加/削除は本家の `Journal#journalize_attachment` と同じ形(`prop_key` = 添付 ID、ファイル名を追加時は `value`・削除時は `old_value`)で記録する。単票の履歴表示は属性名をそのまま出すため、添付行は添付 ID が見えたままになっている |
+| 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)はアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。画像はサムネイル(`/api/attachments/[id]/thumbnail`、sharp で PNG に再エンコード)をインライン表示する。注記への添付は無い |
 | リアクション | done | journal への 👍(本家 6.1 の Reaction 相当) |
 | CSV インポート | partial | 課題のみ(`issue-import-actions.ts`)。権限 `import_issues` は未定義、工数のインポート(`import_time_entries`)も無い |
 | カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` の 7 種のみ。本家の `user` / `version` / `link` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
@@ -186,7 +185,7 @@
 | トピックのロック/固定表示(sticky) | missing | 本家 `Message#locked` / `sticky` |
 | News | partial | 作成・削除・コメント追加・ウォッチ。**編集とコメント削除が無い** |
 | 文書(Documents) | partial | 作成・削除・添付。**編集ができない**(`edit_documents` 権限だけが存在する) |
-| ファイル(Files モジュール) | missing | 権限 `view_files` / `manage_files` は登録済みだが、**ルート・UI・テーブルが存在しない空モジュール**。本家はバージョンに紐付くファイルリリースとダウンロード数を持つ |
+| ファイル(Files モジュール) | done | `/projects/[identifier]/files`。プロジェクト直下とバージョン単位のファイルを本家 `FilesController#index` と同じ区分け(プロジェクト → バージョンの逆順)で一覧し、ファイル名/日付/サイズ/DL 数でソート、ダイジェストと説明を表示する。追加・削除は `manage_files`、ダウンロードのたびに `attachments.downloads` を加算(本家と同じく Project/Version のみ)。ファイルを持つバージョンは `Version#deletable?` と同じく削除できない |
 
 ## 9. 工数管理
 
@@ -240,8 +239,8 @@
 | news | partial | 一覧・作成・取得・削除。**PUT(更新)が無い**(本家 API は更新に対応) |
 | messages / documents | partial | 作成と削除のみ。個別の取得・更新が無い |
 | trackers / issue_statuses / enumerations / custom_fields / roles / queries / search | done | 読み取り専用エンドポイント |
-| attachments | partial | `/api/attachments/[id]` でのダウンロードと `/api/v1/uploads` はあるが、メタデータ取得(GET)・更新(PATCH)・削除(DELETE)が無い |
-| files | missing | Files モジュールごと無い(§8) |
+| attachments | done | `/api/attachments/[id]`(ダウンロード、API キー可)と `/api/attachments/[id]/thumbnail`、`/api/v1/uploads`、`/api/v1/attachments/[id]` の GET / PATCH(PUT エイリアス有り)/ DELETE |
+| files | done | `GET /api/v1/projects/[identifier]/files`(バージョン情報・ダイジェスト・DL 数付き)と `POST`(`uploads` のトークンを `version_id` / `description` 付きで引き換え) |
 | my/account | partial | GET のみ。PUT が無い |
 | OAuth2 プロバイダ | missing | 本家 `oauth2_applications` |
 
@@ -267,7 +266,7 @@
 | 本文プレビュー | missing | 本家 `PreviewsController` |
 | 国際化(i18n) | missing | 文言が直書き。ユーザー別言語設定も無い |
 | テーマ切り替え | missing | |
-| 添付画像のサムネイル/インライン表示 | missing | |
+| 添付画像のサムネイル/インライン表示 | done | `/api/attachments/[id]/thumbnail` が sharp で PNG に再エンコードして返す(本家の `Redmine::Thumbnail.convert_available?` と同じく、使えない環境ではサムネイル無しに縮退)。元のバイト列は常に `Content-Disposition: attachment` のままなので SVG/HTML はインライン描画されない |
 | キーボード操作 | done | マイページのブロック移動をボタン化するなど、本家より意図的にアクセシブルにしている箇所がある(§15) |
 
 ## 15. 意図的に対象外とした項目

@@ -6,8 +6,10 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
+import { journalizeAttachment } from "@/application/issues/journalize-attachment";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
@@ -21,6 +23,7 @@ export type UploadAttachmentActionState = {
 const uploadAttachmentSchema = z.object({
   issueId: z.string().uuid(),
   projectIdentifier: z.string().min(1),
+  description: z.string().default(""),
   file: z.instanceof(File),
 });
 
@@ -31,6 +34,7 @@ export async function uploadIssueAttachmentAction(
   const parsed = uploadAttachmentSchema.safeParse({
     issueId: formData.get("issueId"),
     projectIdentifier: formData.get("projectIdentifier"),
+    description: formData.get("description") ?? "",
     file: formData.get("file"),
   });
   if (!parsed.success) {
@@ -67,8 +71,9 @@ export async function uploadIssueAttachmentAction(
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
+  let uploaded;
   try {
-    await uploadAttachment(
+    uploaded = await uploadAttachment(
       {
         attachmentRepository: new DrizzleAttachmentRepository(),
         attachmentStorage: new FsAttachmentStore(),
@@ -80,6 +85,7 @@ export async function uploadIssueAttachmentAction(
         authorId: user.id,
         filename: parsed.data.file.name,
         contentType: parsed.data.file.type,
+        description: parsed.data.description,
         data: buffer,
       },
     );
@@ -89,6 +95,12 @@ export async function uploadIssueAttachmentAction(
     }
     throw error;
   }
+
+  // Issue#attachment_added — the add shows up in the issue's history, like any other change.
+  await journalizeAttachment(
+    { journalRepository: new DrizzleJournalRepository() },
+    { issueId: issue.id, userId: user.id, attachment: uploaded, change: "added" },
+  );
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues/${issue.id}`);
   return { error: null };
@@ -149,6 +161,12 @@ export async function deleteIssueAttachmentAction(
 
   await attachmentRepository.delete(attachment.id);
   await new FsAttachmentStore().delete(attachment.storageKey);
+
+  // Issue#attachment_removed — AttachmentsController#destroy init_journal's the container.
+  await journalizeAttachment(
+    { journalRepository: new DrizzleJournalRepository() },
+    { issueId: issue.id, userId: user.id, attachment, change: "removed" },
+  );
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues/${issue.id}`);
   return { error: null };
