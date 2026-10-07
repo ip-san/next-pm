@@ -14,9 +14,14 @@ function makeRepos(overrides: { storage?: Partial<AttachmentStorage>; settings?:
   };
   const attachmentRepository: AttachmentRepository = {
     listByContainer: mock(async () => []),
+    listByContainers: mock(async () => []),
     findById: mock(async () => null),
     create: mock(async (attachment) => ({ ...attachment, id: "att-1", createdAt: new Date() }) as Attachment),
     attachToContainer: mock(async () => {}),
+    update: mock(async () => {
+      throw new Error("not implemented");
+    }),
+    incrementDownloads: mock(async () => {}),
     delete: mock(async () => {}),
     listPendingOlderThan: mock(async () => []),
   };

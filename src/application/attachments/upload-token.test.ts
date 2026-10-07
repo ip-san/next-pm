@@ -19,6 +19,8 @@ function pendingAttachment(overrides: Partial<Attachment> = {}): Attachment {
     contentType: "image/png",
     fileSize: 4,
     digest: VALID_DIGEST,
+    description: "",
+    downloads: 0,
     createdAt: new Date(),
     ...overrides,
   };
@@ -33,9 +35,14 @@ function makeRepos(overrides: { attachment?: Attachment | null } = {}) {
   };
   const attachmentRepository: AttachmentRepository = {
     listByContainer: mock(async () => []),
+    listByContainers: mock(async () => []),
     findById: mock(async () => attachment),
     create: mock(async (a) => ({ ...a, id: NIL_UUID, createdAt: new Date() }) as Attachment),
     attachToContainer: mock(async () => {}),
+    update: mock(async () => {
+      throw new Error("not implemented");
+    }),
+    incrementDownloads: mock(async () => {}),
     delete: mock(async () => {}),
     listPendingOlderThan: mock(async () => []),
   };

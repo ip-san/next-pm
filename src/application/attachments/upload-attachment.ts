@@ -12,6 +12,7 @@ export interface UploadAttachmentInput {
   filename: string;
   contentType: string;
   data: Buffer;
+  description?: string;
 }
 
 /**
@@ -37,5 +38,6 @@ export async function uploadAttachment(
     contentType: input.contentType || "application/octet-stream",
     fileSize: input.data.byteLength,
     digest: computeDigest(input.data),
+    description: input.description ?? "",
   });
 }

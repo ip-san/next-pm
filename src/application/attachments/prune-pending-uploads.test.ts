@@ -14,6 +14,8 @@ function expiredAttachment(overrides: Partial<Attachment> = {}): Attachment {
     contentType: "image/png",
     fileSize: 10,
     digest: "a".repeat(64),
+    description: "",
+    downloads: 0,
     createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
     ...overrides,
   };
@@ -22,9 +24,14 @@ function expiredAttachment(overrides: Partial<Attachment> = {}): Attachment {
 function makeRepos(expired: Attachment[]) {
   const attachmentRepository: AttachmentRepository = {
     listByContainer: mock(async () => []),
+    listByContainers: mock(async () => []),
     findById: mock(async () => null),
     create: mock(async (a) => ({ ...a, id: "new", createdAt: new Date() }) as Attachment),
     attachToContainer: mock(async () => {}),
+    update: mock(async () => {
+      throw new Error("not implemented");
+    }),
+    incrementDownloads: mock(async () => {}),
     delete: mock(async () => {}),
     listPendingOlderThan: mock(async () => expired),
   };

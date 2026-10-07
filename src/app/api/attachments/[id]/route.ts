@@ -1,80 +1,40 @@
 import { NextResponse } from "next/server";
-import { can } from "@/domain/authorization/authorization-service";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
-import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
-import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
-import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
-import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveAttachmentAccess } from "@/interface/http/attachment-access";
+import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const attachment = await new DrizzleAttachmentRepository().findById(id);
+  const attachmentRepository = new DrizzleAttachmentRepository();
+  const attachment = await attachmentRepository.findById(id);
   if (!attachment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const user = await currentUserFromCookies();
-
-  if (attachment.containerType === "Issue" && attachment.containerId) {
-    const issue = await new DrizzleIssueRepository().findById(attachment.containerId);
-    if (!issue) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const project = await new DrizzleProjectRepository().findById(issue.projectId);
-    if (!project) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const { actor, userGroupIds } = await resolveActor(user, project.id);
-    if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    if (!isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, issuesVisibilityRoles(actor))) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  } else if (attachment.containerType === "Document" && attachment.containerId) {
-    const document = await new DrizzleDocumentRepository().findById(attachment.containerId);
-    if (!document) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const project = await new DrizzleProjectRepository().findById(document.projectId);
-    if (!project) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const { actor } = await resolveActor(user, project.id);
-    if (!can({ permission: "view_documents", project: toAuthorizationProject(project), actor })) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  } else if (attachment.containerType === "WikiPage" && attachment.containerId) {
-    const wikiPage = await new DrizzleWikiPageRepository().findById(attachment.containerId);
-    if (!wikiPage) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
-    if (!project) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const { actor } = await resolveActor(user, project.id);
-    if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  } else {
-    // Message/News attachments are not exposed via the UI yet — deny access rather than
-    // guess at their visibility rules.
+  // Redmine's `accept_api_auth :show, :download, :thumbnail` — an API client downloads the
+  // same bytes the browser does.
+  const user = (await currentUserFromAuthorizationHeader(request)) ?? (await currentUserFromCookies());
+  const access = await resolveAttachmentAccess(attachment, user);
+  if (!access) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Mirrors AttachmentsController#download: only the Files module's containers keep a
+  // download counter — issue/wiki/document attachments do not.
+  if (attachment.containerType === "Project" || attachment.containerType === "Version") {
+    await attachmentRepository.incrementDownloads(attachment.id);
   }
 
   const data = await new FsAttachmentStore().read(attachment.storageKey);
 
   // Always force a download (never inline-render) so a maliciously-typed upload (HTML/SVG with
   // embedded script) can't execute as same-origin content — this is the primary XSS defense here,
-  // not the Content-Type header.
+  // not the Content-Type header. Images get an inline preview through the thumbnail endpoint,
+  // which re-encodes the bytes instead of echoing them back.
   const asciiFilename = attachment.filename.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "'");
   return new NextResponse(new Uint8Array(data), {
     status: 200,
