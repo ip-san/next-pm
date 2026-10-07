@@ -262,8 +262,9 @@ export async function createCustomFieldAction(
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
   }
 
-  // Only Issue custom fields have a tracker concept — Project custom fields apply to every
-  // project (mirrors Redmine's ProjectCustomField, which has no custom_fields_trackers row).
+  // Only Issue custom fields have a tracker concept — Project and TimeEntry custom fields
+  // apply to every project / every entry (mirrors Redmine's ProjectCustomField and
+  // TimeEntryCustomField, neither of which has a custom_fields_trackers row).
   if (parsed.data.customizedType === "Issue" && parsed.data.trackerIds.length === 0) {
     return { error: "対象トラッカーを1つ以上選択してください。" };
   }

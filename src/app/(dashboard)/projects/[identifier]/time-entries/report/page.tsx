@@ -14,6 +14,7 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { filterVisibleTimeEntries } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
 
@@ -71,10 +72,12 @@ export default async function TimeEntryReportPage({
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((issue) => issue !== null).map((issue) => [issue.id, issue]));
 
-  // Same filter as the plain time-entries list: an entry against a private issue the viewer
-  // can't see must not leak that issue's subject, or even the fact that time was logged.
+  // Same two filters as the plain time-entries list: the role's time_entries_visibility
+  // ("own" sees only its own rows), and the private-issue rule — an entry against a private
+  // issue the viewer can't see must not leak that issue's subject, or even the fact that
+  // time was logged against it.
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const entries = allEntries.filter((entry) => {
+  const entries = filterVisibleTimeEntries(allEntries, user?.id ?? null, actor).filter((entry) => {
     if (!entry.issueId) return true;
     const issue = issueById.get(entry.issueId);
     return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
