@@ -1,6 +1,7 @@
 import type { WikiContentVersion, WikiPage } from "@/domain/wiki/entity";
 import { isProtectedByDefault, isWikiPageEditable } from "@/domain/wiki/protection";
 import type { WikiContentRepository, WikiPageRepository } from "@/domain/wiki/repository";
+import { resolveWikiPageParent } from "./set-wiki-page-parent";
 
 export class WikiPageProtectedError extends Error {
   constructor() {
@@ -15,7 +16,12 @@ export interface SaveWikiPageInput {
   text: string;
   comments: string;
   authorId: string;
-  parentId: string | null;
+  /**
+   * The page's parent. `undefined` leaves an existing page's parent alone — Redmine only
+   * accepts parent_id from callers holding rename_wiki_pages (or creating the page), so the
+   * caller decides whether to send it at all.
+   */
+  parentId: string | null | undefined;
   /** The actor's protect_wiki_pages — the only thing that unlocks a protected page (WikiPage#editable_by?). */
   canProtect: boolean;
 }
@@ -34,11 +40,21 @@ export async function saveWikiPage(
     if (!isWikiPageEditable(page, input.canProtect)) {
       throw new WikiPageProtectedError();
     }
+    if (input.parentId !== undefined && input.parentId !== page.parentId) {
+      const parentId = await resolveWikiPageParent(repositories.wikiPageRepository, input.projectId, page, input.parentId);
+      page = await repositories.wikiPageRepository.setParent(page.id, parentId);
+    }
   } else {
+    const parentId = await resolveWikiPageParent(
+      repositories.wikiPageRepository,
+      input.projectId,
+      null,
+      input.parentId ?? null,
+    );
     page = await repositories.wikiPageRepository.create({
       projectId: input.projectId,
       title: input.title,
-      parentId: input.parentId,
+      parentId,
       isProtected: isProtectedByDefault(input.title),
     });
   }

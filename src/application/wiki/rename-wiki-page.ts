@@ -2,6 +2,7 @@ import type { WikiPage } from "@/domain/wiki/entity";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
 import type { WikiPageRepository, WikiRedirectRepository } from "@/domain/wiki/repository";
 import { WikiPageProtectedError } from "./save-wiki-page";
+import { resolveWikiPageParent } from "./set-wiki-page-parent";
 
 export class WikiPageNotFoundError extends Error {}
 export class WikiTitleConflictError extends Error {}
@@ -10,6 +11,8 @@ export interface RenameWikiPageInput {
   pageId: string;
   newTitle: string;
   keepRedirect: boolean;
+  /** `undefined` leaves the parent alone; null detaches the page to the root. */
+  parentId: string | null | undefined;
   /** Redmine gates `rename` on editable? as well as on rename_wiki_pages — see domain/wiki/protection.ts. */
   canProtect: boolean;
 }
@@ -32,22 +35,28 @@ export async function renameWikiPage(
     throw new WikiPageProtectedError();
   }
 
-  const oldTitle = page.title;
-  const newTitle = input.newTitle;
-  if (oldTitle === newTitle) {
-    return page;
+  let current = page;
+  if (input.parentId !== undefined && input.parentId !== current.parentId) {
+    const parentId = await resolveWikiPageParent(repositories.wikiPageRepository, current.projectId, current, input.parentId);
+    current = await repositories.wikiPageRepository.setParent(current.id, parentId);
   }
 
-  const conflict = await repositories.wikiPageRepository.findByTitle(page.projectId, newTitle);
+  const oldTitle = current.title;
+  const newTitle = input.newTitle;
+  if (oldTitle === newTitle) {
+    return current;
+  }
+
+  const conflict = await repositories.wikiPageRepository.findByTitle(current.projectId, newTitle);
   if (conflict) {
     throw new WikiTitleConflictError(newTitle);
   }
 
-  await repositories.wikiRedirectRepository.retarget(page.projectId, oldTitle, newTitle);
-  await repositories.wikiRedirectRepository.deleteByTitle(page.projectId, newTitle);
-  const renamed = await repositories.wikiPageRepository.rename(page.id, newTitle);
+  await repositories.wikiRedirectRepository.retarget(current.projectId, oldTitle, newTitle);
+  await repositories.wikiRedirectRepository.deleteByTitle(current.projectId, newTitle);
+  const renamed = await repositories.wikiPageRepository.rename(current.id, newTitle);
   if (input.keepRedirect) {
-    await repositories.wikiRedirectRepository.create({ projectId: page.projectId, title: oldTitle, redirectsToTitle: newTitle });
+    await repositories.wikiRedirectRepository.create({ projectId: current.projectId, title: oldTitle, redirectsToTitle: newTitle });
   }
 
   return renamed;

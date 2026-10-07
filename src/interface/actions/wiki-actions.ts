@@ -11,6 +11,7 @@ import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { WikiPageNotFoundError, WikiTitleConflictError, renameWikiPage } from "@/application/wiki/rename-wiki-page";
 import { WikiPageProtectedError, saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { InvalidWikiParentError } from "@/application/wiki/set-wiki-page-parent";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -37,6 +38,8 @@ const saveWikiPageSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください。"),
   text: z.string(),
   comments: z.string().default(""),
+  /** Absent (the form hides the select) leaves the parent alone; "" detaches the page to the root. */
+  parentId: z.union([z.string().uuid(), z.literal("")]).optional(),
 });
 
 export async function saveWikiPageAction(
@@ -49,6 +52,7 @@ export async function saveWikiPageAction(
     title: formData.get("title"),
     text: formData.get("text") ?? "",
     comments: formData.get("comments") ?? "",
+    parentId: formData.get("parentId") ?? undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -79,13 +83,16 @@ export async function saveWikiPageAction(
         text: parsed.data.text,
         comments: parsed.data.comments,
         authorId: user.id,
-        parentId: null,
+        parentId: parsed.data.parentId === undefined ? undefined : parsed.data.parentId || null,
         canProtect: can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }),
       },
     ));
   } catch (error) {
     if (error instanceof WikiPageProtectedError) {
       return { error: "このページは保護されています。" };
+    }
+    if (error instanceof InvalidWikiParentError) {
+      return { error: "親ページとして指定できないページです。" };
     }
     throw error;
   }
@@ -262,6 +269,7 @@ const renameWikiPageSchema = z.object({
   projectIdentifier: z.string().min(1),
   newTitle: z.string().min(1, "タイトルを入力してください。"),
   keepRedirect: z.literal("on").optional(),
+  parentId: z.union([z.string().uuid(), z.literal("")]).optional(),
 });
 
 export async function renameWikiPageAction(
@@ -273,6 +281,7 @@ export async function renameWikiPageAction(
     projectIdentifier: formData.get("projectIdentifier"),
     newTitle: formData.get("newTitle"),
     keepRedirect: formData.get("keepRedirect") ?? undefined,
+    parentId: formData.get("parentId") ?? undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -297,9 +306,10 @@ export async function renameWikiPageAction(
   // (preparation.rb#L128,#L135), so either one grants it.
   const { actor } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
-  const canRename =
-    can({ permission: "rename_wiki_pages", project: projectContext, actor }) ||
-    can({ permission: "manage_wiki", project: projectContext, actor });
+  // Redmine's safe_attributes put title and parent_id behind rename_wiki_pages alone, so
+  // manage_wiki opens the rename screen but may not retitle or move the page.
+  const canReparent = can({ permission: "rename_wiki_pages", project: projectContext, actor });
+  const canRename = canReparent || can({ permission: "manage_wiki", project: projectContext, actor });
   if (!canRename) {
     return { error: "この操作を行う権限がありません。" };
   }
@@ -310,8 +320,9 @@ export async function renameWikiPageAction(
       { wikiPageRepository: new DrizzleWikiPageRepository(), wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
       {
         pageId: parsed.data.pageId,
-        newTitle: parsed.data.newTitle,
+        newTitle: canReparent ? parsed.data.newTitle : wikiPage.title,
         keepRedirect: parsed.data.keepRedirect === "on",
+        parentId: canReparent ? (parsed.data.parentId === undefined ? undefined : parsed.data.parentId || null) : undefined,
         canProtect: can({ permission: "protect_wiki_pages", project: projectContext, actor }),
       },
     );
@@ -324,6 +335,9 @@ export async function renameWikiPageAction(
     }
     if (error instanceof WikiPageProtectedError) {
       return { error: "このページは保護されています。" };
+    }
+    if (error instanceof InvalidWikiParentError) {
+      return { error: "親ページとして指定できないページです。" };
     }
     throw error;
   }

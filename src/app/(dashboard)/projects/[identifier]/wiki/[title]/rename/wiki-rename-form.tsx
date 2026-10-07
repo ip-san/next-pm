@@ -5,14 +5,26 @@ import { renameWikiPageAction, type RenameWikiPageActionState } from "@/interfac
 
 const initialState: RenameWikiPageActionState = { error: null };
 
+export interface ParentCandidate {
+  id: string;
+  title: string;
+}
+
 export function WikiRenameForm({
   pageId,
   projectIdentifier,
   title,
+  parentId,
+  parentCandidates,
+  canReparent,
 }: {
   pageId: string;
   projectIdentifier: string;
   title: string;
+  parentId: string | null;
+  parentCandidates: ParentCandidate[];
+  /** rename_wiki_pages. Without it Redmine drops title and parent_id from the submitted attributes. */
+  canReparent: boolean;
 }) {
   const [state, formAction, pending] = useActionState(renameWikiPageAction, initialState);
 
@@ -26,6 +38,21 @@ export function WikiRenameForm({
         </label>
         <input id="newTitle" name="newTitle" defaultValue={title} className="border rounded px-3 py-2" />
       </div>
+      {canReparent ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="parentId" className="text-sm font-medium">
+            親ページ
+          </label>
+          <select id="parentId" name="parentId" defaultValue={parentId ?? ""} className="border rounded px-3 py-2">
+            <option value="">(なし)</option>
+            {parentCandidates.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="keepRedirect" defaultChecked />
         既存のリンクをリダイレクトする
