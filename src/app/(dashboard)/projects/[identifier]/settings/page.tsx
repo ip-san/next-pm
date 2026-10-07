@@ -31,6 +31,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
     new DrizzleCustomValueRepository().listForCustomized("Project", project.id),
   ]);
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
+  const hasWiki = project.enabledModules.includes("wiki");
   const customValueByFieldId = Object.fromEntries(customValues.map((cv) => [cv.customFieldId, cv.value]));
 
   return (
@@ -45,6 +46,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
           activities: can({ permission: "manage_project_activities", project: projectContext, actor }),
+          wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
       <ProjectSettingsForm

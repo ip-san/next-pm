@@ -30,10 +30,11 @@ function makeRepositories(project: Project, deleteSubtreeImpl?: () => Promise<ne
   return { projectRepository, attachmentStorage };
 }
 
-const deleterRole: Pick<Role, "builtin" | "permissions" | "issuesVisibility"> = {
+const deleterRole: Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility"> = {
   builtin: 0,
   permissions: ["delete_project"],
   issuesVisibility: "all",
+  timeEntriesVisibility: "all",
 };
 const deleter: AuthorizationActor = { kind: "member", roles: [deleterRole] };
 const bystander: AuthorizationActor = { kind: "member", roles: [{ ...deleterRole, permissions: ["view_project"] }] };

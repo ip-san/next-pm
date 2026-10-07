@@ -40,4 +40,10 @@ export class DrizzleCustomValueRepository implements CustomValueRepository {
       .returning();
     return toDomain(row);
   }
+
+  async deleteForCustomized(customizedType: CustomizedType, customizedId: string): Promise<void> {
+    await db
+      .delete(customValues)
+      .where(and(eq(customValues.customizedType, customizedType), eq(customValues.customizedId, customizedId)));
+  }
 }

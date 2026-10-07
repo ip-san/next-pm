@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import {
   buildTimeReport,
   type TimeReportColumnUnit,
@@ -15,7 +14,8 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +53,9 @@ export default async function TimeEntryReportPage({
   }
 
   const user = await currentUserFromCookies();
+  const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })) {
+  if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
     notFound();
   }
 
@@ -76,13 +77,13 @@ export default async function TimeEntryReportPage({
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((issue) => issue !== null).map((issue) => [issue.id, issue]));
 
-  // Same filter as the plain time-entries list: an entry against a private issue the viewer
-  // can't see must not leak that issue's subject, or even the fact that time was logged.
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const entries = allEntries.filter((entry) => {
-    if (!entry.issueId) return true;
-    const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
+  // Same shared predicate as the plain time-entries list.
+  const entries = filterAccessibleTimeEntries(allEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById,
   });
 
   const users = await new DrizzleUserRepository().findByIds([...new Set(entries.map((entry) => entry.userId))]);

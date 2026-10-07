@@ -35,6 +35,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 }
 
 const createBoardSchema = z.object({
+  parent_id: z.string().uuid().nullable().default(null),
   name: z.string().min(1),
   description: z.string().min(1),
 });
@@ -67,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ide
   try {
     const board = await createBoard(
       { boardRepository: new DrizzleBoardRepository() },
-      { projectId: project.id, name: parsed.data.name, description: parsed.data.description },
+      { projectId: project.id, parentId: parsed.data.parent_id, name: parsed.data.name, description: parsed.data.description },
     );
     return NextResponse.json({ board }, { status: 201 });
   } catch (error) {

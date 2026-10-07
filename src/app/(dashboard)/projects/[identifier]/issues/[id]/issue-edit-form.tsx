@@ -14,6 +14,7 @@ import type { Tracker } from "@/domain/tracker/entity";
 import type { User } from "@/domain/user/entity";
 import type { Version } from "@/domain/version/entity";
 import type { WorkflowFieldPermission, WorkflowTransition } from "@/domain/workflow/entity";
+import { isCoreFieldDisabled, type TrackerCoreField } from "@/domain/tracker/core-fields";
 import { workflowRuleByAttribute } from "@/domain/workflow/field-permission-rules";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { IssueAutocomplete } from "../issue-autocomplete";
@@ -71,6 +72,9 @@ export function IssueEditForm({
   doneRatioEditable,
   canSetPrivate,
   canManageSubtasks,
+  derivedFields,
+  canEditAttributes,
+  canSetNotesPrivate,
 }: {
   issue: Issue;
   parentIssueLabel: string | null;
@@ -100,6 +104,19 @@ export function IssueEditForm({
   canSetPrivate: boolean;
   /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
   canManageSubtasks: boolean;
+  /**
+   * Attributes this issue derives from its subtasks (the `parent_issue_*` settings, which
+   * only apply to a non-leaf issue). Redmine drops them from safe_attribute_names, so they
+   * render read-only here and are never submitted.
+   */
+  derivedFields: { dates: boolean; priority: boolean; doneRatio: boolean };
+  /**
+   * False for a viewer who holds only `add_issue_notes`: Redmine gates the whole attribute
+   * block on attributes_editable? and shows them just the note box.
+   */
+  canEditAttributes: boolean;
+  /** `set_notes_private` — offers the private-note checkbox next to the comment box. */
+  canSetNotesPrivate: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<FormState>({
@@ -126,6 +143,7 @@ export function IssueEditForm({
   // its id would disclose that it exists), and an untouched picker must leave the existing
   // parent alone rather than submit "" and silently detach it.
   const [parentId, setParentId] = useState<string | null>(null);
+  const [privateNote, setPrivateNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -162,7 +180,21 @@ export function IssueEditForm({
     () => workflowRuleByAttribute(fieldPermissions, { trackerId: state.trackerId, statusId: selectedStatusId, roleIds }),
     [fieldPermissions, state.trackerId, selectedStatusId, roleIds],
   );
-  const isReadOnly = (field: keyof typeof rules) => rules[field] === "readonly";
+  const derivedByParentRollup: Partial<Record<keyof typeof rules, boolean>> = {
+    startDate: derivedFields.dates,
+    dueDate: derivedFields.dates,
+    priorityId: derivedFields.priority,
+    doneRatio: derivedFields.doneRatio,
+  };
+  // A core field the selected tracker switched off isn't offered at all — Redmine removes it
+  // from safe_attribute_names, and updateIssue drops it server-side regardless.
+  const selectedTracker = trackers.find((candidate) => candidate.id === state.trackerId);
+  // Typed on TrackerCoreField rather than the workflow field set: the two overlap but
+  // parentId is a core field with no workflow rule, and subject/isPrivate are the reverse.
+  const isDisabledForTracker = (field: TrackerCoreField) =>
+    selectedTracker !== undefined && isCoreFieldDisabled(selectedTracker, field);
+  const isReadOnly = (field: keyof typeof rules) =>
+    !canEditAttributes || rules[field] === "readonly" || derivedByParentRollup[field] === true;
   const isRequired = (field: keyof typeof rules) => rules[field] === "required";
 
   async function onSubmit(event: React.FormEvent) {
@@ -177,14 +209,15 @@ export function IssueEditForm({
     const values: UpdateIssueFormValues = {
       issueId: issue.id,
       lockVersion: issue.lockVersion,
-      trackerId: state.trackerId,
+      ...(canEditAttributes ? { trackerId: state.trackerId } : {}),
       notes: state.notes,
-      customFieldValues: Object.fromEntries(
-        applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]),
-      ),
+      privateNotes: canSetNotesPrivate && privateNote,
+      customFieldValues: canEditAttributes
+        ? Object.fromEntries(applicableCustomFields.map((field) => [field.id, state.customFieldValues[field.id] ?? ""]))
+        : {},
     };
-    if (canManageSubtasks && parentId !== null) values.parentId = parentId;
-    if (allowedStatuses.length > 0) values.statusId = selectedStatusId;
+    if (canEditAttributes && canManageSubtasks && parentId !== null) values.parentId = parentId;
+    if (canEditAttributes && allowedStatuses.length > 0) values.statusId = selectedStatusId;
     if (!isReadOnly("subject")) values.subject = state.subject;
     if (!isReadOnly("description")) values.description = state.description;
     if (!isReadOnly("priorityId")) values.priorityId = state.priorityId;
@@ -217,6 +250,7 @@ export function IssueEditForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-xl">
+      {!canEditAttributes ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="trackerId" className="text-sm font-medium">
           トラッカー
@@ -234,7 +268,9 @@ export function IssueEditForm({
           ))}
         </select>
       </div>
+      )}
 
+      {!canEditAttributes ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="statusId" className="text-sm font-medium">
           ステータス
@@ -258,6 +294,7 @@ export function IssueEditForm({
           <p className="text-sm">{statusName}（遷移できるステータスがありません）</p>
         )}
       </div>
+      )}
 
       {isReadOnly("subject") ? (
         <ReadOnlyField label="件名" value={issue.subject} />
@@ -275,7 +312,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("description") ? (
+      {isDisabledForTracker("description") ? null : isReadOnly("description") ? (
         <ReadOnlyField label="説明" value={issue.description} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -292,7 +329,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("priorityId") ? (
+      {isDisabledForTracker("priorityId") ? null : isReadOnly("priorityId") ? (
         <ReadOnlyField label="優先度" value={priorities.find((p) => p.id === issue.priorityId)?.name ?? "?"} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -314,7 +351,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("assignedToId") ? (
+      {isDisabledForTracker("assignedToId") ? null : isReadOnly("assignedToId") ? (
         <ReadOnlyField label="担当者" value={currentAssigneeLabel} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -349,7 +386,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("categoryId") ? (
+      {isDisabledForTracker("categoryId") ? null : isReadOnly("categoryId") ? (
         <ReadOnlyField label="カテゴリ" value={categories.find((c) => c.id === issue.categoryId)?.name ?? "(なし)"} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -372,7 +409,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("fixedVersionId") ? (
+      {isDisabledForTracker("fixedVersionId") ? null : isReadOnly("fixedVersionId") ? (
         <ReadOnlyField label="対象バージョン" value={versions.find((v) => v.id === issue.fixedVersionId)?.name ?? "(なし)"} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -395,7 +432,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {canManageSubtasks ? (
+      {canManageSubtasks && !isDisabledForTracker("parentId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="parentId" className="text-sm font-medium">
             親チケット
@@ -411,7 +448,7 @@ export function IssueEditForm({
       ) : null}
 
       <div className="flex gap-4 flex-wrap">
-        {isReadOnly("startDate") ? (
+        {isDisabledForTracker("startDate") ? null : isReadOnly("startDate") ? (
           <ReadOnlyField label="開始日" value={issue.startDate ?? "(なし)"} />
         ) : (
           <div className="flex flex-col gap-1">
@@ -427,7 +464,7 @@ export function IssueEditForm({
             />
           </div>
         )}
-        {isReadOnly("dueDate") ? (
+        {isDisabledForTracker("dueDate") ? null : isReadOnly("dueDate") ? (
           <ReadOnlyField label="期日" value={issue.dueDate ?? "(なし)"} />
         ) : (
           <div className="flex flex-col gap-1">
@@ -443,7 +480,7 @@ export function IssueEditForm({
             />
           </div>
         )}
-        {isReadOnly("estimatedHours") ? (
+        {isDisabledForTracker("estimatedHours") ? null : isReadOnly("estimatedHours") ? (
           <ReadOnlyField label="予定工数" value={issue.estimatedHours === null ? "(なし)" : String(issue.estimatedHours)} />
         ) : (
           <div className="flex flex-col gap-1">
@@ -465,7 +502,7 @@ export function IssueEditForm({
             "issue_status" the ratio follows the status and the field is not shown at all.
             The 10-point step is Redmine's default issue_done_ratio_interval, which next-pm
             has no setting for. */}
-        {doneRatioEditable && !isReadOnly("doneRatio") ? (
+        {isDisabledForTracker("doneRatio") ? null : doneRatioEditable && !isReadOnly("doneRatio") ? (
           <div className="flex flex-col gap-1">
             <label htmlFor="doneRatio" className="text-sm font-medium">
               {label("doneRatio", "進捗率")}
@@ -497,6 +534,7 @@ export function IssueEditForm({
         </label>
       )}
 
+      {canEditAttributes ? (
       <CustomFieldInputs
         fields={applicableCustomFields}
         values={state.customFieldValues}
@@ -509,6 +547,7 @@ export function IssueEditForm({
           }))
         }
       />
+      ) : null}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="notes" className="text-sm font-medium">
@@ -522,6 +561,13 @@ export function IssueEditForm({
           className="border rounded px-3 py-2"
         />
       </div>
+
+      {canSetNotesPrivate ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={privateNote} onChange={(event) => setPrivateNote(event.target.checked)} />
+          プライベート注記にする（閲覧権限のある人だけに表示）
+        </label>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm text-red-600">

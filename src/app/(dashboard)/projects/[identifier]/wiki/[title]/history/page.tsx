@@ -26,7 +26,9 @@ export default async function WikiHistoryPage({
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
+  // Redmine maps wiki#history/diff/annotate to view_wiki_edits, not view_wiki_pages
+  // (preparation.rb#L125) — seeing a page does not imply seeing who changed it.
+  if (!can({ permission: "view_wiki_edits", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
 
@@ -54,14 +56,22 @@ export default async function WikiHistoryPage({
               バージョン {version.version} · {version.createdAt.toISOString()}
               {version.comments ? ` — ${version.comments}` : ""}
             </span>
-            {index + 1 < versions.length ? (
+            <span className="flex items-center gap-3">
               <Link
-                href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/diff?from=${versions[index + 1].version}&to=${version.version}`}
+                href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/annotate?version=${version.version}`}
                 className="underline"
               >
-                前バージョンとの差分
+                注釈
               </Link>
-            ) : null}
+              {index + 1 < versions.length ? (
+                <Link
+                  href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/diff?from=${versions[index + 1].version}&to=${version.version}`}
+                  className="underline"
+                >
+                  前バージョンとの差分
+                </Link>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>

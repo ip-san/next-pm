@@ -51,6 +51,14 @@ export interface IssueRepository {
    * locking. Throws StaleIssueError when the row moved on (0 rows affected) or vanished.
    */
   update(id: string, expectedLockVersion: number, changes: IssueUpdate): Promise<Issue>;
+  /**
+   * Deletes the given issues together with every row that points at them through a
+   * polymorphic column the database can't cascade — journals (and their details and
+   * reactions), watchers and custom values — in one transaction. Attachment rows go too;
+   * their stored files are the caller's to remove, once the transaction has committed.
+   * Relations and changeset links cascade in the schema.
+   */
+  deleteWithDependents(issueIds: string[]): Promise<void>;
   /** Full-text search over subject/description, scoped to one project. */
   search(projectId: string, query: string): Promise<Issue[]>;
 }

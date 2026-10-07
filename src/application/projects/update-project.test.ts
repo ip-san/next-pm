@@ -40,7 +40,7 @@ function makeRepository(overrides: Partial<ProjectRepository> = {}): ProjectRepo
 }
 
 function actorWith(permissions: Role["permissions"]): AuthorizationActor {
-  return { kind: "member", roles: [{ builtin: 0, permissions, issuesVisibility: "all" }] };
+  return { kind: "member", roles: [{ builtin: 0, permissions, issuesVisibility: "all", timeEntriesVisibility: "all" }] };
 }
 
 const admin = { actor: { kind: "admin" } as AuthorizationActor };

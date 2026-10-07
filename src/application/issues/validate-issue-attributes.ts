@@ -4,6 +4,7 @@ import type { IssueCategoryRepository } from "@/domain/issue-category/repository
 import type { MemberRepository } from "@/domain/member/repository";
 import type { ProjectRepository } from "@/domain/project/repository";
 import type { RoleRepository } from "@/domain/role/repository";
+import type { TrackerRepository } from "@/domain/tracker/repository";
 import type { UserRepository } from "@/domain/user/repository";
 import type { VersionRepository } from "@/domain/version/repository";
 
@@ -24,6 +25,7 @@ export interface IssueAttributeRepositories {
   enumerationRepository: EnumerationRepository;
   issueCategoryRepository: IssueCategoryRepository;
   versionRepository: VersionRepository;
+  trackerRepository: TrackerRepository;
 }
 
 /**
@@ -82,22 +84,13 @@ export async function assertIssueAttributesAssignable(
   }
 
   if (candidate.assignedTo !== undefined && candidate.assignedTo !== null) {
-    const assignee = candidate.assignedTo;
-    const members = await repositories.memberRepository.listByProject(input.projectId);
-    const [roles, users] = await Promise.all([
-      repositories.roleRepository.findByIds([...new Set(members.flatMap((member) => member.roleIds))]),
-      repositories.userRepository.findByIds([
-        ...new Set([...members.flatMap((member) => (member.userId ? [member.userId] : [])), ...(input.authorId ? [input.authorId] : [])]),
-      ]),
-    ]);
-    const { userIds, groupIds } = assignablePrincipalIds(
-      members,
-      new Map(roles.map((role) => [role.id, role])),
-      new Map(users.map((user) => [user.id, user.status])),
-      { authorId: input.authorId, currentAssignee: input.currentAssignee },
-    );
-    const offerable = assignee.type === "group" ? groupIds : userIds;
-    if (!offerable.has(assignee.id)) {
+    const allowed = await isAssigneeAssignable(repositories, {
+      projectId: input.projectId,
+      authorId: input.authorId,
+      currentAssignee: input.currentAssignee,
+      assignee: candidate.assignedTo,
+    });
+    if (!allowed) {
       throw new IssueAttributeNotAssignableError("assignedToId");
     }
   }
@@ -117,4 +110,35 @@ export async function assertIssueAttributesAssignable(
       throw new IssueAttributeNotAssignableError("fixedVersionId");
     }
   }
+}
+
+/**
+ * The assignee half of the check on its own, for callers that need to *drop* an unusable
+ * assignee rather than reject the request — Redmine's `project=` does exactly that for a new
+ * record, which is the issue-copy path ("Clear the assignee if not available in the new
+ * project for new issues (eg. copy)").
+ */
+export async function isAssigneeAssignable(
+  repositories: Pick<IssueAttributeRepositories, "memberRepository" | "roleRepository" | "userRepository">,
+  input: {
+    projectId: string;
+    authorId: string | null;
+    currentAssignee: { id: string; type: "user" | "group" } | null;
+    assignee: { id: string; type: "user" | "group" };
+  },
+): Promise<boolean> {
+  const members = await repositories.memberRepository.listByProject(input.projectId);
+  const [roles, users] = await Promise.all([
+    repositories.roleRepository.findByIds([...new Set(members.flatMap((member) => member.roleIds))]),
+    repositories.userRepository.findByIds([
+      ...new Set([...members.flatMap((member) => (member.userId ? [member.userId] : [])), ...(input.authorId ? [input.authorId] : [])]),
+    ]),
+  ]);
+  const { userIds, groupIds } = assignablePrincipalIds(
+    members,
+    new Map(roles.map((role) => [role.id, role])),
+    new Map(users.map((user) => [user.id, user.status])),
+    { authorId: input.authorId, currentAssignee: input.currentAssignee },
+  );
+  return (input.assignee.type === "group" ? groupIds : userIds).has(input.assignee.id);
 }

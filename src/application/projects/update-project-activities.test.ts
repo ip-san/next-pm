@@ -54,11 +54,11 @@ function makeRepositories(overrides: Enumeration[] = []) {
 
 const manager: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["manage_project_activities"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["manage_project_activities"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 const bystander: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_time_entries"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_time_entries"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 
 describe("updateProjectActivities", () => {

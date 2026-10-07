@@ -61,11 +61,11 @@ function makeRepositories(target: Member, membersInProject: Member[] = []) {
 
 const manager: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["manage_members"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["manage_members"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 const bystander: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_members"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_members"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 
 describe("updateMemberRoles", () => {

@@ -1,3 +1,5 @@
+import type { UserStatus } from "@/domain/user/entity";
+
 /** Parses a `<select>` value of a bare uuid (user) or "group:<uuid>" (group) into a Principal reference. */
 export function parseAssigneeValue(value: string): { id: string; type: "user" | "group" } | null {
   if (value === "") return null;
@@ -28,7 +30,7 @@ export function parseAssigneeValue(value: string): { id: string; type: "user" | 
 export function assignablePrincipalIds(
   members: { userId: string | null; groupId: string | null; roleIds: string[] }[],
   rolesById: Map<string, { assignable: boolean }>,
-  userStatusById: Map<string, "active" | "registered" | "locked">,
+  userStatusById: Map<string, UserStatus>,
   extra: { authorId: string | null; currentAssignee: { id: string; type: "user" | "group" } | null },
 ): { userIds: Set<string>; groupIds: Set<string> } {
   const userIds = new Set<string>();

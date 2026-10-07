@@ -40,6 +40,7 @@ export function makeIssueRepositoryMock(overrides: Partial<IssueRepository> = {}
     findByIds: mock(async () => []),
     listByFixedVersionIds: mock(async () => []),
     search: mock(async () => []),
+    deleteWithDependents: mock(async () => undefined),
     create: mock(async () => {
       throw new Error("not used");
     }),

@@ -49,10 +49,11 @@ function makeRepositories(projects: Project[], versions: Version[] = [], issues:
   return { projectRepository, versionRepository, issueRepository };
 }
 
-const closerRole: Pick<Role, "builtin" | "permissions" | "issuesVisibility"> = {
+const closerRole: Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility"> = {
   builtin: 0,
   permissions: ["close_project"],
   issuesVisibility: "all",
+  timeEntriesVisibility: "all",
 };
 const closer: AuthorizationActor = { kind: "member", roles: [closerRole] };
 const bystander: AuthorizationActor = { kind: "member", roles: [{ ...closerRole, permissions: ["view_project"] }] };

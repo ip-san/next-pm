@@ -1,4 +1,6 @@
 import { logTime, InvalidTimeEntryError } from "@/application/time-entries/log-time";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
+import type { ProjectActivityRepository } from "@/domain/enumeration/project-activity-repository";
 import type { EnumerationRepository } from "@/domain/enumeration/repository";
 import { StaleIssueError } from "@/domain/issue/entity";
 import type { Issue } from "@/domain/issue/entity";
@@ -21,6 +23,7 @@ export interface SyncChangesetsRepositories {
   issueStatusRepository: IssueStatusRepository;
   timeEntryRepository: TimeEntryRepository;
   enumerationRepository: EnumerationRepository;
+  projectActivityRepository: ProjectActivityRepository;
   userRepository: UserRepository;
   settingsRepository: SettingsRepository;
 }
@@ -73,7 +76,12 @@ async function applyFixAction(repositories: SyncChangesetsRepositories, issue: I
   }
 }
 
-/** Mirrors Changeset#log_time, using the system-wide default TimeEntryActivity (no per-project override yet). */
+/**
+ * Mirrors Changeset#log_time. The activity comes from the issue's project, not the system
+ * list — Redmine's Project#commit_logtime_activity resolves the configured default over
+ * `activities`, so a project that overrode or switched off that activity gets its own row
+ * (or, if it switched it off entirely, no default to fall back on and no entry).
+ */
 async function applyTimeLog(
   repositories: SyncChangesetsRepositories,
   issue: Issue,
@@ -81,13 +89,18 @@ async function applyTimeLog(
   hours: number,
   userId: string,
 ): Promise<boolean> {
-  const activities = await repositories.enumerationRepository.listByType("TimeEntryActivity");
-  const activity = activities.find((a) => a.isDefault) ?? activities[0];
+  const { offered } = await loadProjectActivities(repositories, issue.projectId);
+  const activity = offered.find((a) => a.isDefault) ?? offered[0];
   if (!activity) return false;
 
   try {
     await logTime(
-      { timeEntryRepository: repositories.timeEntryRepository, settingsRepository: repositories.settingsRepository },
+      {
+        timeEntryRepository: repositories.timeEntryRepository,
+        settingsRepository: repositories.settingsRepository,
+        enumerationRepository: repositories.enumerationRepository,
+        projectActivityRepository: repositories.projectActivityRepository,
+      },
       {
         projectId: issue.projectId,
         issueId: issue.id,

@@ -29,7 +29,13 @@ async function seed() {
   console.log("Seeding builtin roles...");
   const [nonMember] = await db
     .insert(roles)
-    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_members", "view_issues"] })
+    // Mirrors Redmine's default data: Non member may save its own queries, Anonymous may
+    // not (save_queries is declared `:require => :loggedin`).
+    .values({
+      name: "Non member",
+      builtin: ROLE_BUILTIN_NON_MEMBER,
+      permissions: ["view_project", "view_members", "view_issues", "save_queries"],
+    })
     .returning();
   const [anonymous] = await db
     .insert(roles)
@@ -46,24 +52,51 @@ async function seed() {
         "delete_project",
         "select_project_publicity",
         "view_members",
+        "save_queries",
+        "manage_public_queries",
         "view_issues",
         "add_issues",
         "edit_issues",
         "edit_own_issues",
+        "add_issue_notes",
+        "edit_issue_notes",
+        "edit_own_issue_notes",
+        "view_issue_watchers",
+        "set_notes_private",
+        "view_private_notes",
+        "delete_issues",
+        "copy_issues",
         "set_issues_private",
         "manage_subtasks",
         "manage_issue_relations",
         "manage_issue_categories",
         "view_time_entries",
         "log_time",
+        "edit_time_entries",
+        "edit_own_time_entries",
+        "log_time_for_other_users",
+        "import_time_entries",
         "manage_project_activities",
         "view_wiki_pages",
+        "view_wiki_edits",
         "edit_wiki_pages",
+        "rename_wiki_pages",
+        "delete_wiki_pages",
+        "delete_wiki_pages_attachments",
+        "protect_wiki_pages",
+        "view_wiki_page_watchers",
+        "add_wiki_page_watchers",
+        "delete_wiki_page_watchers",
+        "manage_wiki",
+        "export_wiki_pages",
         "manage_boards",
         "view_messages",
         "add_messages",
         "edit_messages",
         "delete_messages",
+        "view_message_watchers",
+        "add_message_watchers",
+        "delete_message_watchers",
         "view_news",
         "manage_news",
         "comment_news",

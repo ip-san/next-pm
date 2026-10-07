@@ -16,6 +16,7 @@ function makeRepos(preferences: UserPreferences | null) {
     unwatch: mock(async () => {}),
     listWatchedIds: mock(async () => []),
     listWatcherUserIds: mock(async () => []),
+    unwatchAll: mock(async () => {}),
   };
   return { userPreferencesRepository, watcherRepository, watch };
 }

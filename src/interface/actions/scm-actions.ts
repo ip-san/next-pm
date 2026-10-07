@@ -8,6 +8,7 @@ import { syncChangesets } from "@/application/scm/sync-changesets";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -122,6 +123,7 @@ export async function syncRepositoryAction(
       issueStatusRepository: new DrizzleIssueStatusRepository(),
       timeEntryRepository: new DrizzleTimeEntryRepository(),
       enumerationRepository: new DrizzleEnumerationRepository(),
+      projectActivityRepository: new DrizzleProjectActivityRepository(),
       userRepository: new DrizzleUserRepository(),
       settingsRepository: new DrizzleSettingsRepository(),
     },
