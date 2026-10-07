@@ -50,6 +50,7 @@ async function seed() {
         "edit_issues",
         "edit_own_issues",
         "delete_issues",
+        "copy_issues",
         "set_issues_private",
         "manage_subtasks",
         "manage_issue_relations",
