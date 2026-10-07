@@ -75,6 +75,15 @@ export interface UpdateIssueInput {
   canSetPrivate?: boolean;
   /** `manage_subtasks`; false silently drops `parentId`. */
   canManageSubtasks?: boolean;
+  /**
+   * `edit_issues`, or `edit_own_issues` on one's own issue. False drops every attribute
+   * change and custom value, leaving a notes-only update — Redmine's `attributes_editable?`
+   * gates the whole `safe_attributes` block that way. Defaults to true so the internal
+   * cascades, which carry no acting-user permissions, keep working.
+   */
+  canEditAttributes?: boolean;
+  /** `add_issue_notes` (Redmine's `notes_addable?`). False drops the note. */
+  canAddNotes?: boolean;
 }
 
 export interface UpdateIssueRepositories extends IssueAttributeRepositories {
@@ -287,7 +296,12 @@ async function applyIssueUpdate(
   // — Redmine's raw model save for these has no equivalent of workflow field permissions.
   const fieldPermissions = options.skipFieldPermissions ? [] : await repositories.workflowFieldPermissionRepository.listForTracker(targetTrackerId);
 
-  const changes = { ...input.changes };
+  // Mirrors Issue#safe_attributes: the attribute block is gated on attributes_editable?
+  // and `notes` separately on notes_addable?, so a user with only add_issue_notes can
+  // comment without being able to change anything.
+  const changes = input.canEditAttributes === false ? ({} as IssueUpdate) : { ...input.changes };
+  const notes = input.canAddNotes === false ? "" : input.notes;
+  const customFieldValues = input.canEditAttributes === false ? undefined : input.customFieldValues;
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     delete changes[field];
   }
@@ -417,8 +431,8 @@ async function applyIssueUpdate(
   // half-applied edit behind; the write itself happens after, once the issue is safely
   // stored, so both land in the single journal below.
   const preparedCustomFieldValues =
-    input.customFieldValues && Object.keys(input.customFieldValues).length > 0
-      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, input.customFieldValues)
+    customFieldValues && Object.keys(customFieldValues).length > 0
+      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, customFieldValues)
       : null;
 
   const after = await repositories.issueRepository.update(input.issueId, input.expectedLockVersion, changes);
@@ -428,12 +442,12 @@ async function applyIssueUpdate(
     : [];
 
   const details = [...diffIssueChanges(before, changes), ...customFieldDetails];
-  if (details.length > 0 || input.notes.trim().length > 0) {
+  if (details.length > 0 || notes.trim().length > 0) {
     await repositories.journalRepository.create({
       journalizedType: "Issue",
       journalizedId: input.issueId,
       userId: input.actingUserId,
-      notes: input.notes,
+      notes,
       details,
     });
     // Mirrors Redmine's issue_contributed_to trigger — firing on any recorded change, not

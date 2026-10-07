@@ -1410,3 +1410,73 @@ describe("updateIssue — permission-gated attributes", () => {
     expect(repos.issueRepository.listByProject).not.toHaveBeenCalled();
   });
 });
+
+describe("updateIssue — notes-only updates", () => {
+  it("records the note but no attribute change for a notes-only actor", async () => {
+    // Redmine gates the whole safe_attributes block on attributes_editable? while `notes`
+    // rides on notes_addable?, so add_issue_notes alone is a comment and nothing more.
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Untouched" });
+    const repos = makeRepositories({ issue });
+
+    const result = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "Hijacked", doneRatio: 90 },
+      customFieldValues: { "cf-1": "nope" },
+      notes: "just a comment",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: true,
+    });
+
+    expect(result.subject).toBe("Untouched");
+    expect(repos.customValueRepository.set).not.toHaveBeenCalled();
+    const journal = (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(journal.notes).toBe("just a comment");
+    expect(journal.details).toEqual([]);
+  });
+
+  it("drops the note from an actor who may edit but not comment", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" });
+    const repos = makeRepositories({ issue });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "should not be stored",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: true,
+      canAddNotes: false,
+    });
+
+    const journal = (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(journal.notes).toBe("");
+    expect(journal.details).toHaveLength(1);
+  });
+
+  it("writes nothing at all when the actor may neither edit nor comment", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "nope" },
+      notes: "nope",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: false,
+    });
+
+    expect(repos.journalRepository.create).not.toHaveBeenCalled();
+  });
+});
