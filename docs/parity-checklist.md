@@ -208,7 +208,7 @@
 | CVS / Bazaar / Filesystem | out-of-scope | 本家にはあるが対象外(artisan-pm 側でも同じ判断) |
 | コミットメッセージ連携 | done | `fixes #id` 等での自動更新、参照キーワード、時間記録 |
 | リビジョン一覧・詳細 | done | |
-| 1 プロジェクトに複数リポジトリ | missing | `scm_repositories` に `project_id` の unique 制約があり 1 対 1。本家は identifier 付きで複数登録できる |
+| 1 プロジェクトに複数リポジトリ | done | `scm_repositories` に `identifier` / `is_default` を追加し、unique 制約を `(project_id, identifier)` + 「1 プロジェクトに既定リポジトリは 1 つ」の部分 unique index に置き換えた。識別子の検証は本家 `Repository` と同じ(英小文字・数字・`-`・`_` のみ、数字だけは不可、255 文字まで、予約語 11 種 + next-pm 固有の `blame`、空文字も含めてプロジェクト内で一意、一度付けたら変更不可)。URL は既定リポジトリが `/projects/:id/repository`、それ以外が `/projects/:id/repository/:repositoryId`(本家の `identifier_param` と同じく識別子、無ければ ID)。プロジェクト設定に「リポジトリ」タブを追加し、追加・更新(識別子とメイン指定のみ。本家 `safe_attributes` と同じくパス・種類は作成時限定)・削除ができる。最初の 1 件は本家 `set_as_default?` と同じく強制的にメインになり、メインを外しても別のリポジトリが自動昇格しないのも本家どおり(表示は先頭のリポジトリにフォールバックする) |
 | リポジトリの自動フェッチ | out-of-scope | cron 相当の仕組みを持たない設計判断(§15) |
 | コミッターとユーザーの紐付け | missing | `changesets.committer_identity` は文字列のまま。本家は `users` へのマッピングを持つ |
 | `commit_access` 権限(WS 経由の認可) | missing | 本家 `SysController` によるリポジトリ認証連携ごと無い |

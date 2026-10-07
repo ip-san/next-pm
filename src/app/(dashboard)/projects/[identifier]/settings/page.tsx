@@ -44,6 +44,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           members: can({ permission: "manage_members", project: projectContext, actor }),
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          repositories: can({ permission: "manage_repository", project: projectContext, actor }),
         }}
       />
       <ProjectSettingsForm project={project} trackers={trackers} customFields={customFields} customValueByFieldId={customValueByFieldId} />

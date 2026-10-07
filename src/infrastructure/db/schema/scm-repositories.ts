@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { projects } from "./projects";
 
 export const scmRepositories = pgTable(
@@ -8,6 +9,20 @@ export const scmRepositories = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    /**
+     * Mirrors Redmine's Repository#identifier — the URL-safe name that distinguishes one of a
+     * project's repositories from the others (`/projects/foo/repository/docs/...`). Redmine
+     * stores NULL for the one repository a project may keep unnamed; this column uses the empty
+     * string instead so the (project_id, identifier) unique constraint actually rejects a second
+     * unnamed repository, which a nullable column would silently allow (NULLs never collide).
+     */
+    identifier: text("identifier").notNull().default(""),
+    /**
+     * Redmine's Repository#is_default — the repository served at the bare
+     * `/projects/:identifier/repository` path. Exactly one per project, enforced by the partial
+     * unique index below (Redmine enforces it only in a before_save callback).
+     */
+    isDefault: boolean("is_default").notNull().default(false),
     /** "git" | "subversion" | "mercurial" — see domain/scm/entity.ts's ScmVendor. Defaults to "git" so existing rows need no backfill. */
     vendor: text("vendor").notNull().default("git"),
     /** Absolute path to the repository's working copy — set by an admin, never derived from request input. */
@@ -21,5 +36,10 @@ export const scmRepositories = pgTable(
      */
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [unique("scm_repositories_project_unique").on(table.projectId)],
+  (table) => [
+    unique("scm_repositories_project_identifier_unique").on(table.projectId, table.identifier),
+    uniqueIndex("scm_repositories_project_default_unique")
+      .on(table.projectId)
+      .where(sql`${table.isDefault}`),
+  ],
 );

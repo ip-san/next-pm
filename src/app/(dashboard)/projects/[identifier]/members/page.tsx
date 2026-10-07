@@ -68,6 +68,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
           members: true,
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          repositories: can({ permission: "manage_repository", project: projectContext, actor }),
         }}
       />
       <table className="text-sm border-collapse">

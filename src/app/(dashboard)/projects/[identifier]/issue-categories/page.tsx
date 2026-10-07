@@ -46,6 +46,7 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
           members: can({ permission: "manage_members", project: projectContext, actor }),
           versions: can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: true,
+          repositories: can({ permission: "manage_repository", project: projectContext, actor }),
         }}
       />
 

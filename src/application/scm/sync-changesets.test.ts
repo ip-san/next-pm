@@ -15,7 +15,16 @@ import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 
 function makeScmRepository(overrides: Partial<ScmRepository> = {}): ScmRepository {
-  return { id: "repo-1", projectId: "proj-1", vendor: "git", rootPath: "/repos/example", createdAt: new Date("2020-01-01"), ...overrides };
+  return {
+    id: "repo-1",
+    projectId: "proj-1",
+    identifier: "",
+    isDefault: true,
+    vendor: "git",
+    rootPath: "/repos/example",
+    createdAt: new Date("2020-01-01"),
+    ...overrides,
+  };
 }
 
 function makeCommit(overrides: Partial<Commit> = {}): Commit {
