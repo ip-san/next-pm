@@ -11,6 +11,7 @@ import type { Issue } from "@/domain/issue/entity";
 import { collectSelfAndDescendantIds } from "@/domain/issue/parent";
 import { resolveProjectChange } from "@/domain/issue/project-change";
 import type { IssueRepository } from "@/domain/issue/repository";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueCategoryRepository } from "@/domain/issue-category/repository";
 import type { IssueRelationRepository } from "@/domain/issue-relation/repository";
@@ -52,6 +53,7 @@ export type CopyIssueRepositories = IssueAttributeRepositories & {
   userPreferencesRepository: UserPreferencesRepository;
   watcherRepository: WatcherRepository;
   settingsRepository: SettingsRepository;
+  issueStatusRepository: IssueStatusRepository;
 };
 
 export interface CopyIssueInput {

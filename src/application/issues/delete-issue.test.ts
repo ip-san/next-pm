@@ -5,6 +5,7 @@ import {
   InvalidTimeEntryTargetError,
   type DeleteIssueRepositories,
 } from "./delete-issue";
+import { makeRollupRepositoriesMock } from "./test-support";
 import type { Attachment } from "@/domain/attachment/entity";
 import type { AuthorizationActor } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
@@ -56,6 +57,8 @@ function makeRepositories(options: { issues: Issue[]; attachments?: Attachment[]
     attachmentRepository: {
       listByContainers: mock(async () => options.attachments ?? []),
     } as unknown as DeleteIssueRepositories["attachmentRepository"],
+    ...makeRollupRepositoriesMock(),
+    enumerationRepository: { listByType: mock(async () => []) } as unknown as DeleteIssueRepositories["enumerationRepository"],
     attachmentStorage: {
       delete: mock(async (key: string) => {
         storageDeletes.push(key);

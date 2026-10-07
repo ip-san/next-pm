@@ -7,7 +7,10 @@ import { isFieldBlank } from "@/domain/workflow/blank";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
 import { requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import type { WorkflowFieldPermissionRepository } from "@/domain/workflow/repository";
+import type { IssueStatusRepository } from "@/domain/issue-status/repository";
+import type { SettingsRepository } from "@/domain/settings/repository";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
+import { recalculateParents } from "@/application/issues/recalculate-parents";
 import { assertIssueAttributesAssignable, type IssueAttributeRepositories } from "./validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "./update-issue";
 
@@ -47,6 +50,8 @@ export async function createIssue(
     workflowFieldPermissionRepository: WorkflowFieldPermissionRepository;
     userPreferencesRepository: UserPreferencesRepository;
     watcherRepository: WatcherRepository;
+    issueStatusRepository: IssueStatusRepository;
+    settingsRepository: SettingsRepository;
   },
   input: CreateIssueInput,
 ): Promise<Issue> {
@@ -122,6 +127,11 @@ export async function createIssue(
     startDate: input.startDate,
     dueDate: input.dueDate,
   });
+
+  // A new subtask can move its parent's derived dates, priority or done ratio.
+  if (issue.parentId) {
+    await recalculateParents(repositories, issue.id);
+  }
 
   await applyAutoWatch(repositories, "issue_created", "Issue", issue.id, issue.authorId);
   if (issue.assignedToId && issue.assignedToType === "user") {

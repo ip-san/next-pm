@@ -337,6 +337,12 @@ export default async function IssueDetailPage({
               (isAuthor && can({ permission: "set_own_issues_private", project: toAuthorizationProject(project), actor }))
             }
             canManageSubtasks={can({ permission: "manage_subtasks", project: toAuthorizationProject(project), actor })}
+            derivedFields={{
+              // The parent_issue_* settings only bite on an issue that actually has subtasks.
+              dates: childIssues.length > 0 && resolveGeneralSettings(settings).parentIssueDates === "derived",
+              priority: childIssues.length > 0 && resolveGeneralSettings(settings).parentIssuePriority === "derived",
+              doneRatio: childIssues.length > 0 && resolveGeneralSettings(settings).parentIssueDoneRatio === "derived",
+            }}
           />
         </section>
       ) : null}

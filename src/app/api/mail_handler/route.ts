@@ -213,6 +213,8 @@ async function handleCreate(sender: User, projectIdentifier: string, subject: st
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         projectId: project.id,

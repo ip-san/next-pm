@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createIssue, type CreateIssueInput } from "./create-issue";
-import { makeIssueAttributeRepositoriesMock } from "./test-support";
+import { makeIssueAttributeRepositoriesMock, makeRollupRepositoriesMock } from "./test-support";
 import { IssueAttributeNotAssignableError } from "./validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "./update-issue";
 import type { Issue } from "@/domain/issue/entity";
@@ -81,6 +81,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -99,6 +100,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ trackerIds: ["tracker-1"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(null),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -115,6 +117,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ trackerIds: ["missing"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(null),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -134,6 +137,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ priorityIds: ["normal"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -151,6 +155,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -168,6 +173,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ categoryIds: ["category-here"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -194,6 +200,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock(),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository([permission]),
@@ -222,6 +229,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository([permission]),
@@ -244,6 +252,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -266,6 +275,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -292,6 +302,7 @@ describe("createIssue", () => {
     await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),

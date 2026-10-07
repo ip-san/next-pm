@@ -15,10 +15,17 @@ export const GENERAL_SETTING_KEYS = [
   "repository_log_display_limit",
   "cross_project_issue_relations",
   "issue_done_ratio",
+  "parent_issue_dates",
+  "parent_issue_priority",
+  "parent_issue_done_ratio",
 ] as const;
 
 export const ISSUE_DONE_RATIO_VALUES = ["issue_field", "issue_status"] as const;
 export type IssueDoneRatioMode = (typeof ISSUE_DONE_RATIO_VALUES)[number];
+
+/** Redmine's parent_issue_* settings: roll the value up from the subtasks, or leave it alone. */
+export const PARENT_ISSUE_ROLLUP_VALUES = ["derived", "independent"] as const;
+export type ParentIssueRollupMode = (typeof PARENT_ISSUE_ROLLUP_VALUES)[number];
 
 export type GeneralSettingKey = (typeof GENERAL_SETTING_KEYS)[number];
 
@@ -43,6 +50,12 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // next-pm previously never derived done_ratio from status at all (only the SCM commit-hook
   // path did) — "issue_field" (manual, Redmine's own default too) preserves that.
   issue_done_ratio: "issue_field",
+  // Redmine defaults all three to "derived". next-pm has never rolled anything up from
+  // subtasks, so defaulting to "independent" keeps existing deployments behaving exactly as
+  // before until an admin opts in — the same rule the rest of this file follows.
+  parent_issue_dates: "independent",
+  parent_issue_priority: "independent",
+  parent_issue_done_ratio: "independent",
 };
 
 export interface GeneralSettings {
@@ -54,6 +67,15 @@ export interface GeneralSettings {
   repositoryLogDisplayLimit: number;
   crossProjectIssueRelations: boolean;
   issueDoneRatio: IssueDoneRatioMode;
+  parentIssueDates: ParentIssueRollupMode;
+  parentIssuePriority: ParentIssueRollupMode;
+  parentIssueDoneRatio: ParentIssueRollupMode;
+}
+
+function rollupMode(raw: string | undefined, key: GeneralSettingKey): ParentIssueRollupMode {
+  return PARENT_ISSUE_ROLLUP_VALUES.includes(raw as ParentIssueRollupMode)
+    ? (raw as ParentIssueRollupMode)
+    : (GENERAL_SETTING_DEFAULTS[key] as ParentIssueRollupMode);
 }
 
 function positiveIntOr(raw: string | undefined, fallback: number): number {
@@ -76,5 +98,8 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
     issueDoneRatio: ISSUE_DONE_RATIO_VALUES.includes(overrides.issue_done_ratio as IssueDoneRatioMode)
       ? (overrides.issue_done_ratio as IssueDoneRatioMode)
       : (GENERAL_SETTING_DEFAULTS.issue_done_ratio as IssueDoneRatioMode),
+    parentIssueDates: rollupMode(overrides.parent_issue_dates, "parent_issue_dates"),
+    parentIssuePriority: rollupMode(overrides.parent_issue_priority, "parent_issue_priority"),
+    parentIssueDoneRatio: rollupMode(overrides.parent_issue_done_ratio, "parent_issue_done_ratio"),
   };
 }

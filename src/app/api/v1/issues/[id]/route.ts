@@ -18,6 +18,7 @@ import {
 } from "@/application/issues/delete-issue";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
@@ -270,6 +271,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         timeEntryRepository: new DrizzleTimeEntryRepository(),
         attachmentRepository: new DrizzleAttachmentRepository(),
         attachmentStorage: new FsAttachmentStore(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        enumerationRepository: new DrizzleEnumerationRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       { issueId: id, actingUserId: user.id, actor, actorGroupIds: userGroupIds, timeEntries: disposition },
     );

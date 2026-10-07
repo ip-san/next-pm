@@ -23,6 +23,7 @@ import {
   WorkflowRequiredFieldError,
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
@@ -158,6 +159,8 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         projectId: parsed.data.projectId,
@@ -604,6 +607,9 @@ export async function deleteIssueAction(
         timeEntryRepository: new DrizzleTimeEntryRepository(),
         attachmentRepository: new DrizzleAttachmentRepository(),
         attachmentStorage: new FsAttachmentStore(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        enumerationRepository: new DrizzleEnumerationRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         issueId: parsed.data.issueId,
@@ -698,6 +704,7 @@ export async function copyIssueAction(
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
         settingsRepository: new DrizzleSettingsRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
       },
       {
         sourceIssueId: parsed.data.sourceIssueId,
