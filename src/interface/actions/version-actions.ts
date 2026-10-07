@@ -6,6 +6,7 @@ import { can } from "@/domain/authorization/authorization-service";
 import { createVersion, InvalidVersionError } from "@/application/versions/create-version";
 import { updateVersion } from "@/application/versions/update-version";
 import { deleteVersion, VersionNotDeletableError } from "@/application/versions/delete-version";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -178,7 +179,7 @@ export async function deleteVersionAction(_prevState: VersionActionState, formDa
   }
 
   try {
-    await deleteVersion({ versionRepository }, parsed.data.versionId);
+    await deleteVersion({ versionRepository, attachmentRepository: new DrizzleAttachmentRepository() }, parsed.data.versionId);
   } catch (error) {
     if (error instanceof VersionNotDeletableError) {
       return { error: error.message };
