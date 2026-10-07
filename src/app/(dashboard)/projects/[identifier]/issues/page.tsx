@@ -1,27 +1,48 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { listProjectIssues } from "@/application/issues/list-project-issues";
 import { can } from "@/domain/authorization/authorization-service";
-import { compileFilters, type FilterCondition } from "@/domain/query/filter-builder";
-import { isQueryVisible } from "@/domain/query/visibility";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { memberUserIds } from "@/domain/member/entity";
+import type { QueryColumn } from "@/domain/query/columns";
+import type { SavedQuery } from "@/domain/query/entity";
+import { linkedPages } from "@/domain/query/pagination";
+import { toggleSortCriteria, sortDirectionFor } from "@/domain/query/sort";
+import { isQueryEditable, isQueryVisible } from "@/domain/query/visibility";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
+import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
+import { DrizzleIssueSearchRepository } from "@/infrastructure/db/repositories/issue-search-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
+import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { SaveQueryForm } from "./save-query-form";
+import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issueColumnValue, issueGroupLabel, issueGroupValue, type IssueListLookups } from "@/interface/query/issue-list-view";
+import { issueListHref, normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
+import { IssueQueryForm, type FilterValueOption } from "./issue-query-form";
+import { SaveQueryForm, SavedQueryControls } from "./save-query-form";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProjectIssuesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ identifier: string }>;
-  searchParams: Promise<{ status_id?: string; query_id?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { identifier } = await params;
-  const { status_id: statusFilter, query_id: queryId } = await searchParams;
+  const raw = normalizeSearchParams(await searchParams);
+  const listParams = parseIssueListParams(raw);
+
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
     notFound();
@@ -29,37 +50,117 @@ export default async function ProjectIssuesPage({
 
   const user = await currentUserFromCookies();
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "view_issues", project: projectContext, actor })) {
     notFound();
   }
 
+  const canViewTimeEntries = can({ permission: "view_time_entries", project: projectContext, actor });
+  const canSaveQueries = can({ permission: "save_queries", project: projectContext, actor });
+  const canManagePublicQueries = can({ permission: "manage_public_queries", project: projectContext, actor });
+
   const queryRepository = new DrizzleQueryRepository();
-  const allQueries = await queryRepository.listForProject(project.id);
-  const visibleQueries = allQueries.filter((q) => isQueryVisible(q, user?.id ?? "", roleIds));
+  const allQueries = await queryRepository.listForProject(project.id, "IssueQuery");
+  const visibleQueries = allQueries.filter((query) => isQueryVisible(query, user?.id ?? "", roleIds));
 
   // ?query_id= is client-supplied — re-verify it belongs to this project and is visible to
-  // this actor before trusting its filters, rather than trusting the id alone (IDOR-safe).
-  let appliedFilters: FilterCondition[] = [];
-  if (queryId) {
-    const query = await queryRepository.findById(queryId);
-    if (query && query.projectId === project.id && isQueryVisible(query, user?.id ?? "", roleIds)) {
-      appliedFilters = query.filters;
-    }
-  } else if (statusFilter) {
-    appliedFilters = [{ field: "status_id", operator: "=", values: [statusFilter] }];
+  // this actor before trusting its settings, rather than trusting the id alone (IDOR-safe).
+  let savedQuery: SavedQuery | null = null;
+  if (listParams.queryId) {
+    savedQuery = visibleQueries.find((query) => query.id === listParams.queryId) ?? null;
   }
 
-  const predicates = compileFilters(appliedFilters);
+  const result = await listProjectIssues(
+    {
+      issueSearchRepository: new DrizzleIssueSearchRepository(),
+      issueStatusRepository: new DrizzleIssueStatusRepository(),
+      customFieldRepository: new DrizzleCustomFieldRepository(),
+      settingsRepository: new DrizzleSettingsRepository(),
+    },
+    {
+      projectId: project.id,
+      params: listParams,
+      savedQuery,
+      visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),
+      canViewTimeEntries,
+      today: new Date().toISOString().slice(0, 10),
+    },
+  );
 
-  const [allIssues, statuses, trackers] = await Promise.all([
-    new DrizzleIssueRepository().listByProject(project.id, predicates),
+  const [statuses, trackers, priorities, categories, versions, members, allGroups, roles] = await Promise.all([
     new DrizzleIssueStatusRepository().listAll(),
     new DrizzleTrackerRepository().listAll(),
+    new DrizzleEnumerationRepository().listByType("IssuePriority"),
+    new DrizzleIssueCategoryRepository().listByProject(project.id),
+    new DrizzleVersionRepository().listByProject(project.id),
+    new DrizzleMemberRepository().listByProject(project.id),
+    new DrizzleGroupRepository().listAll(),
+    new DrizzleRoleRepository().listAssignable(),
   ]);
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
-  const statusById = new Map(statuses.map((s) => [s.id, s]));
-  const trackerById = new Map(trackers.map((t) => [t.id, t]));
+  const memberUsers = await new DrizzleUserRepository().findByIds(memberUserIds(members));
+
+  const lookups: IssueListLookups = {
+    statuses: new Map(statuses.map((status) => [status.id, status.name])),
+    trackers: new Map(trackers.map((tracker) => [tracker.id, tracker.name])),
+    priorities: new Map(priorities.map((priority) => [priority.id, priority.name])),
+    users: new Map(memberUsers.map((member) => [member.id, `${member.lastname} ${member.firstname}`])),
+    groups: new Map(allGroups.map((group) => [group.id, group.name])),
+    categories: new Map(categories.map((category) => [category.id, category.name])),
+    versions: new Map(versions.map((version) => [version.id, version.name])),
+  };
+  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours };
+
+  const basePath = `/projects/${identifier}/issues`;
+  const exportParams = serializeIssueListParams({ ...listParams, ...result.effective, page: undefined }).toString();
+
+  const valueOptions: Record<string, FilterValueOption[]> = {
+    status_id: statuses.map((status) => ({ value: status.id, label: status.name })),
+    tracker_id: trackers.map((tracker) => ({ value: tracker.id, label: tracker.name })),
+    priority_id: priorities.map((priority) => ({ value: priority.id, label: priority.name })),
+    category_id: categories.map((category) => ({ value: category.id, label: category.name })),
+    fixed_version_id: versions.map((version) => ({ value: version.id, label: version.name })),
+    // Redmine offers "me" as the first value of any user filter (`Query#statement` swaps it
+    // for the current user's id at compile time).
+    author_id: userFilterOptions(memberUsers, user?.id),
+    assigned_to_id: userFilterOptions(memberUsers, user?.id),
+    is_private: [
+      { value: "1", label: "はい" },
+      { value: "0", label: "いいえ" },
+    ],
+    ...Object.fromEntries(
+      result.customFields
+        .filter((field) => field.fieldFormat === "list" || field.fieldFormat === "bool")
+        .map((field) => [
+          `cf_${field.id}`,
+          field.fieldFormat === "bool"
+            ? [
+                { value: "1", label: "はい" },
+                { value: "0", label: "いいえ" },
+              ]
+            : field.possibleValues.map((value) => ({ value, label: value })),
+        ]),
+    ),
+  };
+
+  const groupsByValue = new Map((result.search.groups ?? []).map((group) => [group.value, group]));
+  const totalColumns = result.effective.totalableNames
+    .map((key) => result.availableColumns.find((column) => column.key === key))
+    .filter((column): column is QueryColumn => column !== undefined);
+
+  // Group boundaries are worked out before rendering rather than with a running variable
+  // inside the row map — the rows arrive already ordered by the group column, so a row
+  // starts a new group whenever its group value differs from the previous row's.
+  const groupBy = result.effective.groupBy;
+  const tableRows = result.search.issues.map((issue, index) => {
+    const groupValue = groupBy ? issueGroupValue(groupBy, issue, result.search.customValues) : undefined;
+    const previous = index === 0 ? undefined : result.search.issues[index - 1];
+    const previousValue = groupBy && previous ? issueGroupValue(groupBy, previous, result.search.customValues) : undefined;
+    return {
+      issue,
+      groupValue,
+      startsGroup: groupValue !== undefined && (index === 0 || groupValue !== previousValue),
+    };
+  });
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -78,16 +179,10 @@ export default async function ProjectIssuesPage({
           <Link href={`/projects/${identifier}/calendar`} className="border rounded px-3 py-2 text-sm">
             カレンダー
           </Link>
-          <a
-            href={`/api/projects/${identifier}/issues/csv${statusFilter ? `?status_id=${statusFilter}` : ""}`}
-            className="border rounded px-3 py-2 text-sm"
-          >
+          <a href={`/api/projects/${identifier}/issues/csv?${exportParams}`} className="border rounded px-3 py-2 text-sm">
             CSV
           </a>
-          <a
-            href={`/api/projects/${identifier}/issues/pdf${statusFilter ? `?status_id=${statusFilter}` : ""}`}
-            className="border rounded px-3 py-2 text-sm"
-          >
+          <a href={`/api/projects/${identifier}/issues/pdf?${exportParams}`} className="border rounded px-3 py-2 text-sm">
             PDF
           </a>
           <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
@@ -100,16 +195,16 @@ export default async function ProjectIssuesPage({
       </div>
 
       {visibleQueries.length > 0 && (
-        <nav className="flex items-center gap-3 text-sm">
+        <nav className="flex items-center gap-3 text-sm flex-wrap">
           <span className="text-gray-500">保存済みクエリ:</span>
-          <Link href={`/projects/${identifier}/issues`} className={!queryId ? "font-semibold underline" : "underline"}>
+          <Link href={basePath} className={!savedQuery ? "font-semibold underline" : "underline"}>
             (絞り込みなし)
           </Link>
           {visibleQueries.map((query) => (
             <Link
               key={query.id}
-              href={`/projects/${identifier}/issues?query_id=${query.id}`}
-              className={queryId === query.id ? "font-semibold underline" : "underline"}
+              href={`${basePath}?query_id=${query.id}`}
+              className={savedQuery?.id === query.id ? "font-semibold underline" : "underline"}
             >
               {query.name}
             </Link>
@@ -117,64 +212,187 @@ export default async function ProjectIssuesPage({
         </nav>
       )}
 
-      <form method="get" className="flex items-center gap-2 text-sm">
-        <label htmlFor="status_id">ステータスで絞り込み:</label>
-        <select id="status_id" name="status_id" defaultValue={statusFilter ?? ""} className="border rounded px-2 py-1">
-          <option value="">(すべて)</option>
-          {statuses.map((status) => (
-            <option key={status.id} value={status.id}>
-              {status.name}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className="border rounded px-2 py-1">
-          適用
-        </button>
-      </form>
+      <IssueQueryForm
+        action={basePath}
+        columns={result.availableColumns}
+        valueOptions={valueOptions}
+        initialFilters={result.effective.filters}
+        initialColumnKeys={result.displayColumns.filter((column) => !column.frozen).map((column) => column.key)}
+        initialGroupBy={result.effective.groupBy}
+        initialTotalableKeys={result.effective.totalableNames}
+        sortCriteria={result.effective.sortCriteria}
+        perPage={String(result.pagination.perPage)}
+      />
 
-      {appliedFilters.length > 0 && (
-        <SaveQueryForm
+      <SaveQueryForm
+        projectIdentifier={identifier}
+        options={result.effective}
+        canPublish={canManagePublicQueries}
+        canSave={canSaveQueries}
+        roles={roles.map((role) => ({ id: role.id, name: role.name }))}
+        editing={
+          savedQuery && isQueryEditable(savedQuery, { userId: user?.id ?? null, isAdmin: user?.isAdmin ?? false, canManagePublicQueries })
+            ? { id: savedQuery.id, name: savedQuery.name, visibility: savedQuery.visibility, roleIds: savedQuery.roleIds }
+            : undefined
+        }
+      />
+
+      {savedQuery ? (
+        <SavedQueryControls
           projectIdentifier={identifier}
-          filters={appliedFilters}
-          canPublish={can({ permission: "edit_issues", project: toAuthorizationProject(project), actor })}
+          query={{ id: savedQuery.id, name: savedQuery.name, visibility: savedQuery.visibility, roleIds: savedQuery.roleIds }}
+          canDelete={isQueryEditable(savedQuery, {
+            userId: user?.id ?? null,
+            isAdmin: user?.isAdmin ?? false,
+            canManagePublicQueries,
+          })}
+          canCopy={canSaveQueries}
         />
-      )}
+      ) : null}
 
-      <form method="get" action={`/projects/${identifier}/issues/bulk-edit`} className="flex flex-col gap-3">
+      <form method="get" action={`${basePath}/bulk-edit`} className="flex flex-col gap-3">
+        <p className="text-sm text-gray-600">
+          {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
+        </p>
+
         <table className="text-sm border-collapse">
           <thead>
             <tr className="text-left border-b">
               <th className="pr-4 py-1" />
-              <th className="pr-4 py-1">#</th>
-              <th className="pr-4 py-1">トラッカー</th>
-              <th className="pr-4 py-1">件名</th>
-              <th className="pr-4 py-1">ステータス</th>
-              <th className="pr-4 py-1">進捗率</th>
+              {result.displayColumns.map((column) => (
+                <th key={column.key} className="pr-4 py-1">
+                  {column.sortable ? (
+                    <Link
+                      href={issueListHref(basePath, listParams, {
+                        ...result.effective,
+                        columnKeys: result.effective.columnNames,
+                        totalableKeys: result.effective.totalableNames,
+                        sortCriteria: toggleSortCriteria(result.effective.sortCriteria, column),
+                        page: undefined,
+                      })}
+                      className="underline"
+                    >
+                      {column.label}
+                      {sortDirectionFor(result.effective.sortCriteria, column.key) === "asc" ? " ▲" : null}
+                      {sortDirectionFor(result.effective.sortCriteria, column.key) === "desc" ? " ▼" : null}
+                    </Link>
+                  ) : (
+                    column.label
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {issues.map((issue) => (
-              <tr key={issue.id} className="border-b">
-                <td className="pr-4 py-1">
-                  <input type="checkbox" name="ids" value={issue.id} />
-                </td>
-                <td className="pr-4 py-1">
-                  <Link href={`/projects/${identifier}/issues/${issue.id}`} className="underline">
-                    {issue.id.slice(0, 8)}
-                  </Link>
-                </td>
-                <td className="pr-4 py-1">{trackerById.get(issue.trackerId)?.name ?? "?"}</td>
-                <td className="pr-4 py-1">{issue.subject}</td>
-                <td className="pr-4 py-1">{statusById.get(issue.statusId)?.name ?? "?"}</td>
-                <td className="pr-4 py-1">{issue.doneRatio}%</td>
-              </tr>
-            ))}
+            {tableRows.map(({ issue, groupValue, startsGroup }) => {
+              // Group counts and totals come from the aggregate query over the *whole*
+              // filtered set, so a group header shows its real size even when the page cuts
+              // the group in half.
+              const group = startsGroup ? groupsByValue.get(groupValue ?? null) : undefined;
+
+              return (
+                <Fragment key={issue.id}>
+                  {startsGroup ? (
+                    <tr className="bg-gray-50 border-b">
+                      <td colSpan={result.displayColumns.length + 1} className="py-1 font-semibold">
+                        {issueGroupLabel(groupBy as string, groupValue ?? null, lookups)} ({group?.count ?? 0})
+                        {totalColumns.map((column) => (
+                          <span key={column.key} className="ml-3 font-normal text-gray-600">
+                            {column.label}: {group?.totals[column.key] ?? 0}
+                          </span>
+                        ))}
+                      </td>
+                    </tr>
+                  ) : null}
+                  <tr className="border-b">
+                    <td className="pr-4 py-1">
+                      <input type="checkbox" name="ids" value={issue.id} aria-label={`${issue.subject}を選択`} />
+                    </td>
+                    {result.displayColumns.map((column) => (
+                      <td key={column.key} className="pr-4 py-1">
+                        {column.key === "id" || column.key === "subject" ? (
+                          <Link href={`${basePath}/${issue.id}`} className="underline">
+                            {issueColumnValue(column, issue, rowContext)}
+                          </Link>
+                        ) : (
+                          issueColumnValue(column, issue, rowContext)
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                </Fragment>
+              );
+            })}
           </tbody>
+          {totalColumns.length > 0 ? (
+            <tfoot>
+              <tr className="border-t-2 font-semibold">
+                <td className="pr-4 py-1">合計</td>
+                {result.displayColumns.map((column) => (
+                  <td key={column.key} className="pr-4 py-1">
+                    {column.totalable && result.effective.totalableNames.includes(column.key)
+                      ? (result.search.totals[column.key] ?? 0)
+                      : null}
+                  </td>
+                ))}
+              </tr>
+              {/* Totals for columns that aren't displayed still have to appear somewhere. */}
+              {totalColumns.some((column) => !result.displayColumns.includes(column)) ? (
+                <tr>
+                  <td colSpan={result.displayColumns.length + 1} className="py-1 text-gray-600 font-normal">
+                    {totalColumns
+                      .filter((column) => !result.displayColumns.includes(column))
+                      .map((column) => `${column.label}: ${result.search.totals[column.key] ?? 0}`)
+                      .join(" / ")}
+                  </td>
+                </tr>
+              ) : null}
+            </tfoot>
+          ) : null}
         </table>
         <button type="submit" className="border rounded px-3 py-2 text-sm self-start">
           選択したチケットを編集
         </button>
       </form>
+
+      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label="ページ送り">
+        {linkedPages(result.pagination).map((page) => (
+          <Link
+            key={page}
+            href={issueListHref(basePath, listParams, {
+              ...result.effective,
+              columnKeys: result.effective.columnNames,
+              totalableKeys: result.effective.totalableNames,
+              page: String(page),
+              perPage: String(result.pagination.perPage),
+            })}
+            className={page === result.pagination.page ? "font-semibold" : "underline"}
+          >
+            {page}
+          </Link>
+        ))}
+        <span className="text-gray-500">表示件数:</span>
+        {result.perPageOptions.map((option) => (
+          <Link
+            key={option}
+            href={issueListHref(basePath, listParams, {
+              ...result.effective,
+              columnKeys: result.effective.columnNames,
+              totalableKeys: result.effective.totalableNames,
+              page: undefined,
+              perPage: String(option),
+            })}
+            className={option === result.pagination.perPage ? "font-semibold" : "underline"}
+          >
+            {option}
+          </Link>
+        ))}
+      </nav>
     </main>
   );
+}
+
+function userFilterOptions(users: { id: string; firstname: string; lastname: string }[], currentUserId: string | undefined): FilterValueOption[] {
+  const options = users.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` }));
+  return currentUserId ? [{ value: "me", label: "<< 自分 >>" }, ...options] : options;
 }

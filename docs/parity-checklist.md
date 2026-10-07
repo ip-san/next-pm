@@ -19,7 +19,7 @@
 | 差分 | 内容 |
 |---|---|
 | 課題の識別子 | 本家は全体で一意の連番(`#123`)。next-pm は UUID の先頭 8 桁(`#eb0b2d1a`)を表示・参照の shorthand に使う。メール件名の返信検出(`domain/mail/parse-email.ts`)やコミットメッセージ走査(`domain/scm/keyword-scan.ts`)もこの表記に合わせてある。移行するなら全機能横断の変更になる |
-| クエリエンジン | 本家 `Query` はフィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つ。next-pm の `queries` テーブルは `filters` のみで、他の 5 要素が存在しない。課題一覧・工数一覧・横断一覧すべてがこの制約を受けている |
+| クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。現時点の適用先はプロジェクトの課題一覧のみで、工数一覧(§9)と横断一覧(§13)への再利用は未着手(`type` 列と `IssueSearchRepository` の分離はそのための下地) |
 | 課題の更新経路 | ドメイン/ユースケース層(`application/issues/update-issue.ts`)は任意フィールドの更新・ワークフロー検証・journal 生成まで対応済みだが、UI から到達できるのはステータス/対象バージョン/注記のみ。**多くの「課題の未実装機能」は実際には UI 層だけの穴** |
 | 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm はプロジェクト配下のみで、横断は検索(`/search`)と REST API v1 に限られる |
 | 管理画面の CRUD | `interface/actions/admin-actions.ts` は作成系のみ。マスタの編集・削除・並べ替えが全般的に無い |
@@ -30,7 +30,7 @@
 | # | 項目 | 理由 | 参照 |
 |---|---|---|---|
 | 1 | 課題の単票編集フォーム | ドメイン層が揃っているため UI + Server Action のみで済む割に、体感差が最大 | §1 |
-| 2 | クエリの表示列・ソート・グルーピング・合計・ページング | 一覧系すべての基盤。ここが無いと課題数が増えた時点で実用に耐えない | §2 |
+| ~~2~~ | ~~クエリの表示列・ソート・グルーピング・合計・ページング~~ | 課題一覧について実装済み。残るは工数一覧・横断一覧への展開 | §2 |
 | 3 | 横断画面(`/issues`, `/time_entries`, `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
 | 4 | 管理画面の更新・削除 | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
 | 5 | プライベート注記・注記の編集/削除 | `journals` にフラグ列追加 + 権限 3 種の追加が前提 | §1, §4 |
@@ -75,20 +75,20 @@
 | カスタムフィールド: 適用範囲 | partial | トラッカー単位の紐付け + プロジェクト設定での有効化。ロール別の可視/編集可否(本家の `visible` / `role_ids`)が無い |
 | カスタムフィールド: 課題での値の入力 | partial | REST API(`POST /api/v1/issues`, `PATCH /api/v1/issues/[id]`)からのみ設定可能。**課題の作成/更新フォームに入力欄が無い**(`application/issues/set-custom-field-values.ts` は UI から呼ばれていない)。単票画面での表示は done |
 | カスタムフィールド: プロジェクトでの値の入力 | done | プロジェクト設定画面から編集可能 |
-| カスタムフィールドによる絞り込み・表示列 | missing | §2 のクエリエンジン側の制約 |
+| カスタムフィールドによる絞り込み・表示列 | done | 課題一覧のフィルタ・表示列・ソート・グルーピング・合計すべてで `cf_<id>` を扱える(`domain/query/columns.ts`)。書式ごとの扱いは本家準拠 — 合計は `int`/`float` のみ、グルーピングは `text` と `float` を除く(本家 `FloatFormat` が `group_statement` を持たないため)。値の数値キャストは正規表現で保護してあり、非数値が混ざった行があっても一覧全体が落ちない |
 
 ## 2. クエリ・一覧・エクスポート
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| 保存済みクエリ | partial | 作成(`saveQueryAction`)と適用、可視性(private/roles/public)、プロジェクト単位/グローバルまで。**編集・削除・複製が無い**。権限 `save_queries` / `manage_public_queries` も未定義 |
-| フィルタの適用 | partial | 保存済みクエリの `filters` と `?status_id=` のショートカットのみ。**画面上でその場に条件を組み立てる UI が無い**(`issues/page.tsx`) |
-| 表示列の選択 | missing | `queries` テーブルに `column_names` 相当が無い |
-| グルーピング | missing | `group_by` 相当が無い |
-| ソート | missing | `sort_criteria` 相当が無い |
-| 合計行(予定工数/作業時間などの total) | missing | |
-| ページネーション | missing | 一覧は全件をメモリ上で可視性フィルタして描画している |
-| CSV エクスポート | partial | 課題のみ(`/api/projects/[identifier]/issues/csv`)。工数・ユーザーの CSV が無い。表示列の選択も §2 の制約により不可 |
+| 保存済みクエリ | done | 作成・編集・削除・複製(`application/queries/`)、可視性(private/roles/public)、プロジェクト単位/グローバル。権限は `save_queries` / `manage_public_queries` を追加。可否は本家 `Query#editable_by?` の移植(`domain/query/visibility.ts`)— private は所有者のみ、public/roles は `manage_public_queries` 保持者、グローバルな public は管理者のみ。`manage_public_queries` を持たない利用者の公開指定は本家同様エラーにせず private へ落とす |
+| フィルタの適用 | done | 画面上でその場に条件を組み立てる UI(`issues/issue-query-form.tsx`)。演算子は本家 `Query.operators` のうち next-pm に対象列がある 31 種(等価/空/範囲/部分一致/前方後方一致/未完了・完了/相対日付 17 種)。`me` の展開、`o`/`c` のステータス集合展開も本家準拠。URL は本家と同じ `f[]` / `op[field]` / `v[field][]` / `c[]` / `t[]` / `group_by` / `sort` / `set_filter` |
+| 表示列の選択 | done | `queries.column_names`。既定は本家 `Setting.issue_list_default_columns` と同じ 6 列。`spent_hours` は `view_time_entries` 保持者にのみ提示(本家 `IssueQuery#initialize_available_columns` 準拠) |
+| グルーピング | done | `queries.group_by`。グループ見出しに件数と小計を表示。件数・小計はページではなく絞り込み結果全体に対して SQL で集計するため、グループがページ境界で分割されても正しい。グループの並び順は本家同様その列のソート式(ステータスなら `position`)に従う |
+| ソート | done | `queries.sort_criteria`。列見出しクリックで多段ソート(本家同様 3 キーまで、クリックした列が先頭へ)。UUID 主キーには順序が無いため `id` 列のソートは `created_at` に対応付け、ページングが安定するよう常に `id` を最終キーに付ける |
+| 合計行(予定工数/作業時間などの total) | done | 本家 `options[:totalable_names]` 相当を `queries.totalable_names` に保持。予定工数・作業時間・数値カスタムフィールドの合計を、全体とグループ単位の両方で SQL 集計 |
+| ページネーション | done | 件数・行・グループ集計・合計すべて SQL 側で処理し、1 ページ分しかメモリに載せない。プライベート課題の可視性も `Array#filter` ではなく WHERE 句で効かせてあるため、件数と合計が可視範囲とずれない。ページサイズは本家 `Setting.per_page_options`(既定 `25,50,100`)。範囲外のページ番号は最終ページに丸める |
+| CSV エクスポート | partial | 課題のみ(`/api/projects/[identifier]/issues/csv`)。工数・ユーザーの CSV が無い。一覧と同じ URL 契約・同じユースケースを使うため、選択した表示列・フィルタ・ソートをそのまま反映する(行数の上限は本家同様 `issues_export_limit`、既定 500) |
 | PDF エクスポート | done | 課題一覧・Wiki・ガント |
 | Atom フィード | partial | プロジェクト活動のみ(`/api/projects/[identifier]/activity/atom`)。課題一覧・横断活動のフィードが無い |
 
@@ -117,12 +117,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 43。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 45。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `manage_subtasks`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `set_issues_private`, `set_notes_private`, `set_own_issues_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_issue_notes`, `add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `copy_issues`, `delete_issues`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `edit_issue_notes`, `edit_own_issue_notes`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_related_issues`, `manage_subtasks`, `protect_wiki_pages`, `rename_wiki_pages`, `search_project`, `select_project_publicity`, `set_issues_private`, `set_notes_private`, `set_own_issues_private`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_private_notes`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -194,7 +194,7 @@
 |---|---|---|
 | 工数の記録 | done | 課題単票の `log-time-form` から |
 | 工数の編集・削除 | missing | `edit_time_entries` / `edit_own_time_entries` 権限だけが存在し、対応する操作が無い |
-| プロジェクトの工数一覧 | partial | 一覧と集計レポートあり。フィルタ・列選択・ソートは §2 の制約 |
+| プロジェクトの工数一覧 | partial | 一覧と集計レポートあり。フィルタ・列選択・ソートは未適用 — §2 のクエリエンジンは `queries.type = 'TimeEntryQuery'` を見込んだ作りになっているが、工数側の列カタログと読み取りモデルはまだ無い |
 | 横断の工数一覧 | missing | 本家 `/time_entries` |
 | 他ユーザー名義での記録 | missing | `log_time_for_other_users` |
 | 工数のカスタムフィールド | missing | |
