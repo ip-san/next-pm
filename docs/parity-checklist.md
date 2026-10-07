@@ -19,9 +19,9 @@
 | 差分 | 内容 |
 |---|---|
 | 課題の識別子 | 本家は全体で一意の連番(`#123`)。next-pm は UUID の先頭 8 桁(`#eb0b2d1a`)を表示・参照の shorthand に使う。メール件名の返信検出(`domain/mail/parse-email.ts`)やコミットメッセージ走査(`domain/scm/keyword-scan.ts`)もこの表記に合わせてある。移行するなら全機能横断の変更になる |
-| クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。現時点の適用先はプロジェクトの課題一覧のみで、工数一覧(§9)と横断一覧(§13)への再利用は未着手(`type` 列と `IssueSearchRepository` の分離はそのための下地) |
+| クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。適用先はプロジェクトの課題一覧と横断の課題一覧(§13)。工数一覧(§9)への再利用は未着手(`type` 列はそのための下地) |
 | 課題の更新経路 | 解消済み。単票の編集フォームからドメイン層の全項目(トラッカー・親課題・カスタム値を含む)に到達できるようになった。残る穴は一括編集の対応項目(§1)とコンテキストメニュー |
-| 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm はプロジェクト配下のみで、横断は検索(`/search`)と REST API v1 に限られる |
+| 画面のスコープ | 本家は「グローバル画面 + プロジェクト画面」の二層構造(`/issues`, `/time_entries`, `/activity`)。next-pm も `/issues` を持つようになった。残るグローバル画面は `/time_entries` と `/activity` |
 | 管理画面の CRUD | ユーザー/ロール/トラッカー/課題ステータス/カスタムフィールド/列挙項目の編集・削除・並べ替えを実装済み。残るのはボード(§8)と、列挙項目のプロジェクト単位の上書き編集 |
 | 国際化 | 本家は約 50 言語のロケールファイル + ユーザーごとの言語設定。next-pm は文言がコンポーネントに直書きで i18n 基盤自体が無い |
 
@@ -31,7 +31,7 @@
 |---|---|---|---|
 | ~~1~~ | ~~課題の単票編集フォーム~~ (対応済み) | ドメイン層が揃っているため UI + Server Action のみで済む割に、体感差が最大 | §1 |
 | ~~2~~ | ~~クエリの表示列・ソート・グルーピング・合計・ページング~~ | 課題一覧について実装済み。残るは工数一覧・横断一覧への展開 | §2 |
-| 3 | 横断画面(`/issues`, `/time_entries`, `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
+| 3 | 横断画面(`/issues` は対応済み。残り `/time_entries`, `/activity`) | #2 の後なら一覧コンポーネントの再利用で済む | §13 |
 | 4 | ~~管理画面の更新・削除~~ (実装済み) | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
 | 5 | プライベート注記・注記の編集/削除 | `journals` にフラグ列追加 + 権限 3 種の追加が前提 | §1, §4 |
 | 6 | ~~工数の編集・削除~~(対応済み) | 編集/削除・他ユーザー名義の記録・工数カスタムフィールド・CSV 入出力・REST の個別操作まで実装 | §9 |
@@ -80,7 +80,7 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| 保存済みクエリ | done | 作成・編集・削除・複製(`application/queries/`)、可視性(private/roles/public)、プロジェクト単位/グローバル。権限は `save_queries` / `manage_public_queries` を追加。可否は本家 `Query#editable_by?` の移植(`domain/query/visibility.ts`)— private は所有者のみ、public/roles は `manage_public_queries` 保持者、グローバルな public は管理者のみ。`manage_public_queries` を持たない利用者の公開指定は本家同様エラーにせず private へ落とす |
+| 保存済みクエリ | done | 作成・編集・削除・複製(`application/queries/`)、可視性(private/roles/public)、プロジェクト単位/グローバル(本家 `Query.global_or_on_project` — プロジェクト一覧は自分のものとグローバルの両方、横断一覧はグローバルのみを出す。グローバルな保存は `/issues` から行える)。権限は `save_queries` / `manage_public_queries` を追加。可否は本家 `Query#editable_by?` の移植(`domain/query/visibility.ts`)— private は所有者のみ、public/roles は `manage_public_queries` 保持者、グローバルな public は管理者のみ。`manage_public_queries` を持たない利用者の公開指定は本家同様エラーにせず private へ落とす |
 | フィルタの適用 | done | 画面上でその場に条件を組み立てる UI(`issues/issue-query-form.tsx`)。演算子は本家 `Query.operators` のうち next-pm に対象列がある 31 種(等価/空/範囲/部分一致/前方後方一致/未完了・完了/相対日付 17 種)。`me` の展開、`o`/`c` のステータス集合展開も本家準拠。URL は本家と同じ `f[]` / `op[field]` / `v[field][]` / `c[]` / `t[]` / `group_by` / `sort` / `set_filter` |
 | 表示列の選択 | done | `queries.column_names`。既定は本家 `Setting.issue_list_default_columns` と同じ 6 列。`spent_hours` は `view_time_entries` 保持者にのみ提示(本家 `IssueQuery#initialize_available_columns` 準拠) |
 | グルーピング | done | `queries.group_by`。グループ見出しに件数と小計を表示。件数・小計はページではなく絞り込み結果全体に対して SQL で集計するため、グループがページ境界で分割されても正しい。グループの並び順は本家同様その列のソート式(ステータスなら `position`)に従う |
@@ -89,7 +89,7 @@
 | ページネーション | done | 件数・行・グループ集計・合計すべて SQL 側で処理し、1 ページ分しかメモリに載せない。プライベート課題の可視性も `Array#filter` ではなく WHERE 句で効かせてあるため、件数と合計が可視範囲とずれない。ページサイズは本家 `Setting.per_page_options`(既定 `25,50,100`)。範囲外のページ番号は最終ページに丸める |
 | CSV エクスポート | partial | 課題のみ(`/api/projects/[identifier]/issues/csv`)。工数・ユーザーの CSV が無い。一覧と同じ URL 契約・同じユースケースを使うため、選択した表示列・フィルタ・ソートをそのまま反映する(行数の上限は本家同様 `issues_export_limit`、既定 500) |
 | PDF エクスポート | done | 課題一覧・Wiki・ガント |
-| Atom フィード | partial | プロジェクト活動のみ(`/api/projects/[identifier]/activity/atom`)。課題一覧・横断活動のフィードが無い |
+| Atom フィード | partial | プロジェクト活動(`/api/projects/[identifier]/activity/atom`)と、課題一覧のプロジェクト単位・横断の両方(`/api/projects/[identifier]/issues/atom`, `/api/issues/atom`)。課題フィードは一覧と同じ `f[]`/`query_id` を読むため、絞り込んだ一覧をそのまま購読できる。本家 `Issue` の `acts_as_event` に合わせ、並び順は作成日の降順・件名は `トラッカー #id (ステータス): 題名`。残るは横断活動のフィード |
 
 ## 3. プロジェクト
 
@@ -253,7 +253,7 @@
 | 横断検索 | partial | 全対象を横断して検索できる(`/search`)が、対象種別の絞り込み・タイトルのみ検索・未完了課題のみ等のオプションが無い。権限 `search_project` も未定義 |
 | プロジェクト活動 | done | `/projects/[identifier]/activity`、リポジトリのコミットも含む |
 | 横断活動 | missing | 本家 `/activity` |
-| 横断課題一覧 | missing | 本家 `/issues` |
+| 横断課題一覧 | done | `/issues`。プロジェクト一覧と同じクエリエンジン・同じ URL 契約で、スコープだけが「`view_issues` を持つ全プロジェクト」に変わる。本家 `Issue.visible_condition(user)` と同じく可視性はプロジェクトごとに決まるため、`projectScopes`(プロジェクト単位の `issues_visibility` と `time_entries_visibility` の判定)を WHERE 句の OR に展開する。`project` 列・`project_id` フィルタ・グルーピングを追加(本家 `if project.nil?` 準拠。カテゴリはプロジェクト固有のためフィルタのみ外す)。CSV と Atom も同じ URL 契約で出力 |
 | マイページ | partial | ブロック方式でカスタマイズ可(担当課題/報告課題/ウォッチ中/News/文書/作業時間)。本家にあってこちらに無いブロックは activity(活動)・calendar(カレンダー)・issue_query_selection(任意の保存済みクエリの結果) の 3 種(`../redmine/app/views/my/blocks/`) |
 | ガントチャート | partial | 月単位のウィンドウ + PDF 出力。ズーム段階(日/週/月/四半期)、バージョン行・サブプロジェクト表示、PNG 出力が無い |
 | カレンダー | done | 月グリッド |

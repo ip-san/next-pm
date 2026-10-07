@@ -5,7 +5,8 @@ import { QueryNotFoundError } from "./update-query";
 
 export interface DeleteQueryInput {
   queryId: string;
-  projectId: string;
+  /** Null for the global list — a global request may only delete a global query. */
+  projectId: string | null;
   actor: QueryActor;
 }
 

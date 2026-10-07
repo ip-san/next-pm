@@ -50,7 +50,7 @@ function repository(stored: SavedQuery | null = null) {
   const updated: { id: string; changes: SavedQueryUpdate }[] = [];
   const deleted: string[] = [];
   const queryRepository: QueryRepository = {
-    listForProject: mock(async () => []),
+    listAvailableFor: mock(async () => []),
     findById: mock(async () => stored),
     create: mock(async (draft: SavedQueryDraft) => {
       created.push(draft);

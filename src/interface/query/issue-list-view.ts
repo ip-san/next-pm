@@ -10,6 +10,8 @@ export interface IssueListLookups {
   groups: Map<string, string>;
   categories: Map<string, string>;
   versions: Map<string, string>;
+  /** Only the cross-project list renders a project column, so a project-scoped caller may omit this. */
+  projects?: Map<string, string>;
 }
 
 export interface IssueRowContext {
@@ -48,6 +50,8 @@ export function issueColumnValue(column: QueryColumn, issue: Issue, context: Iss
   switch (column.key) {
     case "id":
       return context.fullIds ? issue.id : issue.id.slice(0, 8);
+    case "project":
+      return context.lookups.projects?.get(issue.projectId) ?? "";
     case "tracker":
       return context.lookups.trackers.get(issue.trackerId) ?? "";
     case "status":
@@ -97,6 +101,8 @@ export function issueGroupValue(groupBy: string, issue: Issue, customValues: Map
   }
 
   switch (groupBy) {
+    case "project":
+      return issue.projectId;
     case "tracker":
       return issue.trackerId;
     case "status":
@@ -132,6 +138,8 @@ export function issueGroupValue(groupBy: string, issue: Issue, customValues: Map
 export function issueGroupLabel(groupBy: string, value: string | null, lookups: IssueListLookups): string {
   if (value === null) return "(なし)";
   switch (groupBy) {
+    case "project":
+      return lookups.projects?.get(value) ?? value;
     case "tracker":
       return lookups.trackers.get(value) ?? value;
     case "status":

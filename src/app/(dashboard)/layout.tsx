@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { logoutAction } from "@/interface/actions/auth-actions";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { listProjectsWithPermission } from "@/interface/http/resolve-actor";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUserFromCookies();
+
+  // Redmine's application_menu hides the global Issues and Spent time entries unless the
+  // viewer holds the permission in at least one visible project with the module enabled
+  // (`allowed_to?(..., nil, :global => true) && EnabledModule.exists?`). `can` already
+  // folds the module check in, so one lookup per permission answers both halves.
+  const issueProjects = await listProjectsWithPermission(user, "view_issues");
 
   return (
     <div className="flex flex-col flex-1">
@@ -15,6 +22,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/projects" className="hover:underline">
             プロジェクト
           </Link>
+          {issueProjects.length > 0 ? (
+            <Link href="/issues" className="hover:underline">
+              チケット
+            </Link>
+          ) : null}
           <Link href="/search" className="hover:underline">
             検索
           </Link>

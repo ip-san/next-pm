@@ -125,6 +125,33 @@ export async function listProjectsWithPermission(
   return allowed;
 }
 
+/** A project the viewer may act in, with the actor resolution that said so already done. */
+export interface VisibleProjectContext extends ResolvedActor {
+  project: Project;
+  projectContext: ProjectAuthorizationContext;
+}
+
+/**
+ * The cross-project primitive every global page needs: which projects `permission` reaches,
+ * together with the actor resolved for each. Redmine expresses this as one SQL condition
+ * (`Project.allowed_to_condition`), but the role set — and so every per-project rule that
+ * depends on it, from `issues_visibility` to `time_entries_visibility` — differs per
+ * project, so the resolution has to happen per project either way. Returning it keeps the
+ * callers from resolving the same actor a second time for each rule they apply.
+ */
+export async function listVisibleProjectContexts(user: User | null, permission: PermissionKey): Promise<VisibleProjectContext[]> {
+  const projects = await new DrizzleProjectRepository().listAll();
+  const visible: VisibleProjectContext[] = [];
+  for (const project of projects) {
+    const projectContext = toAuthorizationProject(project);
+    const resolved = await resolveActor(user, project.id);
+    if (can({ permission, project: projectContext, actor: resolved.actor })) {
+      visible.push({ ...resolved, project, projectContext });
+    }
+  }
+  return visible;
+}
+
 /**
  * The viewer a journal read needs: who is asking, and whether they hold `view_private_notes`
  * on the project whose journals they're reading.

@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
 import { listProjectIssues } from "@/application/issues/list-project-issues";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
@@ -28,8 +29,8 @@ import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/in
 import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
 import { issueColumnValue, issueGroupLabel, issueGroupValue, type IssueListLookups } from "@/interface/query/issue-list-view";
 import { issueListHref, normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
-import { IssueQueryForm, type FilterValueOption } from "./issue-query-form";
-import { SaveQueryForm, SavedQueryControls } from "./save-query-form";
+import { IssueQueryForm, type FilterValueOption } from "@/interface/components/query/issue-query-form";
+import { SaveQueryForm, SavedQueryControls } from "@/interface/components/query/save-query-form";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export default async function ProjectIssuesPage({
   const canManagePublicQueries = can({ permission: "manage_public_queries", project: projectContext, actor });
 
   const queryRepository = new DrizzleQueryRepository();
-  const allQueries = await queryRepository.listForProject(project.id, "IssueQuery");
+  const allQueries = await queryRepository.listAvailableFor(project.id, "IssueQuery");
   const visibleQueries = allQueries.filter((query) => isQueryVisible(query, user?.id ?? "", roleIds));
 
   // ?query_id= is client-supplied — re-verify it belongs to this project and is visible to
@@ -114,6 +115,8 @@ export default async function ProjectIssuesPage({
 
   const basePath = `/projects/${identifier}/issues`;
   const exportParams = serializeIssueListParams({ ...listParams, ...result.effective, page: undefined }).toString();
+  // The feed URL has to carry its own credential: a feed reader sends no session cookie.
+  const atomKey = user ? await getOrCreateAtomKey(new DrizzleUserRepository(), user.id) : null;
 
   const valueOptions: Record<string, FilterValueOption[]> = {
     status_id: statuses.map((status) => ({ value: status.id, label: status.name })),
@@ -187,6 +190,12 @@ export default async function ProjectIssuesPage({
           <a href={`/api/projects/${identifier}/issues/pdf?${exportParams}`} className="border rounded px-3 py-2 text-sm">
             PDF
           </a>
+          <a
+            href={`/api/projects/${identifier}/issues/atom?${exportParams}${atomKey ? `&key=${atomKey}` : ""}`}
+            className="border rounded px-3 py-2 text-sm"
+          >
+            Atom
+          </a>
           <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
             CSV取り込み
           </Link>
@@ -229,6 +238,7 @@ export default async function ProjectIssuesPage({
 
       <SaveQueryForm
         projectIdentifier={identifier}
+        queryType="IssueQuery"
         options={result.effective}
         canPublish={canManagePublicQueries}
         canSave={canSaveQueries}
@@ -243,6 +253,7 @@ export default async function ProjectIssuesPage({
       {savedQuery ? (
         <SavedQueryControls
           projectIdentifier={identifier}
+          queryType="IssueQuery"
           query={{ id: savedQuery.id, name: savedQuery.name, visibility: savedQuery.visibility, roleIds: savedQuery.roleIds }}
           canDelete={isQueryEditable(savedQuery, {
             userId: user?.id ?? null,

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { queries, queriesRoles } from "@/infrastructure/db/schema/queries";
 import type { FilterCondition } from "@/domain/query/filter-builder";
@@ -41,11 +41,12 @@ async function replaceRoleIds(queryId: string, visibility: SavedQuery["visibilit
 }
 
 export class DrizzleQueryRepository implements QueryRepository {
-  async listForProject(projectId: string, type: QueryType = "IssueQuery"): Promise<SavedQuery[]> {
+  async listAvailableFor(projectId: string | null, type: QueryType = "IssueQuery"): Promise<SavedQuery[]> {
+    const scope = projectId === null ? isNull(queries.projectId) : or(isNull(queries.projectId), eq(queries.projectId, projectId));
     const rows = await db
       .select()
       .from(queries)
-      .where(and(eq(queries.projectId, projectId), eq(queries.type, type)))
+      .where(and(scope, eq(queries.type, type)))
       .orderBy(queries.name);
     return attachRoleIds(rows);
   }
