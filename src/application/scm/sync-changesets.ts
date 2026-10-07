@@ -87,7 +87,11 @@ async function applyTimeLog(
 
   try {
     await logTime(
-      { timeEntryRepository: repositories.timeEntryRepository, settingsRepository: repositories.settingsRepository },
+      {
+        timeEntryRepository: repositories.timeEntryRepository,
+        settingsRepository: repositories.settingsRepository,
+        enumerationRepository: repositories.enumerationRepository,
+      },
       {
         projectId: issue.projectId,
         issueId: issue.id,

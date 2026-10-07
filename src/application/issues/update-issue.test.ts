@@ -109,6 +109,7 @@ function makeRepositories(
   };
   const customValueRepository: CustomValueRepository = {
     listForCustomized: mock(async () => overrides.customValues ?? []),
+    deleteForCustomized: mock(async () => {}),
     set: mock(async (customFieldId, customizedType, customizedId, value) => ({
       id: `cv-${customFieldId}`,
       customFieldId,
@@ -664,6 +665,7 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
   };
   const customValueRepository: CustomValueRepository = {
     listForCustomized: mock(async () => []),
+    deleteForCustomized: mock(async () => {}),
     set: mock(async () => {
       throw new Error("not used");
     }),

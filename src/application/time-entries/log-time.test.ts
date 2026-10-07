@@ -3,23 +3,48 @@ import { logTime, InvalidTimeEntryError } from "./log-time";
 import type { TimeEntry } from "@/domain/time-entry/entity";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import type { Enumeration } from "@/domain/enumeration/entity";
+import type { EnumerationRepository } from "@/domain/enumeration/repository";
 
-function makeRepo(settings: Record<string, string> = {}) {
+const activity = (overrides: Partial<Enumeration> = {}): Enumeration => ({
+  id: "activity-1",
+  type: "TimeEntryActivity",
+  name: "Development",
+  position: 1,
+  isDefault: true,
+  projectId: null,
+  parentId: null,
+  ...overrides,
+});
+
+function makeRepo(settings: Record<string, string> = {}, activities: Enumeration[] = [activity()]) {
   const timeEntryRepository: TimeEntryRepository = {
     listForProject: mock(async () => []),
     listForIssue: mock(async () => []),
+    findById: mock(async () => null),
+    create: mock(async (entry) => ({ ...entry, id: "entry-1", createdAt: new Date(), updatedAt: new Date() }) as TimeEntry),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => {}),
     reassignProjectForIssues: mock(async () => undefined),
     listForIssues: mock(async () => []),
     deleteForIssues: mock(async () => undefined),
     detachFromIssues: mock(async () => undefined),
     reassignToIssue: mock(async () => undefined),
-    create: mock(async (entry) => ({ ...entry, id: "entry-1", createdAt: new Date() }) as TimeEntry),
   };
   const settingsRepository: SettingsRepository = {
     getAll: mock(async () => settings),
     setMany: mock(async () => {}),
   };
-  return { timeEntryRepository, settingsRepository };
+  const enumerationRepository: EnumerationRepository = {
+    listByType: mock(async () => activities),
+    create: mock(async () => {
+      throw new Error("not used");
+    }),
+    unsetSystemDefaultsForType: mock(async () => {}),
+  };
+  return { timeEntryRepository, settingsRepository, enumerationRepository };
 }
 
 const baseInput = {
@@ -59,5 +84,22 @@ describe("logTime", () => {
   it("rejects non-finite hours", async () => {
     const repos = makeRepo();
     await expect(logTime(repos, { ...baseInput, hours: NaN })).rejects.toThrow(InvalidTimeEntryError);
+  });
+
+  it("rejects an activity id that is not a TimeEntryActivity at all", async () => {
+    const repos = makeRepo({}, []);
+    await expect(logTime(repos, { ...baseInput, hours: 1 })).rejects.toThrow(InvalidTimeEntryError);
+    expect(repos.timeEntryRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects another project's activity", async () => {
+    const repos = makeRepo({}, [activity({ projectId: "other-project" })]);
+    await expect(logTime(repos, { ...baseInput, hours: 1 })).rejects.toThrow(InvalidTimeEntryError);
+  });
+
+  it("accepts the project's own activity", async () => {
+    const repos = makeRepo({}, [activity({ projectId: "proj-1" })]);
+    const entry = await logTime(repos, { ...baseInput, hours: 1 });
+    expect(entry.activityId).toBe("activity-1");
   });
 });

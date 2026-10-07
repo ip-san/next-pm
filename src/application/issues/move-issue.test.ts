@@ -200,15 +200,15 @@ describe("moveIssue", () => {
 describe("moveIssue — authorization", () => {
   const editor: AuthorizationActor = {
     kind: "member",
-    roles: [{ builtin: 0, permissions: ["edit_issues", "add_issues"], issuesVisibility: "all" }],
+    roles: [{ builtin: 0, permissions: ["edit_issues", "add_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
   };
   const viewer: AuthorizationActor = {
     kind: "member",
-    roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all" }],
+    roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
   };
   const ownEditor: AuthorizationActor = {
     kind: "member",
-    roles: [{ builtin: 0, permissions: ["edit_own_issues", "add_issues"], issuesVisibility: "all" }],
+    roles: [{ builtin: 0, permissions: ["edit_own_issues", "add_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
   };
 
   function projectRepositoryReturning(attributes: Record<string, unknown>) {
@@ -333,7 +333,7 @@ describe("moveIssue — authorization", () => {
 describe("moveIssue — private issue visibility", () => {
   const restrictedEditor: AuthorizationActor = {
     kind: "member",
-    roles: [{ builtin: 0, permissions: ["edit_issues", "add_issues"], issuesVisibility: "default" }],
+    roles: [{ builtin: 0, permissions: ["edit_issues", "add_issues"], issuesVisibility: "default", timeEntriesVisibility: "all" }],
   };
 
   it("refuses to move a private issue the actor cannot see", async () => {

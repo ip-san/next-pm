@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { activityEventPath } from "@/domain/activity/entity";
 import { buildAtomFeed } from "@/domain/atom/build-feed";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import { isActiveUser } from "@/domain/user/entity";
 import { listProjectActivity } from "@/application/activity/list-project-activity";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
@@ -17,6 +18,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +33,10 @@ async function resolveUser(request: Request, url: URL) {
   // the full REST API access apiKey grants. atomKey is a separate, narrowly-scoped token.
   const key = url.searchParams.get("key");
   if (!key) return null;
-  return new DrizzleUserRepository().findByAtomKey(key);
+  // Redmine's User.find_by_atom_key goes through Token.find_active_user, so a locked account's
+  // feed key stops working too.
+  const user = await new DrizzleUserRepository().findByAtomKey(key);
+  return user && isActiveUser(user) ? user : null;
 }
 
 // Mirrors ActivitiesController#index format.atom. Scope: always the last activity_days_default
@@ -74,6 +79,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       userId: user?.id ?? null,
       userGroupIds,
       issueVisibilityRoles: issuesVisibilityRoles(actor),
+      timeEntryVisibilityRoles: timeEntriesVisibilityRoles(actor),
       from,
       to,
     },

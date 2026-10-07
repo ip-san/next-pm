@@ -9,7 +9,7 @@ export interface ProjectAuthorizationContext {
   enabledModules: string[];
 }
 
-type RoleForAuthorization = Pick<Role, "builtin" | "permissions" | "issuesVisibility">;
+type RoleForAuthorization = Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility">;
 
 /**
  * Derives the authorization context from a project record. Lives here rather than only in

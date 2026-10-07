@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { memberRoles, members } from "@/infrastructure/db/schema/members";
 import type { Member } from "@/domain/member/entity";
-import type { MemberRepository } from "@/domain/member/repository";
+import type { MemberAdminRepository, MemberRepository } from "@/domain/member/repository";
 
 async function attachRoleIds(memberRows: (typeof members.$inferSelect)[]): Promise<Member[]> {
   if (memberRows.length === 0) return [];
@@ -24,7 +24,7 @@ async function attachRoleIds(memberRows: (typeof members.$inferSelect)[]): Promi
   return result;
 }
 
-export class DrizzleMemberRepository implements MemberRepository {
+export class DrizzleMemberRepository implements MemberRepository, MemberAdminRepository {
   async findById(memberId: string): Promise<Member | null> {
     const [row] = await db.select().from(members).where(eq(members.id, memberId)).limit(1);
     if (!row) return null;
@@ -129,5 +129,19 @@ export class DrizzleMemberRepository implements MemberRepository {
     if (!row) return null;
     const [withRoles] = await attachRoleIds([row]);
     return withRoles;
+  }
+
+  async listByUser(userId: string): Promise<Member[]> {
+    const rows = await db.select().from(members).where(eq(members.userId, userId));
+    return attachRoleIds(rows);
+  }
+
+  async replaceRoles(memberId: string, roleIds: string[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(memberRoles).where(eq(memberRoles.memberId, memberId));
+      if (roleIds.length > 0) {
+        await tx.insert(memberRoles).values(roleIds.map((roleId) => ({ memberId, roleId })));
+      }
+    });
   }
 }

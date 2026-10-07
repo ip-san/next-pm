@@ -24,3 +24,24 @@ export interface MemberRepository {
   /** The inherited row (if any) already materialized for `userId` from the group membership `groupMemberId`. */
   findInherited(groupMemberId: string, userId: string): Promise<Member | null>;
 }
+
+/**
+ * The extra reads/writes the admin "ユーザー → プロジェクト" tab needs — Redmine's
+ * PrincipalMembershipsController, which edits a principal's memberships across projects
+ * rather than one project's member list.
+ */
+export interface MemberAdminRepository {
+  /** Every membership row of one user, direct and group-inherited alike. */
+  listByUser(userId: string): Promise<Member[]>;
+  /** Replaces a membership's role set wholesale (PrincipalMembershipsController#update). */
+  replaceRoles(memberId: string, roleIds: string[]): Promise<void>;
+}
+
+/**
+ * Mirrors Member#deletable? / #any_inherited_role?: a row materialized from a group membership
+ * belongs to that group, so it can only go by removing the user from the group (or the group
+ * from the project), never from the membership list itself.
+ */
+export function isMembershipEditable(member: Pick<Member, "inheritedFromMemberId">): boolean {
+  return member.inheritedFromMemberId === null;
+}

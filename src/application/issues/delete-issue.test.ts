@@ -14,11 +14,11 @@ import type { Project } from "@/domain/project/entity";
 
 const deleter: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 const viewer: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 
 function makeRepositories(options: { issues: Issue[]; attachments?: Attachment[]; project?: Partial<Project> }) {
@@ -93,7 +93,7 @@ describe("deleteIssue", () => {
     const hidden = makeIssue({ id: "issue-1", projectId: "proj-1", isPrivate: true, authorId: "someone-else" });
     const restricted: AuthorizationActor = {
       kind: "member",
-      roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "default" }],
+      roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "default", timeEntriesVisibility: "all" }],
     };
     const { repositories, deleted } = makeRepositories({ issues: [hidden] });
 
@@ -210,7 +210,7 @@ describe("deleteIssue", () => {
 describe("deleteIssue — reassign target visibility", () => {
   const restrictedDeleter: AuthorizationActor = {
     kind: "member",
-    roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "default" }],
+    roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "default", timeEntriesVisibility: "all" }],
   };
 
   it("rejects reassigning time to a private issue the actor cannot see", async () => {

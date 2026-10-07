@@ -14,11 +14,11 @@ import type { Version } from "@/domain/version/entity";
 
 const copier: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["copy_issues", "add_issues"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["copy_issues", "add_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 const viewer: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 
 function makeRepositories(options: {
@@ -166,7 +166,7 @@ describe("copyIssue", () => {
     const hidden = makeIssue({ id: "source", projectId: "proj-1", trackerId: "tracker-1", isPrivate: true, authorId: "someone-else" });
     const restricted: AuthorizationActor = {
       kind: "member",
-      roles: [{ builtin: 0, permissions: ["copy_issues", "add_issues"], issuesVisibility: "default" }],
+      roles: [{ builtin: 0, permissions: ["copy_issues", "add_issues"], issuesVisibility: "default", timeEntriesVisibility: "all" }],
     };
     const { repositories, created } = makeRepositories({ issues: [hidden] });
 
@@ -312,7 +312,7 @@ describe("copyIssue — subtasks", () => {
     });
     const restricted: AuthorizationActor = {
       kind: "member",
-      roles: [{ builtin: 0, permissions: ["copy_issues", "add_issues"], issuesVisibility: "default" }],
+      roles: [{ builtin: 0, permissions: ["copy_issues", "add_issues"], issuesVisibility: "default", timeEntriesVisibility: "all" }],
     };
     const { repositories, created } = makeRepositories({ issues: [parent, hiddenChild, grandchild] });
 

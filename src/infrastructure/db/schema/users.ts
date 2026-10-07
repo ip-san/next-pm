@@ -1,6 +1,11 @@
 import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-export const userStatusEnum = ["active", "registered", "locked"] as const;
+/**
+ * Mirrors Redmine's User::STATUS_* set. "anonymous" is the single AnonymousUser row Redmine
+ * keeps to own records whose author has been deleted (User#remove_references_before_destroy);
+ * it never logs in and is filtered out of every user listing.
+ */
+export const userStatusEnum = ["active", "registered", "locked", "anonymous"] as const;
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -6,6 +6,8 @@ export type PermissionKey =
   | "manage_members"
   | "manage_versions"
   | "add_subprojects"
+  | "save_queries"
+  | "manage_public_queries"
   | "view_issues"
   | "add_issues"
   | "edit_issues"
@@ -29,6 +31,8 @@ export type PermissionKey =
   | "log_time"
   | "edit_time_entries"
   | "edit_own_time_entries"
+  | "log_time_for_other_users"
+  | "import_time_entries"
   | "view_wiki_pages"
   | "edit_wiki_pages"
   | "manage_wiki"
@@ -53,6 +57,14 @@ export type PermissionKey =
   | "view_changesets"
   | "manage_repository";
 
+/**
+ * Mirrors the `:require` option of Redmine's `map.permission` (lib/redmine/preparation.rb):
+ * "member" means the permission is meaningless outside a project membership, "loggedin" means
+ * it at least needs an account. `Role#setable_permissions` uses this to hide members-only
+ * permissions from the builtin Non member role and logged-in-only ones from Anonymous.
+ */
+export type PermissionRequirement = "member" | "loggedin" | null;
+
 interface PermissionDefinition {
   /** Module this permission belongs to; null means it's core (not gated by EnabledModule). */
   module: string | null;
@@ -62,75 +74,82 @@ interface PermissionDefinition {
    */
   readOnly: boolean;
   /**
-   * Mirrors `Redmine::AccessControl`'s `:require` option, enforced in `Role#setable_permissions`:
-   * a "member" permission can't be granted to the builtin Non-member or Anonymous roles, and a
-   * "loggedin" one can't be granted to Anonymous. Without this, an admin could hand
-   * `view_private_notes` to Anonymous and publish every private note.
+   * Null when any principal, including an anonymous visitor, may hold the permission.
+   * Without this, an admin could hand `view_private_notes` to the builtin Anonymous role
+   * and publish every private note.
    */
-  require?: "member" | "loggedin";
+  require: PermissionRequirement;
 }
 
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
-  view_project: { module: null, readOnly: true },
-  edit_project: { module: null, readOnly: false },
-  close_project: { module: null, readOnly: false },
-  select_project_modules: { module: null, readOnly: false },
-  manage_members: { module: null, readOnly: false },
-  manage_versions: { module: null, readOnly: false },
-  add_subprojects: { module: null, readOnly: false },
+  view_project: { module: null, readOnly: true, require: null },
+  edit_project: { module: null, readOnly: false, require: "member" },
+  close_project: { module: null, readOnly: false, require: "member" },
+  select_project_modules: { module: null, readOnly: false, require: "member" },
+  manage_members: { module: null, readOnly: false, require: "member" },
+  manage_versions: { module: null, readOnly: false, require: "member" },
+  add_subprojects: { module: null, readOnly: false, require: "member" },
 
-  view_issues: { module: "issue_tracking", readOnly: true },
-  add_issues: { module: "issue_tracking", readOnly: false },
-  edit_issues: { module: "issue_tracking", readOnly: false },
-  edit_own_issues: { module: "issue_tracking", readOnly: false },
-  add_issue_notes: { module: "issue_tracking", readOnly: false },
-  // Redmine marks both of these `:require => :loggedin`; left unclassified here so the
-  // `require` taxonomy stays owned by one place once the admin branch merges.
-  edit_issue_notes: { module: "issue_tracking", readOnly: false },
-  edit_own_issue_notes: { module: "issue_tracking", readOnly: false },
+  // Redmine declares both outside any project module (lib/redmine/preparation.rb#L50), so
+  // they stay available even on a project with issue tracking disabled — a saved query can
+  // be a time-entry query too.
+  save_queries: { module: null, readOnly: false, require: "loggedin" },
+  manage_public_queries: { module: null, readOnly: false, require: "member" },
+
+  view_issues: { module: "issue_tracking", readOnly: true, require: null },
+  add_issues: { module: "issue_tracking", readOnly: false, require: null },
+  edit_issues: { module: "issue_tracking", readOnly: false, require: null },
+  edit_own_issues: { module: "issue_tracking", readOnly: false, require: null },
+  add_issue_notes: { module: "issue_tracking", readOnly: false, require: null },
+  // preparation.rb#L75-76 marks both note-editing permissions `:require => :loggedin`.
+  edit_issue_notes: { module: "issue_tracking", readOnly: false, require: "loggedin" },
+  edit_own_issue_notes: { module: "issue_tracking", readOnly: false, require: "loggedin" },
   set_notes_private: { module: "issue_tracking", readOnly: false, require: "member" },
   view_private_notes: { module: "issue_tracking", readOnly: true, require: "member" },
-  delete_issues: { module: "issue_tracking", readOnly: false },
-  copy_issues: { module: "issue_tracking", readOnly: false },
-  set_issues_private: { module: "issue_tracking", readOnly: false },
-  set_own_issues_private: { module: "issue_tracking", readOnly: false },
-  manage_subtasks: { module: "issue_tracking", readOnly: false },
-  manage_issue_relations: { module: "issue_tracking", readOnly: false },
-  manage_issue_categories: { module: "issue_tracking", readOnly: false },
-  view_issue_watchers: { module: "issue_tracking", readOnly: true },
-  add_issue_watchers: { module: "issue_tracking", readOnly: false },
-  delete_issue_watchers: { module: "issue_tracking", readOnly: false },
+  delete_issues: { module: "issue_tracking", readOnly: false, require: "member" },
+  copy_issues: { module: "issue_tracking", readOnly: false, require: null },
+  set_issues_private: { module: "issue_tracking", readOnly: false, require: null },
+  set_own_issues_private: { module: "issue_tracking", readOnly: false, require: "loggedin" },
+  manage_subtasks: { module: "issue_tracking", readOnly: false, require: null },
+  manage_issue_relations: { module: "issue_tracking", readOnly: false, require: null },
+  manage_issue_categories: { module: "issue_tracking", readOnly: false, require: "member" },
+  // preparation.rb#L81 declares it `:read => true` with no `:require`.
+  view_issue_watchers: { module: "issue_tracking", readOnly: true, require: null },
+  add_issue_watchers: { module: "issue_tracking", readOnly: false, require: null },
+  delete_issue_watchers: { module: "issue_tracking", readOnly: false, require: null },
 
-  view_time_entries: { module: "time_tracking", readOnly: true },
-  log_time: { module: "time_tracking", readOnly: false },
-  edit_time_entries: { module: "time_tracking", readOnly: false },
-  edit_own_time_entries: { module: "time_tracking", readOnly: false },
+  view_time_entries: { module: "time_tracking", readOnly: true, require: null },
+  log_time: { module: "time_tracking", readOnly: false, require: "loggedin" },
+  edit_time_entries: { module: "time_tracking", readOnly: false, require: "member" },
+  edit_own_time_entries: { module: "time_tracking", readOnly: false, require: "loggedin" },
+  log_time_for_other_users: { module: "time_tracking", readOnly: false, require: "member" },
+  import_time_entries: { module: "time_tracking", readOnly: false, require: null },
 
-  view_wiki_pages: { module: "wiki", readOnly: true },
-  edit_wiki_pages: { module: "wiki", readOnly: false },
-  manage_wiki: { module: "wiki", readOnly: false },
-  export_wiki_pages: { module: "wiki", readOnly: true },
+  view_wiki_pages: { module: "wiki", readOnly: true, require: null },
+  edit_wiki_pages: { module: "wiki", readOnly: false, require: null },
+  manage_wiki: { module: "wiki", readOnly: false, require: "member" },
+  export_wiki_pages: { module: "wiki", readOnly: true, require: null },
 
-  manage_boards: { module: "boards", readOnly: false },
-  view_messages: { module: "boards", readOnly: true },
-  add_messages: { module: "boards", readOnly: false },
-  edit_messages: { module: "boards", readOnly: false },
-  edit_own_messages: { module: "boards", readOnly: false },
-  delete_messages: { module: "boards", readOnly: false },
-  delete_own_messages: { module: "boards", readOnly: false },
+  manage_boards: { module: "boards", readOnly: false, require: "member" },
+  view_messages: { module: "boards", readOnly: true, require: null },
+  add_messages: { module: "boards", readOnly: false, require: null },
+  edit_messages: { module: "boards", readOnly: false, require: "member" },
+  edit_own_messages: { module: "boards", readOnly: false, require: "loggedin" },
+  delete_messages: { module: "boards", readOnly: false, require: "member" },
+  delete_own_messages: { module: "boards", readOnly: false, require: "loggedin" },
 
-  view_news: { module: "news", readOnly: true },
-  manage_news: { module: "news", readOnly: false },
-  comment_news: { module: "news", readOnly: false },
-  view_documents: { module: "documents", readOnly: true },
-  add_documents: { module: "documents", readOnly: false },
-  edit_documents: { module: "documents", readOnly: false },
-  delete_documents: { module: "documents", readOnly: false },
-  view_files: { module: "files", readOnly: true },
-  manage_files: { module: "files", readOnly: false },
-  browse_repository: { module: "repository", readOnly: true },
-  view_changesets: { module: "repository", readOnly: true },
-  manage_repository: { module: "repository", readOnly: false },
+  view_news: { module: "news", readOnly: true, require: null },
+  manage_news: { module: "news", readOnly: false, require: "member" },
+  comment_news: { module: "news", readOnly: false, require: null },
+  view_documents: { module: "documents", readOnly: true, require: null },
+  add_documents: { module: "documents", readOnly: false, require: "loggedin" },
+  edit_documents: { module: "documents", readOnly: false, require: "loggedin" },
+  delete_documents: { module: "documents", readOnly: false, require: "loggedin" },
+  view_files: { module: "files", readOnly: true, require: null },
+  manage_files: { module: "files", readOnly: false, require: "loggedin" },
+  browse_repository: { module: "repository", readOnly: true, require: null },
+  view_changesets: { module: "repository", readOnly: true, require: null },
+  manage_repository: { module: "repository", readOnly: false, require: "member" },
 };
 
 export function isPermissionRegistered(key: string): key is PermissionKey {
@@ -138,13 +157,18 @@ export function isPermissionRegistered(key: string): key is PermissionKey {
 }
 
 /**
- * Port of `Role#setable_permissions`: which permissions a role of this builtin kind may be
- * granted at all. Keeps a members-only permission off the Non-member and Anonymous roles
- * however the role is edited.
+ * Port of `Role#setable_permissions`, as a single-key predicate: whether a role of this
+ * builtin kind may be granted this permission at all. Keeps a members-only permission off
+ * the Non-member and Anonymous roles however the role is edited. `domain/role/entity.ts`'s
+ * `setablePermissions` is the list-shaped form of the same rule and delegates here, so the
+ * role form, the permission matrix and both server actions can never disagree.
+ *
+ * The builtin values are `Role`'s own (`ROLE_BUILTIN_*`), spelled out rather than imported
+ * because that module imports this one.
  */
 export function isPermissionSetableForBuiltin(permission: PermissionKey, builtin: number): boolean {
   const required = PERMISSION_REGISTRY[permission].require;
-  if (!required) return true;
+  if (required === null) return true;
   if (builtin === 2) return false; // Anonymous: neither member nor logged in
   if (builtin === 1) return required !== "member"; // Non-member is logged in but not a member
   return true;

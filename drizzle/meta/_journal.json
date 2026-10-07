@@ -253,6 +253,13 @@
       "when": 1791355180223,
       "tag": "0035_grant_view_issue_watchers",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791356023439,
+      "tag": "0036_serious_phantom_reporter",
+      "breakpoints": true
     }
   ]
 }

@@ -7,17 +7,17 @@ import type { Project } from "@/domain/project/entity";
 
 const editor: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 const ownEditor: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_issues", "edit_own_issue_notes"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues", "edit_own_issue_notes"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
 const privacyEditor: AuthorizationActor = {
   kind: "member",
-  roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes", "set_notes_private"], issuesVisibility: "all" }],
+  roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes", "set_notes_private"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
 };
-const bystander: AuthorizationActor = { kind: "member", roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all" }] };
+const bystander: AuthorizationActor = { kind: "member", roles: [{ builtin: 0, permissions: ["view_issues"], issuesVisibility: "all", timeEntriesVisibility: "all" }] };
 
 function journal(overrides: Partial<Journal> = {}): Journal {
   return {
@@ -231,7 +231,7 @@ describe("updateJournal", () => {
 describe("updateJournal — issue-level visibility", () => {
   const noteEditor: AuthorizationActor = {
     kind: "member",
-    roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes"], issuesVisibility: "default" }],
+    roles: [{ builtin: 0, permissions: ["view_issues", "edit_issue_notes"], issuesVisibility: "default", timeEntriesVisibility: "all" }],
   };
 
   it("refuses to edit a note on a private issue the actor cannot see", async () => {
@@ -271,7 +271,7 @@ describe("updateJournal — issue-level visibility", () => {
   it("refuses when the actor cannot view issues in the project at all", async () => {
     const noViewIssues: AuthorizationActor = {
       kind: "member",
-      roles: [{ builtin: 0, permissions: ["edit_issue_notes"], issuesVisibility: "all" }],
+      roles: [{ builtin: 0, permissions: ["edit_issue_notes"], issuesVisibility: "all", timeEntriesVisibility: "all" }],
     };
     const { repositories } = makeRepositories(journal());
 

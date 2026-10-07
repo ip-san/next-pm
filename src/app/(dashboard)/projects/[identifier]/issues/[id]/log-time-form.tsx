@@ -2,7 +2,9 @@
 
 import { useActionState } from "react";
 import { logTimeAction, type LogTimeActionState } from "@/interface/actions/time-entry-actions";
+import type { CustomField } from "@/domain/custom-field/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
+import { CustomFieldInputs } from "../../time-entries/custom-field-inputs";
 
 const initialState: LogTimeActionState = { error: null };
 
@@ -10,10 +12,15 @@ export function LogTimeForm({
   issueId,
   projectIdentifier,
   activities,
+  customFields = [],
+  /** Empty unless the actor holds log_time_for_other_users — then the user picker is shown. */
+  assignableUsers = [],
 }: {
   issueId: string;
   projectIdentifier: string;
   activities: Enumeration[];
+  customFields?: CustomField[];
+  assignableUsers?: { id: string; name: string }[];
 }) {
   const [state, formAction, pending] = useActionState(logTimeAction, initialState);
   const today = new Date().toISOString().slice(0, 10);
@@ -34,6 +41,20 @@ export function LogTimeForm({
           ))}
         </select>
       </div>
+      {assignableUsers.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="userId" className="text-sm font-medium">
+            ユーザー
+          </label>
+          <select id="userId" name="userId" className="border rounded px-3 py-2">
+            {assignableUsers.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="hours" className="text-sm font-medium">
           作業時間
@@ -52,6 +73,7 @@ export function LogTimeForm({
         </label>
         <input id="comments" name="comments" className="border rounded px-3 py-2" />
       </div>
+      <CustomFieldInputs fields={customFields} />
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
           {state.error}
