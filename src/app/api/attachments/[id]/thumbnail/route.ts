@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { isThumbnailable } from "@/domain/attachment/entity";
+import { resolveThumbnailSize } from "@/domain/attachment/thumbnail-input";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
-import { DEFAULT_THUMBNAIL_SIZE, generateThumbnail } from "@/infrastructure/image/thumbnail";
+import { generateThumbnail } from "@/infrastructure/image/thumbnail";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { resolveAttachmentAccess } from "@/interface/http/attachment-access";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
@@ -10,10 +11,15 @@ export const dynamic = "force-dynamic";
 
 /**
  * Mirrors AttachmentsController#thumbnail: 404 when the attachment has no thumbnail (not an
- * image, or no thumbnailer available) and the same read authorization as the download.
+ * image, or no thumbnailer available) and the same read authorization as the download, which
+ * is why both go through resolveAttachmentAccess rather than repeating the ladder.
  *
  * Deliberately *not* served by `/api/attachments/[id]`: that endpoint counts downloads for
  * Files-module attachments, and an <img> on a listing page must not inflate the counter.
+ *
+ * The response body is always this endpoint's own PNG re-encoding, never the uploaded bytes,
+ * and generateThumbnail only renders formats confirmed from the bytes themselves — the stored
+ * content type below is a cheap pre-filter, not the thing being trusted.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,8 +38,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const size = Number(new URL(request.url).searchParams.get("size") ?? DEFAULT_THUMBNAIL_SIZE);
-  const thumbnail = await generateThumbnail(await new FsAttachmentStore().read(attachment.storageKey), size);
+  const size = resolveThumbnailSize(new URL(request.url).searchParams.get("size"));
+  const thumbnail = await generateThumbnail(await new FsAttachmentStore().read(attachment.storageKey), size, attachment.digest);
   if (!thumbnail) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

@@ -28,13 +28,19 @@ export interface Attachment {
   createdAt: Date;
 }
 
-/**
- * Mirrors Attachment#thumbnailable? (image? && Redmine::Thumbnail.convert_available?) minus
- * SVG: our thumbnails are re-encoded and served inline, and an SVG is a script-bearing
- * document, so it never becomes an inline-rendered image here.
- */
-const THUMBNAILABLE_CONTENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "image/tiff"];
+/** Redmine's `Redmine::Thumbnail::ALLOWED_TYPES`, minus application/pdf (no Ghostscript here). */
+const THUMBNAILABLE_CONTENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "image/avif"];
 
+/**
+ * Mirrors Attachment#thumbnailable? — "does a thumbnail link make sense for this?", answered
+ * from the stored content type so a listing can decide without opening every file.
+ *
+ * This is a hint, never an authorization or safety decision: the stored content type came
+ * from the uploading client and can say image/png about anything at all. The thumbnail
+ * endpoint re-derives the real format from the file's bytes
+ * (domain/attachment/thumbnail-input.ts) before any renderer sees it, exactly as Redmine does
+ * in Redmine::Thumbnail.generate, and answers 404 when the two disagree.
+ */
 export function isThumbnailable(attachment: Pick<Attachment, "contentType">): boolean {
   return THUMBNAILABLE_CONTENT_TYPES.includes(attachment.contentType.split(";")[0].trim().toLowerCase());
 }

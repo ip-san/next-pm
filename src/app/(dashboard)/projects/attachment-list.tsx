@@ -31,7 +31,7 @@ export function AttachmentList({
                next/image would need a loader and the width/height we do not store. */
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              src={`/api/attachments/${attachment.id}/thumbnail?size=80`}
+              src={`/api/attachments/${attachment.id}/thumbnail`}
               alt=""
               className="w-[80px] h-auto border rounded shrink-0"
             />
