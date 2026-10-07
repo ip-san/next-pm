@@ -1,8 +1,7 @@
 import { can, projectAuthorizationContext, type AuthorizationActor } from "@/domain/authorization/authorization-service";
 import type { AttachmentStorage } from "@/domain/attachment/repository";
 import { isProjectDeletable } from "@/domain/project/entity";
-import { planDelete } from "@/domain/project/nested-set";
-import type { ProjectRepository } from "@/domain/project/repository";
+import { ProjectHasSubprojectsError, type ProjectRepository } from "@/domain/project/repository";
 
 export class DeleteProjectNotPermittedError extends Error {
   constructor() {
@@ -51,35 +50,38 @@ export async function deleteProject(repositories: DeleteProjectRepositories, inp
     throw new Error(`Project ${input.projectId} not found`);
   }
 
-  const all = await projectRepository.listNestedSetNodes();
-  const plan = planDelete(all, project);
-  const hasSubprojects = plan.removed.length > 1;
-
-  const permitted = isProjectDeletable({
-    isAdmin: input.isAdmin,
-    hasDeletePermission: can({
-      permission: "delete_project",
-      project: projectAuthorizationContext(project),
-      actor: input.actor,
-    }),
-    hasSubprojects,
+  // Redmine's Project#deletable?: an administrator may take a whole subtree, a permission
+  // holder only a leaf. Whether the project *is* a leaf is deliberately not decided here —
+  // it is a fact about the tree that can change between this check and the delete, so the
+  // verdict handed down is "may this actor take non-leaf projects", and deleteSubtree
+  // re-applies it against the tree it reads under lock.
+  const hasDeletePermission = can({
+    permission: "delete_project",
+    project: projectAuthorizationContext(project),
+    actor: input.actor,
   });
-  if (!permitted) {
+  if (!isProjectDeletable({ isAdmin: input.isAdmin, hasDeletePermission, hasSubprojects: false })) {
     throw new DeleteProjectNotPermittedError();
   }
   if (input.confirmIdentifier !== project.identifier) {
     throw new ProjectDeleteConfirmationMismatchError();
   }
 
-  const removedIds = plan.removed.map((node) => node.id);
-  // Read the storage keys before the rows go, and unlink the files only once the
-  // transaction has committed: a rolled-back delete must not leave the attachments of a
-  // project that still exists missing from disk.
-  const attachments = await projectRepository.listAttachmentsInSubtree(removedIds);
-  await projectRepository.deleteSubtree(removedIds, plan.shifted);
-  for (const attachment of attachments) {
-    await repositories.attachmentStorage.delete(attachment.storageKey);
+  let attachmentStorageKeys: string[];
+  try {
+    ({ attachmentStorageKeys } = await projectRepository.deleteSubtree(project.id, { allowNonLeaf: input.isAdmin }));
+  } catch (error) {
+    if (error instanceof ProjectHasSubprojectsError) {
+      throw new DeleteProjectNotPermittedError();
+    }
+    throw error;
   }
 
-  return attachments.length;
+  // Only now that the transaction has committed: a rolled-back delete must not leave the
+  // attachments of a project that still exists missing from disk.
+  for (const storageKey of attachmentStorageKeys) {
+    await repositories.attachmentStorage.delete(storageKey);
+  }
+
+  return attachmentStorageKeys.length;
 }

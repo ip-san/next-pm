@@ -26,8 +26,7 @@ function makeRepository(overrides: Partial<ProjectRepository> = {}): ProjectRepo
     listNestedSetNodes: mock(async () => []),
     listDescendants: mock(async () => []),
     updateStatus: mock(async () => {}),
-    listAttachmentsInSubtree: mock(async () => []),
-    deleteSubtree: mock(async () => {}),
+    deleteSubtree: mock(async () => ({ removedProjectIds: [], attachmentStorageKeys: [] })),
     createUnderParent: mock(async (project) => ({ ...project, id: "new-id", lft: 1, rgt: 2 }) as Project),
     copySkeletonFrom: mock(
       async (_sourceProjectId, project) => ({ ...project, id: "new-id", lft: 3, rgt: 4 }) as Project,

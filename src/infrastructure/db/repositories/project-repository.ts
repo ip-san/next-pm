@@ -18,8 +18,8 @@ import { versions } from "@/infrastructure/db/schema/versions";
 import { watchers } from "@/infrastructure/db/schema/watchers";
 import { wikiPages } from "@/infrastructure/db/schema/wiki";
 import type { Project, ProjectStatus } from "@/domain/project/entity";
-import type { ProjectRepository, ProjectSettingsUpdate } from "@/domain/project/repository";
-import { isWithinSubtree, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
+import { ProjectHasSubprojectsError, type ProjectRepository, type ProjectSettingsUpdate } from "@/domain/project/repository";
+import { isWithinSubtree, planDelete, planInsert, type NestedSetNode } from "@/domain/project/nested-set";
 
 /**
  * The polymorphic containers living inside a project subtree, as `[containerType, ids]`
@@ -225,25 +225,40 @@ export class DrizzleProjectRepository implements ProjectRepository {
     await db.update(projects).set({ status }).where(inArray(projects.id, projectIds));
   }
 
-  async listAttachmentsInSubtree(projectIds: string[]): Promise<{ id: string; storageKey: string }[]> {
-    if (projectIds.length === 0) return [];
-    const containers = await containersInSubtree(db, projectIds);
-    const found: { id: string; storageKey: string }[] = [];
-    for (const [containerType, ids] of containers) {
-      const rows = await db
-        .select({ id: attachments.id, storageKey: attachments.storageKey })
-        .from(attachments)
-        .where(and(eq(attachments.containerType, containerType), inArray(attachments.containerId, ids)));
-      found.push(...rows);
-    }
-    return found;
-  }
+  async deleteSubtree(
+    rootProjectId: string,
+    options: { allowNonLeaf: boolean },
+  ): Promise<{ removedProjectIds: string[]; attachmentStorageKeys: string[] }> {
+    return db.transaction(async (tx) => {
+      // FOR UPDATE on every project row, inside the transaction: the plan must be built from
+      // the tree as it is now, and the lock keeps it that way — a concurrent child insert
+      // needs a key-share lock on its parent row, which this conflicts with.
+      const nodes = await tx
+        .select({ id: projects.id, lft: projects.lft, rgt: projects.rgt })
+        .from(projects)
+        .for("update");
+      const root = nodes.find((node) => node.id === rootProjectId);
+      if (!root) {
+        throw new Error(`Project ${rootProjectId} not found`);
+      }
 
-  async deleteSubtree(removedProjectIds: string[], shifted: NestedSetNode[]): Promise<void> {
-    if (removedProjectIds.length === 0) return;
+      const plan = planDelete(nodes, root);
+      if (!options.allowNonLeaf && plan.removed.length > 1) {
+        throw new ProjectHasSubprojectsError();
+      }
+      const removedProjectIds = plan.removed.map((node) => node.id);
+      const shifted = plan.shifted;
 
-    await db.transaction(async (tx) => {
       const containers = await containersInSubtree(tx, removedProjectIds);
+
+      const attachmentStorageKeys: string[] = [];
+      for (const [containerType, ids] of containers) {
+        const rows = await tx
+          .select({ storageKey: attachments.storageKey })
+          .from(attachments)
+          .where(and(eq(attachments.containerType, containerType), inArray(attachments.containerId, ids)));
+        attachmentStorageKeys.push(...rows.map((row) => row.storageKey));
+      }
 
       // Journals first, and their reactions before them: a reaction points at a journal,
       // which points at an issue, and none of those three links is a foreign key.
@@ -275,6 +290,8 @@ export class DrizzleProjectRepository implements ProjectRepository {
       for (const node of shifted) {
         await tx.update(projects).set({ lft: node.lft, rgt: node.rgt }).where(eq(projects.id, node.id));
       }
+
+      return { removedProjectIds, attachmentStorageKeys };
     });
   }
 
