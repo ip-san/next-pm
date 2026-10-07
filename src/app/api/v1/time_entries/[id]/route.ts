@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
-import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { deleteTimeEntry } from "@/application/time-entries/delete-time-entry";
-import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
+import {
+  setTimeEntryCustomFieldValues,
+  validateTimeEntryCustomFieldValues,
+} from "@/application/time-entries/set-time-entry-custom-field-values";
 import { InvalidTimeEntryError, updateTimeEntry } from "@/application/time-entries/update-time-entry";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -170,6 +172,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     userId = parsed.data.user_id;
   }
 
+  // Validated before the write, so a rejected value can't leave the other fields applied.
+  // Partial semantics on PUT: only the keys actually sent are checked.
+  const customFieldErrors = await validateTimeEntryCustomFieldValues(
+    new DrizzleCustomFieldRepository(),
+    parsed.data.custom_field_values,
+    { full: false },
+  );
+  if (Object.keys(customFieldErrors).length > 0) {
+    return NextResponse.json({ error: "invalid_custom_field_values", details: customFieldErrors }, { status: 422 });
+  }
+
   try {
     const updated = await updateTimeEntry(
       {
@@ -190,21 +203,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     );
 
     if (Object.keys(parsed.data.custom_field_values).length > 0) {
-      try {
-        await setTimeEntryCustomFieldValues(
-          { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
-          updated.id,
-          parsed.data.custom_field_values,
-        );
-      } catch (customFieldError) {
-        if (customFieldError instanceof CustomFieldValidationError) {
-          return NextResponse.json(
-            { time_entry: updated, error: "invalid_custom_field_values", details: customFieldError.fieldErrors },
-            { status: 422 },
-          );
-        }
-        throw customFieldError;
-      }
+      await setTimeEntryCustomFieldValues(
+        { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+        updated.id,
+        parsed.data.custom_field_values,
+      );
     }
 
     return NextResponse.json({ time_entry: updated });

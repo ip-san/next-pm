@@ -10,7 +10,10 @@ import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { deleteTimeEntry } from "@/application/time-entries/delete-time-entry";
 import { logTime, InvalidTimeEntryError } from "@/application/time-entries/log-time";
-import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
+import {
+  setTimeEntryCustomFieldValues,
+  validateTimeEntryCustomFieldValues,
+} from "@/application/time-entries/set-time-entry-custom-field-values";
 import { updateTimeEntry } from "@/application/time-entries/update-time-entry";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -59,6 +62,19 @@ function customFieldValuesFromForm(formData: FormData): Record<string, string> {
 
 function firstFieldError(error: CustomFieldValidationError): string {
   return Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの値を確認してください。";
+}
+
+/**
+ * Runs before the entry is written, so an invalid value can't leave a created-but-wrong
+ * entry behind that the user duplicates when they fix the value and resubmit.
+ */
+async function customFieldErrorIn(formData: FormData, options: { full: boolean }): Promise<string | null> {
+  const fieldErrors = await validateTimeEntryCustomFieldValues(
+    new DrizzleCustomFieldRepository(),
+    customFieldValuesFromForm(formData),
+    options,
+  );
+  return Object.values(fieldErrors)[0] ?? null;
 }
 
 async function saveCustomFieldValues(entryId: string, formData: FormData): Promise<void> {
@@ -190,6 +206,11 @@ export async function logTimeAction(
     return { error: target.error };
   }
 
+  const customFieldError = await customFieldErrorIn(formData, { full: true });
+  if (customFieldError) {
+    return { error: customFieldError };
+  }
+
   try {
     const entry = await logTime(writeRepositories(), {
       projectId: project.id,
@@ -279,6 +300,11 @@ export async function createTimeEntryAction(
   });
   if (!target.ok) {
     return { error: target.error };
+  }
+
+  const customFieldError = await customFieldErrorIn(formData, { full: true });
+  if (customFieldError) {
+    return { error: customFieldError };
   }
 
   try {
@@ -421,6 +447,11 @@ export async function updateTimeEntryAction(
   });
   if (!target.ok) {
     return { error: target.error };
+  }
+
+  const customFieldError = await customFieldErrorIn(formData, { full: false });
+  if (customFieldError) {
+    return { error: customFieldError };
   }
 
   try {

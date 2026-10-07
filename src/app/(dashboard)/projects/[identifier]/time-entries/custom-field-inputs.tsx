@@ -30,9 +30,9 @@ export function CustomFieldInputs({
               {field.isRequired ? <span className="text-red-600"> *</span> : null}
             </label>
             {field.fieldFormat === "text" ? (
-              <textarea id={name} name={name} rows={3} defaultValue={current} className="border rounded px-3 py-2" />
+              <textarea id={name} name={name} rows={3} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2" />
             ) : field.fieldFormat === "list" ? (
-              <select id={name} name={name} defaultValue={current} className="border rounded px-3 py-2">
+              <select id={name} name={name} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2">
                 <option value="">(未設定)</option>
                 {field.possibleValues.map((value) => (
                   <option key={value} value={value}>
@@ -41,7 +41,7 @@ export function CustomFieldInputs({
                 ))}
               </select>
             ) : field.fieldFormat === "bool" ? (
-              <select id={name} name={name} defaultValue={current} className="border rounded px-3 py-2">
+              <select id={name} name={name} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2">
                 <option value="">(未設定)</option>
                 <option value="1">はい</option>
                 <option value="0">いいえ</option>
@@ -52,6 +52,7 @@ export function CustomFieldInputs({
                 name={name}
                 type={field.fieldFormat === "date" ? "date" : field.fieldFormat === "int" || field.fieldFormat === "float" ? "number" : "text"}
                 step={field.fieldFormat === "float" ? "any" : undefined}
+                required={field.isRequired}
                 defaultValue={current}
                 className="border rounded px-3 py-2"
               />

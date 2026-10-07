@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
-import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { InvalidTimeEntryError, logTime } from "@/application/time-entries/log-time";
-import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
+import {
+  setTimeEntryCustomFieldValues,
+  validateTimeEntryCustomFieldValues,
+} from "@/application/time-entries/set-time-entry-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -185,6 +187,18 @@ export async function POST(request: Request) {
     userId = parsed.data.user_id;
   }
 
+  // Validated before the write: a rejection afterwards would answer 422 on an entry that
+  // already exists, which a retrying client then duplicates. `full` also makes a required
+  // TimeEntry custom field the request omitted an error, as it is on Redmine's own save.
+  const customFieldErrors = await validateTimeEntryCustomFieldValues(
+    new DrizzleCustomFieldRepository(),
+    parsed.data.custom_field_values,
+    { full: true },
+  );
+  if (Object.keys(customFieldErrors).length > 0) {
+    return NextResponse.json({ error: "invalid_custom_field_values", details: customFieldErrors }, { status: 422 });
+  }
+
   try {
     const entry = await logTime(
       {
@@ -205,21 +219,11 @@ export async function POST(request: Request) {
     );
 
     if (Object.keys(parsed.data.custom_field_values).length > 0) {
-      try {
-        await setTimeEntryCustomFieldValues(
-          { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
-          entry.id,
-          parsed.data.custom_field_values,
-        );
-      } catch (customFieldError) {
-        if (customFieldError instanceof CustomFieldValidationError) {
-          return NextResponse.json(
-            { time_entry: entry, error: "invalid_custom_field_values", details: customFieldError.fieldErrors },
-            { status: 422 },
-          );
-        }
-        throw customFieldError;
-      }
+      await setTimeEntryCustomFieldValues(
+        { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+        entry.id,
+        parsed.data.custom_field_values,
+      );
     }
 
     return NextResponse.json({ time_entry: entry }, { status: 201 });

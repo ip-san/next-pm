@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import { parseCsv } from "@/domain/csv/decode";
-import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { InvalidTimeEntryError, logTime } from "@/application/time-entries/log-time";
-import { setTimeEntryCustomFieldValues } from "@/application/time-entries/set-time-entry-custom-field-values";
+import {
+  setTimeEntryCustomFieldValues,
+  validateTimeEntryCustomFieldValues,
+} from "@/application/time-entries/set-time-entry-custom-field-values";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -192,8 +194,10 @@ export async function importTimeEntriesCsvAction(
       }
     }
     // Checked before the entry is created, not after: setTimeEntryCustomFieldValues runs as
-    // a second write, so a value rejected there would leave a half-imported entry behind.
-    const { fieldErrors } = validateCustomFieldValues(customFields, rawCustomValues);
+    // a second write, so a value rejected there would leave a half-imported row behind.
+    // `full` matches the create forms: a required field the CSV has no column for is an
+    // error, not a silently blank value.
+    const fieldErrors = await validateTimeEntryCustomFieldValues(customFieldRepository, rawCustomValues, { full: true });
     if (Object.keys(fieldErrors).length > 0) {
       rowErrors.push(`${rowNumber}行目: ${Object.values(fieldErrors)[0]}`);
       continue;
