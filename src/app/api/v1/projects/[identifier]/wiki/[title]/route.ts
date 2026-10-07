@@ -109,7 +109,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
         text: parsed.data.text,
         comments: parsed.data.comments,
         authorId: user.id,
-        parentId: null,
+        // The REST body carries only text and comments, so an existing page keeps the parent
+        // it already has — `null` here would silently detach every page this endpoint touches.
+        parentId: undefined,
+        canReparentExisting: false,
         canProtect: can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }),
       },
     ));

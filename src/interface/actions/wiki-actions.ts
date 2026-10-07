@@ -84,6 +84,7 @@ export async function saveWikiPageAction(
         comments: parsed.data.comments,
         authorId: user.id,
         parentId: parsed.data.parentId === undefined ? undefined : parsed.data.parentId || null,
+        canReparentExisting: can({ permission: "rename_wiki_pages", project: toAuthorizationProject(project), actor }),
         canProtect: can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }),
       },
     ));

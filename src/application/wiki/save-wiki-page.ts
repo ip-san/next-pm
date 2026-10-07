@@ -16,12 +16,15 @@ export interface SaveWikiPageInput {
   text: string;
   comments: string;
   authorId: string;
-  /**
-   * The page's parent. `undefined` leaves an existing page's parent alone — Redmine only
-   * accepts parent_id from callers holding rename_wiki_pages (or creating the page), so the
-   * caller decides whether to send it at all.
-   */
+  /** The page's parent. `undefined` leaves an existing page's parent alone. */
   parentId: string | null | undefined;
+  /**
+   * The actor's rename_wiki_pages. Redmine makes parent_id a safe attribute only for a new
+   * page or a caller holding that permission, and safe_attributes silently drops what isn't
+   * safe — so a parentId sent for an existing page without it is ignored, not rejected.
+   * Enforced here rather than per caller: hiding the select in the form is not a gate.
+   */
+  canReparentExisting: boolean;
   /** The actor's protect_wiki_pages — the only thing that unlocks a protected page (WikiPage#editable_by?). */
   canProtect: boolean;
 }
@@ -40,7 +43,7 @@ export async function saveWikiPage(
     if (!isWikiPageEditable(page, input.canProtect)) {
       throw new WikiPageProtectedError();
     }
-    if (input.parentId !== undefined && input.parentId !== page.parentId) {
+    if (input.canReparentExisting && input.parentId !== undefined && input.parentId !== page.parentId) {
       const parentId = await resolveWikiPageParent(repositories.wikiPageRepository, input.projectId, page, input.parentId);
       page = await repositories.wikiPageRepository.setParent(page.id, parentId);
     }
