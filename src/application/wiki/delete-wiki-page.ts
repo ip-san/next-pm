@@ -60,7 +60,7 @@ export async function deleteWikiPage(
     for (const id of descendantIds(pages, page.id)) {
       const descendant = pages.find((candidate) => candidate.id === id);
       if (descendant) {
-        await purge(repositories, descendant.projectId, descendant.id, descendant.title);
+        await purgeWikiPage(repositories, descendant.projectId, descendant.id, descendant.title);
       }
     }
   } else if (input.childrenDisposition === "reassign") {
@@ -79,10 +79,14 @@ export async function deleteWikiPage(
     }
   }
 
-  await purge(repositories, page.projectId, page.id, page.title);
+  await purgeWikiPage(repositories, page.projectId, page.id, page.title);
 }
 
-async function purge(
+/**
+ * Removes everything that hangs off one wiki page without a cascading foreign key. Exported
+ * for deleteProjectWiki, which clears a whole wiki page by page.
+ */
+export async function purgeWikiPage(
   repositories: DeleteWikiPageRepositories,
   projectId: string,
   pageId: string,

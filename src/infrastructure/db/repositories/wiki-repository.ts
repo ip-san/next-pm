@@ -1,11 +1,12 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
-import { wikiContentVersions, wikiPages, wikiRedirects } from "@/infrastructure/db/schema/wiki";
-import type { WikiContentVersion, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
+import { wikiContentVersions, wikiPages, wikiRedirects, wikis } from "@/infrastructure/db/schema/wiki";
+import type { Wiki, WikiContentVersion, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
 import type {
   WikiContentRepository,
   WikiPageRepository,
   WikiRedirectRepository,
+  WikiRepository,
   WikiSearchHit,
   WikiVersionWithPage,
 } from "@/domain/wiki/repository";
@@ -40,6 +41,22 @@ function versionToDomain(row: typeof wikiContentVersions.$inferSelect): WikiCont
     comments: row.comments,
     createdAt: row.createdAt,
   };
+}
+
+export class DrizzleWikiRepository implements WikiRepository {
+  async findByProject(projectId: string): Promise<Wiki | null> {
+    const [row] = await db.select().from(wikis).where(eq(wikis.projectId, projectId)).limit(1);
+    return row ? { id: row.id, projectId: row.projectId, startPage: row.startPage } : null;
+  }
+
+  async setStartPage(projectId: string, startPage: string): Promise<Wiki> {
+    const [row] = await db
+      .insert(wikis)
+      .values({ projectId, startPage })
+      .onConflictDoUpdate({ target: wikis.projectId, set: { startPage } })
+      .returning();
+    return { id: row.id, projectId: row.projectId, startPage: row.startPage };
+  }
 }
 
 export class DrizzleWikiPageRepository implements WikiPageRepository {

@@ -1,4 +1,10 @@
-import type { WikiContentVersion, WikiPage, WikiRedirect } from "./entity";
+import type { Wiki, WikiContentVersion, WikiPage, WikiRedirect } from "./entity";
+
+export interface WikiRepository {
+  /** Null when the project has never had its start page changed — treat as DEFAULT_WIKI_START_PAGE. */
+  findByProject(projectId: string): Promise<Wiki | null>;
+  setStartPage(projectId: string, startPage: string): Promise<Wiki>;
+}
 
 export interface WikiPageRepository {
   listForProject(projectId: string): Promise<WikiPage[]>;

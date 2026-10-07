@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
+import { DEFAULT_WIKI_START_PAGE } from "@/domain/wiki/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleWikiRepository } from "@/infrastructure/db/repositories/wiki-repository";
 
-const DEFAULT_START_PAGE = "Wiki";
-
+/** Mirrors Redmine's `match 'wiki'` route: the project's wiki opens on its configured start page. */
 export default async function WikiIndexPage({
   params,
 }: {
@@ -13,5 +14,7 @@ export default async function WikiIndexPage({
   if (!project) {
     notFound();
   }
-  redirect(`/projects/${identifier}/wiki/${encodeURIComponent(DEFAULT_START_PAGE)}`);
+
+  const wiki = await new DrizzleWikiRepository().findByProject(project.id);
+  redirect(`/projects/${identifier}/wiki/${encodeURIComponent(wiki?.startPage ?? DEFAULT_WIKI_START_PAGE)}`);
 }

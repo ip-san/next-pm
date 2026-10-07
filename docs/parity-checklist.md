@@ -173,7 +173,7 @@
 | ページ削除 | done | `delete_wiki_pages` を追加し、確認画面(`wiki/[title]/destroy`)で本家 `WikiController#destroy` の 3 択(子をトップレベルへ/子も削除/別ページへ付け替え)を提供。REST の DELETE も同権限 + `?todo=` に対応(既定は本家と同じ nullify)。ページ削除時に添付・ウォッチャー・そのページ宛てリダイレクトも併せて削除する(本家 `delete_redirects` と acts_as_attachable/watchable の dependent destroy 相当) |
 | 保護ページ | done | ページ画面の保護/解除トグル(`protect_wiki_pages`)。保護ページの編集・改名・添付の追加/削除は同権限が無いと拒否(本家 `WikiPage#editable_by?` を `domain/wiki/protection.ts` に再実装)。`Sidebar` は作成時に自動で保護(本家 `DEFAULT_PROTECTED_PAGES`) |
 | 親子階層 | done | 目次(`wiki/index`、本家 `index` の親子ツリー)と日付順目次(`wiki/date_index`)、ページ画面のパンくず・子ページ一覧(`domain/wiki/hierarchy.ts`)。親ページの選択は編集フォーム(新規ページ)と改名フォームから行い、自分自身・子孫・他プロジェクトのページは拒否(本家 `WikiPage#validate_parent_title`)。本家の safe_attributes に合わせ、既存ページのタイトルと親の変更は `rename_wiki_pages` 保持者のみ(`manage_wiki` だけでは画面に入れても変更できない) |
-| Wiki の開始ページ設定・Wiki 自体の削除 | missing | 本家 `WikisController` |
+| Wiki の開始ページ設定・Wiki 自体の削除 | done | プロジェクト設定に Wiki タブを追加(`manage_wiki`)。開始ページを保存すると `/projects/:id/wiki` の遷移先が変わる。開始ページを改名すると設定も追従し、`manage_wiki` 保持者は改名フォームのチェックボックスで別ページを開始ページにできる(本家 `WikiPage#update_wiki_start_page` / `is_start_page`)。Wiki の削除(本家 `WikisController#destroy`)は全ページ・版歴・添付・リダイレクトを削除し、開始ページを既定値へ戻す(本家 `Wiki.create_default` 相当) |
 | ウォッチ | done | ページ単位のウォッチ |
 | 版歴の閲覧権限 | done | `view_wiki_edits` を追加し、履歴・差分ページと活動フィードの Wiki 更新(本家 `WikiContentVersion` の `acts_as_activity_provider`)を同権限で制御 |
 

@@ -17,6 +17,8 @@ export function WikiRenameForm({
   parentId,
   parentCandidates,
   canReparent,
+  isStartPage,
+  canSetStartPage,
 }: {
   pageId: string;
   projectIdentifier: string;
@@ -25,6 +27,9 @@ export function WikiRenameForm({
   parentCandidates: ParentCandidate[];
   /** rename_wiki_pages. Without it Redmine drops title and parent_id from the submitted attributes. */
   canReparent: boolean;
+  isStartPage: boolean;
+  /** manage_wiki — what makes Redmine's is_start_page a safe attribute. */
+  canSetStartPage: boolean;
 }) {
   const [state, formAction, pending] = useActionState(renameWikiPageAction, initialState);
 
@@ -52,6 +57,14 @@ export function WikiRenameForm({
             ))}
           </select>
         </div>
+      ) : null}
+      {canSetStartPage ? (
+        <label className="flex items-center gap-2 text-sm">
+          {/* Already the start page: Redmine checks and disables the box, because the setting
+              follows the rename either way. */}
+          <input type="checkbox" name="isStartPage" defaultChecked={isStartPage} disabled={isStartPage} />
+          このページを Wiki の開始ページにする
+        </label>
       ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="keepRedirect" defaultChecked />

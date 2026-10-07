@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
+import { DEFAULT_WIKI_START_PAGE } from "@/domain/wiki/entity";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
@@ -23,6 +24,7 @@ import {
   DrizzleWikiContentRepository,
   DrizzleWikiPageRepository,
   DrizzleWikiRedirectRepository,
+  DrizzleWikiRepository,
 } from "@/infrastructure/db/repositories/wiki-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -271,6 +273,7 @@ const renameWikiPageSchema = z.object({
   newTitle: z.string().min(1, "タイトルを入力してください。"),
   keepRedirect: z.literal("on").optional(),
   parentId: z.union([z.string().uuid(), z.literal("")]).optional(),
+  isStartPage: z.literal("on").optional(),
 });
 
 export async function renameWikiPageAction(
@@ -283,6 +286,7 @@ export async function renameWikiPageAction(
     newTitle: formData.get("newTitle"),
     keepRedirect: formData.get("keepRedirect") ?? undefined,
     parentId: formData.get("parentId") ?? undefined,
+    isStartPage: formData.get("isStartPage") ?? undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -310,10 +314,15 @@ export async function renameWikiPageAction(
   // Redmine's safe_attributes put title and parent_id behind rename_wiki_pages alone, so
   // manage_wiki opens the rename screen but may not retitle or move the page.
   const canReparent = can({ permission: "rename_wiki_pages", project: projectContext, actor });
-  const canRename = canReparent || can({ permission: "manage_wiki", project: projectContext, actor });
+  const canManageWiki = can({ permission: "manage_wiki", project: projectContext, actor });
+  const canRename = canReparent || canManageWiki;
   if (!canRename) {
     return { error: "この操作を行う権限がありません。" };
   }
+
+  const wikiRepository = new DrizzleWikiRepository();
+  const wiki = await wikiRepository.findByProject(project.id);
+  const wasStartPage = (wiki?.startPage ?? DEFAULT_WIKI_START_PAGE) === wikiPage.title;
 
   let renamed;
   try {
@@ -341,6 +350,14 @@ export async function renameWikiPageAction(
       return { error: "親ページとして指定できないページです。" };
     }
     throw error;
+  }
+
+  // Redmine's WikiPage#update_wiki_start_page, a before_save: the start page follows the
+  // page it names when that page is renamed, and manage_wiki can point it at this page.
+  // Being the start page already is an attribute of the page, not a permission, so the
+  // follow happens for anyone allowed to rename at all.
+  if (wasStartPage || (canManageWiki && parsed.data.isStartPage === "on")) {
+    await wikiRepository.setStartPage(project.id, renamed.title);
   }
 
   redirect(`/projects/${parsed.data.projectIdentifier}/wiki/${encodeURIComponent(renamed.title)}`);
