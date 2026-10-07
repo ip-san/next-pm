@@ -9,6 +9,7 @@ import type {
   IssueSearchRepository,
   IssueSearchResult,
   IssueVisibilityScope,
+  SpentHoursScope,
 } from "@/domain/query/issue-search";
 import type { SortCriterion } from "@/domain/query/sort";
 
@@ -58,8 +59,21 @@ const SORT_EXPRESSIONS: Record<string, SQL> = {
   is_private: sql`i.is_private`,
   created_on: sql`i.created_at`,
   updated_on: sql`i.updated_at`,
-  spent_hours: sql`coalesce((select sum(te.hours) from time_entries te where te.issue_id = i.id), 0)`,
 };
+
+/**
+ * The `spent_hours` sum, narrowed to what this viewer may see. Unlike every other sortable
+ * column it depends on who is asking, so it can't live in the static map above.
+ */
+function spentHoursExpression(scope: SpentHoursScope): SQL {
+  if (scope.kind === "all") {
+    return sql`coalesce((select sum(te.hours) from time_entries te where te.issue_id = i.id), 0)`;
+  }
+  if (scope.userId === null) {
+    return sql`0::numeric`;
+  }
+  return sql`coalesce((select sum(te.hours) from time_entries te where te.issue_id = i.id and te.user_id = ${scope.userId}::uuid), 0)`;
+}
 
 /**
  * Column key -> the expression to GROUP BY. Association columns group on the foreign key
@@ -268,12 +282,13 @@ function customFieldSortExpression(customFieldId: string, numeric: boolean): SQL
   return sql`(select ${value} from custom_values cv where cv.customized_type = 'Issue' and cv.customized_id = i.id and cv.custom_field_id = ${customFieldId}::uuid limit 1)`;
 }
 
-function sortExpression(key: string, customFieldFormats: Map<string, string>): SQL | undefined {
+function sortExpression(key: string, customFieldFormats: Map<string, string>, spentHoursScope: SpentHoursScope): SQL | undefined {
   const customFieldId = parseCustomFieldKey(key);
   if (customFieldId) {
     const format = customFieldFormats.get(customFieldId);
     return format ? customFieldSortExpression(customFieldId, format === "int" || format === "float") : undefined;
   }
+  if (key === "spent_hours") return spentHoursExpression(spentHoursScope);
   return SORT_EXPRESSIONS[key];
 }
 
@@ -314,7 +329,12 @@ function distinctGroupOrderExpression(key: string): SQL | undefined {
   return GROUP_ORDER_EXPRESSIONS[key];
 }
 
-function orderByClause(sortCriteria: SortCriterion[], groupOrder: SQL | undefined, customFieldFormats: Map<string, string>): SQL {
+function orderByClause(
+  sortCriteria: SortCriterion[],
+  groupOrder: SQL | undefined,
+  customFieldFormats: Map<string, string>,
+  spentHoursScope: SpentHoursScope,
+): SQL {
   const parts: SQL[] = [];
   // Redmine prepends the group column to the order so rows of one group stay contiguous
   // across page boundaries (Query#group_by_sort_order). It orders by the column's *sortable*
@@ -322,7 +342,7 @@ function orderByClause(sortCriteria: SortCriterion[], groupOrder: SQL | undefine
   if (groupOrder) parts.push(sql`${groupOrder} asc nulls last`);
 
   for (const [key, direction] of sortCriteria) {
-    const expression = sortExpression(key, customFieldFormats);
+    const expression = sortExpression(key, customFieldFormats, spentHoursScope);
     if (!expression) continue;
     parts.push(direction === "desc" ? sql`${expression} desc nulls last` : sql`${expression} asc nulls last`);
   }
@@ -345,10 +365,10 @@ const BASE_FROM = sql`
 `;
 
 /** Per-column SUM expressions for the totals row. */
-function totalExpression(key: string, customFieldFormats: Map<string, string>): SQL | undefined {
+function totalExpression(key: string, customFieldFormats: Map<string, string>, spentHoursScope: SpentHoursScope): SQL | undefined {
   if (key === "estimated_hours") return sql`coalesce(sum(i.estimated_hours), 0)`;
   if (key === "spent_hours") {
-    return sql`coalesce(sum((select coalesce(sum(te.hours), 0) from time_entries te where te.issue_id = i.id)), 0)`;
+    return sql`coalesce(sum(${spentHoursExpression(spentHoursScope)}), 0)`;
   }
   const customFieldId = parseCustomFieldKey(key);
   if (!customFieldId) return undefined;
@@ -424,18 +444,25 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     // status's position, so the groups come out in workflow order.
     const distinctGroupOrder = criteria.groupBy ? distinctGroupOrderExpression(criteria.groupBy) : undefined;
     const rowGroupOrder = distinctGroupOrder ?? group;
-    const totalKeys = criteria.totalableKeys.filter((key) => totalExpression(key, customFieldFormats) !== undefined);
+    const totalKeys = criteria.totalableKeys.filter(
+      (key) => totalExpression(key, customFieldFormats, criteria.spentHoursScope) !== undefined,
+    );
 
     const [summary, groups, rows] = await Promise.all([
-      this.loadSummary(where, totalKeys, customFieldFormats),
-      group ? this.loadGroups(where, group, distinctGroupOrder, totalKeys, customFieldFormats) : Promise.resolve(null),
+      this.loadSummary(where, totalKeys, customFieldFormats, criteria.spentHoursScope),
+      group
+        ? this.loadGroups(where, group, distinctGroupOrder, totalKeys, customFieldFormats, criteria.spentHoursScope)
+        : Promise.resolve(null),
       this.loadRows(where, criteria, rowGroupOrder, customFieldFormats, limit, offset),
     ]);
 
     // Both of these are bounded by the page size, so they stay one extra round trip each
     // rather than the N+1 a per-row lookup would be.
     const issueIds = rows.map((issue) => issue.id);
-    const [customValues, spentHours] = await Promise.all([loadCustomValues(issueIds), loadSpentHours(issueIds)]);
+    const [customValues, spentHours] = await Promise.all([
+      loadCustomValues(issueIds),
+      loadSpentHours(issueIds, criteria.spentHoursScope),
+    ]);
 
     return { issues: rows, customValues, spentHours, ...summary, groups };
   }
@@ -444,8 +471,11 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     where: SQL,
     totalKeys: string[],
     customFieldFormats: Map<string, string>,
+    spentHoursScope: SpentHoursScope,
   ): Promise<{ totalCount: number; totals: Record<string, number> }> {
-    const totalSelects = totalKeys.map((key, index) => sql`${totalExpression(key, customFieldFormats)} as ${sql.raw(`total_${index}`)}`);
+    const totalSelects = totalKeys.map(
+      (key, index) => sql`${totalExpression(key, customFieldFormats, spentHoursScope)} as ${sql.raw(`total_${index}`)}`,
+    );
     const selects = sql.join([sql`count(*) as row_count`, ...totalSelects], sql`, `);
     const result = await db.execute<Record<string, unknown>>(sql`select ${selects} ${BASE_FROM} ${where}`);
     const row = result.rows[0] ?? {};
@@ -461,8 +491,11 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     distinctGroupOrder: SQL | undefined,
     totalKeys: string[],
     customFieldFormats: Map<string, string>,
+    spentHoursScope: SpentHoursScope,
   ): Promise<IssueGroup[]> {
-    const totalSelects = totalKeys.map((key, index) => sql`${totalExpression(key, customFieldFormats)} as ${sql.raw(`total_${index}`)}`);
+    const totalSelects = totalKeys.map(
+      (key, index) => sql`${totalExpression(key, customFieldFormats, spentHoursScope)} as ${sql.raw(`total_${index}`)}`,
+    );
     const selects = sql.join([sql`${group} as group_value`, sql`count(*) as row_count`, ...totalSelects], sql`, `);
     // `group by 1` rather than by a second copy of the expression: a custom-field group key
     // is a correlated subquery whose custom_field_id is a bound parameter, so re-emitting
@@ -492,7 +525,7 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     limit: number,
     offset: number,
   ): Promise<Issue[]> {
-    const order = orderByClause(criteria.sort, group, customFieldFormats);
+    const order = orderByClause(criteria.sort, group, customFieldFormats, criteria.spentHoursScope);
     const result = await db.execute<Record<string, unknown>>(
       sql`select i.* ${BASE_FROM} ${where} order by ${order} limit ${limit} offset ${offset}`,
     );
@@ -515,10 +548,12 @@ async function loadCustomValues(issueIds: string[]): Promise<Map<string, string>
   return new Map(result.rows.filter((row) => row.value !== null).map((row) => [`${row.customized_id}:${row.custom_field_id}`, row.value as string]));
 }
 
-async function loadSpentHours(issueIds: string[]): Promise<Map<string, number>> {
+async function loadSpentHours(issueIds: string[], scope: SpentHoursScope): Promise<Map<string, number>> {
   if (issueIds.length === 0) return new Map();
+  if (scope.kind === "own" && scope.userId === null) return new Map();
+  const ownFilter = scope.kind === "own" ? sql` and user_id = ${scope.userId}::uuid` : sql``;
   const result = await db.execute<{ issue_id: string; hours: string }>(
-    sql`select issue_id, sum(hours) as hours from time_entries where issue_id in ${idList(issueIds)} group by issue_id`,
+    sql`select issue_id, sum(hours) as hours from time_entries where issue_id in ${idList(issueIds)}${ownFilter} group by issue_id`,
   );
   return new Map(result.rows.map((row) => [row.issue_id, toNumber(row.hours)]));
 }

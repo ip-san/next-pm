@@ -14,6 +14,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
 import { IssuesPdfDocument } from "./issues-pdf-document";
 
@@ -64,6 +65,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
         savedQuery,
         visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),
         canViewTimeEntries: can({ permission: "view_time_entries", project: projectContext, actor }),
+        spentHoursScope: spentHoursScopeFor(actor, user?.id ?? null),
         today: new Date().toISOString().slice(0, 10),
         exportLimit: settings.issuesExportLimit,
       },

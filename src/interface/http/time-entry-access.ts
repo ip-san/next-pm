@@ -2,8 +2,9 @@ import { can, type AuthorizationActor, type ProjectAuthorizationContext } from "
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { TimeEntriesVisibility } from "@/domain/role/entity";
+import type { SpentHoursScope } from "@/domain/query/issue-search";
 import type { TimeEntry } from "@/domain/time-entry/entity";
-import { isTimeEntryVisible } from "@/domain/time-entry/visibility";
+import { isTimeEntryVisible, seesOnlyOwnTimeEntries } from "@/domain/time-entry/visibility";
 import { issuesVisibilityRoles } from "./resolve-actor";
 
 /**
@@ -21,6 +22,14 @@ export function timeEntriesVisibilityRoles(actor: AuthorizationActor): { timeEnt
     case "anonymous":
       return [actor.role];
   }
+}
+
+/**
+ * The `spent_hours` scope for one viewer, so the issue list's column, sort and totals sum
+ * over the same entries its time-entry screens would have shown them.
+ */
+export function spentHoursScopeFor(actor: AuthorizationActor, userId: string | null): SpentHoursScope {
+  return seesOnlyOwnTimeEntries(timeEntriesVisibilityRoles(actor)) ? { kind: "own", userId } : { kind: "all" };
 }
 
 type VisibleIssue = Pick<Issue, "isPrivate" | "authorId" | "assignedToId" | "assignedToType">;

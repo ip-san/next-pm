@@ -25,6 +25,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
 import { issueColumnValue, issueGroupLabel, issueGroupValue, type IssueListLookups } from "@/interface/query/issue-list-view";
 import { issueListHref, normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
 import { IssueQueryForm, type FilterValueOption } from "./issue-query-form";
@@ -83,6 +84,7 @@ export default async function ProjectIssuesPage({
       savedQuery,
       visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),
       canViewTimeEntries,
+      spentHoursScope: spentHoursScopeFor(actor, user?.id ?? null),
       today: new Date().toISOString().slice(0, 10),
     },
   );

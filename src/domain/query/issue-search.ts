@@ -18,10 +18,21 @@ export interface IssueVisibilityScope {
   seesAllPrivateIssues: boolean;
 }
 
+/**
+ * How wide every `spent_hours` figure reaches — the per-row value, the sort key and the
+ * totals alike. Mirrors `Issue.load_visible_spent_hours`, which sums over
+ * `TimeEntry.visible(user)` rather than over every entry: a viewer whose roles all say
+ * `time_entries_visibility == "own"` must not learn other people's hours through a sum.
+ * `userId: null` is the anonymous case of that rule, and matches no entry at all.
+ */
+export type SpentHoursScope = { kind: "all" } | { kind: "own"; userId: string | null };
+
 export interface IssueSearchCriteria {
   projectId: string;
   predicates: CompiledPredicate[];
   visibility: IssueVisibilityScope;
+  /** How far the `spent_hours` figures reach — see SpentHoursScope. */
+  spentHoursScope: SpentHoursScope;
   sort: SortCriterion[];
   /** A groupable column key, or null. */
   groupBy: string | null;
@@ -65,7 +76,7 @@ export interface IssueSearchRepository {
    * group and total queries (Redmine's `IssueQuery#issue_count`, used the same way by
    * `IssuesController#index` to build its Paginator).
    */
-  count(criteria: Omit<IssueSearchCriteria, "sort" | "groupBy" | "totalableKeys" | "offset" | "limit">): Promise<number>;
+  count(criteria: Omit<IssueSearchCriteria, "sort" | "groupBy" | "totalableKeys" | "offset" | "limit" | "spentHoursScope">): Promise<number>;
   search(criteria: IssueSearchCriteria): Promise<IssueSearchResult>;
   /**
    * Same filtering, ordering and visibility as `search`, but every matching row — for the

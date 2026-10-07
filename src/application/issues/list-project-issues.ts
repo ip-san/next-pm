@@ -10,7 +10,7 @@ import {
 } from "@/domain/query/columns";
 import type { QueryOptions, SavedQuery } from "@/domain/query/entity";
 import { compileFilters, DEFAULT_FIRST_DAY_OF_WEEK, type FilterCondition } from "@/domain/query/filter-builder";
-import type { IssueSearchRepository, IssueSearchResult, IssueVisibilityScope } from "@/domain/query/issue-search";
+import type { IssueSearchRepository, IssueSearchResult, IssueVisibilityScope, SpentHoursScope } from "@/domain/query/issue-search";
 import { paginate, resolvePerPage, type Pagination } from "@/domain/query/pagination";
 import { resolveSortCriteria } from "@/domain/query/sort";
 import { validFilters } from "@/domain/query/validate-filters";
@@ -33,6 +33,12 @@ export interface ListProjectIssuesInput {
   visibility: IssueVisibilityScope;
   /** Redmine only offers the spent_hours column/total to a viewer holding view_time_entries. */
   canViewTimeEntries: boolean;
+  /**
+   * How wide the spent_hours figures may reach, from the viewer's `time_entries_visibility`
+   * roles. Only consulted when `canViewTimeEntries` is set, since the column is not offered
+   * otherwise.
+   */
+  spentHoursScope: SpentHoursScope;
   /** "Today" for the relative date operators, as ISO yyyy-mm-dd. */
   today: string;
   /**
@@ -111,6 +117,7 @@ export async function listProjectIssues(
     sort: effective.sortCriteria,
     groupBy: effective.groupBy,
     totalableKeys: effective.totalableNames,
+    spentHoursScope: input.spentHoursScope,
   };
 
   if (input.exportLimit !== undefined) {

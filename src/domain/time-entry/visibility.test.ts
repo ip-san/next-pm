@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { canEditTimeEntry, isTimeEntryVisible } from "./visibility";
+import { canEditTimeEntry, isTimeEntryVisible, seesOnlyOwnTimeEntries } from "./visibility";
 
 const own = { timeEntriesVisibility: "own" as const };
 const all = { timeEntriesVisibility: "all" as const };
@@ -57,5 +57,19 @@ describe("canEditTimeEntry", () => {
 
   it("refuses an anonymous actor", () => {
     expect(canEditTimeEntry({ ...base, entry: { userId: "me" }, userId: null, canEditOwnTimeEntries: true })).toBe(false);
+  });
+});
+
+describe("seesOnlyOwnTimeEntries", () => {
+  it("narrows when every role says own", () => {
+    expect(seesOnlyOwnTimeEntries([{ timeEntriesVisibility: "own" }, { timeEntriesVisibility: "own" }])).toBe(true);
+  });
+
+  it("does not narrow as soon as one role says all", () => {
+    expect(seesOnlyOwnTimeEntries([{ timeEntriesVisibility: "own" }, { timeEntriesVisibility: "all" }])).toBe(false);
+  });
+
+  it("narrows an actor with no roles at all", () => {
+    expect(seesOnlyOwnTimeEntries([])).toBe(true);
   });
 });

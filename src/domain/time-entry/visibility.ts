@@ -25,6 +25,17 @@ export function isTimeEntryVisible(
 }
 
 /**
+ * The same rule read the other way round, for the places that aggregate instead of listing:
+ * true when nothing the actor holds says "all", so a SUM over time entries has to be
+ * narrowed to their own rows. Mirrors `Issue.load_visible_spent_hours`, which sums over
+ * `TimeEntry.visible(user)` — one "all" role is enough to lift the narrowing, exactly as
+ * `isTimeEntryVisible`'s `some` is.
+ */
+export function seesOnlyOwnTimeEntries(roles: VisibilityRole[]): boolean {
+  return !roles.some((role) => role.timeEntriesVisibility === "all");
+}
+
+/**
  * Pure re-implementation of TimeEntry#editable_by?:
  *   visible?(usr) && ((usr == user && edit_own_time_entries) || edit_time_entries)
  * Both the delete and the edit path go through this in Redmine (TimelogController's
