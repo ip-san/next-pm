@@ -68,12 +68,15 @@ export async function addMemberAction(_prevState: MemberActionState, formData: F
 
   const [targetUser, roles] = await Promise.all([
     new DrizzleUserRepository().findByLogin(parsed.data.login),
-    new DrizzleRoleRepository().findByIds(parsed.data.roleIds),
+    // Role.givable, not findByIds: a crafted request must not be able to hand a member
+    // the builtin Non member or Anonymous role.
+    new DrizzleRoleRepository().listGivable(),
   ]);
   if (!targetUser) {
     return { error: "指定されたログインIDのユーザーが見つかりません。" };
   }
-  if (roles.length !== parsed.data.roleIds.length) {
+  const givableIds = new Set(roles.map((role) => role.id));
+  if (parsed.data.roleIds.some((roleId) => !givableIds.has(roleId))) {
     return { error: "存在しないロールが指定されました。" };
   }
 
@@ -124,13 +127,16 @@ export async function addGroupMemberAction(_prevState: MemberActionState, formDa
   const memberRepository = new DrizzleMemberRepository();
   const [group, roles, existingGroupMemberships] = await Promise.all([
     groupRepository.findById(parsed.data.groupId),
-    new DrizzleRoleRepository().findByIds(parsed.data.roleIds),
+    // Role.givable, not findByIds: a crafted request must not be able to hand a member
+    // the builtin Non member or Anonymous role.
+    new DrizzleRoleRepository().listGivable(),
     memberRepository.listByGroup(parsed.data.groupId),
   ]);
   if (!group) {
     return { error: "指定されたグループが見つかりません。" };
   }
-  if (roles.length !== parsed.data.roleIds.length) {
+  const givableIds = new Set(roles.map((role) => role.id));
+  if (parsed.data.roleIds.some((roleId) => !givableIds.has(roleId))) {
     return { error: "存在しないロールが指定されました。" };
   }
   if (existingGroupMemberships.some((m) => m.projectId === guard.project.id)) {

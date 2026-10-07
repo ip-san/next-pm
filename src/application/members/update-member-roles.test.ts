@@ -32,7 +32,7 @@ function member(overrides: Partial<Member> = {}): Member {
   return { id: "member-1", userId: "user-1", groupId: null, inheritedFromMemberId: null, projectId: "proj-1", roleIds: ["role-a"], ...overrides };
 }
 
-function assignableRole(id: string): Role {
+function givableRole(id: string): Role {
   return {
     id,
     name: id,
@@ -54,7 +54,7 @@ function makeRepositories(target: Member, membersInProject: Member[] = []) {
   const memberAdminRepository = { replaceRoles: mock(async () => {}) } as unknown as MemberAdminRepository;
   const projectRepository = { findById: mock(async () => project) } as unknown as ProjectRepository;
   const roleRepository = {
-    listAssignable: mock(async () => [assignableRole("role-a"), assignableRole("role-b")]),
+    listGivable: mock(async () => [givableRole("role-a"), givableRole("role-b")]),
   } as unknown as RoleRepository;
   return { memberRepository, memberAdminRepository, projectRepository, roleRepository };
 }
@@ -97,7 +97,7 @@ describe("updateMemberRoles", () => {
     );
   });
 
-  it("refuses a role that is not assignable, so builtin roles cannot be granted", async () => {
+  it("refuses a role that is not givable, so the builtin roles cannot be granted", async () => {
     const repositories = makeRepositories(member());
     await expect(
       updateMemberRoles(repositories, { memberId: "member-1", roleIds: ["role-builtin"], actor: manager }),

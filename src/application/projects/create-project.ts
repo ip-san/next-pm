@@ -95,7 +95,7 @@ export async function createProject(repositories: CreateProjectRepositories, inp
   }
 
   const defaults = resolveProjectDefaults(await repositories.settingsRepository.getAll());
-  const assignableRoles = await repositories.roleRepository.listAssignable();
+  const assignableRoles = await repositories.roleRepository.listGivable();
   const creatorRole = defaultMemberRole(assignableRoles, defaults.newProjectUserRoleId);
 
   const mayChoose = (permission: "select_project_publicity" | "select_project_modules") =>

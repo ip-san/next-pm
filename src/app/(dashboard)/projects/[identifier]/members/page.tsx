@@ -36,7 +36,9 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
 
   const [members, roles, groups] = await Promise.all([
     new DrizzleMemberRepository().listByProject(project.id),
-    new DrizzleRoleRepository().listAssignable(),
+    // Role.givable: the builtin Non member / Anonymous roles describe people who are
+    // *not* members, so they must not be offerable here.
+    new DrizzleRoleRepository().listGivable(),
     new DrizzleGroupRepository().listAll(),
   ]);
   const users = await new DrizzleUserRepository().findByIds(memberUserIds(members));
@@ -70,6 +72,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
           members: true,
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          activities: can({ permission: "manage_project_activities", project: projectContext, actor }),
         }}
       />
       <table className="text-sm border-collapse">

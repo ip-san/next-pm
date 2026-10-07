@@ -1,7 +1,7 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { roles } from "@/infrastructure/db/schema/roles";
-import { ROLE_BUILTIN_ANONYMOUS, ROLE_BUILTIN_NON_MEMBER, type Role } from "@/domain/role/entity";
+import { ROLE_BUILTIN_ANONYMOUS, ROLE_BUILTIN_MEMBER, ROLE_BUILTIN_NON_MEMBER, type Role } from "@/domain/role/entity";
 import type { RoleRepository } from "@/domain/role/repository";
 
 function toDomain(row: typeof roles.$inferSelect): Role {
@@ -49,6 +49,15 @@ export class DrizzleRoleRepository implements RoleRepository {
 
   async listAssignable(): Promise<Role[]> {
     const rows = await db.select().from(roles).where(eq(roles.assignable, true));
+    return rows.map(toDomain);
+  }
+
+  async listGivable(): Promise<Role[]> {
+    const rows = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.assignable, true), eq(roles.builtin, ROLE_BUILTIN_MEMBER)))
+      .orderBy(roles.position, roles.id);
     return rows.map(toDomain);
   }
 

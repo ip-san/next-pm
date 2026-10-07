@@ -43,7 +43,7 @@ const creatorRole = role("Creator", ["add_project"]);
 function makeRepositories(options: { projectRepository?: ProjectRepository; roles?: Role[]; settings?: Record<string, string> } = {}) {
   const projectRepository = options.projectRepository ?? makeProjectRepository();
   const memberRepository = { create: mock(async () => ({ id: "member-1" })) } as unknown as MemberRepository;
-  const roleRepository = { listAssignable: mock(async () => options.roles ?? [creatorRole]) } as unknown as RoleRepository;
+  const roleRepository = { listGivable: mock(async () => options.roles ?? [creatorRole]) } as unknown as RoleRepository;
   const settingsRepository = { getAll: mock(async () => options.settings ?? {}) } as unknown as SettingsRepository;
   return { projectRepository, memberRepository, roleRepository, settingsRepository };
 }

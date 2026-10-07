@@ -75,7 +75,7 @@ export async function updateMemberRoles(
   if (roleIds.length === 0) {
     throw new MemberRolesEmptyError();
   }
-  const assignableIds = new Set((await repositories.roleRepository.listAssignable()).map((role) => role.id));
+  const assignableIds = new Set((await repositories.roleRepository.listGivable()).map((role) => role.id));
   if (roleIds.some((roleId) => !assignableIds.has(roleId))) {
     throw new MemberRolesInvalidError();
   }

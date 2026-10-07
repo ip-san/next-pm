@@ -44,6 +44,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           members: can({ permission: "manage_members", project: projectContext, actor }),
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          activities: can({ permission: "manage_project_activities", project: projectContext, actor }),
         }}
       />
       <ProjectSettingsForm

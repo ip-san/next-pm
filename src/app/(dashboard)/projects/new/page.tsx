@@ -34,7 +34,7 @@ export default async function NewProjectPage() {
   const [trackers, defaults, assignableRoles, allProjects] = await Promise.all([
     new DrizzleTrackerRepository().listAll(),
     loadProjectDefaults(new DrizzleSettingsRepository()),
-    new DrizzleRoleRepository().listAssignable(),
+    new DrizzleRoleRepository().listGivable(),
     new DrizzleProjectRepository().listAll(),
   ]);
 
