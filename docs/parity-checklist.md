@@ -193,7 +193,7 @@
 |---|---|---|
 | 工数の記録 | done | 課題単票の `log-time-form` と、チケット任意のプロジェクト単位フォーム(`time-entries/new`、本家 `timelog/new` 相当) |
 | 工数の編集・削除 | done | 一覧・課題単票からの編集画面(`time-entries/[entryId]/edit`)と削除。`editable_by?`(visible かつ 自分の工数+`edit_own_time_entries` または `edit_time_entries`)を `domain/time-entry/visibility.ts` に実装。削除権限は本家同様に編集権限と同一 |
-| 工数の可視性(ロール設定) | done | `time_entries_visibility` が `own` のロールは自分名義の工数しか見えない(`TimeEntry#visible?` 相当)。一覧・レポート・課題単票・CSV エクスポート・REST API(一覧/個別)・編集/削除のすべてが同じ述語(`interface/http/time-entry-access.ts` の `canAccessTimeEntry`)を通る。活動(`application/activity/list-project-activity.ts`)だけは Application 層から Interface 層を参照できないため、同じ 3 条件をインラインで適用している |
+| 工数の可視性(ロール設定) | done | `time_entries_visibility` が `own` のロールは自分名義の工数しか見えない(`TimeEntry#visible?` 相当)。一覧・レポート・課題単票・CSV エクスポート・REST API(一覧/個別)・編集/削除のすべてが同じ述語(`interface/http/time-entry-access.ts` の `canAccessTimeEntry`)を通る。活動(`application/activity/list-project-activity.ts`)だけは Application 層から Interface 層を参照できないため、同じ 3 条件をインラインで適用している。課題一覧の `spent_hours` 列・ソート・合計も同じロール設定で絞る(`SpentHoursScope`、本家 `Issue.load_visible_spent_hours` 相当) |
 | プロジェクトの工数一覧 | partial | 一覧と集計レポートあり。フィルタ・列選択・ソートは未適用 — §2 のクエリエンジンは `queries.type = 'TimeEntryQuery'` を見込んだ作りになっているが、工数側の列カタログと読み取りモデルはまだ無い |
 | 横断の工数一覧 | missing | 本家 `/time_entries` |
 | 他ユーザー名義での記録 | done | `log_time_for_other_users`。対象は `TimeEntry#assignable_users`(= `log_time` を持つロールの有効なメンバー + 自分)に限定され、権限が無ければ選択欄自体を出さずサーバ側でも拒否 |
