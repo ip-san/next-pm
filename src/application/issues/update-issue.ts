@@ -90,6 +90,20 @@ export interface UpdateIssueInput {
   canSetNotesPrivate?: boolean;
 }
 
+/**
+ * What the update actually stored. Callers that notify must build the message from this and
+ * never from their own request body: a note the actor wasn't allowed to add is dropped from
+ * the journal, and mailing it anyway would deliver it to every recipient while leaving no
+ * record anyone could audit.
+ */
+export interface UpdateIssueOutcome {
+  issue: Issue;
+  /** The note as persisted — "" when none was stored (dropped for permissions, or blank). */
+  persistedNotes: string;
+  /** Whether the stored note ended up private, after the blank/split rules. */
+  persistedNotesPrivate: boolean;
+}
+
 export interface UpdateIssueRepositories extends IssueAttributeRepositories {
   issueRepository: IssueRepository;
   journalRepository: JournalRepository;
@@ -104,8 +118,8 @@ export interface UpdateIssueRepositories extends IssueAttributeRepositories {
   customValueRepository: CustomValueRepository;
 }
 
-export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<Issue> {
-  const { after, appliedChanges } = await applyIssueUpdate(repositories, input, {
+export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<UpdateIssueOutcome> {
+  const { after, appliedChanges, persistedNotes, persistedNotesPrivate } = await applyIssueUpdate(repositories, input, {
     skipTransitionCheck: false,
     skipBlockedCheck: false,
     skipFieldPermissions: false,
@@ -135,7 +149,7 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
     await rescheduleFollowingIssues(repositories, input.issueId, input.actingUserId, new Set([input.issueId]));
   }
 
-  return after;
+  return { issue: after, persistedNotes, persistedNotesPrivate };
 }
 
 /**
@@ -262,7 +276,7 @@ async function applyIssueUpdate(
   repositories: UpdateIssueRepositories,
   input: UpdateIssueInput,
   options: { skipTransitionCheck: boolean; skipBlockedCheck: boolean; skipFieldPermissions: boolean },
-): Promise<{ after: Issue; appliedChanges: IssueUpdate }> {
+): Promise<{ after: Issue; appliedChanges: IssueUpdate; persistedNotes: string; persistedNotesPrivate: boolean }> {
   const before = await repositories.issueRepository.findById(input.issueId);
   if (!before) {
     throw new Error(`Issue ${input.issueId} not found`);
@@ -454,6 +468,8 @@ async function applyIssueUpdate(
     ? await applyIssueCustomFieldValues(repositories, input.issueId, preparedCustomFieldValues)
     : [];
 
+  let persistedNotes = "";
+  let persistedNotesPrivate = false;
   const details = [...diffIssueChanges(before, changes), ...customFieldDetails];
   if (details.length > 0 || notes.trim().length > 0) {
     // Mirrors Journal#split_private_notes: a private note carrying attribute changes
@@ -468,6 +484,10 @@ async function applyIssueUpdate(
         privateNotes: journal.privateNotes,
         details: journal.details,
       });
+      if (journal.notes.trim().length > 0) {
+        persistedNotes = journal.notes;
+        persistedNotesPrivate = journal.privateNotes;
+      }
     }
     // Mirrors Redmine's issue_contributed_to trigger — firing on any recorded change, not
     // just notes, since a plain field edit shows up in the issue's history the same as a
@@ -493,5 +513,5 @@ async function applyIssueUpdate(
     await recalculateParents(repositories, input.issueId, [before.parentId]);
   }
 
-  return { after, appliedChanges: changes };
+  return { after, appliedChanges: changes, persistedNotes, persistedNotesPrivate };
 }

@@ -283,9 +283,6 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   // to change anything about the issue.
   const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
   const canSetNotesPrivate = can({ permission: "set_notes_private", project: projectContext, actor });
-  // A blank note is never private (Journal#split_private_notes), so this also decides
-  // whether the notification below has to be split.
-  const noteIsPrivate = canSetNotesPrivate && parsed.data.privateNotes === true && parsed.data.notes.trim().length > 0;
   if (!canEditAttributes && !canAddNotes) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
@@ -352,9 +349,9 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     changes.doneRatio = parsedRatio;
   }
 
-  let updated;
+  let outcome;
   try {
-    updated = await updateIssue(
+    outcome = await updateIssue(
       {
         ...drizzleIssueAttributeRepositories(),
         issueRepository,
@@ -422,6 +419,13 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     throw error;
   }
 
+  const updated = outcome.issue;
+  // Everything below is built from what the update *stored*, never from the request body:
+  // a note the actor wasn't allowed to add is dropped from the journal, and mailing it
+  // anyway would deliver it to every recipient with no record anyone could audit.
+  const noteBody = outcome.persistedNotes.trim();
+  const noteIsPrivate = outcome.persistedNotesPrivate;
+
   // Mirrors Issue#notified_users for an update event: author, assignee(s), watchers, and
   // every project member (private-visibility filtered). Filtered against the *updated*
   // issue, since this form can flip is_private on — mailing the pre-update state would
@@ -459,7 +463,6 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   );
   const notifiableWatcherUserIds = filterUserIdsVisibleToPrivateIssue(updated, watcherUserIds, rolesByUserId);
 
-  const noteBody = parsed.data.notes.trim();
   const genericBody = "チケットが更新されました。";
   const recipientGroups = [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds];
 
