@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
@@ -26,11 +28,15 @@ export default async function ProjectTimeEntriesPage({
     notFound();
   }
 
-  const [allEntries, activities] = await Promise.all([
+  const [allEntries, { byId: activityById }] = await Promise.all([
     new DrizzleTimeEntryRepository().listForProject(project.id),
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+    // byId, not the offered list: an entry recorded before the project deactivated an
+    // activity still has to show that activity's name.
+    loadProjectActivities(
+      { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+      project.id,
+    ),
   ]);
-  const activityById = new Map(activities.map((a) => [a.id, a]));
 
   const issueIds = [...new Set(allEntries.map((e) => e.issueId).filter((id): id is string => id !== null))];
   const issueRepository = new DrizzleIssueRepository();

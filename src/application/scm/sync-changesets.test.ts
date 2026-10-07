@@ -111,7 +111,7 @@ function makeSettingsRepository(): SettingsRepository {
 
 const OPEN_STATUS: IssueStatus = { id: "status-open", name: "Open", description: "", isClosed: false, defaultDoneRatio: null, position: 1 };
 const CLOSED_STATUS: IssueStatus = { id: "status-closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 2 };
-const ACTIVITY: Enumeration = { id: "activity-1", type: "TimeEntryActivity", name: "Development", position: 1, isDefault: true, projectId: null, parentId: null };
+const ACTIVITY: Enumeration = { id: "activity-1", type: "TimeEntryActivity", name: "Development", position: 1, isDefault: true, active: true, projectId: null, parentId: null };
 const COMMITTER: User = {
   id: "user-1",
   login: "alice",

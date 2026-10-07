@@ -8,7 +8,9 @@ import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
@@ -94,7 +96,12 @@ export default async function IssueDetailPage({
     await Promise.all([
       new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
       new DrizzleTimeEntryRepository().listForIssue(issue.id),
-      new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+      // The picker offers what *this project* allows, not every system activity
+      // (Redmine's Project#activities).
+      loadProjectActivities(
+        { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+        project.id,
+      ).then((view) => view.offered),
       new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
       user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
       new DrizzleVersionRepository().listSharedWith(project.id),

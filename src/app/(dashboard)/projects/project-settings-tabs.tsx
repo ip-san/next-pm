@@ -1,12 +1,13 @@
 import Link from "next/link";
 
-export type ProjectSettingsTab = "settings" | "members" | "versions" | "issueCategories";
+export type ProjectSettingsTab = "settings" | "members" | "versions" | "issueCategories" | "activities";
 
 const TAB_PATH: Record<ProjectSettingsTab, string> = {
   settings: "settings",
   members: "members",
   versions: "versions",
   issueCategories: "issue-categories",
+  activities: "settings/activities",
 };
 
 const TAB_LABEL: Record<ProjectSettingsTab, string> = {
@@ -14,6 +15,7 @@ const TAB_LABEL: Record<ProjectSettingsTab, string> = {
   members: "メンバー",
   versions: "バージョン",
   issueCategories: "チケットのカテゴリ",
+  activities: "作業分類",
 };
 
 /**
@@ -31,7 +33,7 @@ export function ProjectSettingsTabs({
   active: ProjectSettingsTab;
   visibleTabs: Partial<Record<ProjectSettingsTab, boolean>>;
 }) {
-  const tabs: ProjectSettingsTab[] = ["settings", "members", "versions", "issueCategories"];
+  const tabs: ProjectSettingsTab[] = ["settings", "members", "versions", "issueCategories", "activities"];
 
   return (
     <nav className="flex gap-3 text-sm border-b pb-2">

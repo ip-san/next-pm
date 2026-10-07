@@ -106,7 +106,7 @@
 | メンバー管理 | done | ユーザー/グループの追加・削除に加えて、メンバー一覧でロールをその場で変更できる(本家 `MembersController#update`)。グループ由来の行は本家の `Member#any_inherited_role?` と同じく編集も削除もできず、グループ側のロールを変えると配下の継承行も追従する |
 | バージョン(ロードマップ) | done | 作成/更新/削除、共有範囲(sharing)、Wiki ページ紐付け、ロードマップ画面 |
 | 課題カテゴリ | done | 作成/更新/削除 |
-| プロジェクト単位の作業分類 | partial | `enumerations` に `project_id` / `parent_id` 列はあるが、上書きを編集する UI が無い。権限 `manage_project_activities` も未定義 |
+| プロジェクト単位の作業分類 | done | `manage_project_activities` を追加し、プロジェクト設定の「作業分類」タブで有効/無効を切り替える(本家 `ProjectEnumerationsController`)。システム側と異なる状態にしたときだけ `parent_id` 付きの子行を作り、同じ状態に戻したら工数を親へ戻してから子行を削除する。工数入力の選択肢は `Project#activities` 相当の実効リストを使う。本家が併せて上書きする活動のカスタムフィールド値は、next-pm の `customizedType` が Issue / Project のみのため対象外 |
 
 ## 4. ロールと権限
 
@@ -157,7 +157,7 @@
 | 課題ステータス | partial | 作成のみ。編集/削除/並べ替えが無い |
 | ワークフロー | done | 遷移とフィールド権限の編集 |
 | カスタムフィールド | partial | 作成のみ。編集/削除/並べ替えが無い |
-| 列挙項目(優先度・作業分類・文書カテゴリ) | partial | 作成のみ。編集/削除/並べ替え、プロジェクト単位の上書き編集が無い |
+| 列挙項目(優先度・作業分類・文書カテゴリ) | partial | 作成のみ。編集/削除/並べ替えが無い(プロジェクト単位の作業分類の上書きは §3 で対応済み) |
 | アプリケーション設定 | partial | 15 項目(添付上限・REST API 有効化・活動日数・フィード件数・進捗率の算出方式・プロジェクト間の関連許可・リポジトリログ表示件数・コミットキーワード各種・新規プロジェクトの既定値 5 種 `default_projects_public` / `default_projects_modules` / `default_projects_tracker_ids` / `sequential_project_identifiers` / `new_project_user_role_id`)。本家は 100 前後の設定を持ち、認証(`login_required`, セッション有効期限)・表示(日時書式、既定言語)・課題追跡(既定トラッカー、添付の既定)・メール通知の設定が未対応 |
 | 情報画面(環境情報) | missing | 本家 `/admin/info` |
 | プラグイン一覧 | out-of-scope | プラグイン機構そのものが無い |

@@ -17,10 +17,13 @@ import {
   unarchiveProject,
 } from "@/application/projects/project-status";
 import { updateProject, UpdateProjectNotPermittedError } from "@/application/projects/update-project";
+import { updateProjectActivities, UpdateProjectActivitiesNotPermittedError } from "@/application/projects/update-project-activities";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
@@ -370,4 +373,62 @@ export async function deleteProjectAction(
   revalidatePath("/admin");
   revalidatePath("/projects", "layout");
   redirect(user.isAdmin ? "/admin" : "/projects");
+}
+
+const updateProjectActivitiesSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  activityIds: z.array(z.string().uuid()),
+  activeActivityIds: z.array(z.string().uuid()),
+});
+
+export type ProjectActivitiesActionState = {
+  error: string | null;
+};
+
+export async function updateProjectActivitiesAction(
+  _prevState: ProjectActivitiesActionState,
+  formData: FormData,
+): Promise<ProjectActivitiesActionState> {
+  const parsed = updateProjectActivitiesSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    activityIds: formData.getAll("activityIds"),
+    activeActivityIds: formData.getAll("activeActivityIds"),
+  });
+  if (!parsed.success) {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const user = await currentUserFromCookies();
+  const { actor } = await resolveActor(user, project.id);
+
+  // Every rendered row posts its id, so a box left unchecked means "off here" rather than
+  // "unchanged" — without the hidden companion field there would be no way to turn one off.
+  const activeIds = new Set(parsed.data.activeActivityIds);
+  const activeByActivityId = Object.fromEntries(parsed.data.activityIds.map((id) => [id, activeIds.has(id)]));
+
+  try {
+    await updateProjectActivities(
+      {
+        projectRepository,
+        enumerationRepository: new DrizzleEnumerationRepository(),
+        projectActivityRepository: new DrizzleProjectActivityRepository(),
+      },
+      { projectId: project.id, activeByActivityId, actor },
+    );
+  } catch (error) {
+    if (error instanceof UpdateProjectActivitiesNotPermittedError) {
+      return { error: "この操作を行う権限がありません。" };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/settings/activities`);
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/time-entries`);
+  return { error: null };
 }

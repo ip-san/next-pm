@@ -222,6 +222,7 @@ export async function createEnumerationAction(
     name: parsed.data.name,
     position: 0,
     isDefault: parsed.data.isDefault,
+    active: true,
     projectId: null,
     parentId: null,
   });

@@ -7,7 +7,9 @@ import {
   type TimeReportColumnUnit,
   type TimeReportCriterion,
 } from "@/domain/report/time-entry-report";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
@@ -60,11 +62,14 @@ export default async function TimeEntryReportPage({
   const criterion = parseCriterion(criteriaParam);
   const columnUnit = parseColumnUnit(columnsParam);
 
-  const [allEntries, activities] = await Promise.all([
+  const [allEntries, { byId: activityById }] = await Promise.all([
     new DrizzleTimeEntryRepository().listForProject(project.id),
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+    // See the time-entries list: the lookup must cover deactivated activities too.
+    loadProjectActivities(
+      { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+      project.id,
+    ),
   ]);
-  const activityById = new Map(activities.map((activity) => [activity.id, activity]));
 
   const issueIds = [...new Set(allEntries.map((entry) => entry.issueId).filter((id): id is string => id !== null))];
   const issueRepository = new DrizzleIssueRepository();
