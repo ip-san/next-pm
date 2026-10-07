@@ -65,7 +65,15 @@ export async function resolveGlobalRoles(user: User | null): Promise<Role[]> {
     return [await roleRepository.findBuiltinAnonymous()];
   }
 
-  const memberships = await new DrizzleMemberRepository().listByUser(user.id);
+  // Redmine's Principal#memberships is scoped `where.not(projects: {status: ARCHIVED})`, so
+  // a role held only on an archived project grants nothing globally — without this filter it
+  // would still answer `add_project`, letting an archived membership open a new project.
+  const archivedProjectIds = new Set(
+    (await new DrizzleProjectRepository().listAll()).filter((project) => project.status === "archived").map((project) => project.id),
+  );
+  const memberships = (await new DrizzleMemberRepository().listByUser(user.id)).filter(
+    (member) => !archivedProjectIds.has(member.projectId),
+  );
   const membershipRoles = await roleRepository.findByIds([...new Set(memberships.flatMap((member) => member.roleIds))]);
   return [...membershipRoles, await roleRepository.findBuiltinNonMember()];
 }

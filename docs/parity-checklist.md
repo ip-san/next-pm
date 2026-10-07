@@ -106,7 +106,7 @@
 | メンバー管理 | done | ユーザー/グループの追加・削除に加えて、メンバー一覧でロールをその場で変更できる(本家 `MembersController#update`)。グループ由来の行は本家の `Member#any_inherited_role?` と同じく編集も削除もできず、グループ側のロールを変えると配下の継承行も追従する。ロールの選択肢は本家 `Role.givable` に合わせ、builtin(非メンバー/匿名)を除外する |
 | バージョン(ロードマップ) | done | 作成/更新/削除、共有範囲(sharing)、Wiki ページ紐付け、ロードマップ画面 |
 | 課題カテゴリ | done | 作成/更新/削除 |
-| プロジェクト単位の作業分類 | done | `manage_project_activities` を追加し、プロジェクト設定の「作業分類」タブで有効/無効を切り替える(本家 `ProjectEnumerationsController`)。システム側と異なる状態にしたときだけ `parent_id` 付きの子行を作り、同じ状態に戻したら工数を親へ戻してから子行を削除する。工数入力の選択肢は `Project#activities` 相当の実効リストを使う。本家が併せて上書きする活動のカスタムフィールド値は、next-pm の `customizedType` が Issue / Project のみのため対象外 |
+| プロジェクト単位の作業分類 | done | `manage_project_activities` を追加し、プロジェクト設定の「作業分類」タブで有効/無効を切り替える(本家 `ProjectEnumerationsController`)。システム側と異なる状態にしたときだけ `parent_id` 付きの子行を作り、同じ状態に戻したら工数を親へ戻してから子行を削除する。工数入力の選択肢は `Project#activities` 相当の実効リストを使う。本家が併せて上書きする活動のカスタムフィールド値は、next-pm の `customizedType` が Issue / Project のみのため対象外。**未対応**: 本家 `TimeEntry#validate_time_entry` の `activity_id` 包含チェック(`project.activities.include?`)が無く、無効化した分類の ID を直接送れば記録できてしまう。工数の入力経路(`log-time.ts` / `time-entry-actions.ts` / REST)は §9 の担当範囲のため手を付けていない |
 
 ## 4. ロールと権限
 
