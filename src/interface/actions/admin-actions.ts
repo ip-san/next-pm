@@ -18,44 +18,9 @@ import { parseFieldPermissionEntries } from "@/domain/workflow/parse-field-permi
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
+import type { AdminActionState } from "./admin-action-state";
 
-export type AdminActionState = {
-  error: string | null;
-};
-
-const createIssueStatusSchema = z.object({
-  name: z.string().min(1).max(30),
-  isClosed: z.coerce.boolean().default(false),
-});
-
-export async function createIssueStatusAction(
-  _prevState: AdminActionState,
-  formData: FormData,
-): Promise<AdminActionState> {
-  const authError = await requireAdmin();
-  if (authError) {
-    return { error: authError };
-  }
-
-  const parsed = createIssueStatusSchema.safeParse({
-    name: formData.get("name"),
-    isClosed: formData.get("isClosed") === "on",
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
-  }
-
-  await new DrizzleIssueStatusRepository().create({
-    name: parsed.data.name,
-    description: "",
-    isClosed: parsed.data.isClosed,
-    defaultDoneRatio: null,
-    position: 0,
-  });
-
-  revalidatePath("/admin/issue-statuses");
-  return { error: null };
-}
+export type { AdminActionState } from "./admin-action-state";
 
 const createTrackerSchema = z.object({
   name: z.string().min(1),
