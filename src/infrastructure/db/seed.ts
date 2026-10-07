@@ -48,6 +48,7 @@ async function seed() {
         "add_issue_notes",
         "edit_issue_notes",
         "edit_own_issue_notes",
+        "view_issue_watchers",
         "set_notes_private",
         "view_private_notes",
         "delete_issues",

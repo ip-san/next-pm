@@ -61,7 +61,7 @@
 | 課題の関連 | done | precedes/follows(遅延日数と後続の再スケジュール)・blocks/blocked・duplicates/duplicated(canonical のクローズで重複も自動クローズ)・relates・copied_to/copied_from の 9 種を定義、循環参照ガードあり(copied_to は課題のコピーで生成される) |
 | 関連の権限分離 | partial | `manage_issue_relations` のみ。本家の `manage_related_issues`(別プロジェクト側の課題に関連を張る権限)が無い |
 | ウォッチャー | done | 追加/削除/自己トグル、作成・担当・コメント時の自動ウォッチ(`user_preferences.auto_watch_on`) |
-| ウォッチャー一覧の閲覧権限 | missing | 本家の `view_issue_watchers` が無く、閲覧可否が追加権限と一体になっている |
+| ウォッチャー一覧の閲覧権限 | done | `view_issue_watchers` でウォッチャー一覧の表示可否を制御(追加/削除権限とは独立)。REST にウォッチャー一覧の GET は無いため画面のみ |
 | 注記(journal) | done | `add_issue_notes` 権限で注記のみの更新が可能(本家 `Issue#notes_addable?` と同じく編集権限とは独立。メール返信もこの権限で判定)。`edit_issue_notes` / `edit_own_issue_notes` による注記の編集に対応(本家 `Journal#editable_by?`)。読めないプライベート注記は編集もできない(本家が `Journal.visible` で絞るのと同じ)。`journals.updated_at` / `updated_by_id` を記録し履歴に「編集済み」を表示。本文を空にした注記は、変更履歴を持たない場合に限り削除する(本家は journals に destroy が無く空の行が残るだけで表示もされないため、見え方は同じ) |
 | プライベート注記 | done | `journals.private_notes` 列 + `set_notes_private` / `view_private_notes` 権限。可視判定は本家 `Journal.visible_notes_condition` に準拠(公開 / 自分が書いた / 権限あり)で SQL 側に適用。注記が属性変更を伴う場合は本家 `split_private_notes` と同じく 2 件の journal に分割して変更履歴は公開のまま保つ。空の注記はプライベートにならない。通知もプライベート注記のときは権限保持者だけに本文を送り、他の宛先には汎用文のみ送る。`view_private_notes` / `set_notes_private` は本家同様メンバー専用で、非メンバー/匿名ロールには付与できない |
 | プライベート課題 | done | `issues.is_private` と可視性判定(`domain/issue/visibility.ts`)に加え、`set_issues_private` / `set_own_issues_private`(own = 作成者)による設定可否の制御を実装。権限が無い場合は本家 `safe_attributes` と同じく送信値を黙って捨て、フォームにも項目を出さない |
@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` / `time_entries_visibility` / `users_visibility` |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 53。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 54。下表参照 |
 | プロジェクトモジュール | partial | 本家 10 に対し 8。`calendar` / `gantt` が未登録 |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_issue_watchers`, `view_members`, `view_message_watchers`, `view_wiki_edits`, `view_wiki_page_watchers`
+`add_message_watchers`, `add_project`, `add_wiki_page_watchers`, `commit_access`, `delete_message_watchers`, `delete_project`, `delete_wiki_pages`, `delete_wiki_pages_attachments`, `import_issues`, `import_time_entries`, `log_time_for_other_users`, `manage_project_activities`, `manage_public_queries`, `manage_related_issues`, `protect_wiki_pages`, `rename_wiki_pages`, `save_queries`, `search_project`, `select_project_publicity`, `use_webhooks`, `view_calendar`, `view_gantt`, `view_members`, `view_message_watchers`, `view_wiki_edits`, `view_wiki_page_watchers`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 

@@ -22,6 +22,7 @@ export type PermissionKey =
   | "manage_subtasks"
   | "manage_issue_relations"
   | "manage_issue_categories"
+  | "view_issue_watchers"
   | "add_issue_watchers"
   | "delete_issue_watchers"
   | "view_time_entries"
@@ -96,6 +97,7 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_subtasks: { module: "issue_tracking", readOnly: false },
   manage_issue_relations: { module: "issue_tracking", readOnly: false },
   manage_issue_categories: { module: "issue_tracking", readOnly: false },
+  view_issue_watchers: { module: "issue_tracking", readOnly: true },
   add_issue_watchers: { module: "issue_tracking", readOnly: false },
   delete_issue_watchers: { module: "issue_tracking", readOnly: false },
 

@@ -139,6 +139,7 @@ export default async function IssueDetailPage({
   const canSetNotesPrivate = can({ permission: "set_notes_private", project: toAuthorizationProject(project), actor });
   const canEditAnyNote = can({ permission: "edit_issue_notes", project: toAuthorizationProject(project), actor });
   const canEditOwnNote = can({ permission: "edit_own_issue_notes", project: toAuthorizationProject(project), actor });
+  const canViewWatchers = can({ permission: "view_issue_watchers", project: toAuthorizationProject(project), actor });
   const canAddWatchers = can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor });
   const canDeleteWatchers = can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor });
 
@@ -428,12 +429,14 @@ export default async function IssueDetailPage({
         {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} /> : null}
       </section>
 
-      {canAddWatchers || canDeleteWatchers || watcherList.length > 0 ? (
+      {canViewWatchers || canAddWatchers || canDeleteWatchers ? (
         <section>
           <WatcherManager
             issueId={issue.id}
             projectIdentifier={identifier}
-            watchers={watcherList}
+            // Redmine gates the watcher list itself on view_issue_watchers; someone who may
+            // only add a watcher gets the control without the roster.
+            watchers={canViewWatchers ? watcherList : []}
             candidates={canAddWatchers ? watcherCandidates : []}
             canAdd={canAddWatchers}
             canRemove={canDeleteWatchers}
