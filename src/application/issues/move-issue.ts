@@ -1,4 +1,11 @@
+import {
+  actorIssuesVisibilityRoles,
+  can,
+  projectAuthorizationContext,
+  type AuthorizationActor,
+} from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { resolveProjectChange } from "@/domain/issue/project-change";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
 import type { IssueCategoryRepository } from "@/domain/issue-category/repository";
@@ -10,6 +17,17 @@ import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { VersionRepository } from "@/domain/version/repository";
+
+export class MoveIssueNotPermittedError extends Error {
+  constructor(public readonly side: "source" | "target") {
+    super(
+      side === "source"
+        ? "The acting user may not edit this issue in its current project."
+        : "The acting user may not add issues to the target project.",
+    );
+    this.name = "MoveIssueNotPermittedError";
+  }
+}
 
 export class ProjectHasNoTrackerError extends Error {
   constructor() {
@@ -35,6 +53,18 @@ export interface MoveIssueInput {
   /** Explicit tracker for the moved issue; falls back to Redmine's own rule when omitted. */
   targetTrackerId?: string;
   actingUserId: string;
+  /**
+   * The acting user's resolved roles on the issue's *current* project, and on the target.
+   * Both are needed because membership — and therefore the effective role set — is per
+   * project. The caller resolves who the actor is; this use case decides what that allows,
+   * against the project records it loads itself.
+   */
+  sourceActor: AuthorizationActor;
+  targetActor: AuthorizationActor;
+  /** True when the acting user authored the issue, for the `edit_own_issues` branch. */
+  isAuthor: boolean;
+  /** Groups the acting user belongs to, for the group-assignee branch of private visibility. */
+  actorGroupIds?: string[];
 }
 
 /**
@@ -53,6 +83,32 @@ export async function moveIssue(repositories: MoveIssueRepositories, input: Move
   if (!issue) {
     throw new Error(`Issue ${input.issueId} not found`);
   }
+  // Authorization is enforced here, not only in the calling action. A move rewrites an
+  // issue's project, tracker, category, version and parent and drags its whole subtree,
+  // time entries and relations along — far too much to leave guarded by one caller.
+  // Mirrors Redmine, where IssuesController#update is gated by `authorize` on the source
+  // project and the destination must come from `Issue.allowed_target_projects`, i.e. a
+  // project the user has :add_issues on.
+  const sourceProject = await repositories.projectRepository.findById(issue.projectId);
+  if (!sourceProject) {
+    throw new Error(`Project ${issue.projectId} not found`);
+  }
+  const sourceContext = projectAuthorizationContext(sourceProject);
+  const mayEditSource =
+    can({ permission: "edit_issues", project: sourceContext, actor: input.sourceActor }) ||
+    (input.isAuthor && can({ permission: "edit_own_issues", project: sourceContext, actor: input.sourceActor }));
+  if (!mayEditSource) {
+    throw new MoveIssueNotPermittedError("source");
+  }
+  // A private issue the actor can't see must not be movable either — otherwise the move
+  // itself becomes an oracle for its existence.
+  if (
+    !isPrivateIssueVisible(issue, input.actingUserId, input.actorGroupIds ?? [], actorIssuesVisibilityRoles(input.sourceActor))
+  ) {
+    throw new MoveIssueNotPermittedError("source");
+  }
+
+  // Nothing to do, but only once the actor has been shown to be allowed to do it.
   if (issue.projectId === input.targetProjectId && input.targetTrackerId === undefined) {
     return issue;
   }
@@ -60,6 +116,12 @@ export async function moveIssue(repositories: MoveIssueRepositories, input: Move
   const targetProject = await repositories.projectRepository.findById(input.targetProjectId);
   if (!targetProject) {
     throw new Error(`Project ${input.targetProjectId} not found`);
+  }
+  // `can` resolves the target's archived/closed state and its enabled modules from the
+  // record loaded right here, so a closed or archived project, or one with issue_tracking
+  // switched off, is refused even if the caller believed otherwise.
+  if (!can({ permission: "add_issues", project: projectAuthorizationContext(targetProject), actor: input.targetActor })) {
+    throw new MoveIssueNotPermittedError("target");
   }
   // Mirrors `allowed_target_projects(...).having_trackers` — a project with no tracker
   // cannot hold an issue at all.

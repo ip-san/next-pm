@@ -1,5 +1,5 @@
 import type { User } from "@/domain/user/entity";
-import { can } from "@/domain/authorization/authorization-service";
+import { actorIssuesVisibilityRoles, can, projectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { PermissionKey } from "@/domain/authorization/permission-registry";
 import type { Project } from "@/domain/project/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -24,12 +24,7 @@ export function toAuthorizationProject(project: {
   isPublic: boolean;
   enabledModules: string[];
 }): ProjectAuthorizationContext {
-  return {
-    isArchived: project.status === "archived",
-    isActive: project.status === "active",
-    isPublic: project.isPublic,
-    enabledModules: project.enabledModules,
-  };
+  return projectAuthorizationContext(project);
 }
 
 /** Resolves which roles/actor-kind apply to `user` for `projectId`, mirroring User#allowed_to?'s role resolution. */
@@ -65,15 +60,7 @@ export async function resolveActor(user: User | null, projectId: string): Promis
  * every call site special-case `actor.kind === "admin"`.
  */
 export function issuesVisibilityRoles(actor: AuthorizationActor): { issuesVisibility: IssuesVisibility }[] {
-  switch (actor.kind) {
-    case "admin":
-      return [{ issuesVisibility: "all" }];
-    case "member":
-      return actor.roles;
-    case "non_member":
-    case "anonymous":
-      return [actor.role];
-  }
+  return actorIssuesVisibilityRoles(actor);
 }
 
 /**
