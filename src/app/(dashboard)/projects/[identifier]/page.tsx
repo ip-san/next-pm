@@ -57,6 +57,7 @@ export default async function ProjectPage({
   // reopened at all). Archive/unarchive are admin-only and live on the admin projects list.
   const canCloseProject = can({ permission: "close_project", project: toAuthorizationProject(project), actor });
   const canDeleteProject = can({ permission: "delete_project", project: toAuthorizationProject(project), actor });
+  const canViewMembers = can({ permission: "view_members", project: toAuthorizationProject(project), actor });
   const canManageIssueCategories =
     project.enabledModules.includes("issue_tracking") &&
     can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor });
@@ -257,7 +258,8 @@ export default async function ProjectPage({
             </section>
           ) : null}
 
-          {principalsByRole.size > 0 ? (
+          {/* Redmine gates the members box on view_members (MembersController#index). */}
+          {canViewMembers && principalsByRole.size > 0 ? (
             <section className="flex flex-col gap-1">
               <h2 className="font-semibold text-sm">メンバー</h2>
               {[...principalsByRole.keys()].sort().map((roleName) => (

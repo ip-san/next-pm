@@ -103,7 +103,7 @@
 | プロジェクトのコピー | done | `copyProjectAction` |
 | 新規プロジェクト作成権限 | done | `add_project`(グローバル判定)と親プロジェクト側の `add_subprojects` で判定。非管理者が作成した場合は Setting `new_project_user_role_id` のロール(未設定なら最初の付与可能ロール)でメンバーに追加する |
 | 公開設定の権限分離 | done | `select_project_publicity` / 既存の `select_project_modules` を作成時・設定更新時の双方で判定。権限が無い場合は本家の safe_attributes と同じく送信値を破棄する(チェックボックスを出さないだけでは、未チェックと区別が付かず非公開になってしまうため) |
-| メンバー管理 | partial | ユーザー/グループの追加・削除。**既存メンバーのロール変更ができない**(一度削除して再追加が必要) |
+| メンバー管理 | done | ユーザー/グループの追加・削除に加えて、メンバー一覧でロールをその場で変更できる(本家 `MembersController#update`)。グループ由来の行は本家の `Member#any_inherited_role?` と同じく編集も削除もできず、グループ側のロールを変えると配下の継承行も追従する |
 | バージョン(ロードマップ) | done | 作成/更新/削除、共有範囲(sharing)、Wiki ページ紐付け、ロードマップ画面 |
 | 課題カテゴリ | done | 作成/更新/削除 |
 | プロジェクト単位の作業分類 | partial | `enumerations` に `project_id` / `parent_id` 列はあるが、上書きを編集する UI が無い。権限 `manage_project_activities` も未定義 |
@@ -235,7 +235,7 @@
 | issues | partial | GET / POST / PATCH(PUT エイリアス有り)。**DELETE が無い**。journals の更新、`include=` パラメータ各種も無い |
 | projects | done | GET / POST / PUT / DELETE、`archive` / `unarchive` / `close` / `reopen`(本家 5.1 の API、POST / PUT 両対応で 204) |
 | users | partial | GET / POST。PUT / DELETE が無い |
-| memberships | partial | 一覧・作成・削除。PUT(ロール変更)が無い |
+| memberships | done | 一覧・作成・PUT(ロール変更)・削除 |
 | time_entries | partial | 一覧・作成のみ。個別 GET / PUT / DELETE が無い |
 | versions / wiki / issue_categories / groups / relations | done | CRUD の主要部分は実装済み |
 | news | partial | 一覧・作成・取得・削除。**PUT(更新)が無い**(本家 API は更新に対応) |
