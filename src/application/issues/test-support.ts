@@ -24,6 +24,7 @@ export function makeIssueAttributeRepositoriesMock(
     members?: Pick<Member, "userId" | "groupId" | "roleIds">[];
     roles?: (Pick<Role, "id" | "assignable"> & Partial<Pick<Role, "builtin" | "permissions" | "issuesVisibility">>)[];
     users?: Pick<User, "id" | "status">[];
+    disabledCoreFields?: string[];
   } = {},
 ): IssueAttributeRepositories {
   const trackerIds = allow.trackerIds ?? ["tracker-1", "tracker-2"];
@@ -68,6 +69,21 @@ export function makeIssueAttributeRepositoriesMock(
     versionRepository: {
       listSharedWith: mock(async () => versionIds.map((id) => ({ id }) as Version)),
     } as unknown as IssueAttributeRepositories["versionRepository"],
+    trackerRepository: {
+      findById: mock(async (id: string) => ({
+        id,
+        name: "T",
+        defaultStatusId: "new",
+        position: 1,
+        isInRoadmap: true,
+        disabledCoreFields: allow.disabledCoreFields ?? [],
+      })),
+      findByIds: mock(async () => []),
+      listAll: mock(async () => []),
+      create: mock(async () => {
+        throw new Error("not used");
+      }),
+    } as unknown as IssueAttributeRepositories["trackerRepository"],
   };
 }
 
