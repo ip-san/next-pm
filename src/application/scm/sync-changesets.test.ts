@@ -75,6 +75,10 @@ function makeTimeEntryRepository(): TimeEntryRepository {
     }),
     delete: mock(async () => {}),
     reassignProjectForIssues: mock(async () => undefined),
+    listForIssues: mock(async () => []),
+    deleteForIssues: mock(async () => undefined),
+    detachFromIssues: mock(async () => undefined),
+    reassignToIssue: mock(async () => undefined),
   };
 }
 

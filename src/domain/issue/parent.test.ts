@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { wouldCreateParentCycle } from "./parent";
+import { collectSelfAndDescendantIds, wouldCreateParentCycle } from "./parent";
 
 const tree = new Map<string, string | null>([
   ["root", null],
@@ -35,5 +35,34 @@ describe("wouldCreateParentCycle", () => {
       ["b", "a"],
     ]);
     expect(wouldCreateParentCycle("other", "a", looped)).toBe(true);
+  });
+});
+
+describe("collectSelfAndDescendantIds", () => {
+  const forest = new Map<string, string | null>([
+    ["root", null],
+    ["child-a", "root"],
+    ["child-b", "root"],
+    ["grandchild", "child-a"],
+    ["unrelated", null],
+  ]);
+
+  it("returns the issue and its whole subtree, parents first", () => {
+    const ids = collectSelfAndDescendantIds("root", forest);
+    expect(ids[0]).toBe("root");
+    expect(new Set(ids)).toEqual(new Set(["root", "child-a", "child-b", "grandchild"]));
+    expect(ids.indexOf("child-a")).toBeLessThan(ids.indexOf("grandchild"));
+  });
+
+  it("returns just the issue when it has no children", () => {
+    expect(collectSelfAndDescendantIds("unrelated", forest)).toEqual(["unrelated"]);
+  });
+
+  it("terminates on a cycle left behind by older data", () => {
+    const looped = new Map<string, string | null>([
+      ["a", "b"],
+      ["b", "a"],
+    ]);
+    expect(new Set(collectSelfAndDescendantIds("a", looped))).toEqual(new Set(["a", "b"]));
   });
 });

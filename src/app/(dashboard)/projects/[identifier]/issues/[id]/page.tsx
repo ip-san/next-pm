@@ -161,6 +161,7 @@ export default async function IssueDetailPage({
   const canEditOwnIssues = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
   const canAttachFiles = canEditIssues || (canEditOwnIssues && issue.authorId === user?.id);
   const canManageRelations = can({ permission: "manage_issue_relations", project: toAuthorizationProject(project), actor });
+  const canDeleteIssues = can({ permission: "delete_issues", project: toAuthorizationProject(project), actor });
   const canAddWatchers = can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor });
   const canDeleteWatchers = can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor });
 
@@ -251,7 +252,14 @@ export default async function IssueDetailPage({
             ステータス: {statusById.get(issue.statusId)?.name ?? "?"} / 進捗: {issue.doneRatio}%
           </p>
         </div>
-        {user ? <WatchToggleForm issueId={issue.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
+        <div className="flex items-center gap-3">
+          {user ? <WatchToggleForm issueId={issue.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
+          {canDeleteIssues ? (
+            <Link href={`/projects/${identifier}/issues/${issue.id}/destroy`} className="text-sm text-red-700 underline">
+              削除
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       <p className="whitespace-pre-wrap text-sm">{issue.description}</p>

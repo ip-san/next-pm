@@ -26,3 +26,31 @@ export function wouldCreateParentCycle(
   }
   return false;
 }
+
+/**
+ * The issue plus every descendant of it, parents before children. Redmine deletes and moves
+ * a subtree as a unit (`Issue.self_and_descendants`), and `issues.parent_id` is
+ * ON DELETE SET NULL here, so the set has to be collected explicitly rather than left to
+ * the database. `seen` also guards against a cycle left behind by older data.
+ */
+export function collectSelfAndDescendantIds(rootId: string, parentIdById: ReadonlyMap<string, string | null>): string[] {
+  const childrenByParent = new Map<string, string[]>();
+  for (const [id, parentId] of parentIdById) {
+    if (!parentId) continue;
+    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), id]);
+  }
+
+  const ordered: string[] = [];
+  const queue = [rootId];
+  const seen = new Set<string>([rootId]);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    ordered.push(current);
+    for (const childId of childrenByParent.get(current) ?? []) {
+      if (seen.has(childId)) continue;
+      seen.add(childId);
+      queue.push(childId);
+    }
+  }
+  return ordered;
+}

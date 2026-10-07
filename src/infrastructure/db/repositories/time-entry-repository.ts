@@ -70,4 +70,28 @@ export class DrizzleTimeEntryRepository implements TimeEntryRepository {
     if (issueIds.length === 0) return;
     await db.update(timeEntries).set({ projectId }).where(inArray(timeEntries.issueId, issueIds));
   }
+
+  async listForIssues(issueIds: string[]): Promise<TimeEntry[]> {
+    if (issueIds.length === 0) return [];
+    const rows = await db.select().from(timeEntries).where(inArray(timeEntries.issueId, issueIds));
+    return rows.map(toDomain);
+  }
+
+  async deleteForIssues(issueIds: string[]): Promise<void> {
+    if (issueIds.length === 0) return;
+    await db.delete(timeEntries).where(inArray(timeEntries.issueId, issueIds));
+  }
+
+  async detachFromIssues(issueIds: string[]): Promise<void> {
+    if (issueIds.length === 0) return;
+    await db.update(timeEntries).set({ issueId: null }).where(inArray(timeEntries.issueId, issueIds));
+  }
+
+  async reassignToIssue(issueIds: string[], targetIssueId: string, targetProjectId: string): Promise<void> {
+    if (issueIds.length === 0) return;
+    await db
+      .update(timeEntries)
+      .set({ issueId: targetIssueId, projectId: targetProjectId })
+      .where(inArray(timeEntries.issueId, issueIds));
+  }
 }

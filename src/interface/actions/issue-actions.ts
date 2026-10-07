@@ -10,6 +10,7 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { deleteIssue, DeleteIssueNotPermittedError, InvalidTimeEntryTargetError } from "@/application/issues/delete-issue";
 import { moveIssue, MoveIssueNotPermittedError, ProjectHasNoTrackerError } from "@/application/issues/move-issue";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
@@ -21,6 +22,7 @@ import {
   WorkflowRequiredFieldError,
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
@@ -42,13 +44,16 @@ import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositori
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import {
   createIssueFormSchema,
+  deleteIssueFormSchema,
   moveIssueFormSchema,
   updateIssueFormSchema,
   type CreateIssueFormValues,
+  type DeleteIssueFormValues,
   type UpdateIssueFormValues,
 } from "./issue-schemas";
 
@@ -547,4 +552,83 @@ export async function moveIssueAction(values: {
   revalidatePath(`/projects/${sourceProject.identifier}/issues`);
   revalidatePath(`/projects/${targetProject.identifier}/issues/${parsed.data.issueId}`);
   return { ok: true, projectIdentifier: targetProject.identifier };
+}
+
+/**
+ * Redmine's IssuesController#destroy. The issue goes with its whole subtask tree, and the
+ * caller says what happens to the time logged against that set.
+ */
+export async function deleteIssueAction(
+  values: DeleteIssueFormValues,
+): Promise<{ ok: true; projectIdentifier: string } | { ok: false; error: string }> {
+  const parsed = deleteIssueFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { ok: false, error: "ログインしてください。" };
+  }
+
+  const issueRepository = new DrizzleIssueRepository();
+  const existing = await issueRepository.findById(parsed.data.issueId);
+  if (!existing) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  const project = await new DrizzleProjectRepository().findById(existing.projectId);
+  if (!project) {
+    return { ok: false, error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  if (!can({ permission: "delete_issues", project: toAuthorizationProject(project), actor })) {
+    return { ok: false, error: "この操作を行う権限がありません。" };
+  }
+
+  if (parsed.data.timeEntryMode === "reassign" && !parsed.data.reassignToIssueId) {
+    return { ok: false, error: "工数の付け替え先チケットを選択してください。" };
+  }
+
+  try {
+    await deleteIssue(
+      {
+        issueRepository,
+        projectRepository: new DrizzleProjectRepository(),
+        timeEntryRepository: new DrizzleTimeEntryRepository(),
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+      },
+      {
+        issueId: parsed.data.issueId,
+        actingUserId: user.id,
+        actor,
+        actorGroupIds: userGroupIds,
+        timeEntries:
+          parsed.data.timeEntryMode === "reassign"
+            ? { mode: "reassign", targetIssueId: parsed.data.reassignToIssueId }
+            : { mode: parsed.data.timeEntryMode },
+      },
+    );
+  } catch (error) {
+    if (error instanceof DeleteIssueNotPermittedError) {
+      return { ok: false, error: "この操作を行う権限がありません。" };
+    }
+    if (error instanceof InvalidTimeEntryTargetError) {
+      return {
+        ok: false,
+        error:
+          error.reason === "being_deleted"
+            ? "削除対象のチケットに工数を付け替えることはできません。"
+            : "付け替え先のチケットが見つかりません。",
+      };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${project.identifier}/issues`);
+  return { ok: true, projectIdentifier: project.identifier };
 }

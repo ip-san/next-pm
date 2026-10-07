@@ -28,6 +28,10 @@ function makeRepo(settings: Record<string, string> = {}, activities: Enumeration
     }),
     delete: mock(async () => {}),
     reassignProjectForIssues: mock(async () => undefined),
+    listForIssues: mock(async () => []),
+    deleteForIssues: mock(async () => undefined),
+    detachFromIssues: mock(async () => undefined),
+    reassignToIssue: mock(async () => undefined),
   };
   const settingsRepository: SettingsRepository = {
     getAll: mock(async () => settings),
