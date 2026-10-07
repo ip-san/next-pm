@@ -37,6 +37,22 @@ export async function editMessage(
   validateMessageFields(input.subject, input.content);
 
   const isTopic = input.message.parentId === null;
+  const moving = input.canEditAllMessages && isTopic && input.boardId !== input.message.boardId;
+
+  // Resolve the move target before writing anything: a rejected move must not leave the
+  // subject/content edit half-applied.
+  let targetBoardId: string | null = null;
+  if (moving) {
+    const [currentBoard, targetBoard] = await Promise.all([
+      repositories.boardRepository.findById(input.message.boardId),
+      repositories.boardRepository.findById(input.boardId),
+    ]);
+    if (!targetBoard || !currentBoard || targetBoard.projectId !== currentBoard.projectId) {
+      throw new InvalidMessageError("移動先のフォーラムが見つかりません。");
+    }
+    targetBoardId = targetBoard.id;
+  }
+
   const changes: { subject: string; content: string; locked?: boolean; sticky?: boolean } = {
     subject: input.subject,
     content: input.content,
@@ -49,18 +65,10 @@ export async function editMessage(
 
   const updated = await repositories.messageRepository.update(input.message.id, changes);
 
-  if (!input.canEditAllMessages || !isTopic || input.boardId === input.message.boardId) {
+  if (targetBoardId === null) {
     return updated;
   }
 
-  const [currentBoard, targetBoard] = await Promise.all([
-    repositories.boardRepository.findById(input.message.boardId),
-    repositories.boardRepository.findById(input.boardId),
-  ]);
-  if (!targetBoard || !currentBoard || targetBoard.projectId !== currentBoard.projectId) {
-    throw new InvalidMessageError("移動先のフォーラムが見つかりません。");
-  }
-
-  await repositories.messageRepository.moveThreadToBoard(input.message.id, targetBoard.id);
-  return { ...updated, boardId: targetBoard.id };
+  await repositories.messageRepository.moveThreadToBoard(input.message.id, targetBoardId);
+  return { ...updated, boardId: targetBoardId };
 }

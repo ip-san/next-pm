@@ -73,6 +73,23 @@ describe("editMessage", () => {
     );
   });
 
+  it("writes nothing at all when the move target is rejected", async () => {
+    const repos = makeRepos([board("board-1", "proj-1"), board("board-2", "proj-2")]);
+    await expect(editMessage(repos, { ...base, boardId: "board-2", message: message(), canEditAllMessages: true })).rejects.toThrow(
+      InvalidMessageError,
+    );
+    expect(repos.update).not.toHaveBeenCalled();
+    expect(repos.moveThreadToBoard).not.toHaveBeenCalled();
+  });
+
+  it("refuses a move to a board id that does not exist", async () => {
+    const repos = makeRepos([board("board-1", "proj-1")]);
+    await expect(editMessage(repos, { ...base, boardId: "ghost", message: message(), canEditAllMessages: true })).rejects.toThrow(
+      InvalidMessageError,
+    );
+    expect(repos.update).not.toHaveBeenCalled();
+  });
+
   it("ignores a board change requested with only edit_own_messages", async () => {
     const repos = makeRepos([board("board-1", "proj-1"), board("board-2", "proj-1")]);
     await editMessage(repos, { ...base, boardId: "board-2", message: message(), canEditAllMessages: false });
