@@ -4,6 +4,8 @@ import { generateSalt, hashPassword } from "@/domain/user/password";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 import type { PasswordResetTokenRepository } from "@/domain/password-reset/repository";
+import type { EmailAddress } from "@/domain/email-address/entity";
+import type { EmailAddressRepository } from "@/domain/email-address/repository";
 import type { JobRepository } from "@/domain/job/repository";
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -31,7 +33,7 @@ function makeUser(overrides: Partial<User> = {}): User {
   };
 }
 
-function makeRepos(user: User | null) {
+function makeRepos(user: User | null, additionalAddresses: EmailAddress[] = []) {
   const userRepository: UserRepository = {
     listAll: mock(async () => (user ? [user] : [])),
     findByLogin: mock(async () => user),
@@ -67,7 +69,10 @@ function makeRepos(user: User | null) {
     markDone: mock(async () => {}),
     markFailed: mock(async () => {}),
   };
-  return { userRepository, passwordResetTokenRepository, jobRepository, deleteForUser, create, enqueue };
+  const emailAddressRepository = {
+    listForUser: mock(async () => additionalAddresses),
+  } as unknown as EmailAddressRepository;
+  return { userRepository, passwordResetTokenRepository, emailAddressRepository, jobRepository, deleteForUser, create, enqueue };
 }
 
 describe("requestPasswordReset", () => {
@@ -103,9 +108,32 @@ describe("requestPasswordReset", () => {
     expect(tokenHash).toHaveLength(64); // sha256 hex digest
 
     expect(repos.enqueue).toHaveBeenCalledTimes(1);
-    const [jobType, payload] = repos.enqueue.mock.calls[0] as unknown as [string, { recipientIds: string[]; body: string }];
+    const [jobType, payload] = repos.enqueue.mock.calls[0] as unknown as [
+      string,
+      { recipientIds: string[]; recipientAddresses: string[]; body: string },
+    ];
     expect(jobType).toBe("notify");
-    expect(payload.recipientIds).toEqual(["user-1"]);
+    // Addressed literally, not by user id: a transactional mail must not be filtered by the
+    // recipient's mail_notification preference. See the use case's comment.
+    expect(payload.recipientIds).toEqual([]);
+    expect(payload.recipientAddresses).toEqual(["alice@example.com"]);
     expect(payload.body).toContain("https://example.test/account/lost_password?token=");
+  });
+
+  it("sends the link to the additional address the user actually typed, not the default one", async () => {
+    const additional = {
+      id: "addr-1",
+      userId: "user-1",
+      address: "alice+work@example.com",
+      notify: false,
+      createdAt: new Date(),
+    };
+    const repos = makeRepos(makeUser(), [additional]);
+    await requestPasswordReset(repos, "ALICE+WORK@example.com", "https://example.test");
+
+    const [, payload] = repos.enqueue.mock.calls[0] as unknown as [string, { recipientAddresses: string[] }];
+    // Mirrors Redmine's `user.mails.detect {|e| email.casecmp(e) == 0} || user.mail`. Note
+    // notify is false and it is still used: that flag governs notifications, not this.
+    expect(payload.recipientAddresses).toEqual(["alice+work@example.com"]);
   });
 });

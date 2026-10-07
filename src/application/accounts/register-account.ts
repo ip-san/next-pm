@@ -105,7 +105,11 @@ export async function registerAccount(
   // Mode '2' — Redmine's Mailer.deliver_account_activation_request, sent to every active admin.
   const admins = (await repositories.userRepository.listAll()).filter((u) => u.isAdmin && u.status === "active");
   await enqueueNotification(repositories, {
-    recipientGroups: [admins.map((admin) => admin.id)],
+    recipientGroups: [],
+    // Also literal: an administrator who set mail_notification = none still has to hear about
+    // an account waiting on them, or mode '2' quietly stalls. Redmine treats
+    // deliver_account_activation_request the same way.
+    recipientAddresses: admins.map((admin) => admin.mail),
     excludeUserId: null,
     subject: "アカウントの有効化依頼",
     body:
@@ -136,8 +140,14 @@ export async function sendActivationEmail(
     new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS),
   );
 
+  // Addressed literally, not by user id. This mail exists precisely because the account is
+  // still `registered`, and dispatchJob only resolves *active* users — routing it through
+  // recipientGroups would mean the activation mail for a pending account is never sent, which
+  // would make mode '1' impossible to complete. Redmine's Mailer.deliver_register is a
+  // transactional mail for the same reason: it ignores status and notification preferences.
   await enqueueNotification(repositories, {
-    recipientGroups: [[user.id]],
+    recipientGroups: [],
+    recipientAddresses: [user.mail],
     excludeUserId: null,
     subject: "アカウントの有効化",
     body: `アカウントを有効にするには、以下のリンクをクリックしてください:\n\n${appOrigin}/account/activate?token=${token}\n\nこのリンクの有効期限は24時間です。`,

@@ -16,6 +16,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
 import { DrizzlePasswordResetTokenRepository } from "@/infrastructure/db/repositories/password-reset-token-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/email-address-repository";
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
@@ -233,7 +234,12 @@ export async function lostPasswordAction(
 
   try {
     await requestPasswordReset(
-      { userRepository: new DrizzleUserRepository(), passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository(), jobRepository: new DrizzleJobRepository() },
+      {
+        userRepository: new DrizzleUserRepository(),
+        passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository(),
+        emailAddressRepository: new DrizzleEmailAddressRepository(),
+        jobRepository: new DrizzleJobRepository(),
+      },
       parsed.data.mail,
       await resolveAppOrigin(),
     );

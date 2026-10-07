@@ -363,6 +363,11 @@ export async function createUserAction(
   if (existingByLogin) {
     return { error: "そのログインIDは既に使用されています。" };
   }
+  // The unique constraint on users.mail is not enough any more: an address may also be held
+  // as someone's additional address, which lives in another table. findByMail searches both.
+  if (await userRepository.findByMail(parsed.data.mail)) {
+    return { error: "そのメールアドレスは既に使用されています。" };
+  }
 
   const salt = generateSalt();
   try {

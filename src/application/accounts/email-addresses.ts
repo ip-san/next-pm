@@ -146,8 +146,11 @@ export async function changeDefaultEmailAddress(
     return;
   }
 
-  const owner = await repositories.userRepository.findByMail(address);
-  if (owner && owner.id !== userId) {
+  // Not `owner.id !== userId`: matching one of *your own* additional addresses has to be
+  // refused too, or the same address ends up in both users.mail and email_addresses, which
+  // Redmine's uniqueness validation (one table, case-insensitive) would never allow. Remove
+  // the additional one first.
+  if (await repositories.userRepository.findByMail(address)) {
     throw new EmailAddressError("そのメールアドレスは既に使用されています。");
   }
 

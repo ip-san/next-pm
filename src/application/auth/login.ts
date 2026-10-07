@@ -59,6 +59,13 @@ export async function login(
     // not-null, and there's no sane placeholder to fall back to.
     return { ok: false, reason: "invalid_credentials" };
   }
+  // The directory handed us an address someone here already holds — as their default address
+  // or as one of their additional ones (findByMail covers both). Creating the account anyway
+  // would either violate the unique constraint or, for an additional address, quietly produce
+  // two accounts reachable by the same address.
+  if (await repositories.userRepository.findByMail(attrs.mail)) {
+    return { ok: false, reason: "invalid_credentials" };
+  }
 
   const created = await repositories.userRepository.create({
     login: loginName,

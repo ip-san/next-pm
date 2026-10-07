@@ -67,6 +67,11 @@ export async function POST(request: Request) {
   if (existing) {
     return NextResponse.json({ error: "login_taken" }, { status: 422 });
   }
+  // users.mail's unique constraint no longer covers every address: an address may be held as
+  // someone's additional address in email_addresses. findByMail searches both tables.
+  if (await userRepository.findByMail(parsed.data.mail)) {
+    return NextResponse.json({ error: "mail_taken" }, { status: 422 });
+  }
 
   const salt = generateSalt();
   try {

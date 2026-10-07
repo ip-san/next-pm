@@ -100,6 +100,10 @@ describe("registerAccount", () => {
     expect(created[0].status).toBe("registered");
     expect(tokens).toHaveLength(1);
     expect(tokens[0].action).toBe("register");
+    // The account is still `registered`, and dispatchJob only resolves *active* users — so a
+    // mail addressed by user id would never be delivered and mode 1 could never complete.
+    expect((jobs[0].payload as { recipientIds: string[]; recipientAddresses: string[] }).recipientIds).toEqual([]);
+    expect((jobs[0].payload as { recipientAddresses: string[] }).recipientAddresses).toEqual(["newbie@example.com"]);
 
     const body = (jobs[0].payload as { body: string }).body;
     const mailedToken = body.match(/token=([0-9a-f]+)/)?.[1];
@@ -109,9 +113,9 @@ describe("registerAccount", () => {
 
   it("mode 2 creates a registered account and notifies only the active administrators", async () => {
     const all = [
-      makeUser({ id: "admin-1", isAdmin: true, status: "active" }),
-      makeUser({ id: "admin-2", isAdmin: true, status: "locked" }),
-      makeUser({ id: "plain", isAdmin: false, status: "active" }),
+      makeUser({ id: "admin-1", mail: "admin1@example.com", isAdmin: true, status: "active" }),
+      makeUser({ id: "admin-2", mail: "admin2@example.com", isAdmin: true, status: "locked" }),
+      makeUser({ id: "plain", mail: "plain@example.com", isAdmin: false, status: "active" }),
     ];
     const { repositories, created, tokens, jobs } = makeRepositories({ all });
     const result = await registerAccount(repositories, INPUT, settingsFor("2"), ORIGIN);
@@ -119,7 +123,9 @@ describe("registerAccount", () => {
     expect(result.kind).toBe("pending_admin_activation");
     expect(created[0].status).toBe("registered");
     expect(tokens).toEqual([]);
-    expect((jobs[0].payload as { recipientIds: string[] }).recipientIds).toEqual(["admin-1"]);
+    // Addressed literally so an administrator with mail_notification = none still hears about
+    // an account waiting on them; dispatchJob applies no preference filter to these.
+    expect((jobs[0].payload as { recipientAddresses: string[] }).recipientAddresses).toEqual(["admin1@example.com"]);
   });
 
   it("mode 3 creates an already-active account and mails nothing", async () => {
