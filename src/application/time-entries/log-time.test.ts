@@ -8,6 +8,7 @@ function makeRepo(settings: Record<string, string> = {}) {
   const timeEntryRepository: TimeEntryRepository = {
     listForProject: mock(async () => []),
     listForIssue: mock(async () => []),
+    reassignProjectForIssues: mock(async () => undefined),
     create: mock(async (entry) => ({ ...entry, id: "entry-1", createdAt: new Date() }) as TimeEntry),
   };
   const settingsRepository: SettingsRepository = {

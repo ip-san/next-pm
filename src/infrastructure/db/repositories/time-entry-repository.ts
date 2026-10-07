@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { timeEntries } from "@/infrastructure/db/schema/time-entries";
 import type { TimeEntry } from "@/domain/time-entry/entity";
@@ -45,5 +45,10 @@ export class DrizzleTimeEntryRepository implements TimeEntryRepository {
       })
       .returning();
     return toDomain(row);
+  }
+
+  async reassignProjectForIssues(issueIds: string[], projectId: string): Promise<void> {
+    if (issueIds.length === 0) return;
+    await db.update(timeEntries).set({ projectId }).where(inArray(timeEntries.issueId, issueIds));
   }
 }

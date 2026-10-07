@@ -10,6 +10,7 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { moveIssue, ProjectHasNoTrackerError } from "@/application/issues/move-issue";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
@@ -21,6 +22,9 @@ import {
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
+import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
+import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
@@ -42,6 +46,7 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import {
   createIssueFormSchema,
+  moveIssueFormSchema,
   updateIssueFormSchema,
   type CreateIssueFormValues,
   type UpdateIssueFormValues,
@@ -442,4 +447,92 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
 
   revalidatePath(`/projects/${project.identifier}/issues/${parsed.data.issueId}`);
   return { ok: true, issueId: parsed.data.issueId };
+}
+
+/**
+ * Redmine's single-issue move (the `project_id` half of IssuesController#update, which
+ * routes through `Issue#project=`). Requires edit rights on the issue *and* `add_issues` on
+ * the destination, mirroring `Issue.allowed_target_projects`.
+ */
+export async function moveIssueAction(values: {
+  issueId: string;
+  targetProjectId: string;
+  targetTrackerId: string;
+}): Promise<{ ok: true; projectIdentifier: string } | { ok: false; error: string }> {
+  const parsed = moveIssueFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { ok: false, error: "ログインしてください。" };
+  }
+
+  const issueRepository = new DrizzleIssueRepository();
+  const existing = await issueRepository.findById(parsed.data.issueId);
+  if (!existing) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+
+  const projectRepository = new DrizzleProjectRepository();
+  const sourceProject = await projectRepository.findById(existing.projectId);
+  if (!sourceProject) {
+    return { ok: false, error: "プロジェクトが見つかりません。" };
+  }
+
+  const source = await resolveActor(user, sourceProject.id);
+  if (!isPrivateIssueVisible(existing, user.id, source.userGroupIds, issuesVisibilityRoles(source.actor))) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  const sourceContext = toAuthorizationProject(sourceProject);
+  const canEditAny = can({ permission: "edit_issues", project: sourceContext, actor: source.actor });
+  const canEditOwn = existing.authorId === user.id && can({ permission: "edit_own_issues", project: sourceContext, actor: source.actor });
+  if (!canEditAny && !canEditOwn) {
+    return { ok: false, error: "この操作を行う権限がありません。" };
+  }
+
+  const targetProject = await projectRepository.findById(parsed.data.targetProjectId);
+  if (!targetProject) {
+    return { ok: false, error: "移動先のプロジェクトが見つかりません。" };
+  }
+  const target = await resolveActor(user, targetProject.id);
+  // Same "don't confirm it exists" posture the rest of this file takes: a project the actor
+  // can't add issues to is reported as not found, not as forbidden.
+  if (!can({ permission: "add_issues", project: toAuthorizationProject(targetProject), actor: target.actor })) {
+    return { ok: false, error: "移動先のプロジェクトが見つかりません。" };
+  }
+
+  try {
+    await moveIssue(
+      {
+        issueRepository,
+        projectRepository,
+        issueCategoryRepository: new DrizzleIssueCategoryRepository(),
+        versionRepository: new DrizzleVersionRepository(),
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
+        timeEntryRepository: new DrizzleTimeEntryRepository(),
+        journalRepository: new DrizzleJournalRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
+      {
+        issueId: parsed.data.issueId,
+        targetProjectId: parsed.data.targetProjectId,
+        targetTrackerId: parsed.data.targetTrackerId || undefined,
+        actingUserId: user.id,
+      },
+    );
+  } catch (error) {
+    if (error instanceof StaleIssueError) {
+      return { ok: false, error: "他の変更と競合しました。ページを再読み込みして再度お試しください。" };
+    }
+    if (error instanceof ProjectHasNoTrackerError) {
+      return { ok: false, error: "移動先のプロジェクトにトラッカーが割り当てられていません。" };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${sourceProject.identifier}/issues`);
+  revalidatePath(`/projects/${targetProject.identifier}/issues/${parsed.data.issueId}`);
+  return { ok: true, projectIdentifier: targetProject.identifier };
 }
