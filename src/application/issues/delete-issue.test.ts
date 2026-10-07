@@ -203,3 +203,79 @@ describe("deleteIssue", () => {
     expect(result.deletedIssueIds).toEqual(["issue-1"]);
   });
 });
+
+describe("deleteIssue — reassign target visibility", () => {
+  const restrictedDeleter: AuthorizationActor = {
+    kind: "member",
+    roles: [{ builtin: 0, permissions: ["delete_issues"], issuesVisibility: "default" }],
+  };
+
+  it("rejects reassigning time to a private issue the actor cannot see", async () => {
+    // Otherwise the actor could park hours on an issue invisible to them, and tell from the
+    // outcome that the id exists.
+    const hidden = makeIssue({ id: "hidden", projectId: "proj-1", isPrivate: true, authorId: "someone-else" });
+    const { repositories, deleted } = makeRepositories({ issues: [target, hidden] });
+
+    await expect(
+      deleteIssue(repositories, {
+        issueId: "issue-1",
+        actingUserId: "user-1",
+        actor: restrictedDeleter,
+        timeEntries: { mode: "reassign", targetIssueId: "hidden" },
+      }),
+    ).rejects.toThrow(InvalidTimeEntryTargetError);
+    expect(deleted).toEqual([]);
+  });
+
+  it("reports an invisible target the same way as a missing one", async () => {
+    const hidden = makeIssue({ id: "hidden", projectId: "proj-1", isPrivate: true, authorId: "someone-else" });
+    const { repositories } = makeRepositories({ issues: [target, hidden] });
+
+    const invisible = await deleteIssue(repositories, {
+      issueId: "issue-1",
+      actingUserId: "user-1",
+      actor: restrictedDeleter,
+      timeEntries: { mode: "reassign", targetIssueId: "hidden" },
+    }).catch((error: InvalidTimeEntryTargetError) => error.reason);
+    const missing = await deleteIssue(repositories, {
+      issueId: "issue-1",
+      actingUserId: "user-1",
+      actor: restrictedDeleter,
+      timeEntries: { mode: "reassign", targetIssueId: "00000000-0000-0000-0000-000000000000" },
+    }).catch((error: InvalidTimeEntryTargetError) => error.reason);
+
+    expect(invisible).toBe("not_found");
+    expect(missing).toBe("not_found");
+  });
+
+  it("allows reassigning to the actor's own private issue", async () => {
+    const own = makeIssue({ id: "own", projectId: "proj-1", isPrivate: true, authorId: "user-1" });
+    const { repositories, timeEntryCalls } = makeRepositories({ issues: [target, own] });
+
+    await deleteIssue(repositories, {
+      issueId: "issue-1",
+      actingUserId: "user-1",
+      actor: restrictedDeleter,
+      timeEntries: { mode: "reassign", targetIssueId: "own" },
+    });
+
+    expect(timeEntryCalls[0]).toEqual({ method: "reassignToIssue", args: [["issue-1"], "own", "proj-1"] });
+  });
+
+  it("rejects a descendant deeper than a direct child as the reassign target", async () => {
+    const parent = makeIssue({ id: "parent", projectId: "proj-1" });
+    const child = makeIssue({ id: "child", projectId: "proj-1", parentId: "parent" });
+    const grandchild = makeIssue({ id: "grandchild", projectId: "proj-1", parentId: "child" });
+    const { repositories, deleted } = makeRepositories({ issues: [parent, child, grandchild] });
+
+    const reason = await deleteIssue(repositories, {
+      issueId: "parent",
+      actingUserId: "user-1",
+      actor: deleter,
+      timeEntries: { mode: "reassign", targetIssueId: "grandchild" },
+    }).catch((error: InvalidTimeEntryTargetError) => error.reason);
+
+    expect(reason).toBe("being_deleted");
+    expect(deleted).toEqual([]);
+  });
+});

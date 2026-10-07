@@ -96,7 +96,7 @@ export async function deleteIssue(
     new Map(projectIssues.map((candidate) => [candidate.id, candidate.parentId])),
   );
 
-  await disposeTimeEntries(repositories, deletedIssueIds, input.timeEntries ?? { mode: "destroy" }, issue);
+  await disposeTimeEntries(repositories, deletedIssueIds, input.timeEntries ?? { mode: "destroy" }, issue, input);
 
   // Collected before the rows go, so the files can be removed once the delete has committed.
   const attachments = await repositories.attachmentRepository.listByContainers("Issue", deletedIssueIds);
@@ -123,6 +123,7 @@ async function disposeTimeEntries(
   deletedIssueIds: string[],
   disposition: TimeEntryDisposition,
   issue: Issue,
+  input: DeleteIssueInput,
 ): Promise<void> {
   if (disposition.mode === "destroy") {
     await repositories.timeEntryRepository.deleteForIssues(deletedIssueIds);
@@ -141,6 +142,14 @@ async function disposeTimeEntries(
   }
   const target = await repositories.issueRepository.findById(disposition.targetIssueId);
   if (!target || target.projectId !== issue.projectId) {
+    throw new InvalidTimeEntryTargetError("not_found");
+  }
+  // Stricter than Redmine on purpose. Its destroy resolves the target with
+  // `@project.issues.find_by_id` — no visibility filter — but that lets an actor park hours
+  // on a private issue they cannot see, and tell from the outcome that the id exists.
+  // Reported as "not_found" so an invisible issue is indistinguishable from a missing one,
+  // which is the same posture the rest of this codebase takes.
+  if (!isPrivateIssueVisible(target, input.actingUserId, input.actorGroupIds ?? [], actorIssuesVisibilityRoles(input.actor))) {
     throw new InvalidTimeEntryTargetError("not_found");
   }
   await repositories.timeEntryRepository.reassignToIssue(deletedIssueIds, target.id, target.projectId);
