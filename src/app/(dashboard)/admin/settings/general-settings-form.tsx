@@ -75,6 +75,25 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         </select>
       </label>
 
+      <label className="flex flex-col gap-1 text-sm">
+        1 ページあたりの表示件数（カンマ区切り）
+        <input
+          name="perPageOptions"
+          defaultValue={settings.perPageOptions.join(", ")}
+          className="border rounded px-2 py-1"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        CSV/PDF エクスポートの上限件数
+        <input
+          type="number"
+          min="1"
+          name="issuesExportLimit"
+          defaultValue={settings.issuesExportLimit}
+          className="border rounded px-2 py-1"
+        />
+      </label>
+
       <fieldset className="flex flex-col gap-2 border rounded p-3">
         <legend className="text-sm font-medium px-1">親チケットの値を子チケットから算出する</legend>
         <label className="flex flex-col gap-1 text-sm">

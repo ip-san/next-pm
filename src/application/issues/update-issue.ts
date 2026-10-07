@@ -2,6 +2,7 @@ import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import { diffIssueChanges } from "@/domain/journal/diff-issue";
 import { splitPrivateNote } from "@/domain/journal/visibility";
+import { isCoreFieldDisabled, TRACKER_CORE_FIELDS } from "@/domain/tracker/core-fields";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
@@ -335,6 +336,19 @@ async function applyIssueUpdate(
   // Permission-gated attributes, dropped the same silent way Redmine's safe_attributes does.
   if (!input.canSetPrivate) delete changes.isPrivate;
   if (!input.canManageSubtasks) delete changes.parentId;
+
+  // `names -= disabled_core_fields` (Issue#safe_attribute_names): a field an administrator
+  // switched off for this tracker isn't settable at all, so it is dropped rather than
+  // rejected — keyed on the tracker the update targets, like every other rule here.
+  const targetTracker = await repositories.trackerRepository.findById(targetTrackerId);
+  if (targetTracker) {
+    for (const field of TRACKER_CORE_FIELDS) {
+      if (!isCoreFieldDisabled(targetTracker, field)) continue;
+      delete changes[field];
+      // The assignee is two columns; dropping one without the other would leave a dangling type.
+      if (field === "assignedToId") delete changes.assignedToType;
+    }
+  }
 
   // Mirrors safe_attribute_names subtracting start_date/due_date, priority_id and done_ratio
   // when the matching parent_issue_* setting derives them — all gated on `!leaf?`, so a

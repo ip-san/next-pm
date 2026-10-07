@@ -8,6 +8,7 @@ import { createIssueFormAction } from "@/interface/actions/issue-actions";
 import { createIssueFormSchema, type CreateIssueFormValues } from "@/interface/actions/issue-schemas";
 import { IssueAutocomplete } from "../issue-autocomplete";
 import { CustomFieldInputs } from "../custom-field-inputs";
+import { isCoreFieldDisabled, type TrackerCoreField } from "@/domain/tracker/core-fields";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { Tracker } from "@/domain/tracker/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
@@ -81,6 +82,10 @@ export function NewIssueForm({
   const selectedTrackerId = useWatch({ control, name: "trackerId" });
   const customFieldValues = useWatch({ control, name: "customFieldValues" });
   const applicableCustomFields = customFields.filter((field) => field.trackerIds.includes(selectedTrackerId));
+  // A core field the selected tracker switched off isn't offered; createIssue drops it
+  // server-side regardless, so this only keeps the form honest.
+  const selectedTracker = trackers.find((candidate) => candidate.id === selectedTrackerId);
+  const off = (field: TrackerCoreField) => selectedTracker !== undefined && isCoreFieldDisabled(selectedTracker, field);
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
@@ -119,6 +124,7 @@ export function NewIssueForm({
         {errors.trackerId ? <p className="text-sm text-red-600">{errors.trackerId.message}</p> : null}
       </div>
 
+      {off("priorityId") ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="priorityId" className="text-sm font-medium">
           優先度
@@ -132,6 +138,7 @@ export function NewIssueForm({
         </select>
         {errors.priorityId ? <p className="text-sm text-red-600">{errors.priorityId.message}</p> : null}
       </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="subject" className="text-sm font-medium">
@@ -141,13 +148,16 @@ export function NewIssueForm({
         {errors.subject ? <p className="text-sm text-red-600">{errors.subject.message}</p> : null}
       </div>
 
+      {off("description") ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="description" className="text-sm font-medium">
           説明
         </label>
         <textarea id="description" {...register("description")} className="border rounded px-3 py-2" rows={5} />
       </div>
+      )}
 
+      {off("assignedToId") ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="assignedToId" className="text-sm font-medium">
           担当者
@@ -166,8 +176,9 @@ export function NewIssueForm({
           ))}
         </select>
       </div>
+      )}
 
-      {categories.length > 0 ? (
+      {categories.length > 0 && !off("categoryId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="categoryId" className="text-sm font-medium">
             カテゴリ
@@ -183,7 +194,7 @@ export function NewIssueForm({
         </div>
       ) : null}
 
-      {versions.length > 0 ? (
+      {versions.length > 0 && !off("fixedVersionId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="fixedVersionId" className="text-sm font-medium">
             対象バージョン
@@ -199,7 +210,7 @@ export function NewIssueForm({
         </div>
       ) : null}
 
-      {canManageSubtasks ? (
+      {canManageSubtasks && !off("parentId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="parentId" className="text-sm font-medium">
             親チケット
@@ -215,25 +226,31 @@ export function NewIssueForm({
       ) : null}
 
       <div className="flex gap-4">
+        {off("startDate") ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="startDate" className="text-sm font-medium">
             開始日
           </label>
           <input id="startDate" type="date" {...register("startDate")} className="border rounded px-3 py-2" />
         </div>
+        )}
+        {off("dueDate") ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="dueDate" className="text-sm font-medium">
             期日
           </label>
           <input id="dueDate" type="date" {...register("dueDate")} className="border rounded px-3 py-2" />
         </div>
+        )}
+        {off("estimatedHours") ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="estimatedHours" className="text-sm font-medium">
             予定工数
           </label>
           <input id="estimatedHours" type="number" min="0" step="0.1" {...register("estimatedHours")} className="border rounded px-3 py-2" />
         </div>
-        {doneRatioEditable ? (
+        )}
+        {doneRatioEditable && !off("doneRatio") ? (
           <div className="flex flex-col gap-1">
             <label htmlFor="doneRatio" className="text-sm font-medium">
               進捗率

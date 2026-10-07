@@ -9,6 +9,7 @@ import { requiredAttributeNames } from "@/domain/workflow/field-permission-rules
 import type { WorkflowFieldPermissionRepository } from "@/domain/workflow/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import { isCoreFieldDisabled } from "@/domain/tracker/core-fields";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { recalculateParents } from "@/application/issues/recalculate-parents";
 import { assertIssueAttributesAssignable, type IssueAttributeRepositories } from "./validate-issue-attributes";
@@ -56,30 +57,55 @@ export async function createIssue(
   input: CreateIssueInput,
 ): Promise<Issue> {
   // Every id has to belong to this project — enforced here rather than per-caller so the
+  // Redmine lists is_private and parent_issue_id in safe_attributes only when the actor
+  // holds the matching permission, and silently discards them otherwise rather than
+  // failing the save — same here.
+  const isPrivate = input.canSetPrivate ? input.isPrivate : false;
+
+  // The tracker is checked first and on its own: Redmine's safe_attributes= only assigns
+  // tracker_id when it is one of allowed_target_trackers, before anything reads the tracker.
+  await assertIssueAttributesAssignable(repositories, {
+    projectId: input.projectId,
+    authorId: input.authorId,
+    currentAssignee: null,
+    candidate: { trackerId: input.trackerId },
+  });
+
+  const tracker = await repositories.trackerRepository.findById(input.trackerId);
+  if (!tracker) {
+    throw new Error(`Tracker ${input.trackerId} not found`);
+  }
+
+  // `names -= disabled_core_fields`: a field this tracker switched off takes its default
+  // instead of whatever was submitted — which also covers a copy whose source still carried
+  // a value for a field the target tracker no longer offers. Applied before the ids are
+  // validated, since safe_attributes strips first and validation never sees the dropped
+  // value: a stale id in a disabled field shouldn't fail the save.
+  const off = (field: Parameters<typeof isCoreFieldDisabled>[1]) => isCoreFieldDisabled(tracker, field);
+  const parentId = input.canManageSubtasks && !off("parentId") ? input.parentId : null;
+  const assignedToId = off("assignedToId") ? null : input.assignedToId;
+  const assignedToType = off("assignedToId") ? null : input.assignedToType;
+  const categoryId = off("categoryId") ? null : input.categoryId;
+  const fixedVersionId = off("fixedVersionId") ? null : input.fixedVersionId;
+  const startDate = off("startDate") ? null : input.startDate;
+  const dueDate = off("dueDate") ? null : input.dueDate;
+  const estimatedHours = off("estimatedHours") ? null : input.estimatedHours;
+  const doneRatio = off("doneRatio") ? 0 : input.doneRatio;
+  const description = off("description") ? "" : input.description;
+
+  // Every id has to belong to this project — enforced here rather than per-caller so the
   // REST route, the CSV import and the mail handler can't each miss a different check.
   await assertIssueAttributesAssignable(repositories, {
     projectId: input.projectId,
     authorId: input.authorId,
     currentAssignee: null,
     candidate: {
-      trackerId: input.trackerId,
       priorityId: input.priorityId,
-      assignedTo: input.assignedToId && input.assignedToType ? { id: input.assignedToId, type: input.assignedToType } : null,
-      categoryId: input.categoryId,
-      fixedVersionId: input.fixedVersionId,
+      assignedTo: assignedToId && assignedToType ? { id: assignedToId, type: assignedToType } : null,
+      categoryId,
+      fixedVersionId,
     },
   });
-
-  // Redmine lists is_private and parent_issue_id in safe_attributes only when the actor
-  // holds the matching permission, and silently discards them otherwise rather than
-  // failing the save — same here.
-  const isPrivate = input.canSetPrivate ? input.isPrivate : false;
-  const parentId = input.canManageSubtasks ? input.parentId : null;
-
-  const tracker = await repositories.trackerRepository.findById(input.trackerId);
-  if (!tracker) {
-    throw new Error(`Tracker ${input.trackerId} not found`);
-  }
 
   // Read-only enforcement on create is deferred to a future cycle — every field is still
   // settable at creation time, only required-ness is checked here.
@@ -91,15 +117,15 @@ export async function createIssue(
   });
   const candidate: Record<WorkflowEligibleField, unknown> = {
     subject: input.subject,
-    description: input.description,
-    assignedToId: input.assignedToId,
+    description,
+    assignedToId,
     priorityId: input.priorityId,
-    categoryId: input.categoryId,
-    fixedVersionId: input.fixedVersionId,
-    startDate: input.startDate,
-    dueDate: input.dueDate,
-    doneRatio: input.doneRatio,
-    estimatedHours: input.estimatedHours,
+    categoryId,
+    fixedVersionId,
+    startDate,
+    dueDate,
+    doneRatio,
+    estimatedHours,
     isPrivate,
   };
   for (const field of required) {
@@ -114,18 +140,18 @@ export async function createIssue(
     statusId: tracker.defaultStatusId,
     priorityId: input.priorityId,
     subject: input.subject,
-    description: input.description,
+    description,
     authorId: input.authorId,
-    assignedToId: input.assignedToId,
-    assignedToType: input.assignedToType,
+    assignedToId,
+    assignedToType,
     parentId,
-    fixedVersionId: input.fixedVersionId,
-    categoryId: input.categoryId,
+    fixedVersionId,
+    categoryId,
     isPrivate,
-    doneRatio: input.doneRatio,
-    estimatedHours: input.estimatedHours,
-    startDate: input.startDate,
-    dueDate: input.dueDate,
+    doneRatio,
+    estimatedHours,
+    startDate,
+    dueDate,
   });
 
   // A new subtask can move its parent's derived dates, priority or done ratio.

@@ -4,6 +4,7 @@ import { DrizzleIssueCategoryRepository } from "./issue-category-repository";
 import { DrizzleMemberRepository } from "./member-repository";
 import { DrizzleProjectRepository } from "./project-repository";
 import { DrizzleRoleRepository } from "./role-repository";
+import { DrizzleTrackerRepository } from "./tracker-repository";
 import { DrizzleUserRepository } from "./user-repository";
 import { DrizzleVersionRepository } from "./version-repository";
 
@@ -21,5 +22,6 @@ export function drizzleIssueAttributeRepositories(): IssueAttributeRepositories 
     enumerationRepository: new DrizzleEnumerationRepository(),
     issueCategoryRepository: new DrizzleIssueCategoryRepository(),
     versionRepository: new DrizzleVersionRepository(),
+    trackerRepository: new DrizzleTrackerRepository(),
   };
 }

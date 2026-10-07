@@ -4,6 +4,7 @@ import type { IssueCategoryRepository } from "@/domain/issue-category/repository
 import type { MemberRepository } from "@/domain/member/repository";
 import type { ProjectRepository } from "@/domain/project/repository";
 import type { RoleRepository } from "@/domain/role/repository";
+import type { TrackerRepository } from "@/domain/tracker/repository";
 import type { UserRepository } from "@/domain/user/repository";
 import type { VersionRepository } from "@/domain/version/repository";
 
@@ -24,6 +25,7 @@ export interface IssueAttributeRepositories {
   enumerationRepository: EnumerationRepository;
   issueCategoryRepository: IssueCategoryRepository;
   versionRepository: VersionRepository;
+  trackerRepository: TrackerRepository;
 }
 
 /**

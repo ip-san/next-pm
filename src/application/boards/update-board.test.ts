@@ -36,6 +36,16 @@ describe("updateBoard", () => {
     await expect(updateBoard({ boardRepository }, { ...baseInput, boardId: "a", parentId: "a" })).rejects.toThrow(InvalidBoardError);
   });
 
+  it("rejects a parent board from another project", async () => {
+    // listByProject is scoped to this project, so a board belonging to another one is never
+    // among the valid parents — the same rule createBoard applies, pinned here too since
+    // re-parenting is the path an attacker would reach for.
+    const { boardRepository } = makeRepo([board("a", null, 1)]);
+    await expect(
+      updateBoard({ boardRepository }, { ...baseInput, boardId: "a", parentId: "board-in-another-project" }),
+    ).rejects.toThrow(InvalidBoardError);
+  });
+
   it("rejects a parent that is one of the board's own descendants", async () => {
     const { boardRepository } = makeRepo([board("a", null, 1), board("a1", "a", 1), board("a1x", "a1", 1)]);
     await expect(updateBoard({ boardRepository }, { ...baseInput, boardId: "a", parentId: "a1x" })).rejects.toThrow(InvalidBoardError);
