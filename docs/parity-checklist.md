@@ -69,8 +69,8 @@
 | 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)は課題・Wiki・文書・ファイルのアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。課題・Wiki・文書の添付一覧は共通コンポーネント(`app/(dashboard)/projects/attachment-list.tsx`)で、画像はサムネイルをインライン表示する。注記への添付は無い |
 | リアクション | done | journal への 👍(本家 6.1 の Reaction 相当) |
 | CSV インポート | partial | 課題(`issue-import-actions.ts`)と工数(`time-entry-import-actions.ts`、`import_time_entries`)。課題の取り込みは本家 `IssueImport#authorized?` どおり `import_issues` と `add_issues` の両方を要求し、一覧のリンクも同じ条件で出す。既存ロールには `add_issues` を持つものに `import_issues` を付与(migration 0045)。工数のインポータ UI の整理は未着手 |
-| カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` / `link` の 8 種。`link` は本家 `LinkFormat` に合わせ、値は文字列として保存し、課題詳細ではリンクとして表示する(scheme の無い値は http:// を付け、http / https 以外の scheme は通さない)。本家の URL パターン(`url_pattern`)は未対応。一覧の表示・絞り込みは文字列として扱う。本家の `user` / `version` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
-| カスタムフィールド: 対象 | partial | `Issue` / `Project` / `TimeEntry`。User / Group / Version が無い |
+| カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` / `link` / `user` / `version` の 10 種。`user` は課題のプロジェクトの有効なメンバー、`version` はそのプロジェクトに共有されたバージョンからだけ選べる(検証は `application/custom-field/option-sets.ts` で、画面・REST・メール・一括編集の全経路が同じ選択肢を使う)。`user` / `version` は課題のフィールドだけに指定でき、既定値は持てない。`link` は本家 `LinkFormat` に合わせ、値は文字列として保存し、課題詳細ではリンクとして表示する(scheme の無い値は http:// を付け、http / https 以外の scheme は通さない)。本家の URL パターン(`url_pattern`)は未対応。一覧の表示・絞り込みは文字列として扱う。本家の `user` / `version` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
+| カスタムフィールド: 対象 | partial | `Issue` / `Project` / `TimeEntry`。Group / Version 対象は無い(User 形式のフィールドは課題に指定する) |
 | カスタムフィールド: 適用範囲 | partial | トラッカー単位の紐付け + プロジェクト設定での有効化。ロール別の可視/編集可否(本家の `visible` / `role_ids`)が無い |
 | カスタムフィールド: 課題での値の入力 | done | 作成/更新フォームと REST API の双方から設定可能。7 書式それぞれの入力欄を `issues/custom-field-inputs.tsx` が描画し、トラッカーの紐付けで絞り込む。更新時は属性変更と同じ 1 件の journal に `property = 'cf'` の明細として記録(本家 Journal と同じ)。値の検証は課題行を書き換える前に行うため、不正値で中途半端な更新が残らない |
 | カスタムフィールド: プロジェクトでの値の入力 | done | プロジェクト設定画面から編集可能 |

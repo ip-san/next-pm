@@ -227,6 +227,21 @@ export default async function IssueDetailPage({
   const totalHours = visibleTimeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const customValueByFieldId = new Map(customValues.map((cv) => [cv.customFieldId, cv.value]));
+  // A user or version value is stored as the record's id; show the name the viewer can read.
+  const choiceLabelByFieldId = new Map<string, string>();
+  await Promise.all(
+    customFields
+      .filter((field) => field.fieldFormat === "user" || field.fieldFormat === "version")
+      .map(async (field) => {
+        const raw = customValueByFieldId.get(field.id);
+        if (!raw) return;
+        const label =
+          field.fieldFormat === "user"
+            ? await new DrizzleUserRepository().findById(raw).then((user) => (user ? `${user.lastname} ${user.firstname}` : null))
+            : await new DrizzleVersionRepository().findById(raw).then((version) => version?.name ?? null);
+        if (label) choiceLabelByFieldId.set(field.id, label);
+      }),
+  );
   const customFieldNameById = new Map(allCustomFields.map((field) => [field.id, field.name]));
   // Only ids this page already showed the viewer go in here; anything else renders as a
   // short id, so a journal can't resolve a private project's name or an invisible issue's.
@@ -322,7 +337,7 @@ export default async function IssueDetailPage({
                       {customValueByFieldId.get(field.id)}
                     </a>
                   ) : (
-                    (customValueByFieldId.get(field.id) ?? "(未設定)")
+                    (choiceLabelByFieldId.get(field.id) ?? customValueByFieldId.get(field.id) ?? "(未設定)")
                   )}
                 </dd>
               </div>

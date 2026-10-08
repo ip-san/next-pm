@@ -17,6 +17,8 @@ const FORMAT_OPTIONS = [
   { value: "bool", label: "真偽値" },
   { value: "list", label: "リスト" },
   { value: "link", label: "リンク" },
+  { value: "user", label: "ユーザー" },
+  { value: "version", label: "バージョン" },
 ] as const;
 
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [

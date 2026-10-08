@@ -1,5 +1,6 @@
 "use client";
 
+import { customFieldChoiceOptions } from "@/domain/custom-field/choices";
 import { useActionState, useState } from "react";
 import { bulkUpdateIssuesAction, type BulkEditActionState } from "@/interface/actions/bulk-edit-actions";
 import { CustomFieldInputs } from "../custom-field-inputs";
@@ -165,6 +166,7 @@ export function BulkEditForm({
       </div>
 
       <CustomFieldInputs
+        choices={customFieldChoiceOptions(customFields, { users: members.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` })), versions: versions.map((version) => ({ value: version.id, label: version.name })) })}
         fields={customFields}
         values={customFieldValues}
         onChange={(customFieldId, value) => setCustomFieldValues((current) => ({ ...current, [customFieldId]: value }))}

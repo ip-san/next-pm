@@ -195,6 +195,9 @@ function customFieldFilterType(field: CustomField): FilterType {
     case "bool":
       return "bool";
     case "list":
+    case "user":
+    case "version":
+      // A user or version field is filtered by picking one of the project's records, like a list.
       return "list_optional";
     case "text":
       return "text";

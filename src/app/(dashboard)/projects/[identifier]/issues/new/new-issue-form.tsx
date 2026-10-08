@@ -1,5 +1,6 @@
 "use client";
 
+import { customFieldChoiceOptions } from "@/domain/custom-field/choices";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -276,6 +277,7 @@ export function NewIssueForm({
       ) : null}
 
       <CustomFieldInputs
+        choices={customFieldChoiceOptions(applicableCustomFields, { users: members.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` })), versions: versions.map((version) => ({ value: version.id, label: version.name })) })}
         fields={applicableCustomFields}
         values={customFieldValues}
         errors={fieldErrors}

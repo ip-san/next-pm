@@ -270,7 +270,7 @@ async function copyCustomFieldValues(repositories: CopyIssueRepositories, source
   const raw = Object.fromEntries(values.flatMap((value) => (value.value === null ? [] : [[value.customFieldId, value.value]])));
   if (Object.keys(raw).length === 0) return;
   try {
-    await setIssueCustomFieldValues(repositories, copy.trackerId, copy.id, raw);
+    await setIssueCustomFieldValues(repositories, copy.trackerId, copy.id, copy.projectId, raw);
   } catch {
     // A value the target tracker's fields reject (e.g. a list option that no longer exists)
     // must not sink the copy — Redmine drops unusable custom values the same way.

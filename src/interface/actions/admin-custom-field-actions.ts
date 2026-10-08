@@ -57,6 +57,15 @@ async function resolveAttributes(
   }
   const trackerIds = customizedType === "Issue" ? attributes.trackerIds : [];
 
+  // A user or version field takes one of its project's members or versions, which only an issue
+  // has (see application/custom-field/option-sets.ts); a project or time entry has no such list.
+  if ((fieldFormat === "user" || fieldFormat === "version") && customizedType !== "Issue") {
+    return { ok: false, error: "ユーザー・バージョン形式はチケットのカスタムフィールドだけに指定できます。" };
+  }
+  if ((fieldFormat === "user" || fieldFormat === "version") && attributes.defaultValue.trim().length > 0) {
+    return { ok: false, error: "ユーザー・バージョン形式には既定値を指定できません。" };
+  }
+
   const trackers = await new DrizzleTrackerRepository().findByIds(trackerIds);
   if (trackers.length !== trackerIds.length) {
     return { ok: false, error: "存在しないトラッカーが指定されました。" };

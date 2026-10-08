@@ -1,3 +1,5 @@
+import { loadCustomFieldOptionSets } from "@/application/custom-field/option-sets";
+import { customFieldOptionRepositories } from "@/interface/http/custom-field-option-repositories";
 import { can } from "@/domain/authorization/authorization-service";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import type { CustomField } from "@/domain/custom-field/entity";
@@ -549,7 +551,8 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
   const rawCustomValues = Object.fromEntries(
     applicableFields.map((field) => [field.id, resolved.customFieldValues[field.id] ?? ""]),
   );
-  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawCustomValues);
+  const optionSets = await loadCustomFieldOptionSets(customFieldOptionRepositories(), project.id, applicableFields);
+  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawCustomValues, optionSets);
   if (Object.keys(fieldErrors).length > 0) {
     return ignored("required_custom_field_missing");
   }

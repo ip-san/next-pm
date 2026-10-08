@@ -1,5 +1,6 @@
 "use client";
 
+import { customFieldChoiceOptions } from "@/domain/custom-field/choices";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateIssueFormAction } from "@/interface/actions/issue-actions";
@@ -536,6 +537,7 @@ export function IssueEditForm({
 
       {canEditAttributes ? (
       <CustomFieldInputs
+        choices={customFieldChoiceOptions(applicableCustomFields, { users: members.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` })), versions: versions.map((version) => ({ value: version.id, label: version.name })) })}
         fields={applicableCustomFields}
         values={state.customFieldValues}
         errors={fieldErrors}

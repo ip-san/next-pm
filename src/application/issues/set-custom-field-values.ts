@@ -1,4 +1,5 @@
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
+import { loadCustomFieldOptionSets, type CustomFieldOptionRepositories } from "@/application/custom-field/option-sets";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
@@ -6,7 +7,7 @@ import type { JournalDetail } from "@/domain/journal/entity";
 
 export { CustomFieldValidationError };
 
-export interface CustomFieldValueRepositories {
+export interface CustomFieldValueRepositories extends CustomFieldOptionRepositories {
   customFieldRepository: CustomFieldRepository;
   customValueRepository: CustomValueRepository;
 }
@@ -33,10 +34,13 @@ export async function prepareIssueCustomFieldValues(
   repositories: CustomFieldValueRepositories,
   trackerId: string,
   issueId: string,
+  projectId: string,
   rawValues: Record<string, string>,
 ): Promise<PreparedCustomFieldValues> {
   const applicableFields = await repositories.customFieldRepository.listForTracker(trackerId);
-  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawValues);
+  // A user or version field only takes one of the project's own members or shared versions.
+  const optionSets = await loadCustomFieldOptionSets(repositories, projectId, applicableFields);
+  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawValues, optionSets);
 
   if (Object.keys(fieldErrors).length > 0) {
     throw new CustomFieldValidationError(fieldErrors);
@@ -79,8 +83,9 @@ export async function setIssueCustomFieldValues(
   repositories: CustomFieldValueRepositories,
   trackerId: string,
   issueId: string,
+  projectId: string,
   rawValues: Record<string, string>,
 ): Promise<JournalDetail[]> {
-  const prepared = await prepareIssueCustomFieldValues(repositories, trackerId, issueId, rawValues);
+  const prepared = await prepareIssueCustomFieldValues(repositories, trackerId, issueId, projectId, rawValues);
   return applyIssueCustomFieldValues(repositories, issueId, prepared);
 }

@@ -3,7 +3,7 @@
  * to the formats that don't require a relational lookup target (EnumerationFormat,
  * UserFormat, VersionFormat, AttachmentFormat are out of scope for this phase).
  */
-export type CustomFieldFormat = "string" | "text" | "int" | "float" | "date" | "bool" | "list" | "link";
+export type CustomFieldFormat = "string" | "text" | "int" | "float" | "date" | "bool" | "list" | "link" | "user" | "version";
 
 /**
  * The model a custom field applies to — mirrors Redmine's CustomField STI subclasses

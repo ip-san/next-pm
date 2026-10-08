@@ -1,3 +1,5 @@
+import { loadCustomFieldOptionSets } from "@/application/custom-field/option-sets";
+import { customFieldOptionRepositories } from "@/interface/http/custom-field-option-repositories";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -119,7 +121,8 @@ export async function POST(request: Request) {
   const customFieldValuesForCreate = Object.fromEntries(
     applicableFields.map((field) => [field.id, parsed.data.custom_field_values[field.id] ?? ""]),
   );
-  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, customFieldValuesForCreate);
+  const optionSets = await loadCustomFieldOptionSets(customFieldOptionRepositories(), project.id, applicableFields);
+  const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, customFieldValuesForCreate, optionSets);
   if (Object.keys(fieldErrors).length > 0) {
     return NextResponse.json({ error: "invalid_custom_field_values", details: fieldErrors }, { status: 422 });
   }

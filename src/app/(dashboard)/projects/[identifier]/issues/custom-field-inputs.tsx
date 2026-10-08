@@ -1,6 +1,7 @@
 "use client";
 
 import type { CustomField } from "@/domain/custom-field/entity";
+import type { ChoiceOption } from "@/domain/custom-field/choices";
 
 /**
  * Per-format input widgets for issue custom fields, shared by the create and edit forms —
@@ -19,12 +20,15 @@ export function CustomFieldInputs({
   errors,
   onChange,
   idPrefix,
+  choices = {},
 }: {
   fields: CustomField[];
   values: Record<string, string>;
   errors?: Record<string, string>;
   onChange: (customFieldId: string, value: string) => void;
   idPrefix: string;
+  /** The options for each user / version field, from customFieldChoiceOptions. */
+  choices?: Record<string, ChoiceOption[]>;
 }) {
   if (fields.length === 0) return null;
 
@@ -40,7 +44,7 @@ export function CustomFieldInputs({
               {field.name}
               {field.isRequired ? <span className="text-red-600"> *</span> : null}
             </label>
-            {renderInput(field, inputId, value, onChange)}
+            {renderInput(field, inputId, value, onChange, choices[field.id] ?? [])}
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
           </div>
         );
@@ -54,6 +58,7 @@ function renderInput(
   inputId: string,
   value: string,
   onChange: (customFieldId: string, value: string) => void,
+  choices: ChoiceOption[],
 ) {
   const className = "border rounded px-3 py-2";
   const common = {
@@ -95,5 +100,17 @@ function renderInput(
     case "string":
     case "link":
       return <input {...common} type="text" />;
+    case "user":
+    case "version":
+      return (
+        <select {...common} className={className}>
+          <option value="">(未設定)</option>
+          {choices.map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.label}
+            </option>
+          ))}
+        </select>
+      );
   }
 }

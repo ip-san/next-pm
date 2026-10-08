@@ -473,7 +473,7 @@ async function applyIssueUpdate(
   // stored, so both land in the single journal below.
   const preparedCustomFieldValues =
     customFieldValues && Object.keys(customFieldValues).length > 0
-      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, customFieldValues)
+      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, before.projectId, customFieldValues)
       : null;
 
   const after = await repositories.issueRepository.update(input.issueId, input.expectedLockVersion, changes);

@@ -18,6 +18,8 @@ const FORMAT_LABEL: Record<string, string> = {
   bool: "真偽値",
   list: "リスト",
   link: "リンク",
+  user: "ユーザー",
+  version: "バージョン",
 };
 
 const CUSTOMIZED_TYPE_LABEL: Record<string, string> = {

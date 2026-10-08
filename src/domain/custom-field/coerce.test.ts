@@ -65,3 +65,27 @@ describe("coerceCustomFieldValue", () => {
     expect(coerceCustomFieldValue(field({ fieldFormat: "list", possibleValues: ["A", "B"] }), "C").ok).toBe(false);
   });
 });
+
+describe("coerceCustomFieldValue for user and version fields", () => {
+  const member = "3f1c2b5e-9a7d-4e8f-8b6a-1d2c3e4f5a6b";
+  const outsider = "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
+
+  it("accepts a record id the project offers", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "user" }), member, new Set([member]))).toEqual({ ok: true, value: member });
+  });
+
+  it("refuses an id the project does not offer", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "version" }), outsider, new Set([member]))).toEqual({
+      ok: false,
+      error: expect.stringContaining("候補"),
+    });
+  });
+
+  it("refuses everything when no options are known (fail closed)", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "user" }), member).ok).toBe(false);
+  });
+
+  it("refuses a value that is not an id at all", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "user" }), "Dev One", new Set(["Dev One"])).ok).toBe(false);
+  });
+});

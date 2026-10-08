@@ -1,5 +1,7 @@
 "use server";
 
+import { loadCustomFieldOptionSets } from "@/application/custom-field/option-sets";
+import { customFieldOptionRepositories } from "@/interface/http/custom-field-option-repositories";
 import { revalidatePath } from "next/cache";
 import { can } from "@/domain/authorization/authorization-service";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
@@ -144,9 +146,11 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   // applicable field the submission didn't mention.
   const customFieldRepository = new DrizzleCustomFieldRepository();
   const applicableFields = await customFieldRepository.listForTracker(parsed.data.trackerId);
+  const optionSets = await loadCustomFieldOptionSets(customFieldOptionRepositories(), project.id, applicableFields);
   const { fieldErrors, coerced } = validateCustomFieldValues(
     applicableFields,
     Object.fromEntries(applicableFields.map((field) => [field.id, parsed.data.customFieldValues[field.id] ?? ""])),
+    optionSets,
   );
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, error: "カスタムフィールドの入力内容を確認してください。", fieldErrors };
