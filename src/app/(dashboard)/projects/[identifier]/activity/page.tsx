@@ -1,3 +1,5 @@
+import { UserAvatar } from "@/interface/components/user-avatar";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
@@ -84,6 +86,8 @@ export default async function ProjectActivityPage({
 
   const authors = await new DrizzleUserRepository().findByIds([...new Set(events.map((e) => e.authorId).filter((id): id is string => id !== null))]);
   const authorById = new Map(authors.map((a) => [a.id, `${a.lastname} ${a.firstname}`]));
+  const authorMailById = new Map(authors.map((a) => [a.id, a.mail]));
+  const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
 
   const eventsByDay = new Map<string, ActivityEvent[]>();
   for (const event of events) {
@@ -156,7 +160,12 @@ export default async function ProjectActivityPage({
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span>{TYPE_LABEL[event.type]}</span>
                       <span>{event.occurredAt.toISOString()}</span>
-                      {event.authorId ? <span>{authorById.get(event.authorId) ?? "?"}</span> : null}
+                      {event.authorId ? (
+                        <span className="inline-flex items-center gap-1">
+                          <UserAvatar mail={authorMailById.get(event.authorId) ?? null} gravatarEnabled={gravatarEnabled} />
+                          {authorById.get(event.authorId) ?? "?"}
+                        </span>
+                      ) : null}
                     </div>
                     <Link href={activityEventPath(identifierOf.get(event) ?? identifier, event)} className="font-medium underline block">
                       {event.title}

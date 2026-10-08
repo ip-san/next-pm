@@ -143,7 +143,7 @@
 | API キー | done | マイアカウント画面の表示・再生成(本家 `MyController#show_api_key` / `#reset_api_key`)。**これが入るまで `users.api_key` に値を書く経路が存在せず、REST API は事実上到達不能だった** |
 | Atom キー | done | 初回フィード表示時の自動発行(`get-or-create-atom-key.ts`)に加え、マイアカウント画面からの再生成(本家 `MyController#reset_atom_key`) |
 | ユーザー個人設定 | partial | 自動ウォッチ条件に加え、氏名・メールアドレス・言語・タイムゾーン・履歴の表示順・メール通知方式・メールアドレス非公開・自己通知不要をマイアカウント画面で編集できる。実際に効くのは**履歴の表示順**(課題単票の journal 並び、本家 `comments_sorting`)と**自己通知不要**(通知の配信時フィルタ、本家 `no_self_notified`、既定 true で従来の挙動と同じ)と**メール通知方式の `none`**。言語は i18n 基盤が無いため(§0.1)、メール通知方式の中間 3 択はプロジェクト単位の通知購読が無いため(§11)、メールアドレス非公開は管理画面以外に他人のアドレスを出す画面がまだ無いため、保存されるが未反映 |
-| アバター | partial | 設定 `gravatar_enabled`(既定 OFF。有効にするとレンダリングのたびにアドレスのハッシュが gravatar.com に渡るため)。OFF のときはイニシャルを表示する。現状の表示箇所はマイアカウント画面のみで、課題の作成者・担当者やメンバー一覧にはまだ出していない |
+| アバター | partial | 設定 `gravatar_enabled`(既定 OFF。有効にするとレンダリングのたびにアドレスのハッシュが gravatar.com に渡るため)。ゲートの規則は本家の `avatar` ヘルパーに合わせ、OFF のときは何も表示しない(以前はイニシャルを出していたが、本家の挙動に揃えた)。表示箇所は、マイアカウント・プロジェクトのメンバー一覧・活動。**未対応**: 課題の詳細・履歴・ニュース・メッセージ・ウォッチャー・工数タブ・ユーザー一覧、REST の `avatar_url`(本家は users の JSON に含める) |
 | アカウントの自己削除 | done | 設定 `unsubscribe`(既定 OFF)+ マイアカウント画面の削除セクション。可否は本家 `User#own_account_deletable?` のとおり `Setting.unsubscribe?` かつ(管理者でない **または** 他に有効な管理者が居る)で、管理者も最後の一人でなければ退会できる。削除は本家 `User#remove_references_before_destroy` と同じく作成物を匿名ユーザーへ付け替えてから行う(`UserAdminRepository.reassignReferencesAndDelete`、管理画面 CRUD 側と共用)。管理画面の削除は本家 `UsersController#destroy` と同じく自分自身を拒否し、こちらが本家 `MyController#destroy` にあたる許可経路 |
 
 ## 6. 管理画面

@@ -4,7 +4,7 @@ import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { ownAccountDeletable } from "@/domain/user/account-deletion";
 import { isActiveUser } from "@/domain/user/entity";
-import { gravatarUrl, userInitials } from "@/domain/user/avatar";
+import { UserAvatar } from "@/interface/components/user-avatar";
 import { resolvePreferences } from "@/domain/user-preferences/entity";
 import { isTwofaAvailable } from "@/domain/settings/auth-settings";
 import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/email-address-repository";
@@ -48,14 +48,7 @@ export default async function MyAccountPage() {
   return (
     <main className="p-8 flex flex-col gap-6 max-w-lg">
       <div className="flex items-center gap-3">
-        {settings.gravatarEnabled ? (
-          // eslint-disable-next-line @next/next/no-img-element -- an external Gravatar URL, which next/image would proxy for no benefit
-          <img src={gravatarUrl(user.mail, 48)} alt="" width={48} height={48} className="rounded-full" />
-        ) : (
-          <span className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium">
-            {userInitials(user.firstname, user.lastname)}
-          </span>
-        )}
+        <UserAvatar mail={user.mail} gravatarEnabled={settings.gravatarEnabled} size={48} />
         <h1 className="text-xl font-semibold">アカウント設定</h1>
       </div>
       {canUseWebhooks ? (

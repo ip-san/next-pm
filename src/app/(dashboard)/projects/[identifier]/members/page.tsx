@@ -1,3 +1,6 @@
+import { UserAvatar } from "@/interface/components/user-avatar";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
@@ -44,6 +47,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
   ]);
   const users = await new DrizzleUserRepository().findByIds(memberUserIds(members));
   const userById = new Map(users.map((u) => [u.id, u]));
+  const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
   const roleById = new Map(roles.map((r) => [r.id, r]));
   const groupById = new Map(groups.map((g) => [g.id, g]));
   const memberById = new Map(members.map((m) => [m.id, m]));
@@ -89,7 +93,14 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
         <tbody>
           {members.map((member) => (
             <tr key={member.id} className="border-b">
-              <td className="pr-4 py-1">{principalLabel(member)}</td>
+              <td className="pr-4 py-1">
+                <span className="inline-flex items-center gap-1">
+                  {member.userId ? (
+                    <UserAvatar mail={userById.get(member.userId)?.mail ?? null} gravatarEnabled={gravatarEnabled} />
+                  ) : null}
+                  {principalLabel(member)}
+                </span>
+              </td>
               <td className="pr-4 py-1">
                 {/* A group-inherited row's roles belong to the group, so they are shown but
                     not editable — Member#any_inherited_role? blocks both edit and removal. */}
