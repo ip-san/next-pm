@@ -200,7 +200,7 @@
 | プロジェクトの工数一覧 | done | クエリエンジン駆動に置き換え(`domain/query/time-entry-columns.ts` の列カタログ、`time-entry-search.ts` の読み取りモデル、`application/time-entries/list-time-entries.ts`)。フィルタ・表示列・ソート・グルーピング・合計・ページング・保存済みクエリ(`queries.type = 'TimeEntryQuery'`)が横断一覧と同じ実装で動く。集計レポート(`./report`)は本家同様に別アクションのまま変更なし |
 | 横断の工数一覧 | done | `/time_entries`。プロジェクト一覧と同じ `TimeEntryTable` / 同じユースケースで、スコープだけが「`view_time_entries` を持つ全プロジェクト」に変わる。可視性は本家 `TimeEntry.visible_condition` どおりプロジェクトごとの `time_entries_visibility` を OR で展開し、加えて next-pm 独自の「見えない課題に紐づく工数は出さない」規則(`canAccessTimeEntry`)も SQL 側で効かせる。編集可否は行のプロジェクトの `edit_time_entries` / `edit_own_time_entries` で判定 |
 | 他ユーザー名義での記録 | done | `log_time_for_other_users`。対象は `TimeEntry#assignable_users`(= `log_time` を持つロールの有効なメンバー + 自分)に限定され、権限が無ければ選択欄自体を出さずサーバ側でも拒否 |
-| 工数の一括編集 | missing | 本家 `TimelogController#bulk_edit` / `bulk_update` |
+| 工数の一括編集 | partial | 工数一覧で編集できる行にチェックを入れ、作業分類・時間・日付・コメントを一括で変更できる(本家 `TimelogController#bulk_edit` / `bulk_update` の属性のうち、プロジェクトと課題を動かさない部分)。空欄は変更しない。権限が無い工数は飛ばし、件数で報告する。**未対応**: プロジェクトの移動・課題の付け替え(本家の `project_id` / `issue_id`)、ユーザーの付け替え、カスタムフィールドの一括変更。実機の送信は未確認(ブラウザ拡張が途中で切断)。単票の更新と同じ `updateTimeEntry` を通るため、そのテストで検証範囲をカバーする |
 | 工数のカスタムフィールド | partial | 対象 `TimeEntry` のカスタムフィールドを管理画面から作成でき、記録・編集フォームと REST API から値を設定できる。ロール別の可視/編集可否は §1 と同じ制約 |
 | 工数の CSV エクスポート・インポート | partial | 一覧と同じ表示列・フィルタ・ソートで出すクエリ駆動のエクスポート(`/api/time_entries/csv`、`/api/projects/[identifier]/time-entries/query-csv`)と、列構成がインポータと一致する固定形式のエクスポート(`/api/projects/[identifier]/time-entries/csv`)の2本立て。表示列は利用者が変えられるため、取り込みが当てにできる形式にはならない — だから置き換えずに併置している。インポート(`import_time_entries`、`time-entries/import`)は固定形式の側と対応する。本家の多段マッピングウィザードは対象外で、単一ステップのアップロード(課題インポートと同じ設計) |
 | コミットメッセージからの工数記録 | done | `@2h` 記法(`commit_logtime_enabled`) |

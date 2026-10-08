@@ -19,6 +19,11 @@ export interface TimeEntryTableProps {
   projectIdentifierById: Map<string, string>;
   /** Which rows offer edit/delete — `TimeEntry#editable_by?`, decided per entry by the caller. */
   isEditable: (entry: TimeEntry) => boolean;
+  /**
+   * When given, the table is a selection form: each editable row gets a checkbox, and the submit
+   * button sends the chosen ids as `ids` to this URL (Redmine's bulk edit from the timelog list).
+   */
+  bulkEditHref?: string;
 }
 
 /**
@@ -26,7 +31,15 @@ export interface TimeEntryTableProps {
  * two can never disagree on a column, a group header or a total. Everything it renders
  * comes from `listTimeEntries`; it owns no data access of its own.
  */
-export function TimeEntryTable({ result, lookups, basePath, listParams, projectIdentifierById, isEditable }: TimeEntryTableProps) {
+export function TimeEntryTable({
+  result,
+  lookups,
+  basePath,
+  listParams,
+  projectIdentifierById,
+  isEditable,
+  bulkEditHref,
+}: TimeEntryTableProps) {
   const groupsByValue = new Map((result.search.groups ?? []).map((group) => [group.value, group]));
   const totalColumns = result.effective.totalableNames
     .map((key) => result.availableColumns.find((column) => column.key === key))
@@ -41,7 +54,7 @@ export function TimeEntryTable({ result, lookups, basePath, listParams, projectI
   });
 
   const rowContext = { lookups, customValues: result.search.customValues };
-  const columnCount = result.displayColumns.length + 1;
+  const columnCount = result.displayColumns.length + 1 + (bulkEditHref ? 1 : 0);
 
   const linkWith = (overrides: Partial<IssueListParams>) =>
     issueListHref(basePath, listParams, {
@@ -51,15 +64,11 @@ export function TimeEntryTable({ result, lookups, basePath, listParams, projectI
       ...overrides,
     });
 
-  return (
-    <>
-      <p className="text-sm text-gray-600">
-        {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
-      </p>
-
+  const table = (
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
+            {bulkEditHref ? <th className="pr-2 py-1" /> : null}
             {result.displayColumns.map((column) => (
               <th key={column.key} className="pr-4 py-1">
                 {column.sortable ? (
@@ -101,6 +110,11 @@ export function TimeEntryTable({ result, lookups, basePath, listParams, projectI
                   </tr>
                 ) : null}
                 <tr className="border-b">
+                  {bulkEditHref ? (
+                    <td className="pr-2 py-1">
+                      {isEditable(entry) ? <input type="checkbox" name="ids" value={entry.id} aria-label="選択" /> : null}
+                    </td>
+                  ) : null}
                   {result.displayColumns.map((column) => (
                     <td key={column.key} className="pr-4 py-1">
                       {column.key === "issue" && entry.issueId ? (
@@ -156,6 +170,26 @@ export function TimeEntryTable({ result, lookups, basePath, listParams, projectI
           </tfoot>
         ) : null}
       </table>
+  );
+
+  return (
+    <>
+      <p className="text-sm text-gray-600">
+        {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
+      </p>
+
+      {bulkEditHref ? (
+        <form method="get" action={bulkEditHref} className="flex flex-col gap-2">
+          {table}
+          <div>
+            <button type="submit" className="border rounded px-3 py-1.5 text-sm">
+              選択した工数を一括編集
+            </button>
+          </div>
+        </form>
+      ) : (
+        table
+      )}
 
       <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label="ページ送り">
         {linkedPages(result.pagination).map((page) => (

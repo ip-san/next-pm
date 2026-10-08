@@ -218,6 +218,7 @@ export default async function ProjectTimeEntriesPage({
         isEditable={(entry) =>
           canEditTimeEntry({ entry, userId: user?.id ?? null, visible: true, canEditTimeEntries, canEditOwnTimeEntries })
         }
+        bulkEditHref={canEditTimeEntries || canEditOwnTimeEntries ? `${basePath}/bulk-edit` : undefined}
       />
     </main>
   );

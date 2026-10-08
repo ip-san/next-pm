@@ -526,3 +526,80 @@ export async function deleteTimeEntryAction(
   }
   return { error: null };
 }
+
+export type BulkTimeEntryActionState = {
+  error: string | null;
+  message: string | null;
+};
+
+const bulkTimeEntrySchema = z.object({
+  projectIdentifier: z.string().min(1),
+  ids: z.array(z.string().uuid()).min(1, "工数を選択してください。"),
+  activityId: z.string().uuid().nullable(),
+  hours: z.number().positive("時間は0より大きい値を入力してください。").nullable(),
+  spentOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付はYYYY-MM-DD形式で入力してください。").nullable(),
+  comments: z.string().nullable(),
+});
+
+/**
+ * Redmine's TimelogController#bulk_update for the attributes that don't move an entry between
+ * projects or issues. Every entry is checked the way the single-entry edit checks it (loadEditableEntry),
+ * and a blank field leaves that attribute alone, as parse_params_for_bulk_update does. An entry that
+ * can't be edited, or that the change makes invalid, is skipped and counted, so one bad entry doesn't
+ * stop the rest.
+ */
+export async function bulkUpdateTimeEntriesAction(
+  _prevState: BulkTimeEntryActionState,
+  formData: FormData,
+): Promise<BulkTimeEntryActionState> {
+  const blank = (value: FormDataEntryValue | null) => (typeof value === "string" && value.trim().length > 0 ? value.trim() : null);
+  const hoursRaw = blank(formData.get("hours"));
+  const parsed = bulkTimeEntrySchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    ids: formData.getAll("ids"),
+    activityId: blank(formData.get("activityId")),
+    hours: hoursRaw === null ? null : Number(hoursRaw),
+    spentOn: blank(formData.get("spentOn")),
+    comments: typeof formData.get("comments") === "string" ? (formData.get("comments") as string) : null,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", message: null };
+  }
+  const { activityId, hours, spentOn, comments } = parsed.data;
+  if (activityId === null && hours === null && spentOn === null && (comments === null || comments.trim().length === 0)) {
+    return { error: "変更する項目を1つ以上入力してください。", message: null };
+  }
+
+  let saved = 0;
+  let skipped = 0;
+  for (const entryId of parsed.data.ids) {
+    const loaded = await loadEditableEntry(parsed.data.projectIdentifier, entryId);
+    if (!loaded.ok) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await updateTimeEntry(
+        { ...writeRepositories(), timeEntryRepository: loaded.timeEntryRepository, issueRepository: new DrizzleIssueRepository() },
+        loaded.entry,
+        {
+          activityId: activityId ?? undefined,
+          hours: hours ?? undefined,
+          spentOn: spentOn ?? undefined,
+          comments: comments && comments.trim().length > 0 ? comments : undefined,
+        },
+      );
+      saved += 1;
+    } catch (error) {
+      if (error instanceof InvalidTimeEntryError) {
+        skipped += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/time-entries`);
+  const message = skipped > 0 ? `${saved}件を更新しました。${skipped}件は更新できませんでした。` : `${saved}件を更新しました。`;
+  return { error: saved === 0 ? "更新できる工数がありませんでした。" : null, message };
+}
