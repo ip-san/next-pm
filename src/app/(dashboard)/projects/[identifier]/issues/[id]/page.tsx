@@ -1,3 +1,5 @@
+import { userVisibilityFor } from "@/interface/http/user-visibility";
+import { isActiveUser } from "@/domain/user/entity";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -227,19 +229,29 @@ export default async function IssueDetailPage({
   const totalHours = visibleTimeEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const customValueByFieldId = new Map(customValues.map((cv) => [cv.customFieldId, cv.value]));
-  // A user or version value is stored as the record's id; show the name the viewer can read.
+  // A user or version value is stored as the record's id. The name is shown only when the viewer
+  // could see that record anyway: a user through the users_visibility rule (and only if active),
+  // a version only if it is shared with this project. Anything else reads "(非公開)", so a stale
+  // value can't reveal a user or version the viewer has no access to.
   const choiceLabelByFieldId = new Map<string, string>();
+  const canSeeUser = await userVisibilityFor(user);
+  const sharedVersionById = new Map(versions.map((version) => [version.id, version.name]));
   await Promise.all(
     customFields
       .filter((field) => field.fieldFormat === "user" || field.fieldFormat === "version")
       .map(async (field) => {
         const raw = customValueByFieldId.get(field.id);
         if (!raw) return;
-        const label =
-          field.fieldFormat === "user"
-            ? await new DrizzleUserRepository().findById(raw).then((user) => (user ? `${user.lastname} ${user.firstname}` : null))
-            : await new DrizzleVersionRepository().findById(raw).then((version) => version?.name ?? null);
-        if (label) choiceLabelByFieldId.set(field.id, label);
+        let label: string | null = null;
+        if (field.fieldFormat === "user") {
+          const candidate = await new DrizzleUserRepository().findById(raw);
+          if (candidate && isActiveUser(candidate) && canSeeUser(candidate.id)) {
+            label = `${candidate.lastname} ${candidate.firstname}`;
+          }
+        } else {
+          label = sharedVersionById.get(raw) ?? null;
+        }
+        choiceLabelByFieldId.set(field.id, label ?? "(非公開)");
       }),
   );
   const customFieldNameById = new Map(allCustomFields.map((field) => [field.id, field.name]));
