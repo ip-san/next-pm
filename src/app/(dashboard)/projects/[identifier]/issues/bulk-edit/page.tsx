@@ -4,11 +4,15 @@ import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { BulkEditForm } from "./bulk-edit-form";
@@ -50,6 +54,7 @@ export default async function BulkEditPage({
   const visibilityRoles = issuesVisibilityRoles(actor);
   const canEditAny = can({ permission: "edit_issues", project: toAuthorizationProject(project), actor });
   const canEditOwn = can({ permission: "edit_own_issues", project: toAuthorizationProject(project), actor });
+  const canSetNotesPrivate = can({ permission: "set_notes_private", project: toAuthorizationProject(project), actor });
 
   // Same re-derive-from-the-record pattern used everywhere else in this app: only issues
   // that actually belong to this project, are visible to the actor, and are editable by
@@ -70,11 +75,23 @@ export default async function BulkEditPage({
     );
   }
 
-  const [statuses, priorities, members] = await Promise.all([
+  const [statuses, priorities, members, trackers, categories, versions] = await Promise.all([
     new DrizzleIssueStatusRepository().listAll(),
     new DrizzleEnumerationRepository().listByType("IssuePriority"),
     new DrizzleMemberRepository().listByProject(project.id),
+    new DrizzleTrackerRepository().findByIds(project.trackerIds),
+    new DrizzleIssueCategoryRepository().listByProject(project.id),
+    new DrizzleVersionRepository().listSharedWith(project.id),
   ]);
+  // Mirrors Issue.available_custom_fields(issues): only fields every selected issue's
+  // tracker enables, since a value set here has to be applicable to all of them.
+  const selectedTrackerIds = [...new Set(candidateIssues.map((issue) => issue.trackerId))];
+  const customFieldsPerTracker = await Promise.all(
+    selectedTrackerIds.map((trackerId) => new DrizzleCustomFieldRepository().listForTracker(trackerId)),
+  );
+  const commonCustomFields = (customFieldsPerTracker[0] ?? []).filter((field) =>
+    customFieldsPerTracker.every((fields) => fields.some((candidate) => candidate.id === field.id)),
+  );
   const memberUsers = await new DrizzleUserRepository().findByIds(memberUserIds(members));
   const projectGroupIds = new Set(members.flatMap((member) => (member.groupId ? [member.groupId] : [])));
   const groups = (await new DrizzleGroupRepository().listAll()).filter((group) => projectGroupIds.has(group.id));
@@ -90,6 +107,11 @@ export default async function BulkEditPage({
         ))}
       </ul>
       <BulkEditForm
+        trackers={trackers}
+        categories={categories}
+        versions={versions}
+        customFields={commonCustomFields}
+        canSetNotesPrivate={canSetNotesPrivate}
         projectIdentifier={identifier}
         issueIds={issues.map((issue) => issue.id)}
         statuses={statuses}

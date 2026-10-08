@@ -7,6 +7,7 @@ import { parseAssigneeValue } from "@/domain/issue/assignee";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueUpdate } from "@/domain/issue/repository";
 import { BlockedIssueCloseError, updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
+import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
@@ -37,6 +38,11 @@ const bulkEditSchema = z.object({
   priorityId: z.string().default(""),
   assignedToId: z.string().default(""),
   fixedVersionId: z.string().default(""),
+  categoryId: z.string().default(""),
+  startDate: z.string().default(""),
+  dueDate: z.string().default(""),
+  privateNotes: z.coerce.boolean().default(false),
+  customFieldValues: z.record(z.string(), z.string()).default({}),
   doneRatio: z.string().default(""),
   notes: z.string().default(""),
 });
@@ -52,6 +58,15 @@ export async function bulkUpdateIssuesAction(
     trackerId: formData.get("trackerId") ?? "",
     priorityId: formData.get("priorityId") ?? "",
     fixedVersionId: formData.get("fixedVersionId") ?? "",
+    categoryId: formData.get("categoryId") ?? "",
+    startDate: formData.get("startDate") ?? "",
+    dueDate: formData.get("dueDate") ?? "",
+    privateNotes: formData.get("privateNotes") === "on",
+    customFieldValues: Object.fromEntries(
+      [...formData.entries()].flatMap(([key, value]) =>
+        key.startsWith("cf_") && typeof value === "string" && value.length > 0 ? [[key.slice(3), value]] : [],
+      ),
+    ),
     assignedToId: formData.get("assignedToId") ?? "",
     doneRatio: formData.get("doneRatio") ?? "",
     notes: formData.get("notes") ?? "",
@@ -103,7 +118,24 @@ export async function bulkUpdateIssuesAction(
     }
     changes.doneRatio = doneRatio;
   }
-  if (Object.keys(changes).length === 0 && parsed.data.notes.trim().length === 0) {
+  // "__none__" clears, a blank value leaves the field alone — the convention the assignee
+  // and version controls already use, and what Redmine's bulk edit means by its "none" option.
+  if (parsed.data.categoryId) {
+    changes.categoryId = parsed.data.categoryId === "__none__" ? null : parsed.data.categoryId;
+  }
+  if (parsed.data.startDate) {
+    changes.startDate = parsed.data.startDate === "__none__" ? null : parsed.data.startDate;
+  }
+  if (parsed.data.dueDate) {
+    changes.dueDate = parsed.data.dueDate === "__none__" ? null : parsed.data.dueDate;
+  }
+
+  const customFieldValues = parsed.data.customFieldValues;
+  if (
+    Object.keys(changes).length === 0 &&
+    Object.keys(customFieldValues).length === 0 &&
+    parsed.data.notes.trim().length === 0
+  ) {
     return { error: "変更内容またはコメントを指定してください。", message: null };
   }
 
@@ -119,6 +151,8 @@ export async function bulkUpdateIssuesAction(
   const customFieldRepository = new DrizzleCustomFieldRepository();
   const customValueRepository = new DrizzleCustomValueRepository();
   const visibilityRoles = issuesVisibilityRoles(actor);
+  const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  const canSetNotesPrivate = can({ permission: "set_notes_private", project: projectContext, actor });
 
   let updated = 0;
   let skipped = 0;
@@ -156,9 +190,17 @@ export async function bulkUpdateIssuesAction(
           issueId: issue.id,
           expectedLockVersion: issue.lockVersion,
           changes,
+          customFieldValues,
           notes: parsed.data.notes,
           actingUserId: user.id,
           actorRoleIds: roleIds,
+          // The same permission split the single-issue path applies. Without these a bulk
+          // edit would let someone with edit_issues alone add notes, which add_issue_notes
+          // is meant to gate.
+          canEditAttributes: canEditAny || canEditOwn,
+          canAddNotes,
+          privateNotes: parsed.data.privateNotes,
+          canSetNotesPrivate,
           isAuthor: issue.authorId === user.id,
           isAssignee:
             issue.assignedToType === "group"
@@ -174,7 +216,8 @@ export async function bulkUpdateIssuesAction(
         error instanceof WorkflowTransitionDeniedError ||
         error instanceof WorkflowRequiredFieldError ||
         error instanceof BlockedIssueCloseError ||
-        error instanceof IssueAttributeNotAssignableError
+        error instanceof IssueAttributeNotAssignableError ||
+        error instanceof CustomFieldValidationError
       ) {
         skipped++;
         continue;
