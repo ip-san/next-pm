@@ -102,6 +102,7 @@ function renderInput(
       return <input {...common} type="text" />;
     case "user":
     case "version":
+    case "enumeration":
       return (
         <select {...common} className={className}>
           <option value="">(未設定)</option>

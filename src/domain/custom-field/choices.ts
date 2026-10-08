@@ -12,13 +12,20 @@ export interface ChoiceOption {
  * so a form only offers what the server will accept.
  */
 export function customFieldChoiceOptions(
-  fields: Pick<CustomField, "id" | "fieldFormat">[],
+  fields: Pick<CustomField, "id" | "fieldFormat" | "enumerations">[],
   choices: { users: ChoiceOption[]; versions: ChoiceOption[] },
 ): Record<string, ChoiceOption[]> {
   const options: Record<string, ChoiceOption[]> = {};
   for (const field of fields) {
     if (field.fieldFormat === "user") options[field.id] = choices.users;
     if (field.fieldFormat === "version") options[field.id] = choices.versions;
+    if (field.fieldFormat === "enumeration") {
+      // Only active choices are offered; a value stored against a removed choice still displays.
+      options[field.id] = (field.enumerations ?? [])
+        .filter((choice) => choice.active)
+        .sort((a, b) => a.position - b.position)
+        .map((choice) => ({ value: choice.id, label: choice.name }));
+    }
   }
   return options;
 }

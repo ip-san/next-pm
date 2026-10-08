@@ -59,11 +59,12 @@ async function resolveAttributes(
 
   // A user or version field takes one of its project's members or versions, which only an issue
   // has (see application/custom-field/option-sets.ts); a project or time entry has no such list.
-  if ((fieldFormat === "user" || fieldFormat === "version") && customizedType !== "Issue") {
-    return { ok: false, error: "ユーザー・バージョン形式はチケットのカスタムフィールドだけに指定できます。" };
+  const pickedFromProject = fieldFormat === "user" || fieldFormat === "version" || fieldFormat === "enumeration";
+  if (pickedFromProject && customizedType !== "Issue") {
+    return { ok: false, error: "ユーザー・バージョン・列挙の形式はチケットのカスタムフィールドだけに指定できます。" };
   }
-  if ((fieldFormat === "user" || fieldFormat === "version") && attributes.defaultValue.trim().length > 0) {
-    return { ok: false, error: "ユーザー・バージョン形式には既定値を指定できません。" };
+  if (pickedFromProject && attributes.defaultValue.trim().length > 0) {
+    return { ok: false, error: "ユーザー・バージョン・列挙の形式には既定値を指定できません。" };
   }
 
   const trackers = await new DrizzleTrackerRepository().findByIds(trackerIds);
@@ -72,14 +73,17 @@ async function resolveAttributes(
   }
 
   const possibleValues =
-    fieldFormat === "list"
+    fieldFormat === "list" || fieldFormat === "enumeration"
       ? attributes.possibleValues
           .split(",")
           .map((v) => v.trim())
           .filter((v) => v.length > 0)
       : [];
-  if (fieldFormat === "list" && possibleValues.length === 0) {
-    return { ok: false, error: "リスト形式には選択肢を1つ以上指定してください。" };
+  if ((fieldFormat === "list" || fieldFormat === "enumeration") && possibleValues.length === 0) {
+    return { ok: false, error: "リスト・列挙の形式には選択肢を1つ以上指定してください。" };
+  }
+  if (fieldFormat === "enumeration" && new Set(possibleValues).size !== possibleValues.length) {
+    return { ok: false, error: "同じ選択肢を2つ以上指定できません。" };
   }
 
   let defaultValue: string | null = null;

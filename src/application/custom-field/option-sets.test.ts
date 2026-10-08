@@ -32,3 +32,21 @@ describe("loadCustomFieldOptionSets", () => {
     expect(sets["f-text"]).toBeUndefined();
   });
 });
+
+describe("loadCustomFieldOptionSets for enumeration fields", () => {
+  it("offers only the active choices of the field itself, without a lookup", async () => {
+    const repos = repositories([]);
+    const sets = await loadCustomFieldOptionSets(repos, "project-1", [
+      {
+        id: "f-enum",
+        fieldFormat: "enumeration",
+        enumerations: [
+          { id: "c-1", name: "Low", position: 1, active: true },
+          { id: "c-2", name: "Old", position: 2, active: false },
+        ],
+      },
+    ]);
+    expect([...sets["f-enum"]]).toEqual(["c-1"]);
+    expect(repos.memberRepository.listByProject).not.toHaveBeenCalled();
+  });
+});

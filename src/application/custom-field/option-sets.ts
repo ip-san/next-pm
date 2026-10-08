@@ -20,11 +20,18 @@ export interface CustomFieldOptionRepositories {
 export async function loadCustomFieldOptionSets(
   repositories: CustomFieldOptionRepositories,
   projectId: string,
-  fields: Pick<CustomField, "id" | "fieldFormat">[],
+  fields: Pick<CustomField, "id" | "fieldFormat" | "enumerations">[],
 ): Promise<CustomFieldOptionSets> {
   const sets: CustomFieldOptionSets = {};
   const userFields = fields.filter((field) => field.fieldFormat === "user");
   const versionFields = fields.filter((field) => field.fieldFormat === "version");
+
+  // An enumeration field's choices are its own active choices: no lookup beyond the field itself.
+  for (const field of fields) {
+    if (field.fieldFormat === "enumeration") {
+      sets[field.id] = new Set((field.enumerations ?? []).filter((choice) => choice.active).map((choice) => choice.id));
+    }
+  }
 
   if (userFields.length > 0) {
     const members = await repositories.memberRepository.listByProject(projectId);

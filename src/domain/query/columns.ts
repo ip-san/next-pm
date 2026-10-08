@@ -197,7 +197,8 @@ function customFieldFilterType(field: CustomField): FilterType {
     case "list":
     case "user":
     case "version":
-      // A user or version field is filtered by picking one of the project's records, like a list.
+    case "enumeration":
+      // A user, version or enumeration field is filtered by picking one of its records, like a list.
       return "list_optional";
     case "text":
       return "text";

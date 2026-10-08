@@ -61,7 +61,8 @@ export function coerceCustomFieldValue(
 
     case "user":
     case "version":
-      // Redmine's UserFormat / VersionFormat accept only a record the project offers.
+    case "enumeration":
+      // Redmine's UserFormat / VersionFormat / EnumerationFormat accept only a record the project offers.
       return UUID_PATTERN.test(trimmed) && allowedIds?.has(trimmed)
         ? { ok: true, value: trimmed }
         : { ok: false, error: "候補から選択してください。" };

@@ -89,3 +89,15 @@ describe("coerceCustomFieldValue for user and version fields", () => {
     expect(coerceCustomFieldValue(field({ fieldFormat: "user" }), "Dev One", new Set(["Dev One"])).ok).toBe(false);
   });
 });
+
+describe("coerceCustomFieldValue for enumeration fields", () => {
+  const choice = "5d6e7f80-1a2b-4c3d-8e4f-0a1b2c3d4e5f";
+
+  it("accepts an active choice id the field offers", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "enumeration" }), choice, new Set([choice]))).toEqual({ ok: true, value: choice });
+  });
+
+  it("refuses the name of a choice, since the value stores the id", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "enumeration" }), "Low", new Set([choice])).ok).toBe(false);
+  });
+});

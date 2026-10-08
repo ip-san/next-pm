@@ -1,18 +1,67 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
-import { customFields, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
-import type { CustomField, CustomizedType } from "@/domain/custom-field/entity";
+import { customFieldEnumerations, customFields, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
+import type { CustomField, CustomFieldEnumeration, CustomizedType } from "@/domain/custom-field/entity";
 import type { Positioned } from "@/domain/ordering/positioned";
 import type { CustomFieldAdminRepository, CustomFieldRepository } from "@/domain/custom-field/repository";
 
+/**
+ * Writes an enumeration field's choices to match `names`, in that order. A name that already exists
+ * is reused (so values stored against it keep working); a name that is gone is deactivated, not
+ * deleted, as Redmine keeps the row with `active = false`.
+ */
+async function syncEnumerations(customFieldId: string, names: string[]): Promise<void> {
+  const existing = await db
+    .select()
+    .from(customFieldEnumerations)
+    .where(eq(customFieldEnumerations.customFieldId, customFieldId));
+  const byName = new Map(existing.map((row) => [row.name, row]));
+  const wanted = new Set(names);
+
+  for (const [index, name] of names.entries()) {
+    const row = byName.get(name);
+    if (row) {
+      await db
+        .update(customFieldEnumerations)
+        .set({ position: index + 1, active: true })
+        .where(eq(customFieldEnumerations.id, row.id));
+    } else {
+      await db
+        .insert(customFieldEnumerations)
+        .values({ customFieldId, name, position: index + 1, active: true });
+    }
+  }
+
+  for (const row of existing) {
+    if (!wanted.has(row.name) && row.active) {
+      await db.update(customFieldEnumerations).set({ active: false }).where(eq(customFieldEnumerations.id, row.id));
+    }
+  }
+}
+
 async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Promise<CustomField[]> {
+  // One query for every enumeration choice of the enumeration fields in this batch.
+  const enumerationFieldIds = rows.filter((row) => row.fieldFormat === "enumeration").map((row) => row.id);
+  const choices =
+    enumerationFieldIds.length > 0
+      ? await db
+          .select()
+          .from(customFieldEnumerations)
+          .where(inArray(customFieldEnumerations.customFieldId, enumerationFieldIds))
+          .orderBy(customFieldEnumerations.position, customFieldEnumerations.name)
+      : [];
+
   const result: CustomField[] = [];
   for (const row of rows) {
     const trackerRows = await db
       .select({ trackerId: customFieldsTrackers.trackerId })
       .from(customFieldsTrackers)
       .where(eq(customFieldsTrackers.customFieldId, row.id));
+    const enumerations: CustomFieldEnumeration[] = choices
+      .filter((choice) => choice.customFieldId === row.id)
+      .map((choice) => ({ id: choice.id, name: choice.name, position: choice.position, active: choice.active }));
     result.push({
+      enumerations: row.fieldFormat === "enumeration" ? enumerations : undefined,
       id: row.id,
       name: row.name,
       customizedType: row.customizedType as CustomizedType,
@@ -75,6 +124,10 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
         .values(field.trackerIds.map((trackerId) => ({ customFieldId: row.id, trackerId })));
     }
 
+    if (field.fieldFormat === "enumeration") {
+      await syncEnumerations(row.id, field.possibleValues);
+    }
+
     return { ...field, id: row.id };
   }
 
@@ -92,6 +145,10 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
       })
       .where(eq(customFields.id, id))
       .returning();
+
+    if (row.fieldFormat === "enumeration") {
+      await syncEnumerations(id, changes.possibleValues);
+    }
 
     await db.delete(customFieldsTrackers).where(eq(customFieldsTrackers.customFieldId, id));
     if (changes.trackerIds.length > 0) {

@@ -20,6 +20,7 @@ const FORMAT_LABEL: Record<string, string> = {
   link: "リンク",
   user: "ユーザー",
   version: "バージョン",
+  enumeration: "列挙",
 };
 
 const CUSTOMIZED_TYPE_LABEL: Record<string, string> = {

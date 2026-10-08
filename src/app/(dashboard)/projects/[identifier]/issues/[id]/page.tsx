@@ -238,12 +238,15 @@ export default async function IssueDetailPage({
   const sharedVersionById = new Map(versions.map((version) => [version.id, version.name]));
   await Promise.all(
     customFields
-      .filter((field) => field.fieldFormat === "user" || field.fieldFormat === "version")
+      .filter((field) => field.fieldFormat === "user" || field.fieldFormat === "version" || field.fieldFormat === "enumeration")
       .map(async (field) => {
         const raw = customValueByFieldId.get(field.id);
         if (!raw) return;
         let label: string | null = null;
-        if (field.fieldFormat === "user") {
+        if (field.fieldFormat === "enumeration") {
+          // A choice's name is not personal data; a removed choice still shows its name.
+          label = field.enumerations?.find((choice) => choice.id === raw)?.name ?? "(不明な選択肢)";
+        } else if (field.fieldFormat === "user") {
           const candidate = await new DrizzleUserRepository().findById(raw);
           if (candidate && isActiveUser(candidate) && canSeeUser(candidate.id)) {
             label = `${candidate.lastname} ${candidate.firstname}`;

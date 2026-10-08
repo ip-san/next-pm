@@ -19,3 +19,26 @@ describe("customFieldChoiceOptions", () => {
     expect(options["f-text"]).toBeUndefined();
   });
 });
+
+describe("customFieldChoiceOptions for enumeration fields", () => {
+  it("offers the active choices in position order, with the choice id as the value", () => {
+    const options = customFieldChoiceOptions(
+      [
+        {
+          id: "f-enum",
+          fieldFormat: "enumeration",
+          enumerations: [
+            { id: "c-2", name: "High", position: 2, active: true },
+            { id: "c-1", name: "Low", position: 1, active: true },
+            { id: "c-0", name: "Retired", position: 0, active: false },
+          ],
+        },
+      ],
+      { users: [], versions: [] },
+    );
+    expect(options["f-enum"]).toEqual([
+      { value: "c-1", label: "Low" },
+      { value: "c-2", label: "High" },
+    ]);
+  });
+});

@@ -19,6 +19,7 @@ const FORMAT_OPTIONS = [
   { value: "link", label: "リンク" },
   { value: "user", label: "ユーザー" },
   { value: "version", label: "バージョン" },
+  { value: "enumeration", label: "列挙" },
 ] as const;
 
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
@@ -99,12 +100,16 @@ export function CustomFieldForm({ trackers, field }: { trackers: Tracker[]; fiel
 
       <div className="flex flex-col gap-1">
         <label htmlFor="possibleValues" className="text-sm font-medium">
-          選択肢（形式が「リスト」の場合、カンマ区切り）
+          選択肢（形式が「リスト」「列挙」の場合、カンマ区切り。列挙では外した選択肢は無効になり、既存の値は残る）
         </label>
         <input
           id="possibleValues"
           name="possibleValues"
-          defaultValue={field?.possibleValues.join(", ")}
+          defaultValue={
+            field?.fieldFormat === "enumeration"
+              ? (field.enumerations ?? []).filter((choice) => choice.active).map((choice) => choice.name).join(", ")
+              : field?.possibleValues.join(", ")
+          }
           className="border rounded px-3 py-2"
         />
       </div>
