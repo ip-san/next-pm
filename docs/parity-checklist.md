@@ -238,7 +238,7 @@
 | ページネーション封筒 | done | |
 | issues | partial | GET / POST / PATCH(PUT エイリアス有り)。**DELETE が無い**。journals の更新、`include=` パラメータ各種も無い |
 | projects | done | GET / POST / PUT / DELETE、`archive` / `unarchive` / `close` / `reopen`(本家 5.1 の API、POST / PUT 両対応で 204) |
-| users | partial | GET / POST。PUT / DELETE が無い |
+| users | done | GET / POST / PUT / DELETE。PUT は部分更新(省略した項目は据え置き)、管理者のみ。Cookie 利用時は CSRF を確認する。DELETE は `lock` 指定で施錠、無指定で削除(本家 `UsersController#update` / `#destroy` と同じ)。PUT と管理画面の更新は `application/users/update-user.ts` を共有する。認証方式(auth source)は REST では変えない |
 | memberships | done | 一覧・作成・PUT(ロール変更)・削除 |
 | time_entries | done | 一覧・作成(`user_id` / `custom_field_values` 対応)・個別 GET / PUT / DELETE |
 | versions / wiki / issue_categories / groups / relations | done | CRUD の主要部分は実装済み |

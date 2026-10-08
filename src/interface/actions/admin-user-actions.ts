@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { changeUserStatus, UserStatusChangeError } from "@/application/users/change-user-status";
 import { deleteUser, UserNotDeletableError } from "@/application/users/delete-user";
+import { updateUser, UserUpdateError } from "@/application/users/update-user";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { isMembershipEditable } from "@/domain/member/repository";
@@ -149,63 +150,31 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
   }
 
-  const userRepository = new DrizzleUserRepository();
-  const existing = await userRepository.findById(parsed.data.userId);
-  if (!existing || existing.status === "anonymous") {
-    return { error: "ユーザーが見つかりません。" };
-  }
-
-  const byLogin = await userRepository.findByLogin(parsed.data.login);
-  if (byLogin && byLogin.id !== existing.id) {
-    return { error: "そのログインIDは既に使用されています。" };
-  }
-
-  // Every password rule is settled before anything is written: UsersController#update only
-  // touches the password when one was submitted and the account isn't delegated to a directory,
-  // and a half-applied update that saved the attributes and then refused the password would
-  // leave the admin guessing what actually changed.
-  const password = parsed.data.password;
-  if (password.length > 0) {
-    if (parsed.data.authSource === "ldap") {
-      return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
-    }
-    if (password.length < 8) {
-      return { error: "パスワードは8文字以上で入力してください。" };
-    }
-  } else if (existing.authSource === "ldap" && parsed.data.authSource === null) {
-    // An LDAP-backed account carries an empty local hash by construction (see schema/users.ts),
-    // so moving it to internal authentication without a password would lock it out for good.
-    return { error: "内部認証に切り替えるにはパスワードを設定してください。" };
-  }
-
-  // Redmine's users/_form hides the admin checkbox for User.current, so an admin cannot
-  // demote themselves and lock the whole instance out of its own admin area.
   const actor = await currentUserFromCookies();
-  const isAdmin = actor && actor.id === existing.id ? existing.isAdmin : parsed.data.isAdmin;
-
   try {
-    await userRepository.update(existing.id, {
-      login: parsed.data.login,
-      mail: parsed.data.mail,
-      firstname: parsed.data.firstname,
-      lastname: parsed.data.lastname,
-      isAdmin,
-      authSource: parsed.data.authSource,
-    });
+    await updateUser(
+      { userRepository: new DrizzleUserRepository(), userAdminRepository: new DrizzleUserRepository() },
+      {
+        userId: parsed.data.userId,
+        login: parsed.data.login,
+        mail: parsed.data.mail,
+        firstname: parsed.data.firstname,
+        lastname: parsed.data.lastname,
+        isAdmin: parsed.data.isAdmin,
+        authSource: parsed.data.authSource,
+        password: parsed.data.password,
+      },
+      actor?.id ?? null,
+    );
   } catch (error) {
-    if (duplicateMailError(error)) {
-      return { error: "そのメールアドレスは既に使用されています。" };
+    if (error instanceof UserUpdateError) {
+      return { error: error.message };
     }
     throw error;
   }
 
-  if (password.length > 0) {
-    const salt = generateSalt();
-    await userRepository.updatePassword(existing.id, hashPassword(password, salt), salt);
-  }
-
   revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${existing.id}`);
+  revalidatePath(`/admin/users/${parsed.data.userId}`);
   return { error: null };
 }
 
