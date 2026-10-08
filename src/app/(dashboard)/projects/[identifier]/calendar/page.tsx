@@ -9,6 +9,9 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { subtreeVisibleIssues } from "@/interface/http/project-issue-scope";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
@@ -56,7 +59,13 @@ export default async function ProjectCalendarPage({
     new DrizzleTrackerRepository().listAll(),
   ]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
+  // display_subprojects_issues: the calendar also shows the subprojects' issues, each judged by its own project.
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const subtree = displaySubprojectsIssues ? await subtreeVisibleIssues(user, project) : null;
+  const visibleIssues = subtree
+    ? subtree.issues
+    : allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
+  const identifierByProjectId = subtree?.identifierByProjectId ?? new Map([[project.id, identifier]]);
 
   const issuesByDay = new Map<string, typeof visibleIssues>();
   for (const issue of visibleIssues) {
@@ -131,7 +140,7 @@ export default async function ProjectCalendarPage({
                       {dayIssues.map((issue) => (
                         <Link
                           key={issue.id}
-                          href={`/projects/${identifier}/issues/${issue.id}`}
+                          href={`/projects/${identifierByProjectId.get(issue.projectId) ?? identifier}/issues/${issue.id}`}
                           className="underline truncate block"
                           title={`${trackerById.get(issue.trackerId)?.name ?? "?"}: ${issue.subject}`}
                         >
