@@ -68,6 +68,15 @@ export class DrizzleJournalRepository implements JournalRepository {
     return journal;
   }
 
+  /** Ids of the issues `userId` has journalled — Redmine's `updated_by` filter. */
+  async listIssueIdsJournaledBy(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ journalizedId: journals.journalizedId })
+      .from(journals)
+      .where(and(eq(journals.journalizedType, "Issue"), eq(journals.userId, userId)));
+    return [...new Set(rows.map((row) => row.journalizedId))];
+  }
+
   async listForIssue(issueId: string, viewer: JournalViewer): Promise<Journal[]> {
     const rows = await db
       .select()

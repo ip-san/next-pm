@@ -1,3 +1,5 @@
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { loadMyPagePreferences } from "@/application/my-page/load-preferences";
@@ -7,10 +9,15 @@ import { DrizzleMyPageRepository } from "@/infrastructure/db/repositories/my-pag
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { AddBlockForm } from "./add-block-form";
 import {
+  loadActivityBlock,
+  loadCalendarBlock,
   loadDocumentsBlock,
   loadIssueBlocks,
   loadNewsBlock,
   loadTimelogBlock,
+  loadUpdatedByMeBlock,
+  type ActivityBlockItem,
+  type CalendarBlockItem,
   type DocumentBlockItem,
   type IssueBlockItem,
   type NewsBlockItem,
@@ -24,11 +31,52 @@ export const dynamic = "force-dynamic";
 const BLOCK_LABEL: Record<MyPageBlockType, string> = {
   issues_assigned_to_me: "担当しているチケット",
   issues_reported_by_me: "登録したチケット",
+  issues_updated_by_me: "更新したチケット",
   issues_watched: "ウォッチしているチケット",
+  calendar: "カレンダー",
   news: "ニュース",
   documents: "ドキュメント",
   timelog: "工数",
+  activity: "活動",
 };
+
+function CalendarBlockList({ items }: { items: CalendarBlockItem[] }) {
+  if (items.length === 0) {
+    return <p className="text-sm text-gray-500">今週の予定はありません。</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1 text-sm">
+      {items.map((item) => (
+        <li key={item.id} className="border-b pb-1">
+          <Link href={`/projects/${item.projectIdentifier}/issues/${item.id}`} className="underline">
+            {item.subject}
+          </Link>{" "}
+          <span className="text-gray-500">
+            — {item.startDate ? `開始 ${item.startDate}` : ""} {item.dueDate ? `期日 ${item.dueDate}` : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ActivityBlockList({ items }: { items: ActivityBlockItem[] }) {
+  if (items.length === 0) {
+    return <p className="text-sm text-gray-500">なし</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1 text-sm">
+      {items.map((item) => (
+        <li key={item.key} className="border-b pb-1">
+          <Link href={item.href} className="underline">
+            {item.title}
+          </Link>{" "}
+          <span className="text-gray-500">— {item.occurredAt.toISOString().slice(0, 16).replace("T", " ")}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const GROUP_CLASS: Record<MyPageGroup, string> = {
   top: "flex flex-col gap-8",
@@ -125,6 +173,14 @@ export default async function MyPage() {
   ]);
   const timelogDays = resolveTimelogDays(prefs.blockSettings);
   const timelog = placedBlocks.has("timelog") ? await loadTimelogBlock(user, timelogDays) : [];
+  const today = new Date().toISOString().slice(0, 10);
+  const updatedByMe = placedBlocks.has("issues_updated_by_me") ? await loadUpdatedByMeBlock(user) : [];
+  const calendar = placedBlocks.has("calendar") ? await loadCalendarBlock(user, today) : [];
+  // Redmine's activity_days_default window, the same one the project activity page uses.
+  const { activityDaysDefault } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const activityTo = new Date();
+  const activityFrom = new Date(activityTo.getTime() - activityDaysDefault * 86_400_000);
+  const activity = placedBlocks.has("activity") ? await loadActivityBlock(user, activityFrom, activityTo) : [];
 
   function renderBlockContent(block: MyPageBlockType) {
     switch (block) {
@@ -132,6 +188,12 @@ export default async function MyPage() {
         return <IssueBlockList items={issueBlocks.assigned} />;
       case "issues_reported_by_me":
         return <IssueBlockList items={issueBlocks.reported} />;
+      case "issues_updated_by_me":
+        return <IssueBlockList items={updatedByMe} />;
+      case "calendar":
+        return <CalendarBlockList items={calendar} />;
+      case "activity":
+        return <ActivityBlockList items={activity} />;
       case "issues_watched":
         return <IssueBlockList items={issueBlocks.watched} />;
       case "news":

@@ -12,7 +12,17 @@ export type MyPageGroup = (typeof MY_PAGE_GROUPS)[number];
  * unlike Redmine (which suffixes repeat instances as "issuequery__2"), a block id is always
  * exactly one instance — simpler, and enough for every block below.
  */
-export const MY_PAGE_BLOCK_TYPES = ["issues_assigned_to_me", "issues_reported_by_me", "issues_watched", "news", "documents", "timelog"] as const;
+export const MY_PAGE_BLOCK_TYPES = [
+  "issues_assigned_to_me",
+  "issues_reported_by_me",
+  "issues_updated_by_me",
+  "issues_watched",
+  "calendar",
+  "news",
+  "documents",
+  "timelog",
+  "activity",
+] as const;
 export type MyPageBlockType = (typeof MY_PAGE_BLOCK_TYPES)[number];
 
 export type MyPageLayout = Record<MyPageGroup, MyPageBlockType[]>;
