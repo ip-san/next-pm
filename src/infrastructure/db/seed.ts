@@ -111,6 +111,7 @@ async function seed() {
         "manage_files",
         "browse_repository",
         "view_changesets",
+        "commit_access",
         "manage_related_issues",
         "manage_repository",
         "view_calendar",

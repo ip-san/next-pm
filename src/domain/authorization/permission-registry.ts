@@ -72,6 +72,7 @@ export type PermissionKey =
   | "manage_files"
   | "browse_repository"
   | "view_changesets"
+  | "commit_access"
   | "manage_related_issues"
   | "manage_repository"
   | "view_calendar"
@@ -202,6 +203,9 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   browse_repository: { module: "repository", readOnly: true, require: null },
   view_changesets: { module: "repository", readOnly: true, require: null },
   /** Linking a changeset to an issue by hand on the revision page. Redmine declares it with no :require. */
+  // preparation.rb#L141: an empty permission. Redmine grants it to the default Developer role and
+  // checks it nowhere in core; plugins (SCM hooks) read it.
+  commit_access: { module: "repository", readOnly: false, require: null },
   manage_related_issues: { module: "repository", readOnly: false, require: null },
   manage_repository: { module: "repository", readOnly: false, require: "member" },
 
