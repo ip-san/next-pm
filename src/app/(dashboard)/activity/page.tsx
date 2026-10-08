@@ -8,6 +8,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { activityRepositories, resolveGlobalActivityProjects } from "@/interface/http/activity-scope";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { userVisibilityFor } from "@/interface/http/user-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -65,10 +66,13 @@ export default async function GlobalActivityPage({
   ]);
   const { activityDaysDefault: DAYS } = resolveGeneralSettings(settings);
 
-  // Redmine's `User.visible.active.find(params[:user_id])` — an unknown or locked id is a
-  // 404 there; here it simply drops the filter rather than hiding the whole page.
+  // Redmine's `User.visible.active.find(params[:user_id])` — an unknown, locked or invisible id
+  // is a 404 there; here it simply drops the filter rather than hiding the whole page. An
+  // invisible user gets the same treatment as an unknown one, so the page can't be used to
+  // tell the two apart.
   const author = userIdParam ? await userRepository.findById(userIdParam) : null;
-  const authorFilter = author && isActiveUser(author) ? author : null;
+  const canSeeAuthor = author ? (await userVisibilityFor(user))(author.id) : false;
+  const authorFilter = author && isActiveUser(author) && canSeeAuthor ? author : null;
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

@@ -113,7 +113,7 @@
 | 機能 | 状態 | 備考 |
 |---|---|---|
 | ロール定義 | done | 作成/編集/削除/複製/並べ替え、builtin ロールの編集画面あり。本家 `Role#setable_permissions` 準拠で、非メンバーには `:require => :member`、匿名にはさらに `:require => :loggedin` の権限を提示しない |
-| 可視性設定 | partial | `issues_visibility` と `time_entries_visibility` は読み取り側で効いている。`users_visibility` は列と管理 UI だけで、参照している読み取り経路がまだ無い |
+| 可視性設定 | done | `issues_visibility` と `time_entries_visibility` は読み取り側で効いている。`users_visibility` は本家 `Principal.visible`(`app/models/principal.rb`)どおり、管理者以外の閲覧者に対して、活動の作者フィルタ(`/activity?user_id=`)とメンバー追加のログインID 照会で強制する(見えない利用者は存在しない利用者と同じ扱い)。管理者は全員を見る。プロジェクト単位の候補(メンバー・フィルタ)は本家どおりプロジェクトのメンバーから作るため、規則の対象外 |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
 | 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 79(`permission-registry.ts` 実数)。本家の `manage_categories` は next-pm では `manage_issue_categories`(命名の差異)。未登録は `import_issues` のみ。下表参照 |

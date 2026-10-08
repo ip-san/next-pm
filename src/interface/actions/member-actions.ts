@@ -17,6 +17,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { userVisibilityFor } from "@/interface/http/user-visibility";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export type MemberActionState = {
@@ -72,7 +73,12 @@ export async function addMemberAction(_prevState: MemberActionState, formData: F
     // the builtin Non member or Anonymous role.
     new DrizzleRoleRepository().listGivable(),
   ]);
-  if (!targetUser) {
+  // Redmine only offers principals the acting user can see (members_helper's
+  // render_principals_for_new_members uses Principal.visible). An invisible user is reported
+  // exactly like an unknown login, so this form can't be used to find out who exists.
+  const actor = await currentUserFromCookies();
+  const canSeeTarget = targetUser ? (await userVisibilityFor(actor))(targetUser.id) : false;
+  if (!targetUser || !canSeeTarget) {
     return { error: "指定されたログインIDのユーザーが見つかりません。" };
   }
   const givableIds = new Set(roles.map((role) => role.id));
