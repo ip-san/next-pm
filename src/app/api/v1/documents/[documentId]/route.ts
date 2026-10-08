@@ -1,3 +1,6 @@
+import { deleteDocument } from "@/application/documents/delete-document";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
@@ -39,6 +42,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ d
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  await documentRepository.delete(documentId);
+  await deleteDocument(
+    { documentRepository, attachmentRepository: new DrizzleAttachmentRepository(), attachmentStorage: new FsAttachmentStore() },
+    documentId,
+  );
   return new NextResponse(null, { status: 204 });
 }

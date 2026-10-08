@@ -10,10 +10,18 @@ import {
   WorkflowRequiredFieldError,
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
+import {
+  deleteIssue,
+  DeleteIssueNotPermittedError,
+  InvalidTimeEntryTargetError,
+  type TimeEntryDisposition,
+} from "@/application/issues/delete-issue";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { triggerIssueWebhook } from "@/interface/http/webhook-trigger";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
@@ -25,9 +33,11 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
+import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, journalViewerFor, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 
 const ISSUE_ATTRIBUTE_ERROR_CODES: Record<string, string> = {
@@ -69,7 +79,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const [journals, customValues] = await Promise.all([
-    new DrizzleJournalRepository().listForIssue(id),
+    new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project)),
     new DrizzleCustomValueRepository().listForCustomized("Issue", id),
   ]);
   return NextResponse.json({ issue, journals, customValues });
@@ -130,7 +140,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!canEditAny && !canEditOwn) {
+  const canEditAttributes = canEditAny || canEditOwn;
+  const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  if (!canEditAttributes && !canAddNotes) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -138,7 +150,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // updateIssue itself and reported through the catch below — previously this route checked
   // only that the assignee was *some* user and never looked at the category at all.
   try {
-    const issue = await updateIssue(
+    const { issue } = await updateIssue(
       {
         ...drizzleIssueAttributeRepositories(),
         issueRepository: new DrizzleIssueRepository(),
@@ -166,6 +178,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           can({ permission: "set_issues_private", project: projectContext, actor }) ||
           (isAuthor && can({ permission: "set_own_issues_private", project: projectContext, actor })),
         canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
+        canEditAttributes,
+        canAddNotes,
         changes: {
           statusId: parsed.data.status_id,
           priorityId: parsed.data.priority_id,
@@ -213,6 +227,74 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     throw error;
   }
+}
+
+/**
+ * Mirrors Redmine's `DELETE /issues/:id.json`. The `todo` query parameter matches the
+ * controller's: absent means destroy, which is also the model's `dependent: :destroy`.
+ */
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { user, viaCookie } = await resolveUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (viaCookie && !(await verifyCsrf(request))) {
+    return NextResponse.json({ error: "csrf_check_failed" }, { status: 403 });
+  }
+
+  const issueRepository = new DrizzleIssueRepository();
+  const existing = await issueRepository.findById(id);
+  if (!existing) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const project = await new DrizzleProjectRepository().findById(existing.projectId);
+  if (!project) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (!can({ permission: "delete_issues", project: toAuthorizationProject(project), actor })) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const todo = new URL(request.url).searchParams.get("todo");
+  const reassignTo = new URL(request.url).searchParams.get("reassign_to_id");
+  const disposition: TimeEntryDisposition =
+    todo === "nullify"
+      ? { mode: "nullify" }
+      : todo === "reassign"
+        ? { mode: "reassign", targetIssueId: reassignTo ?? "" }
+        : { mode: "destroy" };
+
+  try {
+    await deleteIssue(
+      {
+        issueRepository,
+        projectRepository: new DrizzleProjectRepository(),
+        timeEntryRepository: new DrizzleTimeEntryRepository(),
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        enumerationRepository: new DrizzleEnumerationRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
+      { issueId: id, actingUserId: user.id, actor, actorGroupIds: userGroupIds, timeEntries: disposition },
+    );
+  } catch (error) {
+    if (error instanceof DeleteIssueNotPermittedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (error instanceof InvalidTimeEntryTargetError) {
+      return NextResponse.json({ error: "invalid_reassign_to_id", reason: error.reason }, { status: 422 });
+    }
+    throw error;
+  }
+
+  return new NextResponse(null, { status: 204 });
 }
 
 // Redmine's REST API accepts PUT for issue updates; next-pm's own handler is PATCH-shaped

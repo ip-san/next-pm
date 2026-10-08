@@ -1,7 +1,8 @@
 import type { Document } from "@/domain/document/entity";
 import type { DocumentRepository } from "@/domain/document/repository";
+import { InvalidDocumentError, validateDocumentFields } from "@/domain/document/validate";
 
-export class InvalidDocumentError extends Error {}
+export { InvalidDocumentError };
 
 export interface CreateDocumentInput {
   projectId: string;
@@ -10,14 +11,9 @@ export interface CreateDocumentInput {
   description: string;
 }
 
-/** Mirrors Document's validates_presence_of :title/:category, validates_length_of :title (max 255). */
+/** Mirrors DocumentsController#create with `safe_attributes 'category_id', 'title', 'description'`. */
 export async function createDocument(repositories: { documentRepository: DocumentRepository }, input: CreateDocumentInput): Promise<Document> {
-  if (input.title.trim().length === 0 || input.title.length > 255) {
-    throw new InvalidDocumentError("タイトルは1〜255文字で入力してください。");
-  }
-  if (input.categoryId.trim().length === 0) {
-    throw new InvalidDocumentError("カテゴリを選択してください。");
-  }
+  validateDocumentFields(input.title, input.categoryId);
 
   return repositories.documentRepository.create({
     projectId: input.projectId,

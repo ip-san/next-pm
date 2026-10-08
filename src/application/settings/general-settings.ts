@@ -1,4 +1,9 @@
-import { resolveGeneralSettings, type GeneralSettings, type IssueDoneRatioMode } from "@/domain/settings/general-settings";
+import {
+  resolveGeneralSettings,
+  type GeneralSettings,
+  type IssueDoneRatioMode,
+  type ParentIssueRollupMode,
+} from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
 
 export async function loadGeneralSettings(settingsRepository: SettingsRepository): Promise<GeneralSettings> {
@@ -16,6 +21,12 @@ export interface UpdateGeneralSettingsInput {
   crossProjectIssueRelations: boolean;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
+  /** Comma-separated, as the admin form submits it; normalised by parsePerPageOptions on read. */
+  perPageOptions: string;
+  issuesExportLimit: number;
+  parentIssueDates: ParentIssueRollupMode;
+  parentIssuePriority: ParentIssueRollupMode;
+  parentIssueDoneRatio: ParentIssueRollupMode;
 }
 
 export async function updateGeneralSettings(
@@ -32,5 +43,10 @@ export async function updateGeneralSettings(
     cross_project_issue_relations: input.crossProjectIssueRelations ? "1" : "0",
     issue_done_ratio: input.issueDoneRatio,
     webhooks_enabled: input.webhooksEnabled ? "1" : "0",
+    per_page_options: input.perPageOptions,
+    issues_export_limit: String(Math.round(input.issuesExportLimit)),
+    parent_issue_dates: input.parentIssueDates,
+    parent_issue_priority: input.parentIssuePriority,
+    parent_issue_done_ratio: input.parentIssueDoneRatio,
   });
 }

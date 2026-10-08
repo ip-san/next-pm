@@ -2,16 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { updateAuthSettings } from "@/application/settings/auth-settings";
 import { updateCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { updateGeneralSettings } from "@/application/settings/general-settings";
-import { updateMailHandlerSettings } from "@/application/settings/mail-handler-settings";
+import { PASSWORD_CHAR_CLASSES, SELF_REGISTRATION_MODES, TWOFA_MODES } from "@/domain/settings/auth-settings";
 import { parseKeywordList } from "@/domain/settings/commit-keywords";
-import { ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
+import { PARENT_ISSUE_ROLLUP_VALUES, ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { requireAdmin } from "@/interface/http/require-admin";
+import { updateMailHandlerSettings } from "@/application/settings/mail-handler-settings";
 import { PREFERRED_BODY_PART_VALUES } from "@/domain/settings/mail-handler-settings";
 import { REMINDERS_JOB_TYPE, type RemindersJobPayload } from "@/application/jobs/send-reminders";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
-import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
-import { requireAdmin } from "@/interface/http/require-admin";
 
 export type SettingsActionState = {
   error: string | null;
@@ -59,8 +61,13 @@ const updateGeneralSettingsSchema = z.object({
   timelogAccept0Hours: z.coerce.boolean().default(false),
   repositoryLogDisplayLimit: z.coerce.number().int().positive("正の整数を入力してください。"),
   crossProjectIssueRelations: z.coerce.boolean().default(false),
-  issueDoneRatio: z.enum(ISSUE_DONE_RATIO_VALUES).default("issue_field"),
   webhooksEnabled: z.coerce.boolean().default(false),
+  issueDoneRatio: z.enum(ISSUE_DONE_RATIO_VALUES).default("issue_field"),
+  perPageOptions: z.string().default(""),
+  issuesExportLimit: z.coerce.number().int().min(1),
+  parentIssueDates: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
+  parentIssuePriority: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
+  parentIssueDoneRatio: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
 });
 
 export async function updateGeneralSettingsAction(
@@ -82,6 +89,11 @@ export async function updateGeneralSettingsAction(
     crossProjectIssueRelations: formData.get("crossProjectIssueRelations") === "on",
     issueDoneRatio: formData.get("issueDoneRatio"),
     webhooksEnabled: formData.get("webhooksEnabled") === "on",
+    perPageOptions: formData.get("perPageOptions"),
+    issuesExportLimit: formData.get("issuesExportLimit"),
+    parentIssueDates: formData.get("parentIssueDates"),
+    parentIssuePriority: formData.get("parentIssuePriority"),
+    parentIssueDoneRatio: formData.get("parentIssueDoneRatio"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -97,7 +109,61 @@ export async function updateGeneralSettingsAction(
     crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
     issueDoneRatio: parsed.data.issueDoneRatio,
     webhooksEnabled: parsed.data.webhooksEnabled,
+    perPageOptions: parsed.data.perPageOptions,
+    issuesExportLimit: parsed.data.issuesExportLimit,
+    parentIssueDates: parsed.data.parentIssueDates,
+    parentIssuePriority: parsed.data.parentIssuePriority,
+    parentIssueDoneRatio: parsed.data.parentIssueDoneRatio,
   });
+
+  revalidatePath("/admin/settings");
+  return { error: null };
+}
+
+const updateAuthSettingsSchema = z.object({
+  loginRequired: z.coerce.boolean().default(false),
+  autologinDays: z.coerce.number().int().min(0),
+  selfRegistration: z.enum(SELF_REGISTRATION_MODES),
+  passwordMinLength: z.coerce.number().int().positive("正の整数を入力してください。"),
+  passwordRequiredCharClasses: z.array(z.enum(PASSWORD_CHAR_CLASSES)),
+  lostPasswordEnabled: z.coerce.boolean().default(false),
+  twofa: z.enum(TWOFA_MODES),
+  unsubscribeEnabled: z.coerce.boolean().default(false),
+  gravatarEnabled: z.coerce.boolean().default(false),
+  sessionLifetimeMinutes: z.coerce.number().int().min(0),
+  sessionTimeoutMinutes: z.coerce.number().int().min(0),
+  maxAdditionalEmails: z.coerce.number().int().min(0),
+});
+
+/** Redmine's Administration > Settings > Authentication tab (SettingsController#edit, tab=authentication). */
+export async function updateAuthSettingsAction(
+  _prevState: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = updateAuthSettingsSchema.safeParse({
+    loginRequired: formData.get("loginRequired") === "on",
+    autologinDays: formData.get("autologinDays"),
+    selfRegistration: formData.get("selfRegistration"),
+    passwordMinLength: formData.get("passwordMinLength"),
+    passwordRequiredCharClasses: formData.getAll("passwordRequiredCharClasses"),
+    lostPasswordEnabled: formData.get("lostPasswordEnabled") === "on",
+    twofa: formData.get("twofa"),
+    unsubscribeEnabled: formData.get("unsubscribeEnabled") === "on",
+    gravatarEnabled: formData.get("gravatarEnabled") === "on",
+    sessionLifetimeMinutes: formData.get("sessionLifetimeMinutes"),
+    sessionTimeoutMinutes: formData.get("sessionTimeoutMinutes"),
+    maxAdditionalEmails: formData.get("maxAdditionalEmails"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  await updateAuthSettings(new DrizzleSettingsRepository(), parsed.data);
 
   revalidatePath("/admin/settings");
   return { error: null };

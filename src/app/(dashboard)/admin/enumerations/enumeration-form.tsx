@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { createEnumerationAction, type AdminActionState } from "@/interface/actions/admin-actions";
+import { createEnumerationAction } from "@/interface/actions/admin-enumeration-actions";
+import type { AdminActionState } from "@/interface/actions/admin-action-state";
 import type { EnumerationType } from "@/domain/enumeration/entity";
 
 const initialState: AdminActionState = { error: null };

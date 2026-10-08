@@ -54,6 +54,8 @@ export async function createUserFromEmail(
     user = await repositories.userRepository.create({
       login,
       mail: input.mail,
+      language: null,
+      mailNotification: "all",
       firstname,
       lastname,
       isAdmin: false,

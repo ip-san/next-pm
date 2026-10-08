@@ -10,6 +10,9 @@ import type { IssueUpdate } from "@/domain/issue/repository";
 import { filterMembersVisibleToPrivateIssue, filterUserIdsVisibleToPrivateIssue, isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { memberUserIds } from "@/domain/member/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { resolveProjectActors } from "@/application/authorization/project-actors";
+import { copyIssue, CopyIssueNotPermittedError } from "@/application/issues/copy-issue";
+import { deleteIssue, DeleteIssueNotPermittedError, InvalidTimeEntryTargetError } from "@/application/issues/delete-issue";
 import { moveIssue, MoveIssueNotPermittedError, ProjectHasNoTrackerError } from "@/application/issues/move-issue";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
@@ -23,6 +26,8 @@ import {
   WorkflowRequiredFieldError,
   WorkflowTransitionDeniedError,
 } from "@/application/issues/update-issue";
+import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
@@ -44,13 +49,18 @@ import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositori
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import {
   createIssueFormSchema,
+  copyIssueFormSchema,
+  deleteIssueFormSchema,
   moveIssueFormSchema,
   updateIssueFormSchema,
+  type CopyIssueFormValues,
   type CreateIssueFormValues,
+  type DeleteIssueFormValues,
   type UpdateIssueFormValues,
 } from "./issue-schemas";
 
@@ -152,6 +162,8 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         projectId: parsed.data.projectId,
@@ -269,7 +281,12 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   const projectContext = toAuthorizationProject(project);
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  if (!canEditAny && !canEditOwn) {
+  const canEditAttributes = canEditAny || canEditOwn;
+  // Redmine's notes_addable? is its own permission: a user may comment without being able
+  // to change anything about the issue.
+  const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
+  const canSetNotesPrivate = can({ permission: "set_notes_private", project: projectContext, actor });
+  if (!canEditAttributes && !canAddNotes) {
     return { ok: false, error: "この操作を行う権限がありません。" };
   }
 
@@ -335,9 +352,9 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     changes.doneRatio = parsedRatio;
   }
 
-  let updated;
+  let outcome;
   try {
-    updated = await updateIssue(
+    outcome = await updateIssue(
       {
         ...drizzleIssueAttributeRepositories(),
         issueRepository,
@@ -368,6 +385,10 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
           can({ permission: "set_issues_private", project: projectContext, actor }) ||
           (isAuthor && can({ permission: "set_own_issues_private", project: projectContext, actor })),
         canManageSubtasks: can({ permission: "manage_subtasks", project: projectContext, actor }),
+        canEditAttributes,
+        canAddNotes,
+        privateNotes: parsed.data.privateNotes === true,
+        canSetNotesPrivate,
       },
     );
   } catch (error) {
@@ -400,6 +421,13 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     }
     throw error;
   }
+
+  const updated = outcome.issue;
+  // Everything below is built from what the update *stored*, never from the request body:
+  // a note the actor wasn't allowed to add is dropped from the journal, and mailing it
+  // anyway would deliver it to every recipient with no record anyone could audit.
+  const noteBody = outcome.persistedNotes.trim();
+  const noteIsPrivate = outcome.persistedNotesPrivate;
 
   // Mirrors Issue#notified_users for an update event: author, assignee(s), watchers, and
   // every project member (private-visibility filtered). Filtered against the *updated*
@@ -438,15 +466,43 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   );
   const notifiableWatcherUserIds = filterUserIdsVisibleToPrivateIssue(updated, watcherUserIds, rolesByUserId);
 
-  await enqueueNotification(
-    { jobRepository: new DrizzleJobRepository() },
-    {
-      recipientGroups: [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds],
-      excludeUserId: user.id,
-      subject: issueMailSubject(project.name, updated.id, updated.subject),
-      body: parsed.data.notes.trim().length > 0 ? parsed.data.notes : "チケットが更新されました。",
-    },
-  );
+  const genericBody = "チケットが更新されました。";
+  const recipientGroups = [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds];
+
+  if (noteIsPrivate && noteBody.length > 0) {
+    // Mirrors Journal#notified_users, which selects down to view_private_notes holders for
+    // a private note. The note body goes only to them; everyone else who would have been
+    // told about this update gets the generic message, so the change is still announced
+    // without the note leaking — the same shape as Redmine's split into two journals.
+    const candidates = [...new Set(recipientGroups.flat().flatMap((id) => (id ? [id] : [])))];
+    const actors = await resolveProjectActors(drizzleIssueAttributeRepositories(), project.id, candidates);
+    const permitted = candidates.filter((candidateId) => {
+      const candidateActor = actors.get(candidateId);
+      return candidateActor !== undefined && can({ permission: "view_private_notes", project: projectContext, actor: candidateActor });
+    });
+    const others = candidates.filter((candidateId) => !permitted.includes(candidateId));
+
+    await enqueueNotification(
+      { jobRepository: new DrizzleJobRepository() },
+      { recipientGroups: [permitted], excludeUserId: user.id, subject: `[${project.name}] ${updated.subject}`, body: noteBody },
+    );
+    if (others.length > 0) {
+      await enqueueNotification(
+        { jobRepository: new DrizzleJobRepository() },
+        { recipientGroups: [others], excludeUserId: user.id, subject: `[${project.name}] ${updated.subject}`, body: genericBody },
+      );
+    }
+  } else {
+    await enqueueNotification(
+      { jobRepository: new DrizzleJobRepository() },
+      {
+        recipientGroups,
+        excludeUserId: user.id,
+        subject: `[${project.name}] ${updated.subject}`,
+        body: noteBody.length > 0 ? noteBody : genericBody,
+      },
+    );
+  }
   await triggerIssueWebhook("issue.updated", project, updated);
 
   revalidatePath(`/projects/${project.identifier}/issues/${parsed.data.issueId}`);
@@ -551,4 +607,190 @@ export async function moveIssueAction(values: {
   revalidatePath(`/projects/${sourceProject.identifier}/issues`);
   revalidatePath(`/projects/${targetProject.identifier}/issues/${parsed.data.issueId}`);
   return { ok: true, projectIdentifier: targetProject.identifier };
+}
+
+/**
+ * Redmine's IssuesController#destroy. The issue goes with its whole subtask tree, and the
+ * caller says what happens to the time logged against that set.
+ */
+export async function deleteIssueAction(
+  values: DeleteIssueFormValues,
+): Promise<{ ok: true; projectIdentifier: string } | { ok: false; error: string }> {
+  const parsed = deleteIssueFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { ok: false, error: "ログインしてください。" };
+  }
+
+  const issueRepository = new DrizzleIssueRepository();
+  const existing = await issueRepository.findById(parsed.data.issueId);
+  if (!existing) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  const project = await new DrizzleProjectRepository().findById(existing.projectId);
+  if (!project) {
+    return { ok: false, error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  if (!can({ permission: "delete_issues", project: toAuthorizationProject(project), actor })) {
+    return { ok: false, error: "この操作を行う権限がありません。" };
+  }
+
+  if (parsed.data.timeEntryMode === "reassign" && !parsed.data.reassignToIssueId) {
+    return { ok: false, error: "工数の付け替え先チケットを選択してください。" };
+  }
+
+  try {
+    await deleteIssue(
+      {
+        issueRepository,
+        projectRepository: new DrizzleProjectRepository(),
+        timeEntryRepository: new DrizzleTimeEntryRepository(),
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        enumerationRepository: new DrizzleEnumerationRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+      },
+      {
+        issueId: parsed.data.issueId,
+        actingUserId: user.id,
+        actor,
+        actorGroupIds: userGroupIds,
+        timeEntries:
+          parsed.data.timeEntryMode === "reassign"
+            ? { mode: "reassign", targetIssueId: parsed.data.reassignToIssueId }
+            : { mode: parsed.data.timeEntryMode },
+      },
+    );
+  } catch (error) {
+    if (error instanceof DeleteIssueNotPermittedError) {
+      return { ok: false, error: "この操作を行う権限がありません。" };
+    }
+    if (error instanceof InvalidTimeEntryTargetError) {
+      return {
+        ok: false,
+        error:
+          error.reason === "being_deleted"
+            ? "削除対象のチケットに工数を付け替えることはできません。"
+            : "付け替え先のチケットが見つかりません。",
+      };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${project.identifier}/issues`);
+  return { ok: true, projectIdentifier: project.identifier };
+}
+
+/** Redmine's copy flow (IssuesController#new with `copy_from`), reduced to one submission. */
+export async function copyIssueAction(
+  values: CopyIssueFormValues,
+): Promise<{ ok: true; issueId: string; projectIdentifier: string } | { ok: false; error: string }> {
+  const parsed = copyIssueFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { ok: false, error: "ログインしてください。" };
+  }
+
+  const issueRepository = new DrizzleIssueRepository();
+  const existing = await issueRepository.findById(parsed.data.sourceIssueId);
+  if (!existing) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  const projectRepository = new DrizzleProjectRepository();
+  const sourceProject = await projectRepository.findById(existing.projectId);
+  if (!sourceProject) {
+    return { ok: false, error: "プロジェクトが見つかりません。" };
+  }
+
+  const source = await resolveActor(user, sourceProject.id);
+  if (!isPrivateIssueVisible(existing, user.id, source.userGroupIds, issuesVisibilityRoles(source.actor))) {
+    return { ok: false, error: "チケットが見つかりません。" };
+  }
+  if (!can({ permission: "copy_issues", project: toAuthorizationProject(sourceProject), actor: source.actor })) {
+    return { ok: false, error: "この操作を行う権限がありません。" };
+  }
+
+  const targetProject = await projectRepository.findById(parsed.data.targetProjectId);
+  if (!targetProject) {
+    return { ok: false, error: "コピー先のプロジェクトが見つかりません。" };
+  }
+  const target = await resolveActor(user, targetProject.id);
+  const targetContext = toAuthorizationProject(targetProject);
+  if (!can({ permission: "add_issues", project: targetContext, actor: target.actor })) {
+    return { ok: false, error: "コピー先のプロジェクトが見つかりません。" };
+  }
+
+  let result;
+  try {
+    result = await copyIssue(
+      {
+        ...drizzleIssueAttributeRepositories(),
+        issueRepository,
+        projectRepository,
+        trackerRepository: new DrizzleTrackerRepository(),
+        issueCategoryRepository: new DrizzleIssueCategoryRepository(),
+        versionRepository: new DrizzleVersionRepository(),
+        issueRelationRepository: new DrizzleIssueRelationRepository(),
+        customFieldRepository: new DrizzleCustomFieldRepository(),
+        customValueRepository: new DrizzleCustomValueRepository(),
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
+        userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+        watcherRepository: new DrizzleWatcherRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+      },
+      {
+        sourceIssueId: parsed.data.sourceIssueId,
+        targetProjectId: parsed.data.targetProjectId,
+        targetTrackerId: parsed.data.targetTrackerId || undefined,
+        actingUserId: user.id,
+        sourceActor: source.actor,
+        targetActor: target.actor,
+        actorGroupIds: source.userGroupIds,
+        actorRoleIdsOnTarget: target.roleIds,
+        copyAttachments: parsed.data.copyAttachments,
+        copySubtasks: parsed.data.copySubtasks,
+        // Mirrors the copy form's `@copy_watchers = User.current.allowed_to?(:add_issue_watchers, @project)`.
+        copyWatchers:
+          parsed.data.copyWatchers && can({ permission: "add_issue_watchers", project: targetContext, actor: target.actor }),
+        canSetPrivate:
+          can({ permission: "set_issues_private", project: targetContext, actor: target.actor }) ||
+          can({ permission: "set_own_issues_private", project: targetContext, actor: target.actor }),
+        canManageSubtasks: can({ permission: "manage_subtasks", project: targetContext, actor: target.actor }),
+      },
+    );
+  } catch (error) {
+    if (error instanceof CopyIssueNotPermittedError) {
+      return {
+        ok: false,
+        error: error.side === "source" ? "この操作を行う権限がありません。" : "コピー先のプロジェクトが見つかりません。",
+      };
+    }
+    if (error instanceof IssueAttributeNotAssignableError) {
+      return { ok: false, error: issueAttributeErrorMessage(error) };
+    }
+    if (error instanceof WorkflowRequiredFieldError) {
+      return { ok: false, error: "コピー先のワークフローで必須の項目が未入力のためコピーできません。" };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${targetProject.identifier}/issues`);
+  return { ok: true, issueId: result.issue.id, projectIdentifier: targetProject.identifier };
 }

@@ -570,6 +570,8 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         projectId: project.id,
@@ -640,8 +642,11 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
   const isAuthor = existing.authorId === base.sender.id;
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = isAuthor && can({ permission: "edit_own_issues", project: projectContext, actor });
-  const canComment = base.options.noPermissionCheck || canEditAny || canEditOwn;
-  if (!canComment) {
+  // A reply adds a note, so it needs add_issue_notes (Redmine's receive_issue_reply goes through
+  // notes_addable?). Keyword attributes still need the edit permissions, checked below.
+  const canAddNotes = base.options.noPermissionCheck || can({ permission: "add_issue_notes", project: projectContext, actor });
+  const canEditAttributes = base.options.noPermissionCheck || canEditAny || canEditOwn;
+  if (!canAddNotes) {
     return ignored("insufficient_permissions");
   }
 
@@ -654,7 +659,7 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
   // for new issues"), so only what the body itself carries can change an existing issue.
   const resolved = await resolveKeywordAttributes(project, keywords.attributes, keywords.customFields, applicableFields);
   // A keyword may only change an attribute if the sender could have changed it from the UI.
-  const changes = base.options.noPermissionCheck || canEditAny || canEditOwn ? resolved.changes : {};
+  const changes = canEditAttributes ? resolved.changes : {};
 
   const isAssignee =
     existing.assignedToType === "group"
@@ -663,7 +668,7 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
 
   let issue;
   try {
-    issue = await updateIssue(issueUpdateRepositories(), {
+    const outcome = await updateIssue(issueUpdateRepositories(), {
       issueId: existing.id,
       expectedLockVersion: existing.lockVersion,
       notes: keywords.body,
@@ -673,9 +678,12 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
       canManageSubtasks: false,
       isAuthor,
       isAssignee,
+      canEditAttributes,
+      canAddNotes,
       changes,
       customFieldValues: resolved.customFieldValues,
     });
+    issue = outcome.issue;
   } catch (error) {
     const mapped = mapWriteFailure(error);
     if (mapped) return mapped;

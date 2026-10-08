@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { createIssue, type CreateIssueInput } from "./create-issue";
-import { makeIssueAttributeRepositoriesMock } from "./test-support";
+import { makeIssueAttributeRepositoriesMock, makeRollupRepositoriesMock } from "./test-support";
 import { IssueAttributeNotAssignableError } from "./validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "./update-issue";
 import type { Issue } from "@/domain/issue/entity";
@@ -57,6 +57,8 @@ function makeFieldPermissionRepository(permissions: WorkflowFieldPermission[] = 
 function makeUserPreferencesRepository(): UserPreferencesRepository {
   return {
     findByUserId: mock(async () => null as UserPreferences | null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => {}),
   };
 }
@@ -68,12 +70,13 @@ function makeWatcherRepository() {
     unwatch: mock(async () => {}),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
 }
 
 describe("createIssue", () => {
   it("defaults the status to the tracker's default status", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -81,6 +84,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -99,6 +103,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ trackerIds: ["tracker-1"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(null),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -115,6 +120,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ trackerIds: ["missing"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(null),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -129,11 +135,12 @@ describe("createIssue", () => {
   it("rejects a priority that is not an IssuePriority enumeration", async () => {
     // The column's FK reaches `enumerations`, which also holds TimeEntryActivity rows — only
     // the type filter keeps an activity id out of an issue's priority.
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     await expect(
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ priorityIds: ["normal"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -146,11 +153,12 @@ describe("createIssue", () => {
   });
 
   it("rejects an assignee who is not an assignable member of the project", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     await expect(
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -163,11 +171,12 @@ describe("createIssue", () => {
   });
 
   it("rejects a category that belongs to another project", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     await expect(
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock({ categoryIds: ["category-here"] }),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -180,7 +189,7 @@ describe("createIssue", () => {
   });
 
   it("rejects a blank field the tracker's default status requires for this role", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const permission: WorkflowFieldPermission = {
       id: "fp-1",
       trackerId: "tracker-1",
@@ -194,6 +203,7 @@ describe("createIssue", () => {
       createIssue(
         {
           ...makeIssueAttributeRepositoriesMock(),
+          ...makeRollupRepositoriesMock(),
           issueRepository: makeIssueRepositoryMock(),
           trackerRepository: makeTrackerRepository(tracker),
           workflowFieldPermissionRepository: makeFieldPermissionRepository([permission]),
@@ -206,7 +216,7 @@ describe("createIssue", () => {
   });
 
   it("allows creation when the required field is filled", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const permission: WorkflowFieldPermission = {
       id: "fp-1",
       trackerId: "tracker-1",
@@ -222,6 +232,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository([permission]),
@@ -235,7 +246,7 @@ describe("createIssue", () => {
   });
 
   it("auto-watches the issue for its author on creation", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -244,6 +255,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -257,7 +269,7 @@ describe("createIssue", () => {
   });
 
   it("auto-watches the issue for a user assignee, but not a group assignee", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -266,6 +278,7 @@ describe("createIssue", () => {
     const issue = await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -283,7 +296,7 @@ describe("createIssue", () => {
   });
 
   it("does not auto-watch for a group assignee", async () => {
-    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true };
+    const tracker: Tracker = { id: "tracker-1", name: "Bug", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] };
     const issueRepository = makeIssueRepositoryMock({
       create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
     });
@@ -292,6 +305,7 @@ describe("createIssue", () => {
     await createIssue(
       {
         ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
         issueRepository,
         trackerRepository: makeTrackerRepository(tracker),
         workflowFieldPermissionRepository: makeFieldPermissionRepository(),
@@ -302,5 +316,87 @@ describe("createIssue", () => {
     );
 
     expect(watcherRepository.watch).not.toHaveBeenCalledWith("Issue", expect.anything(), "group-1");
+  });
+});
+
+describe("createIssue — disabled core fields", () => {
+  const tracker: Tracker = {
+    id: "tracker-1",
+    name: "Bug",
+    defaultStatusId: "new",
+    position: 1,
+    isInRoadmap: true,
+    disabledCoreFields: ["dueDate", "estimatedHours", "assignedToId"],
+  };
+
+  it("falls back to the default for every field the tracker switched off", async () => {
+    // Mirrors `names -= disabled_core_fields` in safe_attribute_names: the value is dropped
+    // rather than rejected, so the issue still saves.
+    const issueRepository = makeIssueRepositoryMock({
+      create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
+    });
+
+    const issue = await createIssue(
+      {
+        ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
+        issueRepository,
+        trackerRepository: makeTrackerRepository(tracker),
+        workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+        userPreferencesRepository: makeUserPreferencesRepository(),
+        watcherRepository: makeWatcherRepository(),
+      },
+      { ...baseInput, dueDate: "2026-05-01", estimatedHours: 8, assignedToId: "user-2", assignedToType: "user" },
+    );
+
+    expect(issue.dueDate).toBeNull();
+    expect(issue.estimatedHours).toBeNull();
+    expect(issue.assignedToId).toBeNull();
+    expect(issue.assignedToType).toBeNull();
+  });
+
+  it("does not reject a stale id in a disabled field", async () => {
+    // safe_attributes strips before assignment, so validation never sees the dropped value —
+    // an assignee who is no longer assignable must not fail a save that discards them anyway.
+    const issueRepository = makeIssueRepositoryMock({
+      create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
+    });
+
+    const issue = await createIssue(
+      {
+        ...makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }),
+        ...makeRollupRepositoriesMock(),
+        issueRepository,
+        trackerRepository: makeTrackerRepository(tracker),
+        workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+        userPreferencesRepository: makeUserPreferencesRepository(),
+        watcherRepository: makeWatcherRepository(),
+      },
+      { ...baseInput, assignedToId: "no-longer-a-member", assignedToType: "user" },
+    );
+
+    expect(issue.assignedToId).toBeNull();
+  });
+
+  it("keeps fields the tracker still enables", async () => {
+    const issueRepository = makeIssueRepositoryMock({
+      create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
+    });
+
+    const issue = await createIssue(
+      {
+        ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
+        issueRepository,
+        trackerRepository: makeTrackerRepository({ ...tracker, disabledCoreFields: [] }),
+        workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+        userPreferencesRepository: makeUserPreferencesRepository(),
+        watcherRepository: makeWatcherRepository(),
+      },
+      { ...baseInput, dueDate: "2026-05-01", estimatedHours: 8 },
+    );
+
+    expect(issue.dueDate).toBe("2026-05-01");
+    expect(issue.estimatedHours).toBe(8);
   });
 });

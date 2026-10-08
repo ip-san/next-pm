@@ -223,6 +223,7 @@ async function applyMove(
       journalizedId: issue.id,
       userId: actingUserId,
       notes: "",
+      privateNotes: false,
       details,
     });
   }

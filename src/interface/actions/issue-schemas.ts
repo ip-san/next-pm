@@ -55,6 +55,8 @@ export const updateIssueFormSchema = z.object({
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   notes: z.string(),
+  /** Mark this note private; honoured only with `set_notes_private`. */
+  privateNotes: z.boolean().optional(),
   customFieldValues: z.record(z.string(), z.string()),
 });
 
@@ -68,3 +70,24 @@ export const moveIssueFormSchema = z.object({
 });
 
 export type MoveIssueFormValues = z.infer<typeof moveIssueFormSchema>;
+
+/** Issue deletion: what to do with time logged on the issue and its subtask tree. */
+export const deleteIssueFormSchema = z.object({
+  issueId: z.string().uuid(),
+  timeEntryMode: z.enum(["destroy", "nullify", "reassign"]),
+  reassignToIssueId: z.string().uuid().or(z.literal("")),
+});
+
+export type DeleteIssueFormValues = z.infer<typeof deleteIssueFormSchema>;
+
+/** Issue copy: destination project/tracker plus Redmine's three "also copy" switches. */
+export const copyIssueFormSchema = z.object({
+  sourceIssueId: z.string().uuid(),
+  targetProjectId: z.string().uuid(),
+  targetTrackerId: z.string().uuid().or(z.literal("")),
+  copyAttachments: z.boolean(),
+  copySubtasks: z.boolean(),
+  copyWatchers: z.boolean(),
+});
+
+export type CopyIssueFormValues = z.infer<typeof copyIssueFormSchema>;

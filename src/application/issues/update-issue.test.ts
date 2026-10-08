@@ -53,7 +53,11 @@ function makeRepositories(
     findById: mock(async () => null),
     listForIssue: mock(async () => []),
     listByProject: mock(async () => []),
-    create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date() })),
+    create: mock(async (j) => ({ ...j, id: "journal-1", createdAt: new Date(), updatedAt: new Date(), updatedById: null })),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => undefined),
   };
   const workflowRepository: WorkflowRepository = {
     listForTracker: mock(async () => (overrides.transitions as never) ?? []),
@@ -85,6 +89,8 @@ function makeRepositories(
   };
   const userPreferencesRepository: UserPreferencesRepository = {
     findByUserId: mock(async () => overrides.userPreferences ?? null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => undefined),
   };
   const watcherRepository = {
@@ -93,6 +99,7 @@ function makeRepositories(
     unwatch: mock(async () => undefined),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => overrides.customFields ?? []),
@@ -105,6 +112,7 @@ function makeRepositories(
   };
   const customValueRepository: CustomValueRepository = {
     listForCustomized: mock(async () => overrides.customValues ?? []),
+    deleteForCustomized: mock(async () => {}),
     set: mock(async (customFieldId, customizedType, customizedId, value) => ({
       id: `cv-${customFieldId}`,
       customFieldId,
@@ -144,7 +152,7 @@ function fieldPermission(overrides: Partial<WorkflowFieldPermission>): WorkflowF
 describe("updateIssue", () => {
   it("applies a non-status change and records a journal entry", async () => {
     const repos = makeRepositories();
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { subject: "New subject" },
@@ -187,7 +195,7 @@ describe("updateIssue", () => {
         },
       ],
     });
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { statusId: "in-progress" },
@@ -241,7 +249,7 @@ describe("updateIssue", () => {
     });
     const updateSpy = mock(repos.issueRepository.update);
     repos.issueRepository.update = updateSpy;
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { subject: "New subject", categoryId: "category-2" },
@@ -284,7 +292,7 @@ describe("updateIssue", () => {
       issue,
       fieldPermissions: [fieldPermission({ fieldName: "dueDate", rule: "required" })],
     });
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { dueDate: "2026-01-01" },
@@ -305,7 +313,7 @@ describe("updateIssue", () => {
       issue,
       fieldPermissions: [fieldPermission({ fieldName: "dueDate", rule: "required" })],
     });
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { subject: "New subject", dueDate: undefined },
@@ -351,7 +359,7 @@ describe("updateIssue", () => {
       ],
       statuses: [{ id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 1 }],
     });
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { statusId: "closed" },
@@ -374,7 +382,7 @@ describe("updateIssue", () => {
       statuses: [{ id: "closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 1 }],
       settings: { issue_done_ratio: "issue_status" },
     });
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { statusId: "closed" },
@@ -397,7 +405,7 @@ describe("updateIssue", () => {
       statuses: [{ id: "in-progress", name: "In Progress", description: "", isClosed: false, defaultDoneRatio: null, position: 1 }],
       settings: { issue_done_ratio: "issue_status" },
     });
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { statusId: "in-progress", doneRatio: 40 },
@@ -533,7 +541,7 @@ describe("updateIssue", () => {
       otherIssues: [makeIssue({ id: "blocker-1", statusId: "closed", priorityId: "normal" })],
     });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { statusId: "closed" },
@@ -561,7 +569,7 @@ describe("updateIssue", () => {
       relations: [{ id: "rel-1", issueFromId: "issue-1", issueToId: "issue-2", relationType: "blocks", delay: null }],
     });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { statusId: "closed" },
@@ -604,8 +612,12 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
     listByProject: mock(async () => []),
     create: mock(async (j) => {
       journalEntries.push({ journalizedId: j.journalizedId, userId: j.userId, details: j.details });
-      return { ...j, id: `journal-${journalEntries.length}`, createdAt: new Date() };
+      return { ...j, id: `journal-${journalEntries.length}`, createdAt: new Date(), updatedAt: new Date(), updatedById: null };
     }),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => undefined),
   };
   const workflowRepository: WorkflowRepository = {
     listForTracker: mock(async () => (options.transitions as never) ?? []),
@@ -636,6 +648,8 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
   };
   const userPreferencesRepository: UserPreferencesRepository = {
     findByUserId: mock(async () => null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => undefined),
   };
   const watcherRepository = {
@@ -644,6 +658,7 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
     unwatch: mock(async () => undefined),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => []),
@@ -656,6 +671,7 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
   };
   const customValueRepository: CustomValueRepository = {
     listForCustomized: mock(async () => []),
+    deleteForCustomized: mock(async () => {}),
     set: mock(async () => {
       throw new Error("not used");
     }),
@@ -1131,7 +1147,7 @@ describe("updateIssue — tracker changes", () => {
       statuses: [{ id: "closed", name: "Closed", description: "", isClosed: false, defaultDoneRatio: null, position: 2 }],
     });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { trackerId: "tracker-2", statusId: "closed" },
@@ -1182,7 +1198,7 @@ describe("updateIssue — parent issue invariants", () => {
     const parent = makeIssue({ id: "parent", projectId: "proj-1" });
     const repos = makeParentRepositories([target, parent], target);
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "child",
       expectedLockVersion: 0,
       changes: { parentId: "parent" },
@@ -1268,7 +1284,7 @@ describe("updateIssue — parent issue invariants", () => {
     const target = makeIssue({ id: "child", projectId: "proj-1", parentId: "parent", statusId: "new", priorityId: "normal" });
     const repos = makeRepositories({ issue: target });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "child",
       expectedLockVersion: 0,
       changes: { parentId: null },
@@ -1312,7 +1328,7 @@ describe("updateIssue — assignable attribute validation", () => {
     const repos = makeRepositories({ issue });
     Object.assign(repos, makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }));
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { subject: "Still editable", assignedToId: "departed", assignedToType: "user" },
@@ -1353,7 +1369,7 @@ describe("updateIssue — permission-gated attributes", () => {
     const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", isPrivate: false });
     const repos = makeRepositories({ issue });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { subject: "Edited", isPrivate: true },
@@ -1373,7 +1389,7 @@ describe("updateIssue — permission-gated attributes", () => {
     const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", isPrivate: false });
     const repos = makeRepositories({ issue });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "issue-1",
       expectedLockVersion: 0,
       changes: { isPrivate: true },
@@ -1392,7 +1408,7 @@ describe("updateIssue — permission-gated attributes", () => {
     const issue = makeIssue({ id: "child", projectId: "proj-1", statusId: "new", priorityId: "normal", parentId: "old-parent" });
     const repos = makeRepositories({ issue });
 
-    const result = await updateIssue(repos, {
+    const { issue: result } = await updateIssue(repos, {
       issueId: "child",
       expectedLockVersion: 0,
       changes: { parentId: "new-parent" },
@@ -1406,5 +1422,381 @@ describe("updateIssue — permission-gated attributes", () => {
 
     expect(result.parentId).toBe("old-parent");
     expect(repos.issueRepository.listByProject).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateIssue — notes-only updates", () => {
+  it("records the note but no attribute change for a notes-only actor", async () => {
+    // Redmine gates the whole safe_attributes block on attributes_editable? while `notes`
+    // rides on notes_addable?, so add_issue_notes alone is a comment and nothing more.
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Untouched" });
+    const repos = makeRepositories({ issue });
+
+    const { issue: result } = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "Hijacked", doneRatio: 90 },
+      customFieldValues: { "cf-1": "nope" },
+      notes: "just a comment",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: true,
+    });
+
+    expect(result.subject).toBe("Untouched");
+    expect(repos.customValueRepository.set).not.toHaveBeenCalled();
+    const journal = (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(journal.notes).toBe("just a comment");
+    expect(journal.details).toEqual([]);
+  });
+
+  it("drops the note from an actor who may edit but not comment", async () => {
+    const issue = makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" });
+    const repos = makeRepositories({ issue });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "should not be stored",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: true,
+      canAddNotes: false,
+    });
+
+    const journal = (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(journal.notes).toBe("");
+    expect(journal.details).toHaveLength(1);
+  });
+
+  it("writes nothing at all when the actor may neither edit nor comment", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "nope" },
+      notes: "nope",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: false,
+    });
+
+    expect(repos.journalRepository.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateIssue — private notes", () => {
+  function journalsCreated(repos: ReturnType<typeof makeRepositories>) {
+    return (repos.journalRepository.create as ReturnType<typeof mock>).mock.calls.map((call) => call[0]);
+  }
+
+  it("ignores the private flag without set_notes_private", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: false,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(journalsCreated(repos)[0].privateNotes).toBe(false);
+  });
+
+  it("marks a note private with the permission", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    const created = journalsCreated(repos);
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ notes: "secret", privateNotes: true });
+  });
+
+  it("splits a private note that accompanies an attribute change, keeping the change public", async () => {
+    // Redmine's split_private_notes: otherwise marking the note private would also hide the
+    // subject change from everyone without view_private_notes.
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    const created = journalsCreated(repos);
+    expect(created).toHaveLength(2);
+    expect(created[0]).toMatchObject({ notes: "", privateNotes: false });
+    expect(created[0].details).toHaveLength(1);
+    expect(created[1]).toMatchObject({ notes: "secret", privateNotes: true });
+    expect(created[1].details).toEqual([]);
+  });
+
+  it("does not mark an attribute-only change private", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    const created = journalsCreated(repos);
+    expect(created).toHaveLength(1);
+    expect(created[0].privateNotes).toBe(false);
+  });
+});
+
+describe("updateIssue — a notes-only actor cannot drive the cascades", () => {
+  it("does not close duplicates when a notes-only actor echoes the issue's current closed status", async () => {
+    // Regression: the cascade triggers used to read the raw payload, so submitting a
+    // statusId equal to the issue's existing (closed) status satisfied
+    // `after.statusId === input.changes.statusId` even though the change was stripped —
+    // closing every duplicate of it with no permission to change anything.
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical", statusId: "closed" }), cascadeIssue({ id: "dup" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "just commenting",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: true,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("new");
+  });
+
+  it("does not reschedule successors when a notes-only actor echoes the issue's current dates", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [
+        cascadeIssue({ id: "predecessor", startDate: "2026-01-01", dueDate: "2026-01-10" }),
+        // Starts before the predecessor's due date, so a cascade would actually move it.
+        cascadeIssue({ id: "successor", startDate: "2026-01-05", dueDate: "2026-01-20" }),
+      ],
+      relations: [{ id: "rel-1", issueFromId: "predecessor", issueToId: "successor", relationType: "precedes", delay: 0 }],
+      transitions: [],
+    });
+
+    await updateIssue(repos, {
+      issueId: "predecessor",
+      expectedLockVersion: 0,
+      changes: { startDate: "2026-01-01", dueDate: "2026-01-10" },
+      notes: "just commenting",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: true,
+    });
+
+    expect(issuesById.get("successor")?.startDate).toBe("2026-01-05");
+  });
+
+  it("does not close duplicates on a status the workflow stripped as read-only", async () => {
+    // The same class of bug for an ordinary editor: a field dropped by a read-only rule
+    // must not trigger a cascade either.
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical", statusId: "closed" }), cascadeIssue({ id: "dup" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [],
+    });
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: false,
+      canAddNotes: false,
+    });
+
+    expect(issuesById.get("dup")?.statusId).toBe("new");
+  });
+});
+
+describe("updateIssue — what the caller may notify about", () => {
+  it("reports no persisted note when the actor may not add one", async () => {
+    // Regression: the notification body was built from the request, so an attribute-only
+    // editor's dropped note was still mailed to every recipient — delivered to inboxes
+    // while leaving nothing in the history to audit.
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    const outcome = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "should never be mailed",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canEditAttributes: true,
+      canAddNotes: false,
+    });
+
+    expect(outcome.persistedNotes).toBe("");
+    expect(outcome.persistedNotesPrivate).toBe(false);
+  });
+
+  it("reports the note it stored", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal" }) });
+
+    const outcome = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "a real comment",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+      canAddNotes: true,
+    });
+
+    expect(outcome.persistedNotes).toBe("a real comment");
+    expect(outcome.persistedNotesPrivate).toBe(false);
+  });
+
+  it("reports a note as private only once it was stored private", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    const outcome = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    // The split puts the details in a public journal and the note in a private one; the
+    // caller must mail the note only to view_private_notes holders.
+    expect(outcome.persistedNotes).toBe("secret");
+    expect(outcome.persistedNotesPrivate).toBe(true);
+  });
+
+  it("does not report a private note the actor was not allowed to add", async () => {
+    // canSetNotesPrivate without canAddNotes previously still routed a never-stored note
+    // to the private-notes recipients.
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", subject: "Before" }) });
+
+    const outcome = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { subject: "After" },
+      notes: "secret",
+      privateNotes: true,
+      canSetNotesPrivate: true,
+      canAddNotes: false,
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(outcome.persistedNotes).toBe("");
+    expect(outcome.persistedNotesPrivate).toBe(false);
+  });
+});
+
+describe("updateIssue — disabled core fields", () => {
+  it("drops a change to a field the tracker switched off", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", dueDate: null }) });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ disabledCoreFields: ["dueDate"] }));
+
+    const { issue: result } = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-05-01", subject: "Still applied" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(result.dueDate).toBeNull();
+    expect(result.subject).toBe("Still applied");
+  });
+
+  it("drops both assignee columns together when the assignee field is off", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: null, assignedToType: null }),
+    });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ disabledCoreFields: ["assignedToId"] }));
+
+    const { issue: result } = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { assignedToId: "user-2", assignedToType: "user" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    // Dropping only the id would leave a dangling assignedToType.
+    expect(result.assignedToId).toBeNull();
+    expect(result.assignedToType).toBeNull();
   });
 });

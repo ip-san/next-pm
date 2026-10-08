@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { loadMailHandlerSettings } from "@/application/settings/mail-handler-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { AuthSettingsForm } from "./auth-settings-form";
 import { CommitKeywordSettingsForm } from "./commit-keyword-settings-form";
 import { GeneralSettingsForm } from "./general-settings-form";
 import { MailHandlerSettingsForm } from "./mail-handler-settings-form";
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
   const commitKeywordSettings = await loadCommitKeywordSettings(settingsRepository);
   const generalSettings = await loadGeneralSettings(settingsRepository);
   const mailHandlerSettings = await loadMailHandlerSettings(settingsRepository);
+  const authSettings = await loadAuthSettings(settingsRepository);
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -43,6 +46,10 @@ export default async function SettingsPage() {
           本家の <code>rake redmine:send_reminders</code> 相当。next-pm には定時起動の仕組みが無いため、ここから手動で（または外部のスケジューラからこの操作を呼び出して）実行します。
         </p>
         <RemindersForm />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">認証</h2>
+        <AuthSettingsForm settings={authSettings} />
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">リポジトリ</h2>

@@ -1,0 +1,1 @@
+ALTER TABLE "journals" ADD COLUMN "private_notes" boolean DEFAULT false NOT NULL;

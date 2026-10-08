@@ -35,6 +35,8 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
   const members = await new DrizzleUserRepository().findByIds(memberUserIds(projectMembers));
   const memberById = new Map(members.map((member) => [member.id, member]));
 
+  const hasWiki = project.enabledModules.includes("wiki");
+
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name} — チケットカテゴリ</h1>
@@ -46,6 +48,7 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
           members: can({ permission: "manage_members", project: projectContext, actor }),
           versions: can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: true,
+          wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
 

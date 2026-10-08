@@ -12,6 +12,8 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWebhookRepository } from "@/infrastructure/db/repositories/webhook-repository";
 import { NodeWebhookSender } from "@/infrastructure/http/webhook-sender";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
+import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/email-address-repository";
 import { ConsoleMailer } from "@/infrastructure/mail/console-mailer";
 import { NodemailerMailer } from "@/infrastructure/mail/nodemailer-mailer";
 import { startHealthServer } from "./health-server";
@@ -42,6 +44,8 @@ const handlers = {
   memberRepository: new DrizzleMemberRepository(),
   roleRepository: new DrizzleRoleRepository(),
   groupRepository: new DrizzleGroupRepository(),
+  userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+  emailAddressRepository: new DrizzleEmailAddressRepository(),
 };
 
 /** Drains the queue until it's empty — the outer loop's sleep only kicks in once there's nothing left to claim. */

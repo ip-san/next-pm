@@ -68,8 +68,17 @@ function makeTimeEntryRepository(): TimeEntryRepository {
   return {
     listForProject: mock(async () => []),
     listForIssue: mock(async () => []),
+    findById: mock(async () => null),
+    create: mock(async (entry) => ({ ...entry, id: "te-1", createdAt: new Date(), updatedAt: new Date() })),
+    update: mock(async () => {
+      throw new Error("not used");
+    }),
+    delete: mock(async () => {}),
     reassignProjectForIssues: mock(async () => undefined),
-    create: mock(async (entry) => ({ ...entry, id: "te-1", createdAt: new Date() })),
+    listForIssues: mock(async () => []),
+    deleteForIssues: mock(async () => undefined),
+    detachFromIssues: mock(async () => undefined),
+    reassignToIssue: mock(async () => undefined),
   };
 }
 
@@ -94,6 +103,10 @@ function makeUserRepository(user: User | null): UserRepository {
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
     updatePassword: mock(async () => {}),
+    updateProfile: mock(async () => {}),
+    updateMail: mock(async () => {}),
+    updateStatus: mock(async () => {}),
+    setApiKey: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async () => {}),
     confirmTotpPairing: mock(async () => {}),
@@ -122,6 +135,8 @@ const COMMITTER: User = {
   status: "active",
   passwordHash: "",
   passwordSalt: "",
+  language: null,
+  mailNotification: "all" as const,
   mustChangePassword: false,
   apiKey: null,
   atomKey: null,

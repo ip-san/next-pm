@@ -35,7 +35,8 @@ export default async function WikiDiffPage({
 
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
+  // Same view_wiki_edits gate as the history page — see history/page.tsx.
+  if (!can({ permission: "view_wiki_edits", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
 

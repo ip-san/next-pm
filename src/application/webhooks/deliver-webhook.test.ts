@@ -39,6 +39,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     twofaScheme: null,
     twofaTotpKey: null,
     twofaTotpLastUsedStep: null,
+    language: null,
+    mailNotification: "all",
     ...overrides,
   };
 }

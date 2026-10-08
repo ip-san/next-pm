@@ -3,8 +3,11 @@ import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { Project } from "@/domain/project/entity";
 import type { User } from "@/domain/user/entity";
+import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
 import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
+import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
@@ -24,6 +27,9 @@ export interface AttachmentAccess {
  *
  * Permissions per container mirror Redmine's `acts_as_attachable` declarations:
  *   Issue      view_issues / edit_issues (or edit_own_issues as the author)
+ *   Message    view_messages / edit_messages        (message.rb: bare acts_as_attachable, so
+ *                                                    both edit and delete fall back to edit_*)
+ *   News       view_news / manage_news / manage_news (news.rb)
  *   Document   view_documents / edit_documents / delete_documents
  *   WikiPage   view_wiki_pages / edit_wiki_pages
  *   Project    view_files / manage_files   (project.rb)
@@ -55,6 +61,39 @@ export async function resolveAttachmentAccess(attachment: Attachment, user: User
         can({ permission: "edit_issues", project: projectContext, actor }) ||
         (can({ permission: "edit_own_issues", project: projectContext, actor }) && issue.authorId === user?.id);
       return { project, allows: (action) => action === "view" || editable };
+    }
+    case "Message": {
+      const message = await new DrizzleMessageRepository().findById(attachment.containerId);
+      if (!message) return null;
+      const board = await new DrizzleBoardRepository().findById(message.boardId);
+      if (!board) return null;
+      const project = await projectRepository.findById(board.projectId);
+      if (!project) return null;
+
+      const { actor } = await resolveActor(user, project.id);
+      const projectContext = toAuthorizationProject(project);
+      if (!can({ permission: "view_messages", project: projectContext, actor })) return null;
+      // Message declares `acts_as_attachable` with no options, so edit_permission and
+      // delete_permission both default to edit_messages — edit_own_messages is not enough.
+      return {
+        project,
+        allows: (action) => action === "view" || can({ permission: "edit_messages", project: projectContext, actor }),
+      };
+    }
+    case "News": {
+      const item = await new DrizzleNewsRepository().findById(attachment.containerId);
+      if (!item) return null;
+      const project = await projectRepository.findById(item.projectId);
+      if (!project) return null;
+
+      const { actor } = await resolveActor(user, project.id);
+      const projectContext = toAuthorizationProject(project);
+      if (!can({ permission: "view_news", project: projectContext, actor })) return null;
+      // news.rb: `acts_as_attachable :edit_permission => :manage_news, :delete_permission => :manage_news`.
+      return {
+        project,
+        allows: (action) => action === "view" || can({ permission: "manage_news", project: projectContext, actor }),
+      };
     }
     case "Document": {
       const document = await new DrizzleDocumentRepository().findById(attachment.containerId);
@@ -108,8 +147,6 @@ export async function resolveAttachmentAccess(attachment: Attachment, user: User
       };
     }
     default:
-      // Message/News attachments have no upload path in next-pm yet — deny rather than guess
-      // at their visibility rules.
       return null;
   }
 }

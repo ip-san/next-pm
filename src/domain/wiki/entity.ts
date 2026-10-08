@@ -1,3 +1,16 @@
+/**
+ * A project's wiki settings. Redmine's Wiki record also owns the pages; here pages hang off
+ * the project directly, so this carries only the start page (Wiki#start_page).
+ */
+export interface Wiki {
+  id: string;
+  projectId: string;
+  startPage: string;
+}
+
+/** Redmine's Wiki.create_default — the start page a project gets before anyone changes it. */
+export const DEFAULT_WIKI_START_PAGE = "Wiki";
+
 export interface WikiPage {
   id: string;
   projectId: string;

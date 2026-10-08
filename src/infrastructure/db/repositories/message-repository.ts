@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { boards } from "@/infrastructure/db/schema/boards";
 import { messages } from "@/infrastructure/db/schema/messages";
@@ -41,7 +41,10 @@ export class DrizzleMessageRepository implements MessageRepository {
       .select()
       .from(messages)
       .where(and(eq(messages.boardId, boardId), isNull(messages.parentId)))
-      .orderBy(messages.createdAt);
+      // Redmine pins sticky topics to the top (`reorder(:sticky => :desc)`) before applying the
+      // list's own sort. Its default second key is COALESCE(last_reply_id, id) DESC; next-pm
+      // stores no last-reply pointer, so creation order stands in.
+      .orderBy(desc(messages.sticky), messages.createdAt);
     return rows.map(toDomain);
   }
 
@@ -79,6 +82,13 @@ export class DrizzleMessageRepository implements MessageRepository {
   async update(id: string, changes: { subject?: string; content?: string; locked?: boolean; sticky?: boolean }): Promise<Message> {
     const [row] = await db.update(messages).set(changes).where(eq(messages.id, id)).returning();
     return toDomain(row);
+  }
+
+  async moveThreadToBoard(topicId: string, boardId: string): Promise<void> {
+    await db
+      .update(messages)
+      .set({ boardId })
+      .where(or(eq(messages.id, topicId), eq(messages.parentId, topicId)));
   }
 
   async delete(id: string): Promise<void> {

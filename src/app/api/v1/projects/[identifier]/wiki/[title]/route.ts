@@ -4,8 +4,10 @@ import { can } from "@/domain/authorization/authorization-service";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { triggerWikiPageWebhook } from "@/interface/http/webhook-trigger";
+import { InvalidReassignTargetError, deleteWikiPage } from "@/application/wiki/delete-wiki-page";
 import { resolveWikiPage } from "@/application/wiki/resolve-wiki-page";
-import { saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { WikiPageProtectedError, saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -16,6 +18,7 @@ import {
   DrizzleWikiPageRepository,
   DrizzleWikiRedirectRepository,
 } from "@/infrastructure/db/repositories/wiki-repository";
+import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -97,17 +100,29 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
   }
 
-  const { page } = await saveWikiPage(
-    { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
-    {
-      projectId: project.id,
-      title,
-      text: parsed.data.text,
-      comments: parsed.data.comments,
-      authorId: user.id,
-      parentId: null,
-    },
-  );
+  let page;
+  try {
+    ({ page } = await saveWikiPage(
+      { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
+      {
+        projectId: project.id,
+        title,
+        text: parsed.data.text,
+        comments: parsed.data.comments,
+        authorId: user.id,
+        // The REST body carries only text and comments, so an existing page keeps the parent
+        // it already has — `null` here would silently detach every page this endpoint touches.
+        parentId: undefined,
+        canReparentExisting: false,
+        canProtect: can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }),
+      },
+    ));
+  } catch (error) {
+    if (error instanceof WikiPageProtectedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
 
   const members = await new DrizzleMemberRepository().listByProject(project.id);
   const rolesById = new Map(
@@ -129,8 +144,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ iden
   return new NextResponse(null, { status: 204 });
 }
 
-// manage_wiki is the closest permission this codebase has to Redmine's dedicated
-// delete_wiki_pages — it exists in the registry but had no gate attached to it anywhere yet.
+// Mirrors WikiController#destroy for an API request: delete_wiki_pages plus the page's own
+// protection gate. Redmine's API path never renders the confirmation form, so children fall
+// through to the default disposition (nullify) unless ?todo= says otherwise.
 export async function DELETE(request: Request, { params }: { params: Promise<{ identifier: string; title: string }> }) {
   const { identifier, title: rawTitle } = await params;
   const title = decodeURIComponent(rawTitle);
@@ -148,7 +164,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "manage_wiki", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "delete_wiki_pages", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -158,6 +175,44 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  await wikiPageRepository.delete(page.id);
+  const query = new URL(request.url).searchParams;
+  const parsedTodo = z.enum(["nullify", "destroy", "reassign"]).safeParse(query.get("todo") ?? "nullify");
+  if (!parsedTodo.success) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 422 });
+  }
+  // Validated before it reaches the use case: an id that isn't a uuid would otherwise fall
+  // through the in-project lookup to findById and blow up on Postgres' uuid cast.
+  const rawReassignTo = query.get("reassign_to_id");
+  const parsedReassignTo = z.string().uuid().nullable().safeParse(rawReassignTo);
+  if (!parsedReassignTo.success) {
+    return NextResponse.json({ error: "invalid_request", reason: "reassign_to_id" }, { status: 422 });
+  }
+
+  try {
+    await deleteWikiPage(
+      {
+        wikiPageRepository,
+        wikiRedirectRepository: new DrizzleWikiRedirectRepository(),
+        attachmentRepository: new DrizzleAttachmentRepository(),
+        attachmentStorage: new FsAttachmentStore(),
+        watcherRepository: new DrizzleWatcherRepository(),
+      },
+      {
+        pageId: page.id,
+        childrenDisposition: parsedTodo.data,
+        reassignToId: parsedReassignTo.data,
+        canProtect: can({ permission: "protect_wiki_pages", project: projectContext, actor }),
+      },
+    );
+  } catch (error) {
+    if (error instanceof WikiPageProtectedError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (error instanceof InvalidReassignTargetError) {
+      return NextResponse.json({ error: "invalid_request", reason: error.reason }, { status: 422 });
+    }
+    throw error;
+  }
+
   return new NextResponse(null, { status: 204 });
 }

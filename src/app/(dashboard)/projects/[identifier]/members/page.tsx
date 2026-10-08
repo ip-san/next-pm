@@ -31,6 +31,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
     notFound();
   }
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
+  const hasWiki = project.enabledModules.includes("wiki");
 
   const [members, roles, groups] = await Promise.all([
     new DrizzleMemberRepository().listByProject(project.id),
@@ -68,6 +69,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
           members: true,
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
       <table className="text-sm border-collapse">

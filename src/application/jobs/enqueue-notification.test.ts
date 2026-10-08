@@ -21,7 +21,13 @@ describe("enqueueNotification", () => {
       subject: "Subject",
       body: "Body",
     });
-    expect(jobRepository.enqueue).toHaveBeenCalledWith("notify", { recipientIds: ["a", "b", "c"], subject: "Subject", body: "Body" });
+    expect(jobRepository.enqueue).toHaveBeenCalledWith("notify", {
+      recipientIds: ["a", "b", "c"],
+      recipientAddresses: [],
+      actorUserId: null,
+      subject: "Subject",
+      body: "Body",
+    });
   });
 
   it("does not enqueue when the recipient union is empty", async () => {
@@ -30,9 +36,29 @@ describe("enqueueNotification", () => {
     expect(jobRepository.enqueue).not.toHaveBeenCalled();
   });
 
-  it("does not enqueue when the only recipient is the excluded actor", async () => {
+  it("still enqueues when the only recipient is the actor — whether they get a copy is their preference now", async () => {
+    // Previously the actor was dropped here, so such a job was never created. The decision
+    // moved to dispatchJob, which can read no_self_notified; see enqueue-notification.ts.
     const jobRepository = makeRepo();
     await enqueueNotification({ jobRepository }, { recipientGroups: [["actor-1"]], excludeUserId: "actor-1", subject: "s", body: "b" });
-    expect(jobRepository.enqueue).not.toHaveBeenCalled();
+    expect(jobRepository.enqueue).toHaveBeenCalledWith("notify", {
+      recipientIds: ["actor-1"],
+      recipientAddresses: [],
+      actorUserId: "actor-1",
+      subject: "s",
+      body: "b",
+    });
+  });
+
+  it("enqueues for literal addresses even when no user resolves", async () => {
+    const jobRepository = makeRepo();
+    await enqueueNotification({ jobRepository }, {
+      recipientGroups: [],
+      recipientAddresses: ["gone@example.com"],
+      excludeUserId: null,
+      subject: "s",
+      body: "b",
+    });
+    expect(jobRepository.enqueue).toHaveBeenCalled();
   });
 });

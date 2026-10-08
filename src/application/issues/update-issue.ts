@@ -1,6 +1,8 @@
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import { diffIssueChanges } from "@/domain/journal/diff-issue";
+import { splitPrivateNote } from "@/domain/journal/visibility";
+import { isCoreFieldDisabled, TRACKER_CORE_FIELDS } from "@/domain/tracker/core-fields";
 import type { JournalRepository } from "@/domain/journal/repository";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
@@ -16,6 +18,7 @@ import { isFieldBlank } from "@/domain/workflow/blank";
 import { applyAutoWatch } from "@/application/watchers/apply-auto-watch";
 import { applyIssueCustomFieldValues, prepareIssueCustomFieldValues } from "@/application/issues/set-custom-field-values";
 import { assertIssueAttributesAssignable, type IssueAttributeRepositories } from "@/application/issues/validate-issue-attributes";
+import { recalculateParents } from "@/application/issues/recalculate-parents";
 import { readOnlyAttributeNames, requiredAttributeNames } from "@/domain/workflow/field-permission-rules";
 import { canTransitionTo } from "@/domain/workflow/transition-rules";
 import type { WorkflowEligibleField } from "@/domain/workflow/entity";
@@ -74,6 +77,32 @@ export interface UpdateIssueInput {
   canSetPrivate?: boolean;
   /** `manage_subtasks`; false silently drops `parentId`. */
   canManageSubtasks?: boolean;
+  /**
+   * `edit_issues`, or `edit_own_issues` on one's own issue. False drops every attribute
+   * change and custom value, leaving a notes-only update — Redmine's `attributes_editable?`
+   * gates the whole `safe_attributes` block that way. Defaults to true so the internal
+   * cascades, which carry no acting-user permissions, keep working.
+   */
+  canEditAttributes?: boolean;
+  /** `add_issue_notes` (Redmine's `notes_addable?`). False drops the note. */
+  canAddNotes?: boolean;
+  /** Mark the note private. Requires `set_notes_private`; false otherwise (fails closed). */
+  privateNotes?: boolean;
+  canSetNotesPrivate?: boolean;
+}
+
+/**
+ * What the update actually stored. Callers that notify must build the message from this and
+ * never from their own request body: a note the actor wasn't allowed to add is dropped from
+ * the journal, and mailing it anyway would deliver it to every recipient while leaving no
+ * record anyone could audit.
+ */
+export interface UpdateIssueOutcome {
+  issue: Issue;
+  /** The note as persisted — "" when none was stored (dropped for permissions, or blank). */
+  persistedNotes: string;
+  /** Whether the stored note ended up private, after the blank/split rules. */
+  persistedNotesPrivate: boolean;
 }
 
 export interface UpdateIssueRepositories extends IssueAttributeRepositories {
@@ -90,8 +119,8 @@ export interface UpdateIssueRepositories extends IssueAttributeRepositories {
   customValueRepository: CustomValueRepository;
 }
 
-export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<Issue> {
-  const after = await applyIssueUpdate(repositories, input, {
+export async function updateIssue(repositories: UpdateIssueRepositories, input: UpdateIssueInput): Promise<UpdateIssueOutcome> {
+  const { after, appliedChanges, persistedNotes, persistedNotesPrivate } = await applyIssueUpdate(repositories, input, {
     skipTransitionCheck: false,
     skipBlockedCheck: false,
     skipFieldPermissions: false,
@@ -102,7 +131,10 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
   // chains of duplicates. Uses update_attribute in Redmine — validations are bypassed for the
   // cascade, which is why closeDuplicate below skips the transition/blocked checks but still
   // goes through applyIssueUpdate for the journal entry, done_ratio derivation, and auto-watch.
-  if (input.changes.statusId && after.statusId === input.changes.statusId) {
+  // Keyed on `appliedChanges`, not the submitted payload: a field the actor wasn't allowed
+  // to set (notes-only actor, or a workflow read-only rule) is stripped before the write, and
+  // must not still trigger a cascade that rewrites *other* issues.
+  if (appliedChanges.statusId && after.statusId === appliedChanges.statusId) {
     const targetStatus = await repositories.issueStatusRepository.findById(after.statusId);
     if (targetStatus?.isClosed) {
       await closeDuplicates(repositories, input.issueId, after.statusId, input.actingUserId, input.actorRoleIds, new Set([input.issueId]));
@@ -112,13 +144,13 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
   // Mirrors Redmine's Issue#reschedule_following_issues, invoked from after_save whenever
   // start_date or due_date actually changed: every "precedes" successor gets pushed forward
   // to keep up, cascading through chains.
-  const startDateChanged = input.changes.startDate !== undefined && after.startDate === input.changes.startDate;
-  const dueDateChanged = input.changes.dueDate !== undefined && after.dueDate === input.changes.dueDate;
+  const startDateChanged = appliedChanges.startDate !== undefined && after.startDate === appliedChanges.startDate;
+  const dueDateChanged = appliedChanges.dueDate !== undefined && after.dueDate === appliedChanges.dueDate;
   if (startDateChanged || dueDateChanged) {
     await rescheduleFollowingIssues(repositories, input.issueId, input.actingUserId, new Set([input.issueId]));
   }
 
-  return after;
+  return { issue: after, persistedNotes, persistedNotesPrivate };
 }
 
 /**
@@ -245,18 +277,26 @@ async function applyIssueUpdate(
   repositories: UpdateIssueRepositories,
   input: UpdateIssueInput,
   options: { skipTransitionCheck: boolean; skipBlockedCheck: boolean; skipFieldPermissions: boolean },
-): Promise<Issue> {
+): Promise<{ after: Issue; appliedChanges: IssueUpdate; persistedNotes: string; persistedNotesPrivate: boolean }> {
   const before = await repositories.issueRepository.findById(input.issueId);
   if (!before) {
     throw new Error(`Issue ${input.issueId} not found`);
   }
 
+  // Permission filtering happens before anything else reads the payload. Mirrors Redmine's
+  // Issue#safe_attributes: the attribute block is gated on attributes_editable? and `notes`
+  // separately on notes_addable?, so a user with only add_issue_notes can comment without
+  // being able to change anything — including which tracker's workflow is consulted.
+  const requested = input.canEditAttributes === false ? ({} as IssueUpdate) : { ...input.changes };
+  const notes = input.canAddNotes === false ? "" : input.notes;
+  const customFieldValues = input.canEditAttributes === false ? undefined : input.customFieldValues;
+
   // Mirrors Redmine's Issue#safe_attributes=, which assigns tracker_id from the submitted
   // params *before* resolving workflow transitions and field permissions — a request that
   // changes the tracker is governed by the new tracker's workflow, not the old one's.
-  const targetTrackerId = input.changes.trackerId ?? before.trackerId;
+  const targetTrackerId = requested.trackerId ?? before.trackerId;
 
-  if (!options.skipTransitionCheck && input.changes.statusId && input.changes.statusId !== before.statusId) {
+  if (!options.skipTransitionCheck && requested.statusId && requested.statusId !== before.statusId) {
     const transitions = await repositories.workflowRepository.listForTracker(targetTrackerId);
     const allowed = canTransitionTo(
       transitions,
@@ -267,10 +307,10 @@ async function applyIssueUpdate(
         isAuthor: input.isAuthor,
         isAssignee: input.isAssignee,
       },
-      input.changes.statusId,
+      requested.statusId,
     );
     if (!allowed) {
-      throw new WorkflowTransitionDeniedError(before.statusId, input.changes.statusId);
+      throw new WorkflowTransitionDeniedError(before.statusId, requested.statusId);
     }
   }
 
@@ -279,20 +319,57 @@ async function applyIssueUpdate(
   // workflow_rule_by_attribute — see the doc comment on WorkflowFieldPermission).
   const fieldPermissionQuery = {
     trackerId: targetTrackerId,
-    statusId: input.changes.statusId ?? before.statusId,
+    statusId: requested.statusId ?? before.statusId,
     roleIds: input.actorRoleIds,
   };
   // Skipped for cascades with no real acting-user role behind them (rescheduleFollowingIssues)
   // — Redmine's raw model save for these has no equivalent of workflow field permissions.
   const fieldPermissions = options.skipFieldPermissions ? [] : await repositories.workflowFieldPermissionRepository.listForTracker(targetTrackerId);
 
-  const changes = { ...input.changes };
+  // Mirrors Issue#safe_attributes: the attribute block is gated on attributes_editable?
+  // and `notes` separately on notes_addable?, so a user with only add_issue_notes can
+  // comment without being able to change anything.
+  const changes = requested;
   for (const field of readOnlyAttributeNames(fieldPermissions, fieldPermissionQuery)) {
     delete changes[field];
   }
   // Permission-gated attributes, dropped the same silent way Redmine's safe_attributes does.
   if (!input.canSetPrivate) delete changes.isPrivate;
   if (!input.canManageSubtasks) delete changes.parentId;
+
+  // `names -= disabled_core_fields` (Issue#safe_attribute_names): a field an administrator
+  // switched off for this tracker isn't settable at all, so it is dropped rather than
+  // rejected — keyed on the tracker the update targets, like every other rule here.
+  const targetTracker = await repositories.trackerRepository.findById(targetTrackerId);
+  if (targetTracker) {
+    for (const field of TRACKER_CORE_FIELDS) {
+      if (!isCoreFieldDisabled(targetTracker, field)) continue;
+      delete changes[field];
+      // The assignee is two columns; dropping one without the other would leave a dangling type.
+      if (field === "assignedToId") delete changes.assignedToType;
+    }
+  }
+
+  // Mirrors safe_attribute_names subtracting start_date/due_date, priority_id and done_ratio
+  // when the matching parent_issue_* setting derives them — all gated on `!leaf?`, so a
+  // childless issue keeps full control of its own values.
+  const rollupSettings = resolveGeneralSettings(await repositories.settingsRepository.getAll());
+  const touchesDerivable =
+    (rollupSettings.parentIssueDates === "derived" && (changes.startDate !== undefined || changes.dueDate !== undefined)) ||
+    (rollupSettings.parentIssuePriority === "derived" && changes.priorityId !== undefined) ||
+    (rollupSettings.parentIssueDoneRatio === "derived" && changes.doneRatio !== undefined);
+  if (touchesDerivable) {
+    const siblings = await repositories.issueRepository.listByProject(before.projectId);
+    const hasChildren = siblings.some((candidate) => candidate.parentId === before.id);
+    if (hasChildren) {
+      if (rollupSettings.parentIssueDates === "derived") {
+        delete changes.startDate;
+        delete changes.dueDate;
+      }
+      if (rollupSettings.parentIssuePriority === "derived") delete changes.priorityId;
+      if (rollupSettings.parentIssueDoneRatio === "derived") delete changes.doneRatio;
+    }
+  }
 
   // Resolved up front so the status branch below doesn't re-read the settings table. Note
   // Redmine keeps 'done_ratio' in safe_attributes regardless of this setting — only the views
@@ -395,8 +472,8 @@ async function applyIssueUpdate(
   // half-applied edit behind; the write itself happens after, once the issue is safely
   // stored, so both land in the single journal below.
   const preparedCustomFieldValues =
-    input.customFieldValues && Object.keys(input.customFieldValues).length > 0
-      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, input.customFieldValues)
+    customFieldValues && Object.keys(customFieldValues).length > 0
+      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, customFieldValues)
       : null;
 
   const after = await repositories.issueRepository.update(input.issueId, input.expectedLockVersion, changes);
@@ -405,15 +482,27 @@ async function applyIssueUpdate(
     ? await applyIssueCustomFieldValues(repositories, input.issueId, preparedCustomFieldValues)
     : [];
 
+  let persistedNotes = "";
+  let persistedNotesPrivate = false;
   const details = [...diffIssueChanges(before, changes), ...customFieldDetails];
-  if (details.length > 0 || input.notes.trim().length > 0) {
-    await repositories.journalRepository.create({
-      journalizedType: "Issue",
-      journalizedId: input.issueId,
-      userId: input.actingUserId,
-      notes: input.notes,
-      details,
-    });
+  if (details.length > 0 || notes.trim().length > 0) {
+    // Mirrors Journal#split_private_notes: a private note carrying attribute changes
+    // becomes two journals so the changes stay public, and a blank note is never private.
+    const privateNotes = input.canSetNotesPrivate === true && input.privateNotes === true;
+    for (const journal of splitPrivateNote({ notes, privateNotes, details })) {
+      await repositories.journalRepository.create({
+        journalizedType: "Issue",
+        journalizedId: input.issueId,
+        userId: input.actingUserId,
+        notes: journal.notes,
+        privateNotes: journal.privateNotes,
+        details: journal.details,
+      });
+      if (journal.notes.trim().length > 0) {
+        persistedNotes = journal.notes;
+        persistedNotesPrivate = journal.privateNotes;
+      }
+    }
     // Mirrors Redmine's issue_contributed_to trigger — firing on any recorded change, not
     // just notes, since a plain field edit shows up in the issue's history the same as a
     // comment does.
@@ -424,5 +513,19 @@ async function applyIssueUpdate(
     await applyAutoWatch(repositories, "issue_assigned_to_me", "Issue", input.issueId, after.assignedToId);
   }
 
-  return after;
+  // Any of these can move a parent's derived dates, priority or done ratio. A re-parent has
+  // to refresh the old parent too, which is no longer reachable from this issue.
+  const affectsRollup =
+    changes.startDate !== undefined ||
+    changes.dueDate !== undefined ||
+    changes.doneRatio !== undefined ||
+    changes.estimatedHours !== undefined ||
+    changes.priorityId !== undefined ||
+    changes.statusId !== undefined ||
+    changes.parentId !== undefined;
+  if (affectsRollup) {
+    await recalculateParents(repositories, input.issueId, [before.parentId]);
+  }
+
+  return { after, appliedChanges: changes, persistedNotes, persistedNotesPrivate };
 }
