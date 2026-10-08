@@ -116,12 +116,12 @@
 | 可視性設定 | partial | `issues_visibility` と `time_entries_visibility` は読み取り側で効いている。`users_visibility` は列と管理 UI だけで、参照している読み取り経路がまだ無い |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 75(`permission-registry.ts` 実数)。下表参照 |
+| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 76(`permission-registry.ts` 実数)。下表参照 |
 | プロジェクトモジュール | done | 本家 10 と同数。`calendar` / `gantt` を追加し、`PROJECT_MODULES` を権限レジストリから一元化した |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`commit_access`, `import_issues`, `manage_related_issues`, `search_project`, `use_webhooks`
+`commit_access`, `import_issues`, `manage_related_issues`, `use_webhooks`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -253,7 +253,7 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| 横断検索 | partial | 全対象を横断して検索できる(`/search`)が、対象種別の絞り込み・タイトルのみ検索・未完了課題のみ等のオプションが無い。権限 `search_project` も未定義 |
+| 横断検索 | partial | 全対象を横断して検索できる(`/search`)。対象種別の絞り込み・全語一致 / いずれか一致・タイトルのみ・未完了課題のみ・検索範囲(すべて / 自分のプロジェクト / サブプロジェクト含む / このプロジェクト)のオプションを本家 `SearchController` に合わせて実装した。権限は `search_project`(本家の public read)で、旧 `view_project` ゲートから移行する backfill を 0041 に入れた。残りは本家の対象種別のうち文書・ソースコード変更履歴・プロジェクトの検索(未実装) |
 | プロジェクト活動 | done | `/projects/[identifier]/activity`、リポジトリのコミットも含む |
 | 横断活動 | done | `/activity`。`list-project-activity` を可視プロジェクトごとに回してマージする実装で、イベント種別ごとの `view_*` 判定・プライベート注記/課題・工数の可視性はすべて既存の規則をそのまま通す(8 種それぞれ権限が違い、しかもプロジェクトごとにロールが違うので、1 本のクエリにまとめると規則が二重化する)。種別チェックボックス・日付ページング・`user_id` での絞り込み・Atom は本家と同じ。Atom は本家同様に日付の窓を持たず `feeds_limit` 件だけを返す |
 | 横断課題一覧 | done | `/issues`。プロジェクト一覧と同じクエリエンジン・同じ URL 契約で、スコープだけが「`view_issues` を持つ全プロジェクト」に変わる。本家 `Issue.visible_condition(user)` と同じく可視性はプロジェクトごとに決まるため、`projectScopes`(プロジェクト単位の `issues_visibility` と `time_entries_visibility` の判定)を WHERE 句の OR に展開する。`project` 列・`project_id` フィルタ・グルーピングを追加(本家 `if project.nil?` 準拠。カテゴリはプロジェクト固有のためフィルタのみ外す)。CSV と Atom も同じ URL 契約で出力 |
