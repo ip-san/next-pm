@@ -15,26 +15,13 @@ import { updateMyAccount } from "@/application/accounts/update-my-account";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { MAIL_NOTIFICATION_OPTIONS } from "@/domain/notification/mail-notification";
 import { COMMENTS_SORTING_VALUES } from "@/domain/user-preferences/entity";
-import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/email-address-repository";
-import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
-import { DrizzlePasswordResetTokenRepository } from "@/infrastructure/db/repositories/password-reset-token-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
-import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { accountRepositories } from "@/interface/http/my-account-repositories";
 import { destroyCurrentSession } from "@/interface/http/session";
 
 const ACCOUNT_PATH = "/my/account";
-
-function accountRepositories() {
-  return {
-    userRepository: new DrizzleUserRepository(),
-    emailAddressRepository: new DrizzleEmailAddressRepository(),
-    passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository(),
-    jobRepository: new DrizzleJobRepository(),
-    userPreferencesRepository: new DrizzleUserPreferencesRepository(),
-  };
-}
 
 export type MyAccountActionState = {
   error: string | null;

@@ -236,7 +236,7 @@
 |---|---|---|
 | 認証 | done | API キー、`rest_api_enabled` 設定で全体を無効化可能 |
 | ページネーション封筒 | done | |
-| issues | partial | GET / POST / PATCH(PUT エイリアス有り)。**DELETE が無い**。journals の更新、`include=` パラメータ各種も無い |
+| issues | partial | GET / POST / PATCH(PUT エイリアス有り)/ DELETE。journals の更新、`include=` パラメータ各種も無い |
 | projects | done | GET / POST / PUT / DELETE、`archive` / `unarchive` / `close` / `reopen`(本家 5.1 の API、POST / PUT 両対応で 204) |
 | users | done | GET / POST / PUT / DELETE。PUT は部分更新(省略した項目は据え置き)、管理者のみ。Cookie 利用時は CSRF を確認する。DELETE は `lock` 指定で施錠、無指定で削除(本家 `UsersController#update` / `#destroy` と同じ)。PUT と管理画面の更新は `application/users/update-user.ts` を共有する。認証方式(auth source)は REST では変えない |
 | memberships | done | 一覧・作成・PUT(ロール変更)・削除 |
@@ -247,7 +247,7 @@
 | trackers / issue_statuses / enumerations / custom_fields / roles / queries / search | done | 読み取り専用エンドポイント |
 | attachments | done | `/api/attachments/[id]`(ダウンロード、API キー可)と `/api/attachments/[id]/thumbnail`、`/api/v1/uploads`、`/api/v1/attachments/[id]` の GET / PATCH(PUT エイリアス有り)/ DELETE |
 | files | done | `GET /api/v1/projects/[identifier]/files`(バージョン情報・ダイジェスト・DL 数付き)と `POST`(`uploads` のトークンを `version_id` / `description` 付きで引き換え) |
-| my/account | partial | GET のみ。PUT が無い |
+| my/account | done | GET / PUT。PUT は本人のプロフィールと設定(`user`: 氏名・メール・言語・通知方式、`pref`: メール非公開・タイムゾーン・履歴の並び・自己通知)を部分更新する。画面と同じ `updateMyAccount` を使うので、メール変更の重複確認と通知も同じ。認証は API キーまたは Cookie(CSRF 確認あり) |
 | OAuth2 プロバイダ | missing | 本家 `oauth2_applications` |
 
 ## 13. 横断機能
