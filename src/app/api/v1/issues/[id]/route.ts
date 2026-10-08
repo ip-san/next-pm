@@ -19,6 +19,7 @@ import {
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { triggerIssueWebhook } from "@/interface/http/webhook-trigger";
+import { loadIssueIncludes, parseIssueIncludes } from "@/interface/http/issue-api-includes";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
@@ -68,7 +69,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -78,11 +79,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const [journals, customValues] = await Promise.all([
+  const [journals, customValues, sections] = await Promise.all([
     new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project)),
     new DrizzleCustomValueRepository().listForCustomized("Issue", id),
+    loadIssueIncludes(
+      {
+        issue,
+        project,
+        projectContext: toAuthorizationProject(project),
+        actor,
+        roleIds,
+        userGroupIds,
+        user,
+      },
+      parseIssueIncludes(new URL(request.url).searchParams.get("include")),
+    ),
   ]);
-  return NextResponse.json({ issue, journals, customValues });
+  return NextResponse.json({ issue, journals, customValues, ...sections });
 }
 
 const updateIssueSchema = z.object({

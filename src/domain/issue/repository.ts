@@ -40,6 +40,8 @@ export interface IssueRepository {
   findByAuthor(userId: string): Promise<Issue[]>;
   /** Across every project — callers must filter by per-project visibility themselves. */
   findByIds(ids: string[]): Promise<Issue[]>;
+  /** Direct subtasks only (Redmine's Issue#children); the caller applies visibility. */
+  listChildren(parentId: string): Promise<Issue[]>;
   /**
    * Across every project — the archive guard needs to see issues *outside* the subtree it is
    * about to hide, so this deliberately does not take a project scope.

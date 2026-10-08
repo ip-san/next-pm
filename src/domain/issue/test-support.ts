@@ -38,6 +38,7 @@ export function makeIssueRepositoryMock(overrides: Partial<IssueRepository> = {}
     findByAssignee: mock(async () => []),
     findByAuthor: mock(async () => []),
     findByIds: mock(async () => []),
+    listChildren: mock(async () => []),
     listByFixedVersionIds: mock(async () => []),
     search: mock(async () => []),
     deleteWithDependents: mock(async () => undefined),

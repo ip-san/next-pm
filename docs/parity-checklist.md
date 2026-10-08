@@ -236,7 +236,7 @@
 |---|---|---|
 | 認証 | done | API キー、`rest_api_enabled` 設定で全体を無効化可能 |
 | ページネーション封筒 | done | |
-| issues | partial | GET / POST / PATCH(PUT エイリアス有り)/ DELETE。journals の更新、`include=` パラメータ各種も無い |
+| issues | partial | GET / POST / PATCH(PUT エイリアス有り)/ DELETE。`GET /issues/:id?include=` は `children` / `relations` / `attachments` / `watchers` / `allowed_statuses` に対応(関連と子課題は相手課題の可視性で絞る。watchers は `view_issue_watchers` のときだけ。`allowed_statuses` は遷移表から。管理者は全件、本家 `new_statuses_allowed_to` どおり)。`changesets` は未対応。journals の更新は無い |
 | projects | done | GET / POST / PUT / DELETE、`archive` / `unarchive` / `close` / `reopen`(本家 5.1 の API、POST / PUT 両対応で 204) |
 | users | done | GET / POST / PUT / DELETE。PUT は部分更新(省略した項目は据え置き)、管理者のみ。Cookie 利用時は CSRF を確認する。DELETE は `lock` 指定で施錠、無指定で削除(本家 `UsersController#update` / `#destroy` と同じ)。PUT と管理画面の更新は `application/users/update-user.ts` を共有する。認証方式(auth source)は REST では変えない |
 | memberships | done | 一覧・作成・PUT(ロール変更)・削除 |
