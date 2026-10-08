@@ -13,7 +13,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTimeEntrySearchRepository } from "@/infrastructure/db/repositories/time-entry-search-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { loadTimeEntryLookups, timeEntryProjectScope } from "@/interface/http/time-entry-list";
+import { loadTimeEntryLookups, timeEntryProjectScope, timeEntryScopesFor } from "@/interface/http/time-entry-list";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
 import { timeEntryColumnValue } from "@/interface/query/time-entry-list-view";
 
@@ -44,6 +44,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const projectEntry = { ...resolved, project, projectContext };
+  // Same subtree as the list page, so the export matches what's on screen.
+  const scopes = await timeEntryScopesFor(user, projectEntry);
   const userGroupIds = user ? await new DrizzleGroupRepository().listGroupIdsForUser(user.id) : [];
 
   let savedQuery: SavedQuery | null = null;
@@ -70,14 +72,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     {
       params: listParams,
       savedQuery,
-      visibility: { userId: user?.id ?? null, userGroupIds, projects: [timeEntryProjectScope(projectEntry)] },
+      visibility: { userId: user?.id ?? null, userGroupIds, projects: scopes.map(timeEntryProjectScope) },
       crossProject: false,
       today: new Date().toISOString().slice(0, 10),
       exportLimit: settings.issuesExportLimit,
     },
   );
 
-  const lookups = await loadTimeEntryLookups([projectEntry], {
+  const lookups = await loadTimeEntryLookups(scopes, {
     issueIds: [...new Set(result.search.entries.map((entry) => entry.issueId).filter((id): id is string => id !== null))],
     userIds: [...new Set(result.search.entries.flatMap((entry) => [entry.userId, entry.authorId]))],
   });

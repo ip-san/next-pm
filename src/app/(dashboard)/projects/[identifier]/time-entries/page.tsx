@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { listTimeEntries } from "@/application/time-entries/list-time-entries";
-import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { can } from "@/domain/authorization/authorization-service";
 import type { SavedQuery } from "@/domain/query/entity";
 import { isQueryEditable, isQueryVisible } from "@/domain/query/visibility";
@@ -23,8 +22,8 @@ import { IssueQueryForm, type FilterValueOption } from "@/interface/components/q
 import { SaveQueryForm, SavedQueryControls } from "@/interface/components/query/save-query-form";
 import { TimeEntryTable } from "@/interface/components/query/time-entry-table";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { loadTimeEntryLookups, timeEntryProjectScope } from "@/interface/http/time-entry-list";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { loadTimeEntryLookups, timeEntryProjectScope, timeEntryScopesFor } from "@/interface/http/time-entry-list";
 import { normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
 
 export const dynamic = "force-dynamic";
@@ -68,13 +67,7 @@ export default async function ProjectTimeEntriesPage({
   }
 
   // display_subprojects_issues: the list also covers the subprojects, each judged by its own project's rules.
-  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
-  const subtreeEntries = displaySubprojectsIssues
-    ? (await listVisibleProjectContexts(user, "view_project")).filter(
-        (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
-      )
-    : [];
-  const scopeEntries = subtreeEntries.length > 0 ? subtreeEntries : [projectEntry];
+  const scopeEntries = await timeEntryScopesFor(user, projectEntry);
   const projectIdentifierById = new Map(scopeEntries.map((entry) => [entry.project.id, entry.project.identifier]));
 
   const result = await listTimeEntries(

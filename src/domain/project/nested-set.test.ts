@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isWithinSubtree, planDelete, planInsert, type NestedSetNode } from "./nested-set";
+import { isWithinSubtree, planDelete, planInsert, subtreeScopes, type NestedSetNode } from "./nested-set";
 
 describe("nested-set planInsert", () => {
   it("places the first root at lft=1, rgt=2", () => {
@@ -98,5 +98,40 @@ describe("nested-set planDelete", () => {
   it("leaves nothing behind when the only root goes", () => {
     const only: NestedSetNode = { id: "only", lft: 1, rgt: 2 };
     expect(planDelete([only], only)).toEqual({ removed: [only], shifted: [] });
+  });
+});
+
+describe("subtreeScopes", () => {
+  // A small forest: root (1..6) with child (2..3) and sibling (4..5); a second root (7..8).
+  const root: NestedSetNode = { id: "root", lft: 1, rgt: 6 };
+  const child: NestedSetNode = { id: "child", lft: 2, rgt: 3 };
+  const sibling: NestedSetNode = { id: "sibling", lft: 4, rgt: 5 };
+  const other: NestedSetNode = { id: "other", lft: 7, rgt: 8 };
+  const self = { project: root, label: "self" };
+  const visible = [
+    { project: root, label: "root" },
+    { project: child, label: "child" },
+    { project: sibling, label: "sibling" },
+    { project: other, label: "other" },
+  ];
+
+  it("returns only the project itself when the setting is off", () => {
+    expect(subtreeScopes(false, visible, root, self)).toEqual([self]);
+  });
+
+  it("returns the visible contexts within the project's subtree when the setting is on", () => {
+    expect(subtreeScopes(true, visible, root, self).map((entry) => entry.label)).toEqual(["root", "child", "sibling"]);
+  });
+
+  it("leaves out a project outside the subtree even when it is visible", () => {
+    expect(subtreeScopes(true, visible, root, self).some((entry) => entry.label === "other")).toBe(false);
+  });
+
+  it("falls back to the project itself when nothing in the subtree is visible", () => {
+    expect(subtreeScopes(true, [{ project: other, label: "other" }], root, self)).toEqual([self]);
+  });
+
+  it("keeps a subproject the viewer can see even when the project itself is not in the visible list", () => {
+    expect(subtreeScopes(true, [{ project: child, label: "child" }], root, self).map((entry) => entry.label)).toEqual(["child"]);
   });
 });

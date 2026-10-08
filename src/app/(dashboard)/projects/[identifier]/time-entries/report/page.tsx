@@ -14,9 +14,8 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { loadGeneralSettings } from "@/application/settings/general-settings";
-import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
-import { listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { timeEntryScopesFor } from "@/interface/http/time-entry-list";
 import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +55,8 @@ export default async function TimeEntryReportPage({
 
   const user = await currentUserFromCookies();
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const resolved = await resolveActor(user, project.id);
+  const { actor } = resolved;
   if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
     notFound();
   }
@@ -67,16 +67,7 @@ export default async function TimeEntryReportPage({
 
   // display_subprojects_issues: the report also covers the subprojects' entries, each project's entries filtered
   // with that project's own actor and rules, and its activity names read from that project.
-  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
-  const subtree = displaySubprojectsIssues
-    ? (await listVisibleProjectContexts(user, "view_time_entries")).filter(
-        (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
-      )
-    : [];
-  const scopes =
-    subtree.length > 0
-      ? subtree
-      : [{ project, projectContext, actor, userGroupIds }];
+  const scopes = await timeEntryScopesFor(user, { ...resolved, project, projectContext });
 
   const perScope = await Promise.all(
     scopes.map(async (scope) => {

@@ -67,7 +67,23 @@ export function planDelete(nodes: NestedSetNode[], removed: NestedSetNode): Dele
   };
 }
 
-/** True if `descendant` is inside `ancestor`'s subtree (or is the ancestor itself). */
-export function isWithinSubtree(ancestor: NestedSetNode, descendant: NestedSetNode): boolean {
+/** True if `descendant` is inside `ancestor`'s subtree (or is the ancestor itself). Relies on valid nested-set bounds. */
+export function isWithinSubtree(ancestor: Pick<NestedSetNode, "lft" | "rgt">, descendant: Pick<NestedSetNode, "lft" | "rgt">): boolean {
   return descendant.lft >= ancestor.lft && descendant.rgt <= ancestor.rgt;
+}
+
+/**
+ * The contexts a project-level list covers. With display_subprojects_issues on, that is the project's subtree
+ * among the viewer's visible contexts; off, it is the project alone. A subtree with nothing visible in it falls
+ * back to the project's own context, so the project's page doesn't come up empty while it is viewable.
+ */
+export function subtreeScopes<T extends { project: NestedSetNode }>(
+  displaySubprojects: boolean,
+  visible: T[],
+  root: NestedSetNode,
+  self: T,
+): T[] {
+  if (!displaySubprojects) return [self];
+  const subtree = visible.filter((entry) => isWithinSubtree(root, entry.project));
+  return subtree.length > 0 ? subtree : [self];
 }

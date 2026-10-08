@@ -1,14 +1,17 @@
 import { can } from "@/domain/authorization/authorization-service";
+import { subtreeScopes } from "@/domain/project/nested-set";
 import { memberUserIds } from "@/domain/member/entity";
 import type { ProjectTimeEntryScope, TimeEntryVisibilityScope } from "@/domain/query/time-entry-search";
 import { seesOnlyOwnTimeEntries } from "@/domain/time-entry/visibility";
 import type { User } from "@/domain/user/entity";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { issuesVisibilityRoles, listVisibleProjectContexts, type VisibleProjectContext } from "@/interface/http/resolve-actor";
 import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
@@ -95,4 +98,15 @@ export async function loadTimeEntryLookups(
     ),
     issues: new Map(issues.map((issue) => [issue.id, issue.subject])),
   };
+}
+
+/**
+ * The contexts a project's time-entry list, report and exports cover: the subtree among the viewer's
+ * projects that allow viewing time entries, when display_subprojects_issues is on; otherwise the project
+ * alone. Each context carries its own actor, so each project's rules apply to its own entries.
+ */
+export async function timeEntryScopesFor(user: User | null, projectEntry: VisibleProjectContext): Promise<VisibleProjectContext[]> {
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const visible = displaySubprojectsIssues ? await listVisibleProjectContexts(user, "view_time_entries") : [];
+  return subtreeScopes(displaySubprojectsIssues, visible, projectEntry.project, projectEntry);
 }

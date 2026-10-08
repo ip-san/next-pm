@@ -1,3 +1,4 @@
+import { isWithinSubtree } from "@/domain/project/nested-set";
 import { can } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
@@ -22,7 +23,7 @@ export async function subprojectIssueScope(
   project: Pick<Project, "lft" | "rgt">,
 ): Promise<{ projectScopes: ProjectIssueScope[]; identifierByProjectId: Map<string, string> }> {
   const contexts = (await listVisibleProjectContexts(user, "view_issues")).filter(
-    (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
+    (entry) => isWithinSubtree(project, entry.project),
   );
 
   const projectScopes: ProjectIssueScope[] = contexts.map((entry) => ({
@@ -64,7 +65,7 @@ export async function subtreeVisibleIssues(
   project: Pick<Project, "lft" | "rgt">,
 ): Promise<{ issues: Issue[]; identifierByProjectId: Map<string, string> }> {
   const contexts = (await listVisibleProjectContexts(user, "view_issues")).filter(
-    (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
+    (entry) => isWithinSubtree(project, entry.project),
   );
   const issueRepository = new DrizzleIssueRepository();
   const perProject = await Promise.all(

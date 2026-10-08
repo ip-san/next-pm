@@ -11,6 +11,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
+import { timeEntryScopesFor } from "@/interface/http/time-entry-list";
 
 export const dynamic = "force-dynamic";
 
@@ -28,29 +29,35 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   const user = await currentUserFromCookies();
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const resolved = await resolveActor(user, project.id);
+  const { actor } = resolved;
   if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const [allEntries, activities, customFields] = await Promise.all([
-    new DrizzleTimeEntryRepository().listForProject(project.id),
+  // Same subtree as the list page (display_subprojects_issues); each project's entries are filtered by its own rules.
+  const scopes = await timeEntryScopesFor(user, { ...resolved, project, projectContext });
+  const [scopedEntries, activities, customFields] = await Promise.all([
+    Promise.all(scopes.map(async (scope) => ({ scope, rows: await new DrizzleTimeEntryRepository().listForProject(scope.project.id) }))),
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
     new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry"),
   ]);
+  const allEntries = scopedEntries.flatMap(({ rows }) => rows);
 
   const issueRepository = new DrizzleIssueRepository();
   const issueIds = [...new Set(allEntries.map((entry) => entry.issueId).filter((id): id is string => id !== null))];
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((issue) => issue !== null).map((issue) => [issue.id, issue]));
 
-  const entries = filterAccessibleTimeEntries(allEntries, {
-    userId: user?.id ?? null,
-    actor,
-    userGroupIds,
-    projectContext,
-    issueById,
-  });
+  const entries = scopedEntries.flatMap(({ scope, rows }) =>
+    filterAccessibleTimeEntries(rows, {
+      userId: user?.id ?? null,
+      actor: scope.actor,
+      userGroupIds: scope.userGroupIds,
+      projectContext: scope.projectContext,
+      issueById,
+    }),
+  );
 
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const entryUsers = await new DrizzleUserRepository().findByIds([...new Set(entries.map((entry) => entry.userId))]);

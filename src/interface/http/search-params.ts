@@ -1,3 +1,4 @@
+import { isWithinSubtree } from "@/domain/project/nested-set";
 import {
   ATTACHMENT_SEARCH_MODES,
   SEARCH_RESULT_TYPES,
@@ -97,7 +98,7 @@ export async function resolveSearchProjects(
       if (!currentProject) return permitted;
       // `@project.self_and_descendants` — the nested set makes a descendant exactly a
       // project whose bounds sit inside the ancestor's.
-      return permitted.filter((entry) => entry.project.lft >= currentProject.lft && entry.project.rgt <= currentProject.rgt);
+      return permitted.filter((entry) => isWithinSubtree(currentProject, entry.project));
     }
     case "project":
       return currentProject ? permitted.filter((entry) => entry.project.id === currentProject.id) : permitted;

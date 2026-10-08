@@ -14,7 +14,8 @@ import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
-import { listVisibleProjectContexts, issuesVisibilityRoles, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { subtreeScopes } from "@/domain/project/nested-set";
+import { listVisibleProjectContexts, issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
 
 export interface ProjectActivityFeedInput {
@@ -40,15 +41,8 @@ export interface ProjectActivityFeedEntry {
  */
 export async function listProjectActivityFeed(input: ProjectActivityFeedInput): Promise<ProjectActivityFeedEntry[]> {
   const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
-  const subtree = displaySubprojectsIssues
-    ? (await listVisibleProjectContexts(input.user, "view_project")).filter(
-        (entry) => entry.project.lft >= input.project.lft && entry.project.rgt <= input.project.rgt,
-      )
-    : [];
-  const scopes =
-    subtree.length > 0
-      ? subtree.map((entry) => ({ project: entry.project, projectContext: entry.projectContext, actor: entry.actor, userGroupIds: entry.userGroupIds }))
-      : [{ project: input.project, projectContext: toAuthorizationProject(input.project), actor: input.actor, userGroupIds: input.userGroupIds }];
+  const self = { ...(await resolveActor(input.user, input.project.id)), project: input.project, projectContext: toAuthorizationProject(input.project) };
+  const scopes = subtreeScopes(displaySubprojectsIssues, await listVisibleProjectContexts(input.user, "view_project"), input.project, self);
 
   const perProject = await Promise.all(
     scopes.map(async (scope) => {
