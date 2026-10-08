@@ -31,6 +31,14 @@ describe("notifyAboutIssue", () => {
     expect(notifyAboutIssue("only_owner", recipient("assignee"), event)).toBe(false);
   });
 
+  it("still sends a watcher the issue mail under only_assigned, though they are neither author nor assignee", () => {
+    const watched: IssueNotifyEvent = { ...event, watcherIds: ["watcher"] };
+    expect(notifyAboutIssue("only_assigned", recipient("watcher"), watched)).toBe(true);
+    expect(notifyAboutIssue("only_assigned", recipient("stranger"), watched)).toBe(false);
+    expect(notifyAboutIssue("only_owner", recipient("watcher"), watched)).toBe(true);
+    expect(notifyAboutIssue("none", recipient("watcher"), watched)).toBe(false);
+  });
+
   it("counts a member of an assigned group as the assignee", () => {
     const groupEvent: IssueNotifyEvent = { authorId: "author", assignee: { type: "group", id: "g-1" }, previousAssignee: null };
     expect(notifyAboutIssue("only_assigned", recipient("member", ["g-1"]), groupEvent)).toBe(true);

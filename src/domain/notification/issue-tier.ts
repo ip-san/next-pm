@@ -8,6 +8,11 @@ export interface IssueNotifyEvent {
   authorId: string | null;
   assignee: { type: "user" | "group"; id: string } | null;
   previousAssignee: { type: "user" | "group"; id: string } | null;
+  /**
+   * The issue's watchers who may see it. Redmine's notified_watchers doesn't apply notify_about?: a
+   * watcher gets the mail unless their mail_notification is none, so the tier never narrows them.
+   */
+  watcherIds?: readonly string[];
 }
 
 /** Redmine's `is_or_belongs_to?`: the user is the assignee, or is a member of an assigned group. */
@@ -28,6 +33,7 @@ export function notifyAboutIssue(
 ): boolean {
   if (option === "all") return true;
   if (option === "none") return false;
+  if (event.watcherIds?.includes(recipient.userId)) return true;
 
   const isAuthor = event.authorId !== null && event.authorId === recipient.userId;
   const isAssignee = assignedTo(event.assignee, recipient.userId, recipient.groupIds);
@@ -47,6 +53,7 @@ export function notifyAboutIssue(
 export function issueNotifyEvent(
   issue: { authorId: string | null; assignedToId: string | null; assignedToType: "user" | "group" | null },
   previous: { assignedToId: string | null; assignedToType: "user" | "group" | null } | null,
+  watcherIds: readonly string[] = [],
 ): IssueNotifyEvent {
   const assigneeOf = (value: { assignedToId: string | null; assignedToType: "user" | "group" | null }) =>
     value.assignedToId && value.assignedToType ? { type: value.assignedToType, id: value.assignedToId } : null;
@@ -54,5 +61,6 @@ export function issueNotifyEvent(
     authorId: issue.authorId,
     assignee: assigneeOf(issue),
     previousAssignee: previous ? assigneeOf(previous) : null,
+    watcherIds,
   };
 }

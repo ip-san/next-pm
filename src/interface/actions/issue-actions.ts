@@ -490,12 +490,12 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
 
     await enqueueNotification(
       { jobRepository: new DrizzleJobRepository() },
-      { recipientGroups: [permitted], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing), subject: `[${project.name}] ${updated.subject}`, body: noteBody },
+      { recipientGroups: [permitted], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds), subject: `[${project.name}] ${updated.subject}`, body: noteBody },
     );
     if (others.length > 0) {
       await enqueueNotification(
         { jobRepository: new DrizzleJobRepository() },
-        { recipientGroups: [others], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing), subject: `[${project.name}] ${updated.subject}`, body: genericBody },
+        { recipientGroups: [others], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds), subject: `[${project.name}] ${updated.subject}`, body: genericBody },
       );
     }
   } else {
@@ -504,7 +504,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
       {
         recipientGroups,
         excludeUserId: user.id,
-        issueEvent: issueNotifyEvent(updated, existing),
+        issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds),
         subject: `[${project.name}] ${updated.subject}`,
         body: noteBody.length > 0 ? noteBody : genericBody,
       },
