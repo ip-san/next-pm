@@ -1,3 +1,4 @@
+import { customFieldsVisibleInEveryScope, type CustomFieldViewer } from "@/domain/custom-field/visibility";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import { findColumn, resolveDisplayColumns, type QueryColumn } from "@/domain/query/columns";
@@ -41,6 +42,8 @@ export interface ListTimeEntriesInput {
   today: string;
   /** Set for an export: return every matching row up to this cap instead of one page. */
   exportLimit?: number;
+  /** The viewer for each project the list covers; a custom field is offered only when every one of them sees it. */
+  customFieldViewers: CustomFieldViewer[];
 }
 
 export interface ListTimeEntriesResult {
@@ -67,10 +70,11 @@ export async function listTimeEntries(
   repositories: ListTimeEntriesRepositories,
   input: ListTimeEntriesInput,
 ): Promise<ListTimeEntriesResult> {
-  const [allCustomFields, settings] = await Promise.all([
+  const [allFieldsIncludingHidden, settings] = await Promise.all([
     repositories.customFieldRepository.listForCustomizedType("TimeEntry"),
     loadGeneralSettings(repositories.settingsRepository),
   ]);
+  const allCustomFields = customFieldsVisibleInEveryScope(allFieldsIncludingHidden, input.customFieldViewers);
 
   const availableColumns = timeEntryQueryColumns({ customFields: allCustomFields, crossProject: input.crossProject });
   const requested = resolveQueryOptions(input);

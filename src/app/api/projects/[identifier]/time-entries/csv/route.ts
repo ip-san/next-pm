@@ -1,3 +1,5 @@
+import { customFieldsVisibleInEveryScope } from "@/domain/custom-field/visibility";
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { can } from "@/domain/authorization/authorization-service";
 import { encodeCsv } from "@/domain/csv/encode";
@@ -37,12 +39,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   // Same subtree as the list page (display_subprojects_issues); each project's entries are filtered by its own rules.
   const scopes = await timeEntryScopesFor(user, { ...resolved, project, projectContext });
-  const [scopedEntries, activities, customFields] = await Promise.all([
+  const [scopedEntries, activities, allCustomFields] = await Promise.all([
     Promise.all(scopes.map(async (scope) => ({ scope, rows: await new DrizzleTimeEntryRepository().listForProject(scope.project.id) }))),
     new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
     new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry"),
   ]);
   const allEntries = scopedEntries.flatMap(({ rows }) => rows);
+  // A field the viewer sees in every scope of this export (customFieldsVisibleInEveryScope): the same rule as the list.
+  const customFields = customFieldsVisibleInEveryScope(
+    allCustomFields,
+    scopes.map((scope) => customFieldViewerFor(user, scope.roleIds)),
+  );
 
   const issueRepository = new DrizzleIssueRepository();
   const issueIds = [...new Set(allEntries.map((entry) => entry.issueId).filter((id): id is string => id !== null))];

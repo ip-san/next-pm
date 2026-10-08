@@ -1,4 +1,5 @@
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
+import { visibleCustomFieldsFor, type CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
@@ -19,8 +20,10 @@ export async function validateTimeEntryCustomFieldValues(
   customFieldRepository: CustomFieldRepository,
   rawValues: Record<string, string>,
   options: { full: boolean },
+  viewer: CustomFieldViewer,
 ): Promise<Record<string, string>> {
-  const applicableFields = await customFieldRepository.listForCustomizedType("TimeEntry");
+  // A field the viewer can't see is neither required nor validated (see setTimeEntryCustomFieldValues).
+  const applicableFields = visibleCustomFieldsFor(await customFieldRepository.listForCustomizedType("TimeEntry"), viewer);
   const values = options.full
     ? { ...Object.fromEntries(applicableFields.map((field) => [field.id, ""])), ...rawValues }
     : rawValues;
@@ -39,8 +42,10 @@ export async function setTimeEntryCustomFieldValues(
   repositories: { customFieldRepository: CustomFieldRepository; customValueRepository: CustomValueRepository },
   timeEntryId: string,
   rawValues: Record<string, string>,
+  viewer: CustomFieldViewer,
 ): Promise<void> {
-  const applicableFields = await repositories.customFieldRepository.listForCustomizedType("TimeEntry");
+  // A hidden field keeps its value whatever the request sends, as on issues.
+  const applicableFields = visibleCustomFieldsFor(await repositories.customFieldRepository.listForCustomizedType("TimeEntry"), viewer);
   const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawValues);
 
   if (Object.keys(fieldErrors).length > 0) {

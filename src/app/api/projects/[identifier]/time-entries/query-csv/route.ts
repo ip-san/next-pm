@@ -1,3 +1,4 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { listTimeEntries } from "@/application/time-entries/list-time-entries";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
@@ -73,6 +74,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       params: listParams,
       savedQuery,
       visibility: { userId: user?.id ?? null, userGroupIds, projects: scopes.map(timeEntryProjectScope) },
+      customFieldViewers: scopes.map((entry) => customFieldViewerFor(user, entry.roleIds)),
       crossProject: false,
       today: new Date().toISOString().slice(0, 10),
       exportLimit: settings.issuesExportLimit,

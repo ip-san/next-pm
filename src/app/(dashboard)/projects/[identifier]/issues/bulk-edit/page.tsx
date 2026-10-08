@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
@@ -41,7 +43,7 @@ export default async function BulkEditPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -110,7 +112,7 @@ export default async function BulkEditPage({
         trackers={trackers}
         categories={categories}
         versions={versions}
-        customFields={commonCustomFields}
+        customFields={visibleCustomFieldsFor(commonCustomFields, customFieldViewerFor(user, roleIds))}
         canSetNotesPrivate={canSetNotesPrivate}
         projectIdentifier={identifier}
         issueIds={issues.map((issue) => issue.id)}

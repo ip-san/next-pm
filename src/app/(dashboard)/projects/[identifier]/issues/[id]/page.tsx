@@ -174,7 +174,7 @@ export default async function IssueDetailPage({
   const canEditTimeEntries = can({ permission: "edit_time_entries", project: toAuthorizationProject(project), actor });
   const canEditOwnTimeEntries = can({ permission: "edit_own_time_entries", project: toAuthorizationProject(project), actor });
   const timeEntryCustomFields = canLogTime
-    ? await new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry")
+    ? visibleCustomFieldsFor(await new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry"), customFieldViewer)
     : [];
   const timeEntryAssignableUsers =
     canLogTime && user && can({ permission: "log_time_for_other_users", project: toAuthorizationProject(project), actor })

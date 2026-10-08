@@ -55,6 +55,7 @@ export async function GET(request: Request) {
       params: listParams,
       savedQuery,
       visibility: scope.visibility,
+      customFieldViewers: scope.customFieldViewers,
       crossProject: true,
       today: new Date().toISOString().slice(0, 10),
       exportLimit: settings.issuesExportLimit,

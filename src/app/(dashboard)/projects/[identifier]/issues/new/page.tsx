@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
@@ -28,7 +30,7 @@ export default async function NewIssuePage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   if (!can({ permission: "add_issues", project: projectContext, actor })) {
     notFound();
@@ -73,7 +75,7 @@ export default async function NewIssuePage({
           groups={groups}
           categories={categories}
           versions={versions}
-          customFields={customFields}
+          customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
           doneRatioEditable={resolveGeneralSettings(settings).issueDoneRatio === "issue_field"}
           canSetPrivate={
             can({ permission: "set_issues_private", project: projectContext, actor }) ||

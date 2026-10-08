@@ -59,6 +59,7 @@ export default async function GlobalTimeEntriesPage({
       params: listParams,
       savedQuery,
       visibility: scope.visibility,
+      customFieldViewers: scope.customFieldViewers,
       crossProject: true,
       today: new Date().toISOString().slice(0, 10),
     },

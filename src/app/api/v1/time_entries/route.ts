@@ -1,3 +1,4 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "log_time", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -195,7 +196,8 @@ export async function POST(request: Request) {
     new DrizzleCustomFieldRepository(),
     parsed.data.custom_field_values,
     { full: true },
-  );
+customFieldViewerFor(user, roleIds),
+);
   if (Object.keys(customFieldErrors).length > 0) {
     return NextResponse.json({ error: "invalid_custom_field_values", details: customFieldErrors }, { status: 422 });
   }
@@ -225,7 +227,8 @@ export async function POST(request: Request) {
         { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
         entry.id,
         parsed.data.custom_field_values,
-      );
+customFieldViewerFor(user, roleIds),
+);
     }
 
     return NextResponse.json({ time_entry: entry }, { status: 201 });

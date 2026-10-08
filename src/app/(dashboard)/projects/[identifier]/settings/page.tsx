@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
@@ -19,7 +21,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   if (!can({ permission: "edit_project", project: projectContext, actor })) {
     notFound();
@@ -53,7 +55,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
       <ProjectSettingsForm
         project={project}
         trackers={trackers}
-        customFields={customFields}
+        customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
         customValueByFieldId={customValueByFieldId}
         // Redmine's safe_attributes: these two are not edit_project's to change. The server
         // drops them when the actor lacks the permission, so leaving the controls out is

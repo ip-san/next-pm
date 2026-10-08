@@ -1,3 +1,4 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -61,7 +62,7 @@ async function loadVisibleEntry(entryId: string, request: Request) {
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   const issue = entry.issueId ? await new DrizzleIssueRepository().findById(entry.issueId) : null;
   const context: TimeEntryAccessContext = {
     userId: user?.id ?? null,
@@ -74,7 +75,7 @@ async function loadVisibleEntry(entryId: string, request: Request) {
     return { ok: false as const, response: notFound() };
   }
 
-  return { ok: true as const, user, viaCookie, entry, project, projectContext, actor, userGroupIds, timeEntryRepository };
+  return { ok: true as const, user, viaCookie, entry, project, projectContext, actor, userGroupIds, roleIds, timeEntryRepository };
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -128,7 +129,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!loaded.ok) {
     return loaded.response;
   }
-  const { user, entry, projectContext, actor, userGroupIds } = loaded;
+  const { user, entry, projectContext, actor, userGroupIds, roleIds } = loaded;
 
   const parsed = updateTimeEntrySchema.safeParse((await request.json().catch(() => null))?.time_entry);
   if (!parsed.success) {
@@ -179,7 +180,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     new DrizzleCustomFieldRepository(),
     parsed.data.custom_field_values,
     { full: false },
-  );
+customFieldViewerFor(user, roleIds),
+);
   if (Object.keys(customFieldErrors).length > 0) {
     return NextResponse.json({ error: "invalid_custom_field_values", details: customFieldErrors }, { status: 422 });
   }
@@ -209,7 +211,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
         updated.id,
         parsed.data.custom_field_values,
-      );
+customFieldViewerFor(user, roleIds),
+);
     }
 
     return NextResponse.json({ time_entry: updated });

@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -46,7 +48,7 @@ export default async function EditTimeEntryPage({
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   const issueRepository = new DrizzleIssueRepository();
   const entryIssue = entry.issueId ? await issueRepository.findById(entry.issueId) : null;
   const visible = canAccessTimeEntry(entry, {
@@ -102,11 +104,15 @@ export default async function EditTimeEntryPage({
         projectIdentifier={identifier}
         issues={issues.map((issue) => ({ id: issue.id, subject: issue.subject }))}
         activities={activities}
-        customFields={customFields}
+        customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
         assignableUsers={assignableUsers}
         currentUserId={user.id}
         entry={entry}
-        customValues={Object.fromEntries(values.map((value) => [value.customFieldId, value.value]))}
+        customValues={Object.fromEntries(
+          values
+            .filter((value) => visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds)).some((field) => field.id === value.customFieldId))
+            .map((value) => [value.customFieldId, value.value]),
+        )}
       />
       <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} />
     </main>

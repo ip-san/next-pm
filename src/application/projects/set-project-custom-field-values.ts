@@ -1,4 +1,5 @@
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
+import { visibleCustomFieldsFor, type CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
@@ -15,8 +16,10 @@ export async function setProjectCustomFieldValues(
   repositories: { customFieldRepository: CustomFieldRepository; customValueRepository: CustomValueRepository },
   projectId: string,
   rawValues: Record<string, string>,
+  viewer: CustomFieldViewer,
 ): Promise<void> {
-  const applicableFields = await repositories.customFieldRepository.listForCustomizedType("Project");
+  // A field the editor can't see is neither validated nor written, as on issues.
+  const applicableFields = visibleCustomFieldsFor(await repositories.customFieldRepository.listForCustomizedType("Project"), viewer);
   const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawValues);
 
   if (Object.keys(fieldErrors).length > 0) {

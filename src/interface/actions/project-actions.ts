@@ -1,5 +1,6 @@
 "use server";
 
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -198,7 +199,7 @@ export async function updateProjectSettingsAction(
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
 
   try {
     await updateProject(
@@ -229,6 +230,7 @@ export async function updateProjectSettingsAction(
         { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
         project.id,
         rawValues,
+        customFieldViewerFor(user, roleIds),
       );
     } catch (error) {
       if (error instanceof CustomFieldValidationError) {

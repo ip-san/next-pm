@@ -1,5 +1,7 @@
 "use server";
 
+import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -70,21 +72,23 @@ function firstFieldError(error: CustomFieldValidationError): string {
  * Runs before the entry is written, so an invalid value can't leave a created-but-wrong
  * entry behind that the user duplicates when they fix the value and resubmit.
  */
-async function customFieldErrorIn(formData: FormData, options: { full: boolean }): Promise<string | null> {
+async function customFieldErrorIn(formData: FormData, options: { full: boolean }, viewer: CustomFieldViewer): Promise<string | null> {
   const fieldErrors = await validateTimeEntryCustomFieldValues(
     new DrizzleCustomFieldRepository(),
     customFieldValuesFromForm(formData),
     options,
-  );
+viewer,
+);
   return Object.values(fieldErrors)[0] ?? null;
 }
 
-async function saveCustomFieldValues(entryId: string, formData: FormData): Promise<void> {
+async function saveCustomFieldValues(entryId: string, formData: FormData, viewer: CustomFieldViewer): Promise<void> {
   await setTimeEntryCustomFieldValues(
     { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
     entryId,
     customFieldValuesFromForm(formData),
-  );
+viewer,
+);
 }
 
 /**
@@ -190,7 +194,7 @@ export async function logTimeAction(
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   // canAttachIssueToTimeEntry carries the log_time check as well as the visibility one.
   if (!canAttachIssueToTimeEntry(issue, project.id, { userId: user.id, actor, userGroupIds, projectContext })) {
     return { error: ISSUE_NOT_FOUND };
@@ -208,7 +212,7 @@ export async function logTimeAction(
     return { error: target.error };
   }
 
-  const customFieldError = await customFieldErrorIn(formData, { full: true });
+  const customFieldError = await customFieldErrorIn(formData, { full: true }, customFieldViewerFor(user, roleIds));
   if (customFieldError) {
     return { error: customFieldError };
   }
@@ -224,7 +228,7 @@ export async function logTimeAction(
       comments: parsed.data.comments,
       spentOn: parsed.data.spentOn,
     });
-    await saveCustomFieldValues(entry.id, formData);
+    await saveCustomFieldValues(entry.id, formData, customFieldViewerFor(user, roleIds));
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
       return { error: error.message };
@@ -282,7 +286,7 @@ export async function createTimeEntryAction(
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "log_time", project: projectContext, actor })) {
     return { error: "この操作を行う権限がありません。" };
   }
@@ -304,7 +308,7 @@ export async function createTimeEntryAction(
     return { error: target.error };
   }
 
-  const customFieldError = await customFieldErrorIn(formData, { full: true });
+  const customFieldError = await customFieldErrorIn(formData, { full: true }, customFieldViewerFor(user, roleIds));
   if (customFieldError) {
     return { error: customFieldError };
   }
@@ -320,7 +324,7 @@ export async function createTimeEntryAction(
       comments: parsed.data.comments,
       spentOn: parsed.data.spentOn,
     });
-    await saveCustomFieldValues(entry.id, formData);
+    await saveCustomFieldValues(entry.id, formData, customFieldViewerFor(user, roleIds));
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
       return { error: error.message };
@@ -362,7 +366,7 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   const issue = entry.issueId ? await new DrizzleIssueRepository().findById(entry.issueId) : null;
   const context: TimeEntryAccessContext = {
     userId: user.id,
@@ -386,7 +390,7 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
     return { ok: false as const, error: "この操作を行う権限がありません。" };
   }
 
-  return { ok: true as const, user, project, projectContext, actor, userGroupIds, entry, timeEntryRepository };
+  return { ok: true as const, user, project, projectContext, actor, userGroupIds, roleIds, entry, timeEntryRepository };
 }
 
 const updateTimeEntrySchema = z.object({
@@ -451,7 +455,7 @@ export async function updateTimeEntryAction(
     return { error: target.error };
   }
 
-  const customFieldError = await customFieldErrorIn(formData, { full: false });
+  const customFieldError = await customFieldErrorIn(formData, { full: false }, customFieldViewerFor(loaded.user, loaded.roleIds));
   if (customFieldError) {
     return { error: customFieldError };
   }
@@ -469,7 +473,7 @@ export async function updateTimeEntryAction(
         spentOn: parsed.data.spentOn,
       },
     );
-    await saveCustomFieldValues(loaded.entry.id, formData);
+    await saveCustomFieldValues(loaded.entry.id, formData, customFieldViewerFor(loaded.user, loaded.roleIds));
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
       return { error: error.message };

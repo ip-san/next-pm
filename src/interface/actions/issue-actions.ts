@@ -777,6 +777,7 @@ export async function copyIssueAction(
         targetActor: target.actor,
         actorGroupIds: source.userGroupIds,
         actorRoleIdsOnTarget: target.roleIds,
+        customFieldViewerOnTarget: customFieldViewerFor(user, target.roleIds),
         copyAttachments: parsed.data.copyAttachments,
         copySubtasks: parsed.data.copySubtasks,
         // Mirrors the copy form's `@copy_watchers = User.current.allowed_to?(:add_issue_watchers, @project)`.

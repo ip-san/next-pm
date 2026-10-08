@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -28,7 +30,7 @@ export default async function NewTimeEntryPage({ params }: { params: Promise<{ i
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "log_time", project: projectContext, actor })) {
     notFound();
   }
@@ -66,7 +68,7 @@ export default async function NewTimeEntryPage({ params }: { params: Promise<{ i
         projectIdentifier={identifier}
         issues={issues.map((issue) => ({ id: issue.id, subject: issue.subject }))}
         activities={activities}
-        customFields={customFields}
+        customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
         assignableUsers={assignableUsers}
         currentUserId={user.id}
       />

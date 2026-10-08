@@ -140,6 +140,7 @@ const baseInput = {
   sourceActor: copier,
   targetActor: copier,
   actorRoleIdsOnTarget: ["role-1"],
+  customFieldViewerOnTarget: { isAdmin: true, roleIds: [] },
   copyAttachments: false,
   copySubtasks: false,
   copyWatchers: false,

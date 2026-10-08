@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -15,7 +17,7 @@ export default async function ImportTimeEntriesPage({ params }: { params: Promis
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   // TimeEntryImport.authorized? requires both permissions, not just import_time_entries.
   if (
@@ -25,7 +27,10 @@ export default async function ImportTimeEntriesPage({ params }: { params: Promis
     notFound();
   }
 
-  const customFields = await new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry");
+  const customFields = visibleCustomFieldsFor(
+    await new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry"),
+    customFieldViewerFor(user, roleIds),
+  );
 
   return (
     <main className="p-8 flex flex-col gap-6">

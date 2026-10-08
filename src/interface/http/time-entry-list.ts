@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { can } from "@/domain/authorization/authorization-service";
 import { subtreeScopes } from "@/domain/project/nested-set";
 import { memberUserIds } from "@/domain/member/entity";
@@ -39,6 +41,8 @@ export interface TimeEntryListScope {
   canSaveQueries: boolean;
   /** The union of the viewer's role ids across visible projects, for saved-query visibility. */
   roleIds: string[];
+  /** One custom-field viewer per visible project, for the list's column and filter catalog. */
+  customFieldViewers: CustomFieldViewer[];
 }
 
 /**
@@ -56,6 +60,7 @@ export async function resolveGlobalTimeEntryScope(user: User | null): Promise<Ti
     canSaveQueries:
       (user?.isAdmin ?? false) || projects.some((entry) => can({ permission: "save_queries", project: entry.projectContext, actor: entry.actor })),
     roleIds: [...new Set(projects.flatMap((entry) => entry.roleIds))],
+    customFieldViewers: projects.map((entry) => customFieldViewerFor(user, entry.roleIds)),
   };
 }
 

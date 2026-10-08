@@ -1,5 +1,6 @@
 "use server";
 
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -72,7 +73,7 @@ export async function importTimeEntriesCsvAction(
   }
 
   const projectContext = toAuthorizationProject(project);
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (
     !can({ permission: "import_time_entries", project: projectContext, actor }) ||
     !can({ permission: "log_time", project: projectContext, actor })
@@ -202,7 +203,7 @@ export async function importTimeEntriesCsvAction(
     // a second write, so a value rejected there would leave a half-imported row behind.
     // `full` matches the create forms: a required field the CSV has no column for is an
     // error, not a silently blank value.
-    const fieldErrors = await validateTimeEntryCustomFieldValues(customFieldRepository, rawCustomValues, { full: true });
+    const fieldErrors = await validateTimeEntryCustomFieldValues(customFieldRepository, rawCustomValues, { full: true }, customFieldViewerFor(user, roleIds));
     if (Object.keys(fieldErrors).length > 0) {
       rowErrors.push(`${rowNumber}行目: ${Object.values(fieldErrors)[0]}`);
       continue;
@@ -222,7 +223,7 @@ export async function importTimeEntriesCsvAction(
           spentOn,
         },
       );
-      await setTimeEntryCustomFieldValues({ customFieldRepository, customValueRepository }, entry.id, rawCustomValues);
+      await setTimeEntryCustomFieldValues({ customFieldRepository, customValueRepository }, entry.id, rawCustomValues, customFieldViewerFor(user, roleIds));
       created++;
     } catch (error) {
       if (error instanceof InvalidTimeEntryError) {

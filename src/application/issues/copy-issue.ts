@@ -6,6 +6,7 @@ import {
   type AuthorizationActor,
 } from "@/domain/authorization/authorization-service";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
+import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import type { Issue } from "@/domain/issue/entity";
 import { collectSelfAndDescendantIds } from "@/domain/issue/parent";
@@ -69,6 +70,8 @@ export interface CopyIssueInput {
   targetActor: AuthorizationActor;
   actorGroupIds?: string[];
   actorRoleIdsOnTarget: string[];
+  /** The copier's view of custom fields on the target project; a value the copier can't write is not copied. */
+  customFieldViewerOnTarget: CustomFieldViewer;
   copyAttachments: boolean;
   copySubtasks: boolean;
   /** Caller passes `add_issue_watchers` on the target project, as Redmine's form does. */
@@ -253,7 +256,7 @@ async function copyOne(
     canManageSubtasks: true,
   });
 
-  await copyCustomFieldValues(repositories, source, copy);
+  await copyCustomFieldValues(repositories, source, copy, input.customFieldViewerOnTarget);
   if (input.copyAttachments) {
     await copyAttachments(repositories, source, copy, input.actingUserId);
   }
@@ -265,13 +268,19 @@ async function copyOne(
 }
 
 /** `copy_from` carries custom_field_values over; values whose field the target tracker doesn't enable are dropped. */
-async function copyCustomFieldValues(repositories: CopyIssueRepositories, source: Issue, copy: Issue): Promise<void> {
+async function copyCustomFieldValues(
+  repositories: CopyIssueRepositories,
+  source: Issue,
+  copy: Issue,
+  viewer: CustomFieldViewer,
+): Promise<void> {
   const values = await repositories.customValueRepository.listForCustomized("Issue", source.id);
   const raw = Object.fromEntries(values.flatMap((value) => (value.value === null ? [] : [[value.customFieldId, value.value]])));
   if (Object.keys(raw).length === 0) return;
   try {
-    // Redmine's copy_from copies every custom value, visibility aside, so the copy is written as an admin would.
-    await setIssueCustomFieldValues(repositories, copy.trackerId, copy.id, copy.projectId, raw, { isAdmin: true, roleIds: [] });
+    // Only the values the copier may write on the target are carried over; a restricted field they can't see is
+    // left empty on the copy rather than written on their behalf.
+    await setIssueCustomFieldValues(repositories, copy.trackerId, copy.id, copy.projectId, raw, viewer);
   } catch {
     // A value the target tracker's fields reject (e.g. a list option that no longer exists)
     // must not sink the copy — Redmine drops unusable custom values the same way.

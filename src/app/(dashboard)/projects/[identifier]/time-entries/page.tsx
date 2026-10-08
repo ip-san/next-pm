@@ -1,3 +1,4 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { listTimeEntries } from "@/application/time-entries/list-time-entries";
@@ -80,6 +81,7 @@ export default async function ProjectTimeEntriesPage({
       params: listParams,
       savedQuery,
       visibility: { userId: user?.id ?? null, userGroupIds, projects: scopeEntries.map(timeEntryProjectScope) },
+      customFieldViewers: scopeEntries.map((entry) => customFieldViewerFor(user, entry.roleIds)),
       crossProject: false,
       today: new Date().toISOString().slice(0, 10),
     },
