@@ -17,6 +17,9 @@ import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-r
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { subtreeVisibleIssues } from "@/interface/http/project-issue-scope";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -68,7 +71,13 @@ export default async function ProjectGanttPage({
     new DrizzleVersionRepository().listSharedWith(project.id),
   ]);
   const visibilityRoles = issuesVisibilityRoles(actor);
-  const visibleIssues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
+  // display_subprojects_issues: the chart also shows the subprojects' issues, each judged by its own project.
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const subtree = displaySubprojectsIssues ? await subtreeVisibleIssues(user, project) : null;
+  const visibleIssues = subtree
+    ? subtree.issues
+    : allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
+  const identifierByProjectId = subtree?.identifierByProjectId ?? new Map([[project.id, identifier]]);
   const rows = buildGanttRows(visibleIssues, window);
   const versionRows = buildVersionRows(versions, visibleIssues, window);
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
@@ -138,7 +147,11 @@ export default async function ProjectGanttPage({
           rows.map((row) => (
             <div key={row.issue.id} className="flex border-b last:border-b-0">
               <div className="w-64 shrink-0 px-2 py-1.5 border-r truncate" style={{ paddingLeft: `${8 + row.depth * 16}px` }}>
-                <Link href={`/projects/${identifier}/issues/${row.issue.id}`} className="underline" title={row.issue.subject}>
+                <Link
+                  href={`/projects/${identifierByProjectId.get(row.issue.projectId) ?? identifier}/issues/${row.issue.id}`}
+                  className="underline"
+                  title={row.issue.subject}
+                >
                   {trackerById.get(row.issue.trackerId)?.name ?? "?"} #{row.issue.id.slice(0, 8)} {row.issue.subject}
                 </Link>
               </div>

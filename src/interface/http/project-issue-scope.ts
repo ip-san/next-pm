@@ -1,9 +1,12 @@
 import { can } from "@/domain/authorization/authorization-service";
+import type { Issue } from "@/domain/issue/entity";
+import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { Project } from "@/domain/project/entity";
 import type { ProjectIssueScope } from "@/domain/query/issue-search";
 import { seesOnlyOwnTimeEntries } from "@/domain/time-entry/visibility";
 import type { User } from "@/domain/user/entity";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { issuesVisibilityRoles, listVisibleProjectContexts } from "@/interface/http/resolve-actor";
 import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
@@ -49,4 +52,30 @@ export async function projectIssueListScopeFor(
   const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
   if (!displaySubprojectsIssues) return {};
   return { projectScopes: (await subprojectIssueScope(user, project)).projectScopes };
+}
+
+/**
+ * The issues of a project's subtree the viewer may see, each project's issues judged with that project's
+ * own actor and groups. For screens that list the issues themselves (the Gantt chart), where the scope
+ * alone isn't enough.
+ */
+export async function subtreeVisibleIssues(
+  user: User | null,
+  project: Pick<Project, "lft" | "rgt">,
+): Promise<{ issues: Issue[]; identifierByProjectId: Map<string, string> }> {
+  const contexts = (await listVisibleProjectContexts(user, "view_issues")).filter(
+    (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
+  );
+  const issueRepository = new DrizzleIssueRepository();
+  const perProject = await Promise.all(
+    contexts.map(async (entry) => {
+      const issues = await issueRepository.listByProject(entry.project.id);
+      const roles = issuesVisibilityRoles(entry.actor);
+      return issues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, entry.userGroupIds, roles));
+    }),
+  );
+  return {
+    issues: perProject.flat(),
+    identifierByProjectId: new Map(contexts.map((entry) => [entry.project.id, entry.project.identifier])),
+  };
 }
