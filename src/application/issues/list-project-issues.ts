@@ -91,7 +91,9 @@ export async function listProjectIssues(
     loadGeneralSettings(repositories.settingsRepository),
   ]);
 
-  const crossProject = input.projectScopes !== undefined;
+  // The cross-project list is the one that passes projectScopes with no project. A project list that
+  // includes its subprojects also passes projectScopes, but keeps the project's own columns (no Project column).
+  const crossProject = input.projectScopes !== undefined && input.projectId === null;
   const availableColumns = issueQueryColumns({
     customFields: allCustomFields,
     canViewTimeEntries: input.canViewTimeEntries,

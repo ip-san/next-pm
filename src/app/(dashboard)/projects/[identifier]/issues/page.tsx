@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
 import { listProjectIssues } from "@/application/issues/list-project-issues";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { subprojectIssueScope } from "@/interface/http/project-issue-scope";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
 import type { QueryColumn } from "@/domain/query/columns";
@@ -87,6 +89,12 @@ export default async function ProjectIssuesPage({
     savedQuery = visibleQueries.find((query) => query.id === listParams.queryId) ?? null;
   }
 
+  // display_subprojects_issues: the list also covers the subprojects the viewer may see issues in.
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const subtree = displaySubprojectsIssues ? await subprojectIssueScope(user, project) : null;
+  // Rows of a subproject link to that project's own issue page, so the project id is looked up here.
+  const identifierByProjectId = subtree?.identifierByProjectId ?? new Map([[project.id, identifier]]);
+
   const result = await listProjectIssues(
     {
       issueSearchRepository: new DrizzleIssueSearchRepository(),
@@ -96,6 +104,7 @@ export default async function ProjectIssuesPage({
     },
     {
       projectId: project.id,
+      ...(subtree ? { projectScopes: subtree.projectScopes } : {}),
       params: listParams,
       savedQuery,
       visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),
@@ -364,15 +373,17 @@ export default async function ProjectIssuesPage({
                       </td>
                     </tr>
                   ) : null}
-                  <tr className="border-b" data-issue-id={issue.id}>
+                  <tr className="border-b" {...(issue.projectId === project.id ? { "data-issue-id": issue.id } : {})}>
                     <td className="pr-4 py-1">
-                      <input type="checkbox" name="ids" value={issue.id} aria-label={`${issue.subject}を選択`} />
+                      {issue.projectId === project.id ? (
+                        <input type="checkbox" name="ids" value={issue.id} aria-label={`${issue.subject}を選択`} />
+                      ) : null}
                     </td>
                     {result.displayColumns.map((column) => (
                       <td key={column.key} className="pr-4 py-1">
                         {column.key === "id" || column.key === "subject" ? (
                           <Link
-                            href={`${basePath}/${issue.id}`}
+                            href={`/projects/${identifierByProjectId.get(issue.projectId) ?? identifier}/issues/${issue.id}`}
                             className="underline"
                             style={
                               column.key === "subject" ? { marginLeft: `${(indentLevels.get(issue.id) ?? 0) * 1.25}rem` } : undefined
