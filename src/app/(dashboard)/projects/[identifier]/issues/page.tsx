@@ -1,3 +1,4 @@
+import { customFieldChoiceOptions } from "@/domain/custom-field/choices";
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -158,6 +159,15 @@ export default async function ProjectIssuesPage({
               ]
             : field.possibleValues.map((value) => ({ value, label: value })),
         ]),
+    ),
+    // A user or version field filters by one of the project's members or shared versions.
+    ...Object.fromEntries(
+      Object.entries(
+        customFieldChoiceOptions(result.customFields, {
+          users: memberUsers.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` })),
+          versions: versions.map((version) => ({ value: version.id, label: version.name })),
+        }),
+      ).map(([fieldId, options]) => [`cf_${fieldId}`, options]),
     ),
   };
 
