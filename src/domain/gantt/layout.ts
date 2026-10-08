@@ -105,3 +105,66 @@ export function buildMonthTicks(window: GanttWindow): GanttMonthTick[] {
   }
   return ticks;
 }
+
+/** Redmine's zoom levels are 1 to 4 (default 2); the timeline is `zoom` pixels per day (g_width = days * zoom). */
+export const GANTT_ZOOM_DEFAULT = 2;
+export const GANTT_ZOOM_MAX = 4;
+export const GANTT_MONTHS_DEFAULT = 6;
+export const GANTT_MONTHS_MAX = 12;
+
+/** Redmine's `@zoom`: anything outside 1 to 4 falls back to the default. */
+export function resolveGanttZoom(raw: string | undefined): number {
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 && value <= GANTT_ZOOM_MAX ? value : GANTT_ZOOM_DEFAULT;
+}
+
+/** Redmine's `@months`: anything outside 1 to the limit falls back to the default. */
+export function resolveGanttMonths(raw: string | undefined): number {
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 && value <= GANTT_MONTHS_MAX ? value : GANTT_MONTHS_DEFAULT;
+}
+
+/** Pixel width of the timeline for a window at a zoom level. */
+export function ganttTimelineWidth(window: GanttWindow, zoom: number): number {
+  return windowDays(window) * zoom;
+}
+
+export interface GanttVersionRow {
+  version: { id: string; name: string; effectiveDate: string };
+  leftPercent: number;
+  widthPercent: number;
+}
+
+/**
+ * One row per shared version with an effective date, as Redmine's gantt draws versions: the bar
+ * runs from the earliest start among the version's issues to its effective date. Only issues the
+ * viewer can see are passed in, so a hidden issue's date can't shape the bar. A version with no
+ * visible dated issue starts on its effective date.
+ */
+export function buildVersionRows(
+  versions: { id: string; name: string; effectiveDate: string | null }[],
+  visibleIssues: Pick<Issue, "fixedVersionId" | "startDate" | "dueDate">[],
+  window: GanttWindow,
+): GanttVersionRow[] {
+  const total = windowDays(window);
+  const rows: GanttVersionRow[] = [];
+  for (const version of versions) {
+    if (!version.effectiveDate) continue;
+    const starts = visibleIssues
+      .filter((issue) => issue.fixedVersionId === version.id)
+      .map((issue) => effectiveIssueRange(issue)?.start)
+      .filter((start): start is string => start !== undefined);
+    const start = starts.length > 0 ? starts.reduce((earliest, candidate) => (candidate < earliest ? candidate : earliest)) : version.effectiveDate;
+    const end = version.effectiveDate;
+    const from = start <= end ? start : end;
+    if (end < window.start || from > window.end) continue;
+    const clampedStart = clampDate(from, window);
+    const clampedEnd = clampDate(end, window);
+    rows.push({
+      version: { id: version.id, name: version.name, effectiveDate: version.effectiveDate },
+      leftPercent: (daysBetween(window.start, clampedStart) / total) * 100,
+      widthPercent: Math.max((daysBetween(clampedStart, clampedEnd) + 1) / total, 1 / total) * 100,
+    });
+  }
+  return rows;
+}
