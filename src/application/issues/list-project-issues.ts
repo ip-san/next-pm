@@ -1,5 +1,6 @@
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
+import { customFieldsVisibleInEveryScope, type CustomFieldViewer } from "@/domain/custom-field/visibility";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import {
   DEFAULT_GLOBAL_ISSUE_COLUMN_KEYS,
@@ -56,6 +57,11 @@ export interface ListProjectIssuesInput {
    * mirroring Redmine's `Setting.issues_export_limit`. Omit for the paginated list.
    */
   exportLimit?: number;
+  /**
+   * The viewer for each project the list covers (one entry for a single project). A custom field is offered as a
+   * column or filter only when every one of them sees it (see customFieldsVisibleInEveryScope).
+   */
+  customFieldViewers: CustomFieldViewer[];
 }
 
 export interface ListProjectIssuesResult {
@@ -85,11 +91,12 @@ export async function listProjectIssues(
   repositories: ListProjectIssuesRepositories,
   input: ListProjectIssuesInput,
 ): Promise<ListProjectIssuesResult> {
-  const [statuses, allCustomFields, settings] = await Promise.all([
+  const [statuses, allFieldsIncludingHidden, settings] = await Promise.all([
     repositories.issueStatusRepository.listAll(),
     repositories.customFieldRepository.listForCustomizedType("Issue"),
     loadGeneralSettings(repositories.settingsRepository),
   ]);
+  const allCustomFields = customFieldsVisibleInEveryScope(allFieldsIncludingHidden, input.customFieldViewers);
 
   // The cross-project list is the one that passes projectScopes with no project. A project list that
   // includes its subprojects also passes projectScopes, but keeps the project's own columns (no Project column).

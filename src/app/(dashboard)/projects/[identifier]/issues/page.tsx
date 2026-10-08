@@ -1,3 +1,4 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { customFieldChoiceOptions } from "@/domain/custom-field/choices";
 import { Fragment } from "react";
 import Link from "next/link";
@@ -105,6 +106,7 @@ export default async function ProjectIssuesPage({
     {
       projectId: project.id,
       ...(subtree ? { projectScopes: subtree.projectScopes } : {}),
+      customFieldViewers: subtree ? subtree.customFieldViewers : [customFieldViewerFor(user, roleIds)],
       params: listParams,
       savedQuery,
       visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),

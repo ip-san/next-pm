@@ -1,3 +1,5 @@
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -79,9 +81,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const [journals, customValues, sections] = await Promise.all([
+  const [journals, customValues, customFields, sections] = await Promise.all([
     new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project)),
     new DrizzleCustomValueRepository().listForCustomized("Issue", id),
+    new DrizzleCustomFieldRepository().listForCustomizedType("Issue"),
     loadIssueIncludes(
       {
         issue,
@@ -95,7 +98,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       parseIssueIncludes(new URL(request.url).searchParams.get("include")),
     ),
   ]);
-  return NextResponse.json({ issue, journals, customValues, ...sections });
+  // Custom values and history details of a restricted field are left out for a viewer who can't see it
+  // (Redmine's visible_custom_field_values and Journal#visible_details).
+  const visibleFieldIds = new Set(visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds)).map((field) => field.id));
+  return NextResponse.json({
+    issue,
+    journals: journals.map((journal) => ({
+      ...journal,
+      details: journal.details.filter((detail) => detail.property !== "cf" || visibleFieldIds.has(detail.fieldName)),
+    })),
+    customValues: customValues.filter((value) => visibleFieldIds.has(value.customFieldId)),
+    ...sections,
+  });
 }
 
 const updateIssueSchema = z.object({
@@ -185,6 +199,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         customFieldValues: parsed.data.custom_field_values,
         actingUserId: user.id,
         actorRoleIds: roleIds,
+        customFieldViewer: customFieldViewerFor(user, roleIds),
         isAuthor,
         isAssignee,
         canSetPrivate:

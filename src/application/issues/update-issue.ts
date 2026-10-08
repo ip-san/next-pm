@@ -1,4 +1,5 @@
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
+import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
 import { diffIssueChanges } from "@/domain/journal/diff-issue";
 import { splitPrivateNote } from "@/domain/journal/visibility";
@@ -65,6 +66,8 @@ export interface UpdateIssueInput {
   notes: string;
   actingUserId: string;
   actorRoleIds: string[];
+  /** Decides which custom fields the actor may write; a hidden field keeps its value whatever is submitted. */
+  customFieldViewer: CustomFieldViewer;
   isAuthor: boolean;
   isAssignee: boolean;
   /**
@@ -189,6 +192,8 @@ async function closeDuplicates(
           notes: "",
           actingUserId,
           actorRoleIds,
+          // Closing a duplicate carries no custom values, so the viewer only matters for fields it never writes.
+          customFieldViewer: { isAdmin: false, roleIds: [] },
           isAuthor: duplicate.authorId === actingUserId,
           isAssignee: duplicate.assignedToId === actingUserId,
         },
@@ -258,6 +263,8 @@ async function rescheduleFollowingIssues(
           notes: "",
           actingUserId,
           actorRoleIds: [],
+          // The cascades act on no one's behalf and carry no custom values.
+          customFieldViewer: { isAdmin: false, roleIds: [] },
           isAuthor: false,
           isAssignee: false,
         },
@@ -473,7 +480,7 @@ async function applyIssueUpdate(
   // stored, so both land in the single journal below.
   const preparedCustomFieldValues =
     customFieldValues && Object.keys(customFieldValues).length > 0
-      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, before.projectId, customFieldValues)
+      ? await prepareIssueCustomFieldValues(repositories, targetTrackerId, input.issueId, before.projectId, customFieldValues, input.customFieldViewer)
       : null;
 
   const after = await repositories.issueRepository.update(input.issueId, input.expectedLockVersion, changes);

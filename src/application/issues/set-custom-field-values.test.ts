@@ -15,6 +15,8 @@ function makeField(overrides: Partial<CustomField> = {}): CustomField {
     fieldFormat: "list",
     isRequired: false,
     defaultValue: null,
+    visible: true,
+    roleIds: [],
     possibleValues: ["Low", "High"],
     position: 1,
     trackerIds: ["tracker-1"],
@@ -48,17 +50,40 @@ function makeRepos(fields: CustomField[]) {
   return { customFieldRepository, customValueRepository, memberRepository, userRepository, versionRepository };
 }
 
+describe("setIssueCustomFieldValues visibility", () => {
+  const restricted = makeField({ id: "field-secret", name: "Secret", visible: false, roleIds: ["manager"] });
+
+  it("writes a restricted field for a viewer holding one of its roles", async () => {
+    const repos = makeRepos([restricted]);
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-secret": "High" }, { isAdmin: false, roleIds: ["manager"] });
+    expect(repos.customValueRepository.set).toHaveBeenCalledWith("field-secret", "Issue", "issue-1", "High");
+  });
+
+  it("ignores a restricted field the viewer can't see, even when the request names it", async () => {
+    const repos = makeRepos([restricted]);
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-secret": "High" }, { isAdmin: false, roleIds: ["reporter"] });
+    expect(repos.customValueRepository.set).not.toHaveBeenCalled();
+  });
+
+  it("doesn't validate a hidden field, so its invalid submitted value can't block the edit", async () => {
+    const repos = makeRepos([restricted]);
+    await expect(
+      setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-secret": "Nope" }, { isAdmin: false, roleIds: [] }),
+    ).resolves.toEqual([]);
+  });
+});
+
 describe("setIssueCustomFieldValues", () => {
   it("persists a valid value for a field present in rawValues", async () => {
     const repos = makeRepos([makeField()]);
-    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "High" });
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "High" }, { isAdmin: true, roleIds: [] });
     expect(repos.customValueRepository.set).toHaveBeenCalledWith("field-1", "Issue", "issue-1", "High");
   });
 
   it("throws with a field-level error and writes nothing when a value is invalid", async () => {
     const repos = makeRepos([makeField()]);
     await expect(
-      setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "Unknown" }),
+      setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "Unknown" }, { isAdmin: true, roleIds: [] }),
     ).rejects.toThrow(CustomFieldValidationError);
     expect(repos.customValueRepository.set).not.toHaveBeenCalled();
   });
@@ -67,27 +92,27 @@ describe("setIssueCustomFieldValues", () => {
     // Regression: a PATCH updating one field must not be rejected because some other
     // already-set required custom field wasn't resent in this call.
     const repos = makeRepos([makeField({ id: "field-1", isRequired: true }), makeField({ id: "field-2", name: "Other" })]);
-    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-2": "High" });
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-2": "High" }, { isAdmin: true, roleIds: [] });
     expect(repos.customValueRepository.set).toHaveBeenCalledTimes(1);
     expect(repos.customValueRepository.set).toHaveBeenCalledWith("field-2", "Issue", "issue-1", "High");
   });
 
   it("treats a required field as invalid when explicitly present but blank", async () => {
     const repos = makeRepos([makeField({ isRequired: true })]);
-    await expect(setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "" })).rejects.toThrow(
+    await expect(setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "" }, { isAdmin: true, roleIds: [] })).rejects.toThrow(
       CustomFieldValidationError,
     );
   });
 
   it("silently ignores a field id not applicable to this tracker", async () => {
     const repos = makeRepos([]);
-    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "not-applicable": "value" });
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "not-applicable": "value" }, { isAdmin: true, roleIds: [] });
     expect(repos.customValueRepository.set).not.toHaveBeenCalled();
   });
 
   it("writes nothing when rawValues is empty", async () => {
     const repos = makeRepos([makeField()]);
-    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", {});
+    await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", {}, { isAdmin: true, roleIds: [] });
     expect(repos.customValueRepository.set).not.toHaveBeenCalled();
   });
 
@@ -97,7 +122,7 @@ describe("setIssueCustomFieldValues", () => {
       makeField({ id: "field-2", isRequired: true, name: "Other" }),
     ]);
     try {
-      await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "", "field-2": "" });
+      await setIssueCustomFieldValues(repos, "tracker-1", "issue-1", "project-1", { "field-1": "", "field-2": "" }, { isAdmin: true, roleIds: [] });
       throw new Error("expected rejection");
     } catch (error) {
       expect(error).toBeInstanceOf(CustomFieldValidationError);

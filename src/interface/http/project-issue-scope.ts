@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { isWithinSubtree } from "@/domain/project/nested-set";
 import { can } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
@@ -21,7 +23,7 @@ import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
 export async function subprojectIssueScope(
   user: User | null,
   project: Pick<Project, "lft" | "rgt">,
-): Promise<{ projectScopes: ProjectIssueScope[]; identifierByProjectId: Map<string, string> }> {
+): Promise<{ projectScopes: ProjectIssueScope[]; identifierByProjectId: Map<string, string>; customFieldViewers: CustomFieldViewer[] }> {
   const contexts = (await listVisibleProjectContexts(user, "view_issues")).filter(
     (entry) => isWithinSubtree(project, entry.project),
   );
@@ -39,6 +41,7 @@ export async function subprojectIssueScope(
   return {
     projectScopes,
     identifierByProjectId: new Map(contexts.map((entry) => [entry.project.id, entry.project.identifier])),
+    customFieldViewers: contexts.map((entry) => customFieldViewerFor(user, entry.roleIds)),
   };
 }
 
@@ -49,10 +52,12 @@ export async function subprojectIssueScope(
 export async function projectIssueListScopeFor(
   user: User | null,
   project: Pick<Project, "lft" | "rgt">,
-): Promise<{ projectScopes?: ProjectIssueScope[] }> {
+  roleIds: string[],
+): Promise<{ projectScopes?: ProjectIssueScope[]; customFieldViewers: CustomFieldViewer[] }> {
   const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
-  if (!displaySubprojectsIssues) return {};
-  return { projectScopes: (await subprojectIssueScope(user, project)).projectScopes };
+  if (!displaySubprojectsIssues) return { customFieldViewers: [customFieldViewerFor(user, roleIds)] };
+  const subtree = await subprojectIssueScope(user, project);
+  return { projectScopes: subtree.projectScopes, customFieldViewers: subtree.customFieldViewers };
 }
 
 /**

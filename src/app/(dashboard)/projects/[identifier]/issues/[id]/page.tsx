@@ -1,3 +1,5 @@
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { userVisibilityFor } from "@/interface/http/user-visibility";
 import { isActiveUser } from "@/domain/user/entity";
 import Link from "next/link";
@@ -153,7 +155,12 @@ export default async function IssueDetailPage({
   const allCustomFields = [...new Map(customFieldsByTracker.flat().map((field) => [field.id, field])).values()].sort(
     (a, b) => a.position - b.position,
   );
-  const customFields = allCustomFields.filter((field) => field.trackerIds.includes(issue.trackerId));
+  // Only the fields this viewer may see: a restricted field's name, value and history stay hidden (Redmine's
+  // visible_custom_field_values and Journal#visible_details).
+  const customFieldViewer = customFieldViewerFor(user, roleIds);
+  const visibleCustomFields = visibleCustomFieldsFor(allCustomFields, customFieldViewer);
+  const visibleFieldIds = new Set(visibleCustomFields.map((field) => field.id));
+  const customFields = visibleCustomFields.filter((field) => field.trackerIds.includes(issue.trackerId));
   const canLogTime = can({ permission: "log_time", project: toAuthorizationProject(project), actor });
   // Spent time is its own permission in Redmine, and a role with time_entries_visibility
   // == "own" only ever sees its own rows — being able to see the issue is not enough.
@@ -257,7 +264,7 @@ export default async function IssueDetailPage({
         choiceLabelByFieldId.set(field.id, label ?? "(非公開)");
       }),
   );
-  const customFieldNameById = new Map(allCustomFields.map((field) => [field.id, field.name]));
+  const customFieldNameById = new Map(visibleCustomFields.map((field) => [field.id, field.name]));
   // Only ids this page already showed the viewer go in here; anything else renders as a
   // short id, so a journal can't resolve a private project's name or an invisible issue's.
   const journalValueNames = new Map<string, string>([
@@ -374,7 +381,9 @@ export default async function IssueDetailPage({
                   {journal.updatedById ? <span className="ml-2">（編集済み）</span> : null}
                 </p>
                 {journal.notes ? <p>{journal.notes}</p> : null}
-                {journal.details.map((detail, index) => {
+                {journal.details
+                  .filter((detail) => detail.property !== "cf" || visibleFieldIds.has(detail.fieldName))
+                  .map((detail, index) => {
                   const described = describeJournalDetail(detail, {
                     customFields: customFieldNameById,
                     values: journalValueNames,
@@ -452,8 +461,10 @@ export default async function IssueDetailPage({
             members={assignableUsers}
             groups={assignableGroups}
             currentAssigneeLabel={currentAssigneeLabel}
-            customFields={allCustomFields}
-            customValues={Object.fromEntries(customValues.map((cv) => [cv.customFieldId, cv.value ?? ""]))}
+            customFields={visibleCustomFields}
+            customValues={Object.fromEntries(
+              customValues.filter((cv) => visibleFieldIds.has(cv.customFieldId)).map((cv) => [cv.customFieldId, cv.value ?? ""]),
+            )}
             doneRatioEditable={resolveGeneralSettings(settings).issueDoneRatio === "issue_field"}
             canSetPrivate={
               can({ permission: "set_issues_private", project: toAuthorizationProject(project), actor }) ||

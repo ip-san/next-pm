@@ -1,3 +1,5 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
 import type { ProjectIssueScope } from "@/domain/query/issue-search";
@@ -20,6 +22,8 @@ export interface GlobalIssueListScope {
   projects: VisibleProjectContext[];
   /** The per-project rules the issue read model needs. */
   projectScopes: ProjectIssueScope[];
+  /** One custom-field viewer per project the viewer holds view_issues in. */
+  customFieldViewers: CustomFieldViewer[];
   /** Redmine's `allowed_to?(:view_time_entries, nil, :global => true)` — the gate on the `spent_hours` column. */
   canViewTimeEntries: boolean;
   /** Redmine's `allowed_to?(:save_queries, nil, :global => true)`. */
@@ -53,6 +57,7 @@ export async function resolveGlobalIssueListScope(user: User | null): Promise<Gl
   return {
     projects,
     projectScopes,
+    customFieldViewers: projects.map((entry) => customFieldViewerFor(user, entry.roleIds)),
     canViewTimeEntries: projectScopes.some((scope) => scope.spentHours !== "none"),
     canSaveQueries:
       (user?.isAdmin ?? false) || projects.some((entry) => can({ permission: "save_queries", project: entry.projectContext, actor: entry.actor })),

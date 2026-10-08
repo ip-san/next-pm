@@ -1,3 +1,5 @@
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { loadCustomFieldOptionSets } from "@/application/custom-field/option-sets";
 import { customFieldOptionRepositories } from "@/interface/http/custom-field-option-repositories";
 import { can } from "@/domain/authorization/authorization-service";
@@ -530,7 +532,7 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
     ? trackers.find((tracker) => normalizeName(tracker.name) === normalizeName(trackerIdFromKeyword))
     : undefined;
   const trackerId = keywordTracker?.id ?? defaultTrackerId;
-  const applicableFields = await customFieldRepository.listForTracker(trackerId);
+  const applicableFields = visibleCustomFieldsFor(await customFieldRepository.listForTracker(trackerId), customFieldViewerFor(base.sender, roleIds));
 
   const keywords = extractIssueKeywords(cleanedBody, {
     allowOverride: base.allowOverride,
@@ -653,7 +655,10 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
     return ignored("insufficient_permissions");
   }
 
-  const applicableFields = await new DrizzleCustomFieldRepository().listForTracker(existing.trackerId);
+  const applicableFields = visibleCustomFieldsFor(
+    await new DrizzleCustomFieldRepository().listForTracker(existing.trackerId),
+    customFieldViewerFor(base.sender, roleIds),
+  );
   const keywords = extractIssueKeywords(cleanedBody, {
     allowOverride: base.allowOverride,
     customFieldNames: applicableFields.map((field) => field.name),
@@ -677,6 +682,7 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix
       notes: keywords.body,
       actingUserId: base.sender.id,
       actorRoleIds: roleIds,
+      customFieldViewer: customFieldViewerFor(base.sender, roleIds),
       canSetPrivate: false,
       canManageSubtasks: false,
       isAuthor,

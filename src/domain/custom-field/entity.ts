@@ -34,4 +34,8 @@ export interface CustomField {
   trackerIds: string[];
   /** The choices of an `enumeration` field, active or not; empty for every other format. */
   enumerations?: CustomFieldEnumeration[];
+  /** Redmine's `visible`: when false, only admins and the roles in `roleIds` see the field. */
+  visible: boolean;
+  /** Only meaningful when `visible` is false: the roles that see the field. */
+  roleIds: string[];
 }

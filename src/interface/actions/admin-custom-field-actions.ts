@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { coerceCustomFieldValue } from "@/domain/custom-field/coerce";
+import { normalizeFieldVisibility } from "@/domain/custom-field/visibility";
 import { nextPosition, resolveMove } from "@/domain/ordering/positioned";
 import { customFieldFormatEnum, customizedTypeEnum } from "@/infrastructure/db/schema/custom-fields";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 import { positionMoveValues, type AdminActionState } from "./admin-action-state";
@@ -19,6 +21,8 @@ const editableAttributesSchema = z.object({
   defaultValue: z.string().default(""),
   isRequired: z.coerce.boolean().default(false),
   trackerIds: z.array(z.string().uuid()).default([]),
+  visible: z.coerce.boolean().default(true),
+  roleIds: z.array(z.string().uuid()).default([]),
 });
 
 function editableAttributesFrom(formData: FormData) {
@@ -28,6 +32,9 @@ function editableAttributesFrom(formData: FormData) {
     defaultValue: formData.get("defaultValue") ?? "",
     isRequired: formData.get("isRequired") === "on",
     trackerIds: formData.getAll("trackerIds"),
+    // Redmine's radio: "1" public, "0" restricted to the checked roles. Anything else is public.
+    visible: formData.get("visible") !== "0",
+    roleIds: formData.getAll("roleIds").filter((id) => id !== ""),
   };
 }
 
@@ -37,6 +44,8 @@ type ResolvedAttributes = {
   defaultValue: string | null;
   possibleValues: string[];
   trackerIds: string[];
+  visible: boolean;
+  roleIds: string[];
 };
 
 /**
@@ -72,6 +81,19 @@ async function resolveAttributes(
     return { ok: false, error: "存在しないトラッカーが指定されました。" };
   }
 
+  // Visibility by role only exists for Issue, Project and TimeEntry fields (Redmine shows the selector for
+  // exactly these), and a restricted field names roles an admin can give. Anything else is public.
+  const roleVisibilityOffered = customizedType === "Issue" || customizedType === "Project" || customizedType === "TimeEntry";
+  const visibility = roleVisibilityOffered
+    ? normalizeFieldVisibility({ visible: attributes.visible, roleIds: attributes.roleIds })
+    : { visible: true, roleIds: [] };
+  if (!visibility.visible) {
+    const givable = new Set((await new DrizzleRoleRepository().listGivable()).map((role) => role.id));
+    if (visibility.roleIds.some((id) => !givable.has(id))) {
+      return { ok: false, error: "存在しないロールが指定されました。" };
+    }
+  }
+
   const possibleValues =
     fieldFormat === "list" || fieldFormat === "enumeration"
       ? attributes.possibleValues
@@ -100,7 +122,7 @@ async function resolveAttributes(
 
   return {
     ok: true,
-    value: { name: attributes.name, isRequired: attributes.isRequired, defaultValue, possibleValues, trackerIds },
+    value: { name: attributes.name, isRequired: attributes.isRequired, defaultValue, possibleValues, trackerIds, ...visibility },
   };
 }
 

@@ -1,9 +1,10 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
-import { customFieldEnumerations, customFields, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
+import { customFieldEnumerations, customFields, customFieldsRoles, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
 import type { CustomField, CustomFieldEnumeration, CustomizedType } from "@/domain/custom-field/entity";
 import type { Positioned } from "@/domain/ordering/positioned";
 import type { CustomFieldAdminRepository, CustomFieldRepository } from "@/domain/custom-field/repository";
+import { normalizeFieldVisibility } from "@/domain/custom-field/visibility";
 
 /**
  * Writes an enumeration field's choices to match `names`, in that order. A name that already exists
@@ -57,6 +58,10 @@ async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Pro
       .select({ trackerId: customFieldsTrackers.trackerId })
       .from(customFieldsTrackers)
       .where(eq(customFieldsTrackers.customFieldId, row.id));
+    const roleRows = await db
+      .select({ roleId: customFieldsRoles.roleId })
+      .from(customFieldsRoles)
+      .where(eq(customFieldsRoles.customFieldId, row.id));
     const enumerations: CustomFieldEnumeration[] = choices
       .filter((choice) => choice.customFieldId === row.id)
       .map((choice) => ({ id: choice.id, name: choice.name, position: choice.position, active: choice.active }));
@@ -71,6 +76,8 @@ async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Pro
       possibleValues: row.possibleValues,
       position: row.position,
       trackerIds: trackerRows.map((t) => t.trackerId),
+      visible: row.visible,
+      roleIds: roleRows.map((r) => r.roleId),
     });
   }
   return result;
@@ -105,6 +112,7 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
   }
 
   async create(field: Omit<CustomField, "id">): Promise<CustomField> {
+    const visibility = normalizeFieldVisibility(field);
     const [row] = await db
       .insert(customFields)
       .values({
@@ -115,8 +123,13 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
         defaultValue: field.defaultValue,
         possibleValues: field.possibleValues,
         position: field.position,
+        visible: visibility.visible,
       })
       .returning();
+
+    if (visibility.roleIds.length > 0) {
+      await db.insert(customFieldsRoles).values(visibility.roleIds.map((roleId) => ({ customFieldId: row.id, roleId })));
+    }
 
     if (field.trackerIds.length > 0) {
       await db
@@ -128,13 +141,14 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
       await syncEnumerations(row.id, field.possibleValues);
     }
 
-    return { ...field, id: row.id };
+    return { ...field, ...visibility, id: row.id };
   }
 
   async update(
     id: string,
-    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds">,
+    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds" | "visible" | "roleIds">,
   ): Promise<CustomField> {
+    const visibility = normalizeFieldVisibility(changes);
     const [row] = await db
       .update(customFields)
       .set({
@@ -142,9 +156,15 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
         isRequired: changes.isRequired,
         defaultValue: changes.defaultValue,
         possibleValues: changes.possibleValues,
+        visible: visibility.visible,
       })
       .where(eq(customFields.id, id))
       .returning();
+
+    await db.delete(customFieldsRoles).where(eq(customFieldsRoles.customFieldId, id));
+    if (visibility.roleIds.length > 0) {
+      await db.insert(customFieldsRoles).values(visibility.roleIds.map((roleId) => ({ customFieldId: id, roleId })));
+    }
 
     if (row.fieldFormat === "enumeration") {
       await syncEnumerations(id, changes.possibleValues);

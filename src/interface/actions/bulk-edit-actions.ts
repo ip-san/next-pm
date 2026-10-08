@@ -1,5 +1,6 @@
 "use server";
 
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -194,6 +195,7 @@ export async function bulkUpdateIssuesAction(
           notes: parsed.data.notes,
           actingUserId: user.id,
           actorRoleIds: roleIds,
+          customFieldViewer: customFieldViewerFor(user, roleIds),
           // The same permission split the single-issue path applies. Without these a bulk
           // edit would let someone with edit_issues alone add notes, which add_issue_notes
           // is meant to gate.

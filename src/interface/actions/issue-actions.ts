@@ -1,5 +1,7 @@
 "use server";
 
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { loadCustomFieldOptionSets } from "@/application/custom-field/option-sets";
 import { customFieldOptionRepositories } from "@/interface/http/custom-field-option-repositories";
 import { revalidatePath } from "next/cache";
@@ -146,7 +148,10 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   // field the form never submitted must still be caught), hence filling in "" for every
   // applicable field the submission didn't mention.
   const customFieldRepository = new DrizzleCustomFieldRepository();
-  const applicableFields = await customFieldRepository.listForTracker(parsed.data.trackerId);
+  const applicableFields = visibleCustomFieldsFor(
+    await customFieldRepository.listForTracker(parsed.data.trackerId),
+    customFieldViewerFor(user, roleIds),
+  );
   const optionSets = await loadCustomFieldOptionSets(customFieldOptionRepositories(), project.id, applicableFields);
   const { fieldErrors, coerced } = validateCustomFieldValues(
     applicableFields,
@@ -383,6 +388,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
         notes: parsed.data.notes,
         actingUserId: user.id,
         actorRoleIds: roleIds,
+        customFieldViewer: customFieldViewerFor(user, roleIds),
         isAuthor,
         isAssignee,
         // Mirrors Redmine: the broad permission, or the "own" one when the actor authored

@@ -52,6 +52,7 @@ export async function GET(request: Request) {
     {
       projectId: null,
       projectScopes: scope.projectScopes,
+      customFieldViewers: scope.customFieldViewers,
       params: listParams,
       savedQuery,
       visibility: { userId: user?.id ?? null, userGroupIds: scope.userGroupIds, seesAllPrivateIssues: false },

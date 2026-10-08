@@ -11,6 +11,8 @@ function field(overrides: Partial<CustomField> = {}): CustomField {
     fieldFormat: "list",
     isRequired: false,
     defaultValue: null,
+    visible: true,
+    roleIds: [],
     possibleValues: ["yes", "no"],
     position: 0,
     trackerIds: [],

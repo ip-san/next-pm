@@ -66,6 +66,7 @@ export default async function GlobalIssuesPage({
     {
       projectId: null,
       projectScopes: scope.projectScopes,
+      customFieldViewers: scope.customFieldViewers,
       params: listParams,
       savedQuery,
       // `seesAllPrivateIssues` is decided per project inside `projectScopes`; only the

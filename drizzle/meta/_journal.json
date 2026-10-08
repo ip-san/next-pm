@@ -330,6 +330,13 @@
       "when": 1791471600479,
       "tag": "0046_faulty_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791500040929,
+      "tag": "0047_overconfident_chat",
+      "breakpoints": true
     }
   ]
 }

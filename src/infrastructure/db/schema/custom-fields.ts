@@ -1,4 +1,5 @@
 import { boolean, integer, jsonb, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { roles } from "./roles";
 import { trackers } from "./trackers";
 
 export const customFieldFormatEnum = ["string", "text", "int", "float", "date", "bool", "list", "link", "user", "version", "enumeration"] as const;
@@ -13,7 +14,28 @@ export const customFields = pgTable("custom_fields", {
   defaultValue: text("default_value"),
   possibleValues: jsonb("possible_values").notNull().$type<string[]>().default([]),
   position: integer("position").notNull().default(0),
+  /**
+   * Redmine's custom_fields.visible: true for everyone, false for the roles in customFieldsRoles
+   * (and admins). Redmine's form only offers the roles when this is off.
+   */
+  visible: boolean("visible").notNull().default(true),
 });
+
+/**
+ * Redmine's custom_fields_roles: which roles see a custom field whose `visible` is off.
+ */
+export const customFieldsRoles = pgTable(
+  "custom_fields_roles",
+  {
+    customFieldId: uuid("custom_field_id")
+      .notNull()
+      .references(() => customFields.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.customFieldId, table.roleId] })],
+);
 
 /**
  * Redmine's CustomFieldEnumeration: the choices of an `enumeration` custom field. A value stores the

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { createCustomFieldAction, updateCustomFieldAction } from "@/interface/actions/admin-custom-field-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
 import type { Tracker } from "@/domain/tracker/entity";
+import type { Role } from "@/domain/role/entity";
 import type { CustomField, CustomizedType } from "@/domain/custom-field/entity";
 
 const initialState: AdminActionState = { error: null };
@@ -22,6 +23,9 @@ const FORMAT_OPTIONS = [
   { value: "enumeration", label: "列挙" },
 ] as const;
 
+/** Redmine shows the role-visibility selector for exactly these custom field types. */
+const ROLE_VISIBILITY_TYPES: CustomizedType[] = ["Issue", "Project", "TimeEntry"];
+
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
   { value: "Issue", label: "チケット" },
   { value: "Project", label: "プロジェクト" },
@@ -33,7 +37,7 @@ const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
  * read-only: Redmine disables the format select for a persisted record and CustomField's STI
  * type never changes, so neither is submitted.
  */
-export function CustomFieldForm({ trackers, field }: { trackers: Tracker[]; field?: CustomField }) {
+export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[]; roles: Role[]; field?: CustomField }) {
   const [state, formAction, pending] = useActionState(
     field ? updateCustomFieldAction : createCustomFieldAction,
     initialState,
@@ -144,6 +148,27 @@ export function CustomFieldForm({ trackers, field }: { trackers: Tracker[]; fiel
             {tracker.name}
           </label>
         ))}
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-1" hidden={!ROLE_VISIBILITY_TYPES.includes(customizedType)}>
+        <legend className="text-sm font-medium">表示の範囲</legend>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="radio" name="visible" value="1" defaultChecked={field?.visible ?? true} />
+          全員に表示
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="radio" name="visible" value="0" defaultChecked={field ? !field.visible : false} />
+          指定したロールだけに表示
+        </label>
+        <div className="flex flex-col gap-1 pl-6">
+          {roles.map((role) => (
+            <label key={role.id} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="roleIds" value={role.id} defaultChecked={field?.roleIds.includes(role.id)} />
+              {role.name}
+            </label>
+          ))}
+          <input type="hidden" name="roleIds" value="" />
+        </div>
       </fieldset>
 
       {state.error ? (

@@ -1,4 +1,5 @@
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
+import { visibleCustomFieldsFor, type CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { loadCustomFieldOptionSets, type CustomFieldOptionRepositories } from "@/application/custom-field/option-sets";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
@@ -36,8 +37,11 @@ export async function prepareIssueCustomFieldValues(
   issueId: string,
   projectId: string,
   rawValues: Record<string, string>,
+  viewer: CustomFieldViewer,
 ): Promise<PreparedCustomFieldValues> {
-  const applicableFields = await repositories.customFieldRepository.listForTracker(trackerId);
+  // A field the viewer can't see is neither validated nor written, even if the request names it (Redmine's
+  // editable_custom_field_values): hidden values are kept as they are, whatever the form sends.
+  const applicableFields = visibleCustomFieldsFor(await repositories.customFieldRepository.listForTracker(trackerId), viewer);
   // A user or version field only takes one of the project's own members or shared versions.
   const optionSets = await loadCustomFieldOptionSets(repositories, projectId, applicableFields);
   const { fieldErrors, coerced } = validateCustomFieldValues(applicableFields, rawValues, optionSets);
@@ -85,7 +89,8 @@ export async function setIssueCustomFieldValues(
   issueId: string,
   projectId: string,
   rawValues: Record<string, string>,
+  viewer: CustomFieldViewer,
 ): Promise<JournalDetail[]> {
-  const prepared = await prepareIssueCustomFieldValues(repositories, trackerId, issueId, projectId, rawValues);
+  const prepared = await prepareIssueCustomFieldValues(repositories, trackerId, issueId, projectId, rawValues, viewer);
   return applyIssueCustomFieldValues(repositories, issueId, prepared);
 }

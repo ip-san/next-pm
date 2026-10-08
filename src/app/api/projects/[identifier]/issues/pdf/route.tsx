@@ -63,7 +63,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       },
       {
         projectId: project.id,
-        ...(await projectIssueListScopeFor(user, project)),
+        ...(await projectIssueListScopeFor(user, project, roleIds)),
         params: listParams,
         savedQuery,
         visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),

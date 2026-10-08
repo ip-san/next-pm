@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { deleteCustomFieldAction, reorderCustomFieldAction } from "@/interface/actions/admin-custom-field-actions";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { AdminRowControls } from "../admin-row-controls";
@@ -35,9 +36,10 @@ export default async function CustomFieldsPage() {
     notFound();
   }
 
-  const [fields, trackers] = await Promise.all([
+  const [fields, trackers, roles] = await Promise.all([
     new DrizzleCustomFieldRepository().listAll(),
     new DrizzleTrackerRepository().listAll(),
+    new DrizzleRoleRepository().listGivable(),
   ]);
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 
@@ -76,7 +78,7 @@ export default async function CustomFieldsPage() {
         ))}
         {fields.length === 0 ? <li className="text-gray-400">登録されていません。</li> : null}
       </ul>
-      <CustomFieldForm trackers={trackers} />
+      <CustomFieldForm trackers={trackers} roles={roles} />
     </main>
   );
 }

@@ -159,6 +159,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: true,
       isAssignee: false,
     });
@@ -175,6 +176,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: true,
       isAssignee: false,
     });
@@ -202,6 +204,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -218,6 +221,7 @@ describe("updateIssue", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -237,6 +241,7 @@ describe("updateIssue", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: true,
         isAssignee: false,
       }),
@@ -256,6 +261,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: true,
       isAssignee: false,
     });
@@ -279,6 +285,7 @@ describe("updateIssue", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: true,
         isAssignee: false,
       }),
@@ -299,6 +306,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: true,
       isAssignee: false,
     });
@@ -320,6 +328,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: true,
       isAssignee: false,
     });
@@ -344,6 +353,7 @@ describe("updateIssue", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -366,6 +376,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -389,6 +400,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -412,6 +424,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -427,6 +440,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -442,6 +456,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -458,6 +473,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -474,6 +490,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -490,6 +507,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -519,6 +537,7 @@ describe("updateIssue", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -548,6 +567,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -576,6 +596,7 @@ describe("updateIssue", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -717,6 +738,7 @@ describe("updateIssue — close duplicates cascade", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -744,6 +766,7 @@ describe("updateIssue — close duplicates cascade", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -766,6 +789,7 @@ describe("updateIssue — close duplicates cascade", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -791,6 +815,7 @@ describe("updateIssue — close duplicates cascade", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -814,6 +839,7 @@ describe("updateIssue — close duplicates cascade", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -835,6 +861,7 @@ describe("updateIssue — close duplicates cascade", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -860,6 +887,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -885,6 +913,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -915,6 +944,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -938,6 +968,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -965,6 +996,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -989,6 +1021,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1014,6 +1047,7 @@ describe("updateIssue — reschedule following issues", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1030,6 +1064,8 @@ function customField(overrides: Partial<CustomField> = {}): CustomField {
     fieldFormat: "list",
     isRequired: false,
     defaultValue: null,
+    visible: true,
+    roleIds: [],
     possibleValues: ["Low", "High"],
     position: 1,
     trackerIds: ["tracker-1"],
@@ -1053,6 +1089,7 @@ describe("updateIssue — custom field values", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1081,6 +1118,7 @@ describe("updateIssue — custom field values", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1104,6 +1142,7 @@ describe("updateIssue — custom field values", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -1127,6 +1166,7 @@ describe("updateIssue — custom field values", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1154,6 +1194,7 @@ describe("updateIssue — tracker changes", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1178,6 +1219,7 @@ describe("updateIssue — tracker changes", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -1205,6 +1247,7 @@ describe("updateIssue — parent issue invariants", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canManageSubtasks: true,
@@ -1230,6 +1273,7 @@ describe("updateIssue — parent issue invariants", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
         canManageSubtasks: true,
@@ -1250,6 +1294,7 @@ describe("updateIssue — parent issue invariants", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
         canManageSubtasks: true,
@@ -1272,6 +1317,7 @@ describe("updateIssue — parent issue invariants", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
         canManageSubtasks: true,
@@ -1291,6 +1337,7 @@ describe("updateIssue — parent issue invariants", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canManageSubtasks: true,
@@ -1314,6 +1361,7 @@ describe("updateIssue — assignable attribute validation", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -1335,6 +1383,7 @@ describe("updateIssue — assignable attribute validation", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1355,6 +1404,7 @@ describe("updateIssue — assignable attribute validation", () => {
         notes: "",
         actingUserId: "user-1",
         actorRoleIds: ["role-1"],
+        customFieldViewer: { isAdmin: true, roleIds: [] },
         isAuthor: false,
         isAssignee: false,
       }),
@@ -1376,6 +1426,7 @@ describe("updateIssue — permission-gated attributes", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canSetPrivate: false,
@@ -1396,6 +1447,7 @@ describe("updateIssue — permission-gated attributes", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canSetPrivate: true,
@@ -1415,6 +1467,7 @@ describe("updateIssue — permission-gated attributes", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canManageSubtasks: false,
@@ -1440,6 +1493,7 @@ describe("updateIssue — notes-only updates", () => {
       notes: "just a comment",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: false,
@@ -1464,6 +1518,7 @@ describe("updateIssue — notes-only updates", () => {
       notes: "should not be stored",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: true,
@@ -1485,6 +1540,7 @@ describe("updateIssue — notes-only updates", () => {
       notes: "nope",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: false,
@@ -1512,6 +1568,7 @@ describe("updateIssue — private notes", () => {
       canSetNotesPrivate: false,
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1531,6 +1588,7 @@ describe("updateIssue — private notes", () => {
       canSetNotesPrivate: true,
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1554,6 +1612,7 @@ describe("updateIssue — private notes", () => {
       canSetNotesPrivate: true,
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1578,6 +1637,7 @@ describe("updateIssue — private notes", () => {
       canSetNotesPrivate: true,
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1607,6 +1667,7 @@ describe("updateIssue — a notes-only actor cannot drive the cascades", () => {
       notes: "just commenting",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: false,
@@ -1634,6 +1695,7 @@ describe("updateIssue — a notes-only actor cannot drive the cascades", () => {
       notes: "just commenting",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: false,
@@ -1659,6 +1721,7 @@ describe("updateIssue — a notes-only actor cannot drive the cascades", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: false,
@@ -1683,6 +1746,7 @@ describe("updateIssue — what the caller may notify about", () => {
       notes: "should never be mailed",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canEditAttributes: true,
@@ -1703,6 +1767,7 @@ describe("updateIssue — what the caller may notify about", () => {
       notes: "a real comment",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
       canAddNotes: true,
@@ -1724,6 +1789,7 @@ describe("updateIssue — what the caller may notify about", () => {
       canSetNotesPrivate: true,
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1749,6 +1815,7 @@ describe("updateIssue — what the caller may notify about", () => {
       canAddNotes: false,
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1770,6 +1837,7 @@ describe("updateIssue — disabled core fields", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });
@@ -1791,6 +1859,7 @@ describe("updateIssue — disabled core fields", () => {
       notes: "",
       actingUserId: "user-1",
       actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
       isAuthor: false,
       isAssignee: false,
     });

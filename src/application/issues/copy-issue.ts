@@ -270,7 +270,8 @@ async function copyCustomFieldValues(repositories: CopyIssueRepositories, source
   const raw = Object.fromEntries(values.flatMap((value) => (value.value === null ? [] : [[value.customFieldId, value.value]])));
   if (Object.keys(raw).length === 0) return;
   try {
-    await setIssueCustomFieldValues(repositories, copy.trackerId, copy.id, copy.projectId, raw);
+    // Redmine's copy_from copies every custom value, visibility aside, so the copy is written as an admin would.
+    await setIssueCustomFieldValues(repositories, copy.trackerId, copy.id, copy.projectId, raw, { isAdmin: true, roleIds: [] });
   } catch {
     // A value the target tracker's fields reject (e.g. a list option that no longer exists)
     // must not sink the copy — Redmine drops unusable custom values the same way.
