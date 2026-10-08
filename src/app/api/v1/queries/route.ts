@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { InvalidQueryError, QueryPermissionError } from "@/application/queries/query-settings";
+import { saveQuery } from "@/application/queries/save-query";
 import { can } from "@/domain/authorization/authorization-service";
-import { compileFilters } from "@/domain/query/filter-builder";
+import { QUERY_FILTER_OPERATORS } from "@/domain/query/filter-builder";
 import { isQueryVisible } from "@/domain/query/visibility";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
@@ -46,7 +48,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const allQueries = await new DrizzleQueryRepository().listForProject(project.id);
+  const allQueries = await new DrizzleQueryRepository().listAvailableFor(project.id, "IssueQuery");
   const queries = allQueries.filter((q) => isQueryVisible(q, user.id, roleIds));
 
   return NextResponse.json({ queries });
@@ -54,7 +56,7 @@ export async function GET(request: Request) {
 
 const filterConditionSchema = z.object({
   field: z.string(),
-  operator: z.enum(["=", "!", "!*", "*", ">=", "<=", "><", "~", "!~"]),
+  operator: z.enum(QUERY_FILTER_OPERATORS),
   values: z.array(z.string()),
 });
 
@@ -64,6 +66,10 @@ const createQuerySchema = z.object({
   visibility: z.enum(["private", "roles", "public"]).default("private"),
   role_ids: z.array(z.string().uuid()).default([]),
   filters: z.array(filterConditionSchema).default([]),
+  column_names: z.array(z.string()).default([]),
+  group_by: z.string().nullable().default(null),
+  sort_criteria: z.array(z.tuple([z.string(), z.enum(["asc", "desc"])])).default([]),
+  totalable_names: z.array(z.string()).default([]),
 });
 
 export async function POST(request: Request) {
@@ -86,23 +92,9 @@ export async function POST(request: Request) {
   }
 
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "view_issues", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
-  // A "public"/"roles" query is visible to every other project member, so making one
-  // requires more trust than just viewing the issue list it's built from. Redmine gates
-  // this on a dedicated manage_public_queries permission, which isn't in this app's
-  // permission registry — edit_issues is used as the closest existing proxy, a deliberate
-  // simplification rather than silently allowing any viewer to publish a shared query.
-  if (parsed.data.visibility !== "private" && !can({ permission: "edit_issues", project: toAuthorizationProject(project), actor })) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
-  try {
-    compileFilters(parsed.data.filters);
-  } catch {
-    return NextResponse.json({ error: "invalid_filters" }, { status: 422 });
   }
 
   if (parsed.data.visibility === "roles" && parsed.data.role_ids.length > 0) {
@@ -112,14 +104,41 @@ export async function POST(request: Request) {
     }
   }
 
-  const query = await new DrizzleQueryRepository().create({
-    name: parsed.data.name,
-    projectId: project.id,
-    userId: user.id,
-    visibility: parsed.data.visibility,
-    filters: parsed.data.filters,
-    roleIds: parsed.data.role_ids,
-  });
-
-  return NextResponse.json({ query }, { status: 201 });
+  // Permission and visibility rules — including Redmine's "silently force a query back to
+  // private when the author lacks manage_public_queries" — live in the use case, so this
+  // route and the server action enforce exactly the same thing.
+  try {
+    const query = await saveQuery(
+      { queryRepository: new DrizzleQueryRepository() },
+      {
+        projectId: project.id,
+        type: "IssueQuery",
+        actor: {
+          userId: user.id,
+          isAdmin: user.isAdmin,
+          canSaveQueries: can({ permission: "save_queries", project: projectContext, actor }),
+          canManagePublicQueries: can({ permission: "manage_public_queries", project: projectContext, actor }),
+        },
+        settings: {
+          name: parsed.data.name,
+          visibility: parsed.data.visibility,
+          roleIds: parsed.data.role_ids,
+          filters: parsed.data.filters,
+          columnNames: parsed.data.column_names,
+          groupBy: parsed.data.group_by,
+          sortCriteria: parsed.data.sort_criteria,
+          totalableNames: parsed.data.totalable_names,
+        },
+      },
+    );
+    return NextResponse.json({ query }, { status: 201 });
+  } catch (error) {
+    if (error instanceof QueryPermissionError) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (error instanceof InvalidQueryError) {
+      return NextResponse.json({ error: "invalid_request", message: error.message }, { status: 422 });
+    }
+    throw error;
+  }
 }

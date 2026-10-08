@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { issues } from "@/infrastructure/db/schema/issues";
 import { projects } from "@/infrastructure/db/schema/projects";
@@ -32,6 +32,12 @@ function findTreeRoot(node: ProjectNode, roots: ProjectNode[]): ProjectNode {
 export class DrizzleVersionRepository implements VersionRepository {
   async listByProject(projectId: string): Promise<Version[]> {
     const rows = await db.select().from(versions).where(eq(versions.projectId, projectId)).orderBy(versions.effectiveDate, versions.name);
+    return rows.map(toDomain);
+  }
+
+  async listByProjects(projectIds: string[]): Promise<Version[]> {
+    if (projectIds.length === 0) return [];
+    const rows = await db.select().from(versions).where(inArray(versions.projectId, projectIds)).orderBy(versions.effectiveDate, versions.name);
     return rows.map(toDomain);
   }
 

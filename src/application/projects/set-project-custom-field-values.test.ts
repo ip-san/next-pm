@@ -29,6 +29,7 @@ function makeRepos(fields: CustomField[]) {
   };
   const customValueRepository: CustomValueRepository = {
     listForCustomized: mock(async () => []),
+    deleteForCustomized: mock(async () => {}),
     set: mock(async (customFieldId, customizedType, customizedId, value) => ({
       id: "cv-1",
       customFieldId,

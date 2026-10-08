@@ -1,8 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import { memberRoles } from "@/infrastructure/db/schema/members";
 import { roles } from "@/infrastructure/db/schema/roles";
-import { ROLE_BUILTIN_ANONYMOUS, ROLE_BUILTIN_NON_MEMBER, type Role } from "@/domain/role/entity";
-import type { RoleRepository } from "@/domain/role/repository";
+import { ROLE_BUILTIN_ANONYMOUS, ROLE_BUILTIN_MEMBER, ROLE_BUILTIN_NON_MEMBER, type Role } from "@/domain/role/entity";
+import type { Positioned } from "@/domain/ordering/positioned";
+import type { RoleAdminRepository, RoleRepository } from "@/domain/role/repository";
 
 function toDomain(row: typeof roles.$inferSelect): Role {
   return {
@@ -18,9 +20,12 @@ function toDomain(row: typeof roles.$inferSelect): Role {
   };
 }
 
-export class DrizzleRoleRepository implements RoleRepository {
+export class DrizzleRoleRepository implements RoleRepository, RoleAdminRepository {
   async listAll(): Promise<Role[]> {
-    const rows = await db.select().from(roles);
+    // Redmine's `Role.sorted` is order(:builtin, :position) — ordinary roles first, in their
+    // configured order, then Non member and Anonymous. The id tiebreak keeps rows that still
+    // share position 0 in a stable order (see DrizzleIssueStatusRepository#listAll).
+    const rows = await db.select().from(roles).orderBy(roles.builtin, roles.position, roles.id);
     return rows.map(toDomain);
   }
 
@@ -52,6 +57,15 @@ export class DrizzleRoleRepository implements RoleRepository {
     return rows.map(toDomain);
   }
 
+  async listGivable(): Promise<Role[]> {
+    const rows = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.assignable, true), eq(roles.builtin, ROLE_BUILTIN_MEMBER)))
+      .orderBy(roles.position, roles.id);
+    return rows.map(toDomain);
+  }
+
   async updatePermissions(roleId: string, permissions: Role["permissions"]): Promise<void> {
     await db.update(roles).set({ permissions }).where(eq(roles.id, roleId));
   }
@@ -71,5 +85,33 @@ export class DrizzleRoleRepository implements RoleRepository {
       })
       .returning();
     return toDomain(row);
+  }
+
+  async update(
+    id: string,
+    changes: Pick<
+      Role,
+      "name" | "permissions" | "issuesVisibility" | "timeEntriesVisibility" | "usersVisibility" | "assignable"
+    >,
+  ): Promise<Role> {
+    const [row] = await db.update(roles).set(changes).where(eq(roles.id, id)).returning();
+    return toDomain(row);
+  }
+
+  async delete(id: string): Promise<void> {
+    // member_roles and workflow rows cascade on their role FK; the caller must have already
+    // refused the delete if any membership still names the role (Role#check_deletable).
+    await db.delete(roles).where(eq(roles.id, id));
+  }
+
+  async countMemberships(id: string): Promise<number> {
+    const [row] = await db.select({ value: count() }).from(memberRoles).where(eq(memberRoles.roleId, id));
+    return row?.value ?? 0;
+  }
+
+  async updatePositions(positions: Positioned[]): Promise<void> {
+    for (const { id, position } of positions) {
+      await db.update(roles).set({ position }).where(eq(roles.id, id));
+    }
   }
 }

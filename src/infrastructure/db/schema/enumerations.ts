@@ -1,4 +1,4 @@
-import { integer, pgTable, text, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { projects } from "./projects";
 
 export const enumerationTypeEnum = ["IssuePriority", "TimeEntryActivity", "DocumentCategory"] as const;
@@ -15,6 +15,12 @@ export const enumerations = pgTable("enumerations", {
   name: text("name").notNull(),
   position: integer("position").notNull().default(0),
   isDefault: integer("is_default").notNull().default(0),
+  /**
+   * Redmine's `enumerations.active`. For a project override row it is the whole point of
+   * the row: a project deactivates a system-wide time-entry activity by owning a child of
+   * it with active = false.
+   */
+  active: boolean("active").notNull().default(true),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
   parentId: uuid("parent_id").references((): AnyPgColumn => enumerations.id, { onDelete: "cascade" }),
 });

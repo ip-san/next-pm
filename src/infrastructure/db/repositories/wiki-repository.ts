@@ -1,11 +1,14 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
-import { wikiContentVersions, wikiPages, wikiRedirects } from "@/infrastructure/db/schema/wiki";
-import type { WikiContentVersion, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
+import { wikiContentVersions, wikiPages, wikiRedirects, wikis } from "@/infrastructure/db/schema/wiki";
+import type { SearchCriteria } from "@/domain/search/entity";
+import { projectScopeCondition, searchMatchCondition } from "@/infrastructure/db/search-tokens";
+import type { Wiki, WikiContentVersion, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
 import type {
   WikiContentRepository,
   WikiPageRepository,
   WikiRedirectRepository,
+  WikiRepository,
   WikiSearchHit,
   WikiVersionWithPage,
 } from "@/domain/wiki/repository";
@@ -42,6 +45,22 @@ function versionToDomain(row: typeof wikiContentVersions.$inferSelect): WikiCont
   };
 }
 
+export class DrizzleWikiRepository implements WikiRepository {
+  async findByProject(projectId: string): Promise<Wiki | null> {
+    const [row] = await db.select().from(wikis).where(eq(wikis.projectId, projectId)).limit(1);
+    return row ? { id: row.id, projectId: row.projectId, startPage: row.startPage } : null;
+  }
+
+  async setStartPage(projectId: string, startPage: string): Promise<Wiki> {
+    const [row] = await db
+      .insert(wikis)
+      .values({ projectId, startPage })
+      .onConflictDoUpdate({ target: wikis.projectId, set: { startPage } })
+      .returning();
+    return { id: row.id, projectId: row.projectId, startPage: row.startPage };
+  }
+}
+
 export class DrizzleWikiPageRepository implements WikiPageRepository {
   async listForProject(projectId: string): Promise<WikiPage[]> {
     const rows = await db.select().from(wikiPages).where(eq(wikiPages.projectId, projectId)).orderBy(wikiPages.title);
@@ -72,6 +91,16 @@ export class DrizzleWikiPageRepository implements WikiPageRepository {
 
   async rename(id: string, newTitle: string): Promise<WikiPage> {
     const [row] = await db.update(wikiPages).set({ title: newTitle }).where(eq(wikiPages.id, id)).returning();
+    return pageToDomain(row);
+  }
+
+  async setParent(id: string, parentId: string | null): Promise<WikiPage> {
+    const [row] = await db.update(wikiPages).set({ parentId }).where(eq(wikiPages.id, id)).returning();
+    return pageToDomain(row);
+  }
+
+  async setProtected(id: string, isProtected: boolean): Promise<WikiPage> {
+    const [row] = await db.update(wikiPages).set({ isProtected }).where(eq(wikiPages.id, id)).returning();
     return pageToDomain(row);
   }
 
@@ -106,6 +135,14 @@ export class DrizzleWikiRedirectRepository implements WikiRedirectRepository {
 
   async deleteByTitle(projectId: string, title: string): Promise<void> {
     await db.delete(wikiRedirects).where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.title, title)));
+  }
+
+  async deleteByTarget(projectId: string, title: string): Promise<void> {
+    await db.delete(wikiRedirects).where(and(eq(wikiRedirects.projectId, projectId), eq(wikiRedirects.redirectsToTitle, title)));
+  }
+
+  async deleteAllForProject(projectId: string): Promise<void> {
+    await db.delete(wikiRedirects).where(eq(wikiRedirects.projectId, projectId));
   }
 
   async create(entry: { projectId: string; title: string; redirectsToTitle: string }): Promise<WikiRedirect> {
@@ -165,7 +202,17 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
    * builder has no clean way to express "latest row per group" joins, so this one query
    * is raw SQL rather than the builder used everywhere else in this file.
    */
-  async search(projectId: string, query: string): Promise<WikiSearchHit[]> {
+  async search(projectIds: string[], criteria: SearchCriteria): Promise<WikiSearchHit[]> {
+    if (criteria.tokens.length === 0) return [];
+    // WikiPage's `acts_as_searchable :columns => ['title', "#{WikiContent.table_name}.text"]`
+    // — the title lives on the page, the text on its current version.
+    const match = searchMatchCondition({
+      columns: [sql`wp.title`, sql`wcv.text`],
+      titleColumns: [sql`wp.title`],
+      criteria,
+      attachmentContainerType: "WikiPage",
+      attachmentContainerIdColumn: sql`wp.id`,
+    });
     const result = await db.execute(sql`
       select wp.id as page_id, wp.project_id, wp.title, wp.parent_id, wp.is_protected,
              wcv.id as version_id, wcv.version, wcv.author_id, wcv.text, wcv.comments, wcv.created_at
@@ -175,8 +222,8 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
         order by page_id, version desc
       ) wcv
       join ${wikiPages} wp on wp.id = wcv.page_id
-      where wp.project_id = ${projectId}
-        and to_tsvector('english', wp.title || ' ' || wcv.text) @@ plainto_tsquery('english', ${query})
+      where ${projectScopeCondition(sql`wp.project_id`, projectIds)}
+        and ${match}
       order by wp.title
     `);
 
@@ -198,6 +245,49 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
           text: r.text as string,
           comments: r.comments as string,
           createdAt: r.created_at as Date,
+        },
+      };
+    });
+  }
+
+  /**
+   * Each page's current version, joined to its page — the index views need every page's last
+   * update without loading its whole history. Same DISTINCT ON shape as `search`, and raw SQL
+   * for the same reason.
+   */
+  async listCurrentByProject(projectId: string): Promise<WikiVersionWithPage[]> {
+    const result = await db.execute(sql`
+      select wp.id as page_id, wp.project_id, wp.title, wp.parent_id, wp.is_protected,
+             wcv.id as version_id, wcv.version, wcv.author_id, wcv.text, wcv.comments, wcv.created_at
+      from (
+        select distinct on (page_id) *
+        from ${wikiContentVersions}
+        order by page_id, version desc
+      ) wcv
+      join ${wikiPages} wp on wp.id = wcv.page_id
+      where wp.project_id = ${projectId}
+      order by wp.title
+    `);
+
+    return result.rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        page: {
+          id: r.page_id as string,
+          projectId: r.project_id as string,
+          title: r.title as string,
+          parentId: r.parent_id as string | null,
+          isProtected: r.is_protected as boolean,
+        },
+        version: {
+          id: r.version_id as string,
+          pageId: r.page_id as string,
+          version: r.version as number,
+          authorId: r.author_id as string,
+          text: r.text as string,
+          comments: r.comments as string,
+          // db.execute bypasses Drizzle's column mapping, so timestamps arrive as strings.
+          createdAt: new Date(r.created_at as string),
         },
       };
     });

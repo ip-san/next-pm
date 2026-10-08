@@ -1,9 +1,16 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import { attachments } from "@/infrastructure/db/schema/attachments";
+import { customValues } from "@/infrastructure/db/schema/custom-values";
 import { issues } from "@/infrastructure/db/schema/issues";
+import { journals } from "@/infrastructure/db/schema/journals";
+import { reactions } from "@/infrastructure/db/schema/reactions";
+import { watchers } from "@/infrastructure/db/schema/watchers";
 import { StaleIssueError, type Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
 import type { CompiledPredicate } from "@/domain/query/filter-builder";
+import type { IssueSearchOptions } from "@/domain/search/entity";
+import { projectScopeCondition, searchMatchCondition } from "@/infrastructure/db/search-tokens";
 import { toDrizzleCondition } from "./compile-predicate";
 
 const ISSUE_FILTER_COLUMNS = {
@@ -86,6 +93,12 @@ export class DrizzleIssueRepository implements IssueRepository {
     return rows.map(toDomain);
   }
 
+  async listByFixedVersionIds(versionIds: string[]): Promise<Issue[]> {
+    if (versionIds.length === 0) return [];
+    const rows = await db.select().from(issues).where(inArray(issues.fixedVersionId, versionIds));
+    return rows.map(toDomain);
+  }
+
   async create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue> {
     const [row] = await db
       .insert(issues)
@@ -128,17 +141,57 @@ export class DrizzleIssueRepository implements IssueRepository {
     return toDomain(row);
   }
 
-  async search(projectId: string, query: string): Promise<Issue[]> {
+  /**
+   * Issue's `acts_as_searchable :columns => ['subject', 'issues.description']`, with the
+   * `:scope => lambda {|options| options[:open_issues] ? self.open : self.all}` switch.
+   * Substring token matching rather than `to_tsvector`, so a partial word still matches the
+   * way Redmine's LIKE search does.
+   */
+  async search(projectIds: string[], criteria: IssueSearchOptions): Promise<Issue[]> {
+    if (criteria.tokens.length === 0) return [];
+    const openOnly = criteria.openIssues
+      ? sql` and exists (select 1 from issue_statuses st where st.id = ${issues.statusId} and st.is_closed = false)`
+      : sql``;
     const rows = await db
       .select()
       .from(issues)
       .where(
-        and(
-          eq(issues.projectId, projectId),
-          sql`to_tsvector('english', ${issues.subject} || ' ' || ${issues.description}) @@ plainto_tsquery('english', ${query})`,
-        ),
+        sql`${projectScopeCondition(sql`${issues.projectId}`, projectIds)} and ${searchMatchCondition({
+          columns: [sql`${issues.subject}`, sql`${issues.description}`],
+          titleColumns: [sql`${issues.subject}`],
+          criteria,
+          attachmentContainerType: "Issue",
+          attachmentContainerIdColumn: sql`${issues.id}`,
+        })}${openOnly}`,
       )
       .orderBy(desc(issues.createdAt));
     return rows.map(toDomain);
+  }
+
+  async deleteWithDependents(issueIds: string[]): Promise<void> {
+    if (issueIds.length === 0) return;
+
+    await db.transaction(async (tx) => {
+      // Journal reactions first: reactions point at journals polymorphically, so they have
+      // to go before the journals they belong to or they'd be orphaned.
+      const journalRows = await tx
+        .select({ id: journals.id })
+        .from(journals)
+        .where(and(eq(journals.journalizedType, "Issue"), inArray(journals.journalizedId, issueIds)));
+      const journalIds = journalRows.map((row) => row.id);
+      if (journalIds.length > 0) {
+        await tx.delete(reactions).where(and(eq(reactions.reactableType, "Journal"), inArray(reactions.reactableId, journalIds)));
+      }
+
+      // journal_details cascades from journals in the schema.
+      await tx.delete(journals).where(and(eq(journals.journalizedType, "Issue"), inArray(journals.journalizedId, issueIds)));
+      await tx.delete(watchers).where(and(eq(watchers.watchableType, "Issue"), inArray(watchers.watchableId, issueIds)));
+      await tx.delete(customValues).where(and(eq(customValues.customizedType, "Issue"), inArray(customValues.customizedId, issueIds)));
+      await tx.delete(attachments).where(and(eq(attachments.containerType, "Issue"), inArray(attachments.containerId, issueIds)));
+
+      // issue_relations and changeset_issues cascade from issues; parent_id is
+      // ON DELETE SET NULL, which is why the caller passes the whole subtree at once.
+      await tx.delete(issues).where(inArray(issues.id, issueIds));
+    });
   }
 }

@@ -5,6 +5,12 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import type { Project } from "@/domain/project/entity";
 import { addGroupToProject } from "@/application/groups/group-membership";
+import {
+  MemberRolesEmptyError,
+  MemberRolesInvalidError,
+  updateMemberRoles,
+  UpdateMemberRolesNotPermittedError,
+} from "@/application/members/update-member-roles";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -62,12 +68,15 @@ export async function addMemberAction(_prevState: MemberActionState, formData: F
 
   const [targetUser, roles] = await Promise.all([
     new DrizzleUserRepository().findByLogin(parsed.data.login),
-    new DrizzleRoleRepository().findByIds(parsed.data.roleIds),
+    // Role.givable, not findByIds: a crafted request must not be able to hand a member
+    // the builtin Non member or Anonymous role.
+    new DrizzleRoleRepository().listGivable(),
   ]);
   if (!targetUser) {
     return { error: "指定されたログインIDのユーザーが見つかりません。" };
   }
-  if (roles.length !== parsed.data.roleIds.length) {
+  const givableIds = new Set(roles.map((role) => role.id));
+  if (parsed.data.roleIds.some((roleId) => !givableIds.has(roleId))) {
     return { error: "存在しないロールが指定されました。" };
   }
 
@@ -118,13 +127,16 @@ export async function addGroupMemberAction(_prevState: MemberActionState, formDa
   const memberRepository = new DrizzleMemberRepository();
   const [group, roles, existingGroupMemberships] = await Promise.all([
     groupRepository.findById(parsed.data.groupId),
-    new DrizzleRoleRepository().findByIds(parsed.data.roleIds),
+    // Role.givable, not findByIds: a crafted request must not be able to hand a member
+    // the builtin Non member or Anonymous role.
+    new DrizzleRoleRepository().listGivable(),
     memberRepository.listByGroup(parsed.data.groupId),
   ]);
   if (!group) {
     return { error: "指定されたグループが見つかりません。" };
   }
-  if (roles.length !== parsed.data.roleIds.length) {
+  const givableIds = new Set(roles.map((role) => role.id));
+  if (parsed.data.roleIds.some((roleId) => !givableIds.has(roleId))) {
     return { error: "存在しないロールが指定されました。" };
   }
   if (existingGroupMemberships.some((m) => m.projectId === guard.project.id)) {
@@ -132,6 +144,61 @@ export async function addGroupMemberAction(_prevState: MemberActionState, formDa
   }
 
   await addGroupToProject({ groupRepository, memberRepository }, { groupId: group.id, projectId: guard.project.id, roleIds: parsed.data.roleIds });
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/members`);
+  return { error: null };
+}
+
+const updateMemberRolesSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  memberId: z.string().uuid(),
+  roleIds: z.array(z.string().uuid()),
+});
+
+export async function updateMemberRolesAction(_prevState: MemberActionState, formData: FormData): Promise<MemberActionState> {
+  const parsed = updateMemberRolesSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    memberId: formData.get("memberId"),
+    roleIds: formData.getAll("roleIds"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  const user = await currentUserFromCookies();
+  if (!user) {
+    return { error: "ログインしてください。" };
+  }
+  // The membership's own project decides the actor's roles, not the identifier in the form.
+  const memberRepository = new DrizzleMemberRepository();
+  const member = await memberRepository.findById(parsed.data.memberId);
+  if (!member) {
+    return { error: "メンバーが見つかりません。" };
+  }
+  const { actor } = await resolveActor(user, member.projectId);
+
+  try {
+    await updateMemberRoles(
+      {
+        memberRepository,
+        memberAdminRepository: memberRepository,
+        projectRepository: new DrizzleProjectRepository(),
+        roleRepository: new DrizzleRoleRepository(),
+      },
+      { memberId: parsed.data.memberId, roleIds: parsed.data.roleIds, actor },
+    );
+  } catch (error) {
+    if (error instanceof UpdateMemberRolesNotPermittedError) {
+      return { error: "この操作を行う権限がありません。" };
+    }
+    if (error instanceof MemberRolesEmptyError) {
+      return { error: "ロールを1つ以上選択してください。" };
+    }
+    if (error instanceof MemberRolesInvalidError) {
+      return { error: "存在しないロールが指定されました。" };
+    }
+    throw error;
+  }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/members`);
   return { error: null };

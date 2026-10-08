@@ -1,6 +1,5 @@
 import type { IssueRepository } from "@/domain/issue/repository";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import type { IssuesVisibility } from "@/domain/role/entity";
+import type { Issue } from "@/domain/issue/entity";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { ScmRepository } from "@/domain/scm/entity";
 
@@ -13,9 +12,8 @@ export interface UnlinkChangesetIssueInput {
   scmRepository: ScmRepository;
   revision: string;
   issueId: string;
-  viewerId: string | null;
-  viewerGroupIds: string[];
-  issueVisibilityRoles: { issuesVisibility: IssuesVisibility }[];
+  /** Redmine's `Issue#visible?` for the viewer, across projects — see `issueVisibilityCheck`. */
+  canViewIssue: (issue: Issue) => boolean;
 }
 
 /**
@@ -35,7 +33,7 @@ export async function unlinkChangesetIssue(
   if (!changeset) return;
 
   const issue = await repositories.issueRepository.findById(input.issueId);
-  if (!issue || !isPrivateIssueVisible(issue, input.viewerId, input.viewerGroupIds, input.issueVisibilityRoles)) return;
+  if (!issue || !input.canViewIssue(issue)) return;
 
   await repositories.changesetRepository.unlinkIssue(changeset.id, issue.id);
 }

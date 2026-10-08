@@ -1,0 +1,110 @@
+import type { Issue } from "@/domain/issue/entity";
+import type { CompiledPredicate } from "./filter-builder";
+import type { SortCriterion } from "./sort";
+
+/**
+ * The private-issue rule from `domain/issue/visibility.ts`, reduced to the three facts a
+ * SQL `WHERE` clause needs. Pagination has to happen in the database, so the rule cannot
+ * stay a post-fetch `Array#filter` the way the old all-rows issue list applied it — see
+ * `issueVisibilityScope` in interface/http/resolve-actor.ts for the actor mapping.
+ *
+ * The SQL form of the rule lives in `issueVisibilityClause`; the two are kept in step by
+ * hand, since next-pm has no database-backed test harness to pin them together.
+ */
+export interface IssueVisibilityScope {
+  userId: string | null;
+  userGroupIds: string[];
+  /** True for an admin, or for a member holding a role with issuesVisibility "all". */
+  seesAllPrivateIssues: boolean;
+}
+
+/**
+ * How wide every `spent_hours` figure reaches — the per-row value, the sort key and the
+ * totals alike. Mirrors `Issue.load_visible_spent_hours`, which sums over
+ * `TimeEntry.visible(user)` rather than over every entry: a viewer whose roles all say
+ * `time_entries_visibility == "own"` must not learn other people's hours through a sum.
+ * `userId: null` is the anonymous case of that rule, and matches no entry at all.
+ */
+export type SpentHoursScope = { kind: "all" } | { kind: "own"; userId: string | null };
+
+/**
+ * One project's slice of a cross-project issue list. Membership — and therefore the role
+ * set that decides both the private-issue rule and `time_entries_visibility` — is per
+ * project, so Redmine's `Issue.visible_condition` builds its SQL as an OR of per-project
+ * conditions (`Project.allowed_to_condition` yields the role block once per role set).
+ * The global list does the same, one entry per project the viewer holds `view_issues` in.
+ */
+export interface ProjectIssueScope {
+  projectId: string;
+  /** This project's `issues_visibility == "all"` verdict. */
+  seesAllPrivateIssues: boolean;
+  /** How far `spent_hours` reaches in this project; "none" when the viewer lacks `view_time_entries` here. */
+  spentHours: "all" | "own" | "none";
+}
+
+export interface IssueSearchCriteria {
+  /** The single project a project-scoped list runs against. Null for the cross-project list, which uses `projectScopes` instead. */
+  projectId: string | null;
+  /**
+   * Set by the cross-project list in place of `projectId`: one entry per project the viewer
+   * may see issues in. When present, `projectId`, `visibility.seesAllPrivateIssues` and
+   * `spentHoursScope` are not consulted — each project contributes its own rule instead.
+   * An empty array matches nothing, which is what a viewer with no visible project must see.
+   */
+  projectScopes?: ProjectIssueScope[];
+  predicates: CompiledPredicate[];
+  visibility: IssueVisibilityScope;
+  /** How far the `spent_hours` figures reach — see SpentHoursScope. Ignored when `projectScopes` is set. */
+  spentHoursScope: SpentHoursScope;
+  sort: SortCriterion[];
+  /** A groupable column key, or null. */
+  groupBy: string | null;
+  /** Totalable column keys whose sums the caller wants. */
+  totalableKeys: string[];
+  offset: number;
+  limit: number;
+}
+
+export interface IssueGroup {
+  /** The raw group value — an id for association columns, the value itself otherwise. Null is Redmine's "(blank)" group. */
+  value: string | null;
+  count: number;
+  /** Per-totalable-column sums for this group alone. */
+  totals: Record<string, number>;
+}
+
+export interface IssueSearchResult {
+  /** Just the issues on the requested page, already ordered. */
+  issues: Issue[];
+  /** Custom field values for the returned issues only, keyed `${issueId}:${customFieldId}`. */
+  customValues: Map<string, string>;
+  /** Summed time-entry hours per returned issue — only populated when the caller asked for the column. */
+  spentHours: Map<string, number>;
+  /** Count over the whole filtered set, not the page. */
+  totalCount: number;
+  /** Per-column sums over the whole filtered set. */
+  totals: Record<string, number>;
+  /** Group counts and per-group totals over the whole filtered set, or null when ungrouped. */
+  groups: IssueGroup[] | null;
+}
+
+/**
+ * The read model behind the issue list. Deliberately separate from `IssueRepository`: it
+ * returns aggregates and a single page rather than entities, and nothing in the write path
+ * should grow a dependency on it.
+ */
+export interface IssueSearchRepository {
+  /**
+   * Row count alone, so the caller can clamp the requested page before paying for the row,
+   * group and total queries (Redmine's `IssueQuery#issue_count`, used the same way by
+   * `IssuesController#index` to build its Paginator).
+   */
+  count(criteria: Omit<IssueSearchCriteria, "sort" | "groupBy" | "totalableKeys" | "offset" | "limit" | "spentHoursScope">): Promise<number>;
+  search(criteria: IssueSearchCriteria): Promise<IssueSearchResult>;
+  /**
+   * Same filtering, ordering and visibility as `search`, but every matching row — for the
+   * CSV/PDF exports, which Redmine caps with `Setting.issues_export_limit` rather than
+   * paginating.
+   */
+  searchAll(criteria: Omit<IssueSearchCriteria, "offset" | "limit">, limit: number): Promise<IssueSearchResult>;
+}

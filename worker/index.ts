@@ -4,6 +4,8 @@ import { loadSmtpConfigFromEnv } from "@/domain/mailer/smtp-config";
 import type { Mailer } from "@/domain/mailer/port";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
+import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/email-address-repository";
 import { ConsoleMailer } from "@/infrastructure/mail/console-mailer";
 import { NodemailerMailer } from "@/infrastructure/mail/nodemailer-mailer";
 import { startHealthServer } from "./health-server";
@@ -20,6 +22,8 @@ const RETRY_DELAY_MS = 30000;
 
 const jobRepository = new DrizzleJobRepository();
 const userRepository = new DrizzleUserRepository();
+const userPreferencesRepository = new DrizzleUserPreferencesRepository();
+const emailAddressRepository = new DrizzleEmailAddressRepository();
 const smtpConfig = loadSmtpConfigFromEnv(process.env);
 const mailer: Mailer = smtpConfig ? new NodemailerMailer(smtpConfig) : new ConsoleMailer();
 
@@ -31,7 +35,7 @@ async function drainOnce() {
       return;
     }
     try {
-      await dispatchJob({ mailer, userRepository }, job);
+      await dispatchJob({ mailer, userRepository, userPreferencesRepository, emailAddressRepository }, job);
       await jobRepository.markDone(job.id);
     } catch (error) {
       Sentry.captureException(error);

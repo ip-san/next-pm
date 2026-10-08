@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { UserForm } from "./user-form";
+import { UserRowControls } from "./user-row-controls";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function UsersPage() {
             <th className="pr-4 py-1">メール</th>
             <th className="pr-4 py-1">状態</th>
             <th className="pr-4 py-1">管理者</th>
+            <th className="pr-4 py-1" />
           </tr>
         </thead>
         <tbody>
@@ -45,6 +47,9 @@ export default async function UsersPage() {
               <td className="pr-4 py-1">{u.mail}</td>
               <td className="pr-4 py-1">{STATUS_LABEL[u.status]}</td>
               <td className="pr-4 py-1">{u.isAdmin ? "○" : ""}</td>
+              <td className="pr-4 py-1">
+                <UserRowControls user={u} isSelf={u.id === user.id} />
+              </td>
             </tr>
           ))}
         </tbody>

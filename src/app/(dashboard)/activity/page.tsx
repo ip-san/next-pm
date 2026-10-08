@@ -1,0 +1,195 @@
+import Link from "next/link";
+import { listGlobalActivity, type GlobalActivityEvent } from "@/application/activity/list-global-activity";
+import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
+import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
+import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import { isActiveUser } from "@/domain/user/entity";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { activityRepositories, resolveGlobalActivityProjects } from "@/interface/http/activity-scope";
+import { currentUserFromCookies } from "@/interface/http/current-user";
+
+export const dynamic = "force-dynamic";
+
+const GROUP_LABEL: Record<ActivityEventGroup, string> = {
+  issue: "チケット",
+  news: "ニュース",
+  message: "フォーラム",
+  wiki_edit: "Wiki",
+  document: "ドキュメント",
+  time_entry: "工数",
+  changeset: "リポジトリ",
+};
+
+const TYPE_LABEL: Record<ActivityEvent["type"], string> = {
+  issue_created: "チケット作成",
+  issue_updated: "チケット更新",
+  news: "ニュース",
+  message: "フォーラム",
+  wiki_edit: "Wiki編集",
+  document: "ドキュメント",
+  time_entry: "工数",
+  changeset: "コミット",
+};
+
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function parseDateParam(value: string | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * `ActivitiesController#index` without a project: the same date window, the same
+ * `show_<type>` checkboxes and the same per-project rules as the project page, aggregated
+ * over every project the viewer may see. `?user_id=` narrows to one person's events, which
+ * is the link the My Page activity block and a user profile point at.
+ */
+export default async function GlobalActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; user_id?: string } & Partial<Record<`show_${ActivityEventGroup}`, string>>>;
+}) {
+  const rawSearchParams = await searchParams;
+  const { from: fromParam, user_id: userIdParam } = rawSearchParams;
+
+  const user = await currentUserFromCookies();
+  const userRepository = new DrizzleUserRepository();
+  const [projects, atomKey, settings] = await Promise.all([
+    resolveGlobalActivityProjects(user),
+    user ? getOrCreateAtomKey(userRepository, user.id) : Promise.resolve(null),
+    new DrizzleSettingsRepository().getAll(),
+  ]);
+  const { activityDaysDefault: DAYS } = resolveGeneralSettings(settings);
+
+  // Redmine's `User.visible.active.find(params[:user_id])` — an unknown or locked id is a
+  // 404 there; here it simply drops the filter rather than hiding the whole page.
+  const author = userIdParam ? await userRepository.findById(userIdParam) : null;
+  const authorFilter = author && isActiveUser(author) ? author : null;
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const dateTo = fromParam ? (parseDateParam(fromParam) ?? today) : today;
+  const to = new Date(dateTo);
+  to.setUTCDate(to.getUTCDate() + 1);
+  const from = new Date(to);
+  from.setUTCDate(from.getUTCDate() - DAYS);
+
+  const anyGroupParamPresent = ACTIVITY_EVENT_GROUPS.some((group) => rawSearchParams[`show_${group}`] !== undefined);
+  const selectedGroups = anyGroupParamPresent ? ACTIVITY_EVENT_GROUPS.filter((group) => rawSearchParams[`show_${group}`] !== undefined) : undefined;
+
+  const events = await listGlobalActivity(activityRepositories(), {
+    projects,
+    userId: user?.id ?? null,
+    from,
+    to,
+    groups: selectedGroups,
+    authorId: authorFilter?.id ?? null,
+  });
+
+  const authors = await userRepository.findByIds([...new Set(events.map((e) => e.authorId).filter((id): id is string => id !== null))]);
+  const authorById = new Map(authors.map((a) => [a.id, `${a.lastname} ${a.firstname}`]));
+
+  const eventsByDay = new Map<string, GlobalActivityEvent[]>();
+  for (const event of events) {
+    const day = formatDate(event.occurredAt);
+    const list = eventsByDay.get(day) ?? [];
+    list.push(event);
+    eventsByDay.set(day, list);
+  }
+
+  const prevFrom = new Date(from);
+  prevFrom.setUTCDate(prevFrom.getUTCDate() - 1);
+  // The next window's `from` lands on `to + DAYS - 1` so it starts exactly where this one
+  // ends (Redmine's `@date_to + @days - 1`).
+  const nextFrom = new Date(to);
+  nextFrom.setUTCDate(nextFrom.getUTCDate() + DAYS - 1);
+  const carried = `${selectedGroups ? selectedGroups.map((group) => `&show_${group}=1`).join("") : ""}${authorFilter ? `&user_id=${authorFilter.id}` : ""}`;
+
+  const feedQuery = new URLSearchParams();
+  if (atomKey) feedQuery.set("key", atomKey);
+  if (authorFilter) feedQuery.set("user_id", authorFilter.id);
+  for (const group of selectedGroups ?? []) feedQuery.append(`show_${group}`, "1");
+
+  return (
+    <main className="p-8 flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">
+          アクティビティ{authorFilter ? `（${authorFilter.lastname} ${authorFilter.firstname}）` : "（全プロジェクト）"}
+        </h1>
+        <a href={`/api/activity/atom?${feedQuery.toString()}`} className="text-sm underline">
+          Atom
+        </a>
+      </div>
+
+      <form className="flex flex-wrap gap-4 items-center text-sm">
+        {ACTIVITY_EVENT_GROUPS.map((group) => (
+          <label key={group} className="flex items-center gap-1">
+            <input type="checkbox" name={`show_${group}`} value="1" defaultChecked={!selectedGroups || selectedGroups.includes(group)} />
+            {GROUP_LABEL[group]}
+          </label>
+        ))}
+        {authorFilter ? <input type="hidden" name="user_id" value={authorFilter.id} /> : null}
+        <input type="hidden" name="from" value={fromParam ?? ""} />
+        <button type="submit" className="bg-black text-white rounded px-3 py-1">
+          適用
+        </button>
+      </form>
+
+      <p className="text-sm text-gray-600">
+        {formatDate(from)} 〜 {formatDate(dateTo)}
+        {" ・ "}
+        <Link href={`?from=${formatDate(prevFrom)}${carried}`} className="underline">
+          « 前の{DAYS}日間
+        </Link>
+        {to <= today ? (
+          <>
+            {" | "}
+            <Link href={`?from=${formatDate(nextFrom)}${carried}`} className="underline">
+              次の{DAYS}日間 »
+            </Link>
+          </>
+        ) : null}
+        {authorFilter ? (
+          <>
+            {" ・ "}
+            <Link href={`?from=${fromParam ?? ""}`} className="underline">
+              すべての利用者
+            </Link>
+          </>
+        ) : null}
+      </p>
+
+      {events.length === 0 ? (
+        <p className="text-gray-500 text-sm">この期間に該当するアクティビティはありません。</p>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {[...eventsByDay.entries()].map(([day, dayEvents]) => (
+            <section key={day} className="flex flex-col gap-2">
+              <h2 className="font-semibold text-sm border-b pb-1">{day}</h2>
+              <ul className="flex flex-col gap-2 text-sm">
+                {dayEvents.map((event) => (
+                  <li key={`${event.projectIdentifier}-${event.type}-${event.id}-${event.occurredAt.toISOString()}`} className="border rounded p-3">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{event.projectName}</span>
+                      <span>{TYPE_LABEL[event.type]}</span>
+                      <span>{event.occurredAt.toISOString()}</span>
+                      {event.authorId ? <span>{authorById.get(event.authorId) ?? "?"}</span> : null}
+                    </div>
+                    <Link href={activityEventPath(event.projectIdentifier, event)} className="font-medium underline block">
+                      {event.title}
+                    </Link>
+                    {event.excerpt ? <p className="text-gray-600 line-clamp-2">{event.excerpt}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}

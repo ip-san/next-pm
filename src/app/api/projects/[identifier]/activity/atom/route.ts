@@ -15,24 +15,12 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
-import { currentUserFromCookies } from "@/interface/http/current-user";
+import { atomResponse, resolveAtomUser } from "@/interface/http/atom-feed";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
+import { can } from "@/domain/authorization/authorization-service";
 
 export const dynamic = "force-dynamic";
-
-async function resolveUser(request: Request, url: URL) {
-  const viaCookie = await currentUserFromCookies();
-  if (viaCookie) return viaCookie;
-
-  // Mirrors Redmine's atom_key (accept_atom_auth): a feed reader can't carry a session cookie
-  // or set custom headers, so it authenticates via a token embedded in the feed URL itself.
-  // Deliberately NOT the general apiKey — query strings end up in server logs, browser
-  // history, and proxy caches, so a leak here must only expose read-only feed content, never
-  // the full REST API access apiKey grants. atomKey is a separate, narrowly-scoped token.
-  const key = url.searchParams.get("key");
-  if (!key) return null;
-  return new DrizzleUserRepository().findByAtomKey(key);
-}
 
 // Mirrors ActivitiesController#index format.atom. Scope: always the last activity_days_default
 // days across every event type (no per-type show_* filtering, no date navigation) — a feed
@@ -47,8 +35,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const user = await resolveUser(request, url);
+  const user = await resolveAtomUser(url);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
+  // The feed's *entries* were already filtered by actor, but its title is the project's name,
+  // which was being served to anyone who guessed the identifier — a private project's name
+  // leaked, and with login_required on the whole feed stayed readable while logged out. The
+  // same `view_project` gate the project page uses, and the same 404 rather than 403, so the
+  // endpoint does not confirm that the project exists.
+  if (!can({ permission: "view_project", project: toAuthorizationProject(project), actor })) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const { activityDaysDefault, feedsLimit } = resolveGeneralSettings(await new DrizzleSettingsRepository().getAll());
 
   const to = new Date();
@@ -74,6 +71,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       userId: user?.id ?? null,
       userGroupIds,
       issueVisibilityRoles: issuesVisibilityRoles(actor),
+      timeEntryVisibilityRoles: timeEntriesVisibilityRoles(actor),
       from,
       to,
     },
@@ -96,13 +94,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     })),
   );
 
-  return new NextResponse(xml, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/atom+xml; charset=utf-8",
-      // The feed URL carries the reader's atomKey in its query string — never send it as a
-      // Referer header if a feed reader follows a link out from this response.
-      "Referrer-Policy": "no-referrer",
-    },
-  });
+  return atomResponse(xml);
 }

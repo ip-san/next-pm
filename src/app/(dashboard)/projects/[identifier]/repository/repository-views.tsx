@@ -8,7 +8,7 @@ import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/cha
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
-import { visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { issueVisibilityCheck, listVisibleProjectContexts } from "@/interface/http/resolve-actor";
 import { LinkRelatedIssueForm, UnlinkRelatedIssueForm } from "./related-issue-forms";
 import { loadRepositoryContext, repositoryPath } from "./repository-context";
 import { SyncRepositoryButton } from "./sync-repository-button";
@@ -256,7 +256,7 @@ async function RelatedIssues({
   const linkedIssues = changeset
     ? (await Promise.all((await new DrizzleChangesetRepository().listIssueIds(changeset.id)).map((id) => issueRepository.findById(id))))
         .filter((issue) => issue !== null)
-        .filter(visibleIssueFilter(context.user?.id ?? null, context.actor, context.userGroupIds))
+        .filter(issueVisibilityCheck(context.user, await listVisibleProjectContexts(context.user, "view_issues")))
     : [];
 
   if (linkedIssues.length === 0 && !canManage) return null;

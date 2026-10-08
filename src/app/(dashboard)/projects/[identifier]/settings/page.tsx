@@ -31,6 +31,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
     new DrizzleCustomValueRepository().listForCustomized("Project", project.id),
   ]);
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
+  const hasWiki = project.enabledModules.includes("wiki");
   const customValueByFieldId = Object.fromEntries(customValues.map((cv) => [cv.customFieldId, cv.value]));
 
   return (
@@ -45,9 +46,21 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
           repositories: can({ permission: "manage_repository", project: projectContext, actor }),
+          activities: can({ permission: "manage_project_activities", project: projectContext, actor }),
+          wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
-      <ProjectSettingsForm project={project} trackers={trackers} customFields={customFields} customValueByFieldId={customValueByFieldId} />
+      <ProjectSettingsForm
+        project={project}
+        trackers={trackers}
+        customFields={customFields}
+        customValueByFieldId={customValueByFieldId}
+        // Redmine's safe_attributes: these two are not edit_project's to change. The server
+        // drops them when the actor lacks the permission, so leaving the controls out is
+        // only about not showing a field whose value would be ignored.
+        showPublicity={can({ permission: "select_project_publicity", project: projectContext, actor })}
+        showModules={can({ permission: "select_project_modules", project: projectContext, actor })}
+      />
     </main>
   );
 }

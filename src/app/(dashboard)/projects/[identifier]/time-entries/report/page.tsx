@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import {
   buildTimeReport,
   type TimeReportColumnUnit,
   type TimeReportCriterion,
 } from "@/domain/report/time-entry-report";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +53,9 @@ export default async function TimeEntryReportPage({
   }
 
   const user = await currentUserFromCookies();
+  const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_time_entries", project: toAuthorizationProject(project), actor })) {
+  if (!can({ permission: "view_time_entries", project: projectContext, actor })) {
     notFound();
   }
 
@@ -60,24 +63,27 @@ export default async function TimeEntryReportPage({
   const criterion = parseCriterion(criteriaParam);
   const columnUnit = parseColumnUnit(columnsParam);
 
-  const [allEntries, activities] = await Promise.all([
+  const [allEntries, { byId: activityById }] = await Promise.all([
     new DrizzleTimeEntryRepository().listForProject(project.id),
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+    // See the time-entries list: the lookup must cover deactivated activities too.
+    loadProjectActivities(
+      { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+      project.id,
+    ),
   ]);
-  const activityById = new Map(activities.map((activity) => [activity.id, activity]));
 
   const issueIds = [...new Set(allEntries.map((entry) => entry.issueId).filter((id): id is string => id !== null))];
   const issueRepository = new DrizzleIssueRepository();
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((issue) => issue !== null).map((issue) => [issue.id, issue]));
 
-  // Same filter as the plain time-entries list: an entry against a private issue the viewer
-  // can't see must not leak that issue's subject, or even the fact that time was logged.
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const entries = allEntries.filter((entry) => {
-    if (!entry.issueId) return true;
-    const issue = issueById.get(entry.issueId);
-    return !issue || isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles);
+  // Same shared predicate as the plain time-entries list.
+  const entries = filterAccessibleTimeEntries(allEntries, {
+    userId: user?.id ?? null,
+    actor,
+    userGroupIds,
+    projectContext,
+    issueById,
   });
 
   const users = await new DrizzleUserRepository().findByIds([...new Set(entries.map((entry) => entry.userId))]);

@@ -7,6 +7,8 @@ import { createIssue } from "@/application/issues/create-issue";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { WorkflowRequiredFieldError } from "@/application/issues/update-issue";
 import { InvalidUploadTokenError, redeemUploadToken } from "@/application/attachments/upload-token";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { drizzleIssueAttributeRepositories } from "@/infrastructure/db/repositories/issue-attribute-repositories";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
@@ -147,6 +149,8 @@ export async function POST(request: Request) {
         workflowFieldPermissionRepository: new DrizzleWorkflowFieldPermissionRepository(),
         userPreferencesRepository: new DrizzleUserPreferencesRepository(),
         watcherRepository: new DrizzleWatcherRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        settingsRepository: new DrizzleSettingsRepository(),
       },
       {
         projectId: parsed.data.project_id,

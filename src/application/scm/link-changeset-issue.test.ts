@@ -91,7 +91,7 @@ function makeRepositories(options: {
   };
 }
 
-const VIEWER = { viewerId: "user-1", viewerGroupIds: [], issueVisibilityRoles: [{ issuesVisibility: "all" as const }] };
+const VIEWER = { canViewIssue: () => true };
 
 function baseInput(issueRef: string, crossProjectRef = false) {
   return { scmRepository: SCM_REPOSITORY, repositoryProject: REPOSITORY_PROJECT, revision: "abcdef12", issueRef, crossProjectRef, ...VIEWER };
@@ -154,9 +154,9 @@ describe("linkChangesetIssue", () => {
   it("refuses an issue the viewer cannot see", async () => {
     const issue = makeIssue({ id: "eb0b2d1a-0000-0000-0000-000000000000", projectId: "proj-1", isPrivate: true, authorId: "someone-else" });
     const repositories = makeRepositories({ issues: [issue] });
-    await expect(
-      linkChangesetIssue(repositories, { ...baseInput("eb0b2d1a"), issueVisibilityRoles: [{ issuesVisibility: "default" }] }),
-    ).rejects.toThrow(InvalidChangesetIssueLinkError);
+    await expect(linkChangesetIssue(repositories, { ...baseInput("eb0b2d1a"), canViewIssue: () => false })).rejects.toThrow(
+      InvalidChangesetIssueLinkError,
+    );
   });
 
   it("refuses an ambiguous id prefix rather than picking one", async () => {
@@ -231,9 +231,7 @@ describe("unlinkChangesetIssue", () => {
         scmRepository: SCM_REPOSITORY,
         revision: "abcdef12",
         issueId: issue.id,
-        viewerId: "user-1",
-        viewerGroupIds: [],
-        issueVisibilityRoles: [{ issuesVisibility: "default" }],
+        canViewIssue: () => false,
       },
     );
     expect(changesetRepository.unlinkIssue).not.toHaveBeenCalled();

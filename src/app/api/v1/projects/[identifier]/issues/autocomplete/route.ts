@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { tokenizeSearchQuery } from "@/domain/search/tokens";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -30,7 +31,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     return NextResponse.json({ results: [] });
   }
 
-  const matches = await new DrizzleIssueRepository().search(project.id, query);
+  // The autocomplete wants every word the user has typed so far to match, and it looks at
+  // the subject alone — the Redmine equivalent of `all_words` + `titles_only`.
+  const matches = await new DrizzleIssueRepository().search([project.id], {
+    tokens: tokenizeSearchQuery(query),
+    allWords: true,
+    titlesOnly: true,
+    attachments: "0",
+    openIssues: false,
+  });
   const visible = matches.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds)).slice(0, RESULT_LIMIT);
 
   return NextResponse.json({ results: visible.map((issue) => ({ id: issue.id, subject: issue.subject })) });

@@ -34,6 +34,11 @@ export class DrizzleDocumentRepository implements DocumentRepository {
     return toDomain(row);
   }
 
+  async update(id: string, changes: { categoryId?: string; title?: string; description?: string }): Promise<Document> {
+    const [row] = await db.update(documents).set(changes).where(eq(documents.id, id)).returning();
+    return toDomain(row);
+  }
+
   async delete(id: string): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
   }

@@ -33,8 +33,10 @@ const bulkEditSchema = z.object({
   projectIdentifier: z.string().min(1),
   issueIds: z.array(z.string().uuid()).min(1),
   statusId: z.string().default(""),
+  trackerId: z.string().default(""),
   priorityId: z.string().default(""),
   assignedToId: z.string().default(""),
+  fixedVersionId: z.string().default(""),
   doneRatio: z.string().default(""),
   notes: z.string().default(""),
 });
@@ -47,7 +49,9 @@ export async function bulkUpdateIssuesAction(
     projectIdentifier: formData.get("projectIdentifier"),
     issueIds: formData.getAll("issueIds"),
     statusId: formData.get("statusId") ?? "",
+    trackerId: formData.get("trackerId") ?? "",
     priorityId: formData.get("priorityId") ?? "",
+    fixedVersionId: formData.get("fixedVersionId") ?? "",
     assignedToId: formData.get("assignedToId") ?? "",
     doneRatio: formData.get("doneRatio") ?? "",
     notes: formData.get("notes") ?? "",
@@ -76,7 +80,12 @@ export async function bulkUpdateIssuesAction(
 
   const changes: IssueUpdate = {};
   if (parsed.data.statusId) changes.statusId = parsed.data.statusId;
+  if (parsed.data.trackerId) changes.trackerId = parsed.data.trackerId;
   if (parsed.data.priorityId) changes.priorityId = parsed.data.priorityId;
+  // "__none__" clears, matching the assignee control; a blank value means "leave alone".
+  if (parsed.data.fixedVersionId) {
+    changes.fixedVersionId = parsed.data.fixedVersionId === "__none__" ? null : parsed.data.fixedVersionId;
+  }
   if (parsed.data.assignedToId) {
     if (parsed.data.assignedToId === "__none__") {
       changes.assignedToId = null;

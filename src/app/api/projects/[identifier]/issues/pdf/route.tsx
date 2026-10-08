@@ -1,26 +1,33 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
+import { listProjectIssues } from "@/application/issues/list-project-issues";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { can } from "@/domain/authorization/authorization-service";
-import { compileFilters } from "@/domain/query/filter-builder";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
+import type { SavedQuery } from "@/domain/query/entity";
+import { isQueryVisible } from "@/domain/query/visibility";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleIssueSearchRepository } from "@/infrastructure/db/repositories/issue-search-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
+import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
 import { IssuesPdfDocument } from "./issues-pdf-document";
 
 export const dynamic = "force-dynamic";
 
 // Cookie-authed download endpoint, same pattern as the CSV export and the gantt PDF export —
 // outside /api/v1 since this serves the HTML issues list's "PDF" link, not the Bearer/Basic
-// REST API surface. Mirrors the exact same predicates/visibility filtering and columns as
-// the CSV export (projects/[identifier]/issues/csv/route.ts) so the two exports never drift.
+// REST API surface. Reads the same URL contract and runs the same use case as the list page
+// and the CSV export, so filters, sort and visibility never drift between the three. Unlike
+// the CSV it keeps a fixed column set, because IssuesPdfDocument has a fixed page layout.
 export async function GET(request: Request, { params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
-  const url = new URL(request.url);
-  const statusFilter = url.searchParams.get("status_id");
+  const listParams = parseIssueListParams(normalizeSearchParams(new URL(request.url).searchParams));
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -28,24 +35,49 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }
 
   const user = await currentUserFromCookies();
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
+  const projectContext = toAuthorizationProject(project);
+  if (!can({ permission: "view_issues", project: projectContext, actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const predicates = statusFilter ? compileFilters([{ field: "status_id", operator: "=", values: [statusFilter] }]) : [];
+  const settingsRepository = new DrizzleSettingsRepository();
+  let savedQuery: SavedQuery | null = null;
+  if (listParams.queryId) {
+    const candidate = await new DrizzleQueryRepository().findById(listParams.queryId);
+    // Redmine's `global_or_on_project`: a project list may apply its own queries and the global ones.
+    if (candidate && (candidate.projectId === null || candidate.projectId === project.id) && isQueryVisible(candidate, user?.id ?? "", roleIds)) {
+      savedQuery = candidate;
+    }
+  }
 
-  const [allIssues, statuses, trackers] = await Promise.all([
-    new DrizzleIssueRepository().listByProject(project.id, predicates),
+  const settings = await loadGeneralSettings(settingsRepository);
+  const [result, statuses, trackers] = await Promise.all([
+    listProjectIssues(
+      {
+        issueSearchRepository: new DrizzleIssueSearchRepository(),
+        issueStatusRepository: new DrizzleIssueStatusRepository(),
+        customFieldRepository: new DrizzleCustomFieldRepository(),
+        settingsRepository,
+      },
+      {
+        projectId: project.id,
+        params: listParams,
+        savedQuery,
+        visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),
+        canViewTimeEntries: can({ permission: "view_time_entries", project: projectContext, actor }),
+        spentHoursScope: spentHoursScopeFor(actor, user?.id ?? null),
+        today: new Date().toISOString().slice(0, 10),
+        exportLimit: settings.issuesExportLimit,
+      },
+    ),
     new DrizzleIssueStatusRepository().listAll(),
     new DrizzleTrackerRepository().listAll(),
   ]);
-  const visibilityRoles = issuesVisibilityRoles(actor);
-  const issues = allIssues.filter((issue) => isPrivateIssueVisible(issue, user?.id ?? null, userGroupIds, visibilityRoles));
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 
-  const rows = issues.map((issue) => ({
+  const rows = result.search.issues.map((issue) => ({
     id: issue.id,
     trackerName: trackerById.get(issue.trackerId)?.name ?? "",
     subject: issue.subject,

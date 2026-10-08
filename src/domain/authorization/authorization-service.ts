@@ -9,7 +9,7 @@ export interface ProjectAuthorizationContext {
   enabledModules: string[];
 }
 
-type RoleForAuthorization = Pick<Role, "builtin" | "permissions" | "issuesVisibility">;
+type RoleForAuthorization = Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility">;
 
 /**
  * Derives the authorization context from a project record. Lives here rather than only in
@@ -99,4 +99,35 @@ export function can(request: AuthorizationRequest): boolean {
   return roles.some(
     (role) => (project.isPublic || isMemberRole(role)) && role.permissions.includes(permission),
   );
+}
+
+export interface GlobalAuthorizationRequest {
+  permission: PermissionKey | string;
+  isAdmin: boolean;
+  /**
+   * Every role the actor holds in any project, plus their builtin role (Non member when
+   * logged in, Anonymous otherwise) — Redmine's `self.roles | memberships.roles` union with
+   * the builtin appended.
+   */
+  roles: Pick<Role, "permissions">[];
+}
+
+/**
+ * Redmine's `User#allowed_to?(permission, nil, :global => true)`, used for the handful of
+ * permissions that are asked about with no project in hand — `add_project` is the one this
+ * codebase needs, since the project it would authorize does not exist yet.
+ *
+ * Deliberately has none of `can`'s project rules: with no project there is no status to be
+ * archived or closed, and no enabled-module list, so a permission belonging to a module is
+ * answered on the role alone. Redmine's global branch does the same.
+ */
+export function canGlobally(request: GlobalAuthorizationRequest): boolean {
+  const { permission } = request;
+  if (!isPermissionRegistered(permission)) {
+    return false;
+  }
+  if (request.isAdmin) {
+    return true;
+  }
+  return request.roles.some((role) => role.permissions.includes(permission));
 }

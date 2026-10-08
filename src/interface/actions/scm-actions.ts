@@ -8,6 +8,7 @@ import type { ScmRepository } from "@/domain/scm/entity";
 import { resolveScmRepositoryByParam } from "@/domain/scm/identifier";
 import { connectRepository, InvalidRepositoryError } from "@/application/scm/connect-repository";
 import { InvalidChangesetIssueLinkError, linkChangesetIssue } from "@/application/scm/link-changeset-issue";
+import type { Issue } from "@/domain/issue/entity";
 import { mapCommitters } from "@/application/scm/map-committers";
 import { unlinkChangesetIssue } from "@/application/scm/unlink-changeset-issue";
 import { updateRepository } from "@/application/scm/update-repository";
@@ -15,6 +16,7 @@ import { syncChangesets } from "@/application/scm/sync-changesets";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -24,7 +26,7 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issueVisibilityCheck, listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export type ScmActionState = {
   error: string | null;
@@ -241,7 +243,7 @@ async function authorizeRelatedIssues(
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_related_issues", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
   }
@@ -258,14 +260,14 @@ async function authorizeRelatedIssues(
   return {
     project,
     scmRepository,
-    viewer: { viewerId: user?.id ?? null, viewerGroupIds: userGroupIds, issueVisibilityRoles: issuesVisibilityRoles(actor) },
+    // Issue visibility is per issue project, so the check resolves the viewer in each project
+    // rather than only the repository's own (see issueVisibilityCheck).
+    viewer: { canViewIssue: issueVisibilityCheck(user, await listVisibleProjectContexts(user, "view_issues")) },
   };
 }
 
 interface ResolvedViewer {
-  viewerId: string | null;
-  viewerGroupIds: string[];
-  issueVisibilityRoles: ReturnType<typeof issuesVisibilityRoles>;
+  canViewIssue: (issue: Issue) => boolean;
 }
 
 const changesetIssueLinkSchema = z.object({
@@ -397,6 +399,7 @@ export async function syncRepositoryAction(
       issueStatusRepository: new DrizzleIssueStatusRepository(),
       timeEntryRepository: new DrizzleTimeEntryRepository(),
       enumerationRepository: new DrizzleEnumerationRepository(),
+      projectActivityRepository: new DrizzleProjectActivityRepository(),
       userRepository: new DrizzleUserRepository(),
       projectRepository: new DrizzleProjectRepository(),
       settingsRepository: new DrizzleSettingsRepository(),

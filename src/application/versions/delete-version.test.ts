@@ -42,6 +42,7 @@ function versionFile(): Attachment {
 function makeRepo(fixedIssueCount: number): VersionRepository {
   return {
     listByProject: mock(async () => []),
+    listByProjects: mock(async () => []),
     listSharedWith: mock(async () => []),
     findById: mock(async () => null),
     create: mock(async () => {

@@ -1,9 +1,7 @@
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
-import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { Project } from "@/domain/project/entity";
 import type { ProjectRepository } from "@/domain/project/repository";
-import type { IssuesVisibility } from "@/domain/role/entity";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { ScmRepository } from "@/domain/scm/entity";
 import { canReferenceIssueProject } from "@/domain/scm/issue-reference";
@@ -28,10 +26,8 @@ export interface LinkChangesetIssueInput {
   revision: string;
   /** What the user typed, with or without the leading "#" — next-pm's 8-hex id shorthand. */
   issueRef: string;
-  /** Viewer context for the issue-visibility check. */
-  viewerId: string | null;
-  viewerGroupIds: string[];
-  issueVisibilityRoles: { issuesVisibility: IssuesVisibility }[];
+  /** Redmine's `Issue#visible?` for the viewer, across projects — see `issueVisibilityCheck`. */
+  canViewIssue: (issue: Issue) => boolean;
   /** Setting.commit_cross_project_ref. */
   crossProjectRef: boolean;
 }
@@ -67,7 +63,7 @@ export async function linkChangesetIssue(
   if (!issueProject || !canReferenceIssueProject(input.repositoryProject, issueProject, input.crossProjectRef)) {
     throw new InvalidChangesetIssueLinkError("チケットが不正です。");
   }
-  if (!isPrivateIssueVisible(issue, input.viewerId, input.viewerGroupIds, input.issueVisibilityRoles)) {
+  if (!input.canViewIssue(issue)) {
     throw new InvalidChangesetIssueLinkError("チケットが不正です。");
   }
 

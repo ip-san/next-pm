@@ -14,6 +14,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     lastname: "Dev",
     isAdmin: false,
     status: "active",
+    language: null,
+    mailNotification: "all",
     passwordHash: "",
     passwordSalt: "",
     mustChangePassword: false,

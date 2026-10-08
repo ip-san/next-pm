@@ -2,7 +2,7 @@ import { describe, expect, it, mock } from "bun:test";
 import { listProjectActivity, type ListProjectActivityRepositories } from "./list-project-activity";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
-import type { Journal } from "@/domain/journal/entity";
+import type { Journal, JournalDetail } from "@/domain/journal/entity";
 import type { Role } from "@/domain/role/entity";
 
 const activeProject: ProjectAuthorizationContext = {
@@ -17,7 +17,7 @@ const managerRole: Role = {
   name: "Manager",
   builtin: 0,
   position: 1,
-  permissions: ["view_issues", "view_wiki_pages", "view_news", "view_messages", "view_documents", "view_time_entries", "view_changesets"],
+  permissions: ["view_issues", "view_wiki_pages", "view_wiki_edits", "view_news", "view_messages", "view_documents", "view_time_entries", "view_changesets"],
   issuesVisibility: "all",
   timeEntriesVisibility: "all",
   usersVisibility: "all",
@@ -70,6 +70,7 @@ function timeEntry(overrides: Partial<import("@/domain/time-entry/entity").TimeE
     comments: "Worked on it",
     spentOn: "2026-07-15",
     createdAt: inside,
+    updatedAt: inside,
     ...overrides,
   };
 }
@@ -109,6 +110,9 @@ function journal(overrides: Partial<Journal>): Journal {
     journalizedType: "Issue",
     journalizedId: "issue-1",
     userId: "user-1",
+    privateNotes: false,
+    updatedAt: inside,
+    updatedById: null,
     notes: "",
     details: [],
     createdAt: inside,
@@ -139,6 +143,7 @@ function baseInput(overrides: Partial<Parameters<typeof listProjectActivity>[1]>
     userId: "user-1",
     userGroupIds: [],
     issueVisibilityRoles: [managerRole],
+    timeEntryVisibilityRoles: [managerRole],
     from,
     to,
     ...overrides,
@@ -266,6 +271,23 @@ describe("listProjectActivity", () => {
     expect(events).toEqual([{ type: "time_entry", id: "entry-1", authorId: "user-1", title: "2h", excerpt: "Worked on it", occurredAt: inside }]);
   });
 
+  it("hides another user's time entry from a role scoped to its own time", async () => {
+    const ownTimeOnly = { ...managerRole, timeEntriesVisibility: "own" as const };
+    const repositories = makeRepositories({
+      timeEntryRepository: {
+        listForProject: mock(async () => [
+          timeEntry({ id: "mine", userId: "user-1", issueId: null, createdAt: inside }),
+          timeEntry({ id: "theirs", userId: "user-2", issueId: null, createdAt: inside }),
+        ]),
+      } as unknown as ListProjectActivityRepositories["timeEntryRepository"],
+    });
+    const events = await listProjectActivity(
+      repositories,
+      baseInput({ actor: { kind: "member", roles: [ownTimeOnly] }, timeEntryVisibilityRoles: [ownTimeOnly] }),
+    );
+    expect(events.map((e) => e.id)).toEqual(["mine"]);
+  });
+
   it("includes a time entry linked to a visible issue", async () => {
     const repositories = makeRepositories({
       issueRepository: {
@@ -352,5 +374,38 @@ describe("listProjectActivity", () => {
     const events = await listProjectActivity(repositories, baseInput({ actor: { kind: "member", roles: [noRepositoryRole] } }));
     expect(events).toEqual([]);
     expect(repositories.scmRepositoryRepository.listByProject).not.toHaveBeenCalled();
+  });
+});
+
+describe("listProjectActivity — attribute-only journals", () => {
+  function withJournal(notes: string, details: JournalDetail[]) {
+    return makeRepositories({
+      issueRepository: {
+        listByProject: mock(async () => [issue({ createdAt: new Date("2000-01-01") })]),
+      } as unknown as ListProjectActivityRepositories["issueRepository"],
+      journalRepository: {
+        listByProject: mock(async () => [journal({ notes, details })]),
+      } as unknown as ListProjectActivityRepositories["journalRepository"],
+    });
+  }
+
+  it("describes the change when the journal carries no note", async () => {
+    // Regression: a status change with no comment produced a dated activity entry whose
+    // description was empty.
+    const repositories = withJournal("", [{ property: "attr", fieldName: "statusId", oldValue: "open", newValue: "closed" }]);
+
+    const events = await listProjectActivity(repositories, baseInput());
+
+    expect(events.find((event) => event.type === "issue_updated")?.excerpt).toBe("ステータス: open → closed");
+  });
+
+  it("prefers the note when there is one", async () => {
+    const repositories = withJournal("a real comment", [
+      { property: "attr", fieldName: "statusId", oldValue: "open", newValue: "closed" },
+    ]);
+
+    const events = await listProjectActivity(repositories, baseInput());
+
+    expect(events.find((event) => event.type === "issue_updated")?.excerpt).toBe("a real comment");
   });
 });
