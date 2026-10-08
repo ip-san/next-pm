@@ -59,7 +59,7 @@
 | 別プロジェクトへの移動 | done | 単票画面の `move-issue-form.tsx` から移動先プロジェクト+トラッカーを選んで実行(`application/issues/move-issue.ts`)。本家 `Issue#project=` / `after_project_change` に準拠し、トラッカーの自動フォールバック・カテゴリの同名再マッチ・共有外バージョンの解除・親の解除・同一プロジェクトの子チケットの随伴(keep_tracker)・工数の付け替え・プロジェクトをまたぐ関連の削除(`cross_project_issue_relations` が無効な場合)まで行う。移動先の候補は `add_issues` 権限を持つプロジェクトのみ。**一括編集での移動は未対応**(従来の備考にあった「一括編集の projectId 経由」は誤りで、`bulk-edit-actions.ts` は他プロジェクトの課題をスキップする) |
 | サブタスク(親子) | partial | 作成・更新の双方で `parentId` を設定でき、`manage_subtasks` 権限で可否を制御、付け替え時は自分自身/子孫を親にする循環を拒否する(`domain/issue/parent.ts`、本家 `Issue#validate_parent_issue`)。親課題の集計値は `parent_issue_dates` / `parent_issue_priority` / `parent_issue_done_ratio` 設定で子から算出(`domain/issue/rollup.ts` + `application/issues/recalculate-parents.ts`、本家 `Issue#recalculate_attributes_for`)、算出対象の項目は編集フォームで読み取り専用になる。一覧は本家 `issue_list` ヘルパーと同じ親子インデント表示(`domain/issue/tree.ts`、一覧に含まれる課題を基準に段付けする)。なお本家に予定工数のロールアップ設定は無く、`total_estimated_hours` は表示専用の合計値 |
 | 課題の関連 | done | precedes/follows(遅延日数と後続の再スケジュール)・blocks/blocked・duplicates/duplicated(canonical のクローズで重複も自動クローズ)・relates・copied_to/copied_from の 9 種を定義、循環参照ガードあり(copied_to は課題のコピーで生成される) |
-| 関連の権限分離 | done | `manage_issue_relations` で課題間の関連を制御。**従来の備考は誤り**: 本家の `manage_related_issues` は課題間の関連ではなくリポジトリモジュールの権限(`lib/redmine/preparation.rb` で `{:repositories => [:add_related_issue, :remove_related_issue]}`)で、コミット(changeset)と課題を手動で紐付けるためのもの。next-pm はコミットキーワード走査による自動紐付けのみで手動 UI が無いため、この権限は意図的に未登録(実体の無い権限キーを増やさないため)。§15 の手動紐付け対応時にあわせて追加する |
+| 関連の権限分離 | done | `manage_issue_relations` で課題間の関連を制御。**従来の備考は誤り**: 本家の `manage_related_issues` は課題間の関連ではなくリポジトリモジュールの権限(`lib/redmine/preparation.rb` で `{:repositories => [:add_related_issue, :remove_related_issue]}`)で、コミット(changeset)と課題を手動で紐付けるためのもの。権限キーを登録し(`require` なし、本家どおり)、リビジョン画面から手動で紐付け・解除できる。紐付け・解除・関連一覧は、課題のプロジェクトごとの `view_issues` と非公開ルールを合わせて判定する(本家 `Issue#visible?`) |
 | ウォッチャー | done | 追加/削除/自己トグル、作成・担当・コメント時の自動ウォッチ(`user_preferences.auto_watch_on`) |
 | ウォッチャー一覧の閲覧権限 | done | `view_issue_watchers` でウォッチャー一覧の表示可否を制御(追加/削除権限とは独立)。REST にウォッチャー一覧の GET は無いため画面のみ |
 | 注記(journal) | done | `add_issue_notes` 権限で注記のみの更新が可能(本家 `Issue#attachments_addable?` と同じく添付の追加も可、削除は編集権限が必要)(本家 `Issue#notes_addable?` と同じく編集権限とは独立。メール返信もこの権限で判定)。`edit_issue_notes` / `edit_own_issue_notes` による注記の編集に対応(本家 `Journal#editable_by?`)。読めないプライベート注記は編集もできない(本家が `Journal.visible` で絞るのと同じ)。`journals.updated_at` / `updated_by_id` を記録し履歴に「編集済み」を表示。本文を空にした注記は、変更履歴を持たない場合に限り削除する(本家は journals に destroy が無く空の行が残るだけで表示もされないため、見え方は同じ) |
@@ -121,7 +121,7 @@
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`commit_access`, `import_issues`, `manage_related_issues`, `use_webhooks`
+`import_issues`, `use_webhooks`
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -216,7 +216,8 @@
 | 1 プロジェクトに複数リポジトリ | done | `scm_repositories` に `identifier` / `is_default` を追加し、unique 制約を `(project_id, identifier)` + 「1 プロジェクトに既定リポジトリは 1 つ」の部分 unique index に置き換えた。識別子の検証は本家 `Repository` と同じ(英小文字・数字・`-`・`_` のみ、数字だけは不可、255 文字まで、予約語 11 種 + next-pm 固有の `blame`、空文字も含めてプロジェクト内で一意、一度付けたら変更不可)。URL は既定リポジトリが `/projects/:id/repository`、それ以外が `/projects/:id/repository/:repositoryId`(本家の `identifier_param` と同じく識別子、無ければ ID)。プロジェクト設定に「リポジトリ」タブを追加し、追加・更新(識別子とメイン指定のみ。本家 `safe_attributes` と同じくパス・種類は作成時限定)・削除ができる。最初の 1 件は本家 `set_as_default?` と同じく強制的にメインになり、メインを外しても別のリポジトリが自動昇格しないのも本家どおり(表示は先頭のリポジトリにフォールバックする) |
 | リポジトリの自動フェッチ | out-of-scope | cron 相当の仕組みを持たない設計判断(§15) |
 | コミッターとユーザーの紐付け | done | 本家と同じく `changesets.user_id` 自体が紐付けの実体で、専用テーブルも `extra_info` も使わない。取り込み時に本家 `Repository#find_committer_user` と同じ順序で解決する(① そのコミッター文字列を持つ最新 changeset に既にユーザーが入っていればそれ、② `Name <email>` を分解してログイン一致、③ メール一致)。リポジトリ設定の「コミッタの紐付け」画面(本家 `RepositoriesController#committers`)で付け替えると、本家 `committer_ids=` と同じく そのリポジトリの既存 changeset を一括で書き換え、既存の journal・工数は書き換えない。以降の同期は①の経路で同じユーザーに解決される。コミットキーワードの工数記録は本家同様に紐付いたユーザー名義で行い、紐付かない場合は本家の `TimeEntry` 検証失敗と同じく記録をスキップする。**差分**: ログイン一致は完全一致のみ(本家は大文字小文字を無視するフォールバックを持つが、next-pm の `findByLogin` はログイン認証と共用のため緩めていない。大小が違うコミッターはこの画面で一度紐付ければ①の経路で固定される) |
-| `commit_access` 権限(WS 経由の認可) | missing | 本家 `SysController` によるリポジトリ認証連携ごと無い |
+| `commit_access` 権限 | done | 空の権限(本家 `preparation.rb` で `{}`)。本家の既定データでは Developer に付き、core はどこでも参照しない。Manager の seed に付与。既存ロールへの backfill は不要(挙動が無いため) |
+| リポジトリ管理 WS(`/sys`) | partial | 本家 `SysController` の 3 エンドポイントを `GET /api/sys/projects`、`POST /api/sys/projects/:id/repository`、`GET\|POST /api/sys/fetch_changesets` で実装。`sys_api_enabled` = `1` と `sys_api_key` が一致する `key` パラメータを要求し、キーが空なら常に拒否(本家は空キーを許しうるため、より厳しくした)。一覧は有効なプロジェクトのうち repository モジュールを持つものと既定リポジトリ、作成は既定リポジトリが無いときだけ 201(あれば 409)、取り込みは対象プロジェクトの全リポジトリ。**未実装**: 管理画面での有効化とキー発行(現状は設定テーブルへ直接書く)。WS の `url` は絶対パス(Subversion は URL)を受け、キーの保持者を管理者と同じ信頼境界として扱う(本家と同じ) |
 
 ## 11. 通知・メール
 
