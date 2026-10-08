@@ -2,25 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
-import { listProjectActivity } from "@/application/activity/list-project-activity";
-import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
-import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
-import { DrizzleDocumentRepository } from "@/infrastructure/db/repositories/document-repository";
-import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
-import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
-import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
-import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
-import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { listVisibleProjectContexts } from "@/interface/http/resolve-actor";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
-import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
+import { listProjectActivityFeed } from "@/interface/http/project-activity-feed";
+import { resolveActor } from "@/interface/http/resolve-actor";
 
 export const dynamic = "force-dynamic";
 
@@ -90,57 +78,9 @@ export default async function ProjectActivityPage({
   const anyGroupParamPresent = ACTIVITY_EVENT_GROUPS.some((group) => rawSearchParams[`show_${group}`] !== undefined);
   const selectedGroups = anyGroupParamPresent ? ACTIVITY_EVENT_GROUPS.filter((group) => rawSearchParams[`show_${group}`] !== undefined) : undefined;
 
-  // display_subprojects_issues: the feed also covers the subprojects. Each project's events come from the same
-  // per-project loader, with that project's own actor and visibility, and each event remembers its project so
-  // its link points at the right project.
-  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
-  const subtreeContexts = displaySubprojectsIssues
-    ? (await listVisibleProjectContexts(user, "view_project")).filter(
-        (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
-      )
-    : [];
-  const feedScopes =
-    subtreeContexts.length > 0
-      ? subtreeContexts.map((entry) => ({
-          project: entry.project,
-          projectContext: entry.projectContext,
-          actor: entry.actor,
-          userGroupIds: entry.userGroupIds,
-        }))
-      : [{ project, projectContext: toAuthorizationProject(project), actor, userGroupIds }];
-  const identifierOf = new WeakMap<ActivityEvent, string>();
-  const perProject = await Promise.all(
-    feedScopes.map(async (scope) => {
-      const scoped = await listProjectActivity(
-        {
-          issueRepository: new DrizzleIssueRepository(),
-      journalRepository: new DrizzleJournalRepository(),
-      newsRepository: new DrizzleNewsRepository(),
-      messageRepository: new DrizzleMessageRepository(),
-      wikiContentRepository: new DrizzleWikiContentRepository(),
-      documentRepository: new DrizzleDocumentRepository(),
-      timeEntryRepository: new DrizzleTimeEntryRepository(),
-      scmRepositoryRepository: new DrizzleScmRepositoryRepository(),
-      changesetRepository: new DrizzleChangesetRepository(),
-    },
-    {
-      projectId: scope.project.id,
-      projectContext: scope.projectContext,
-      actor: scope.actor,
-      userId: user?.id ?? null,
-      userGroupIds: scope.userGroupIds,
-      issueVisibilityRoles: issuesVisibilityRoles(scope.actor),
-      timeEntryVisibilityRoles: timeEntriesVisibilityRoles(scope.actor),
-      from,
-      to,
-      groups: selectedGroups,
-    },
-  );
-          for (const event of scoped) identifierOf.set(event, scope.project.identifier);
-          return scoped;
-    }),
-  );
-  const events = perProject.flat().sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+  const feed = await listProjectActivityFeed({ user, project, actor, userGroupIds, from, to, groups: selectedGroups });
+  const events = feed.map((entry) => entry.event);
+  const identifierOf = new Map(feed.map((entry) => [entry.event, entry.identifier]));
 
   const authors = await new DrizzleUserRepository().findByIds([...new Set(events.map((e) => e.authorId).filter((id): id is string => id !== null))]);
   const authorById = new Map(authors.map((a) => [a.id, `${a.lastname} ${a.firstname}`]));
