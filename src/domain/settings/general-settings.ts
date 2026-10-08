@@ -18,6 +18,7 @@ export const GENERAL_SETTING_KEYS = [
   "cross_project_issue_relations",
   "issue_done_ratio",
   "webhooks_enabled",
+  "display_subprojects_issues",
   "per_page_options",
   "issues_export_limit",
   "parent_issue_dates",
@@ -58,6 +59,9 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // Redmine's own default too (settings.yml webhooks_enabled: 0) — an outbound HTTP channel
   // stays off until an admin turns it on.
   webhooks_enabled: "0",
+  // Redmine defaults this on (settings.yml display_subprojects_issues: 1). next-pm's issue lists have
+  // never included subprojects, so off keeps existing screens as they were until an admin opts in.
+  display_subprojects_issues: "0",
   // Both match Redmine's own settings.yml defaults. The issue list had no pagination at all
   // before, so there's no prior next-pm behavior to preserve here.
   per_page_options: PER_PAGE_OPTIONS_DEFAULT,
@@ -80,6 +84,11 @@ export interface GeneralSettings {
   crossProjectIssueRelations: boolean;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
+  /**
+   * Redmine's display_subprojects_issues: the project's screens also list the issues of its
+   * subprojects. Off by default here (see GENERAL_SETTING_DEFAULTS).
+   */
+  displaySubprojectsIssues: boolean;
   /** Page sizes the issue/time-entry lists offer, already parsed and sorted. */
   perPageOptions: number[];
   /** Row cap on a CSV/PDF export, mirroring Redmine's `Setting.issues_export_limit`. */
@@ -116,6 +125,7 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
       ? (overrides.issue_done_ratio as IssueDoneRatioMode)
       : (GENERAL_SETTING_DEFAULTS.issue_done_ratio as IssueDoneRatioMode),
     webhooksEnabled: (overrides.webhooks_enabled ?? GENERAL_SETTING_DEFAULTS.webhooks_enabled) === "1",
+    displaySubprojectsIssues: (overrides.display_subprojects_issues ?? GENERAL_SETTING_DEFAULTS.display_subprojects_issues) === "1",
     perPageOptions: parsePerPageOptions(overrides.per_page_options),
     issuesExportLimit: positiveIntOr(overrides.issues_export_limit, Number(GENERAL_SETTING_DEFAULTS.issues_export_limit)),
     parentIssueDates: rollupMode(overrides.parent_issue_dates, "parent_issue_dates"),

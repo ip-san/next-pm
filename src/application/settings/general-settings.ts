@@ -21,6 +21,7 @@ export interface UpdateGeneralSettingsInput {
   crossProjectIssueRelations: boolean;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
+  displaySubprojectsIssues: boolean;
   /** Comma-separated, as the admin form submits it; normalised by parsePerPageOptions on read. */
   perPageOptions: string;
   issuesExportLimit: number;
@@ -43,6 +44,7 @@ export async function updateGeneralSettings(
     cross_project_issue_relations: input.crossProjectIssueRelations ? "1" : "0",
     issue_done_ratio: input.issueDoneRatio,
     webhooks_enabled: input.webhooksEnabled ? "1" : "0",
+    display_subprojects_issues: input.displaySubprojectsIssues ? "1" : "0",
     per_page_options: input.perPageOptions,
     issues_export_limit: String(Math.round(input.issuesExportLimit)),
     parent_issue_dates: input.parentIssueDates,

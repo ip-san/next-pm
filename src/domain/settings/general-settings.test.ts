@@ -67,3 +67,15 @@ describe("resolveGeneralSettings", () => {
     expect(settings.issueDoneRatio).toBe("issue_field");
   });
 });
+
+describe("display_subprojects_issues", () => {
+  it("is off by default, so subproject issues stay off every screen until an admin turns it on", () => {
+    expect(GENERAL_SETTING_DEFAULTS.display_subprojects_issues).toBe("0");
+    expect(resolveGeneralSettings({}).displaySubprojectsIssues).toBe(false);
+  });
+
+  it("is on only for the stored value \"1\"", () => {
+    expect(resolveGeneralSettings({ display_subprojects_issues: "1" }).displaySubprojectsIssues).toBe(true);
+    expect(resolveGeneralSettings({ display_subprojects_issues: "0" }).displaySubprojectsIssues).toBe(false);
+  });
+});

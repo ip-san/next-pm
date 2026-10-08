@@ -78,6 +78,10 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         <input type="checkbox" name="webhooksEnabled" defaultChecked={settings.webhooksEnabled} />
         Webhookを有効にする
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="displaySubprojectsIssues" defaultChecked={settings.displaySubprojectsIssues} />
+        サブプロジェクトのチケットを親プロジェクトの画面にも表示する
+      </label>
 
       <label className="flex flex-col gap-1 text-sm">
         1 ページあたりの表示件数（カンマ区切り）
