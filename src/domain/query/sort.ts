@@ -51,9 +51,13 @@ export function toggleSortCriteria(criteria: SortCriterion[], column: QueryColum
 }
 
 /** Drops criteria naming a column that no longer exists or isn't sortable, then falls back to the default. */
-export function resolveSortCriteria(columns: QueryColumn[], criteria: SortCriterion[]): SortCriterion[] {
+export function resolveSortCriteria(
+  columns: QueryColumn[],
+  criteria: SortCriterion[],
+  defaultCriteria: SortCriterion[] = DEFAULT_ISSUE_SORT,
+): SortCriterion[] {
   const valid = criteria.filter(([key]) => findColumn(columns, key)?.sortable);
-  return valid.length > 0 ? valid : DEFAULT_ISSUE_SORT;
+  return valid.length > 0 ? valid : defaultCriteria;
 }
 
 export function sortDirectionFor(criteria: SortCriterion[], key: string): SortDirection | null {

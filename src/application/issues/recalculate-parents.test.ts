@@ -42,8 +42,8 @@ function makeRepositories(options: {
       listByType: mock(
         async () =>
           options.priorities ?? [
-            { id: "normal", type: "IssuePriority", name: "Normal", position: 2, isDefault: true, projectId: null, parentId: null },
-            { id: "urgent", type: "IssuePriority", name: "Urgent", position: 5, isDefault: false, projectId: null, parentId: null },
+            { id: "normal", type: "IssuePriority", name: "Normal", position: 2, isDefault: true, active: true, projectId: null, parentId: null },
+            { id: "urgent", type: "IssuePriority", name: "Urgent", position: 5, isDefault: false, active: true, projectId: null, parentId: null },
           ] satisfies Enumeration[],
       ),
       create: mock(async () => {

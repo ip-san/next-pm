@@ -5,10 +5,13 @@ import { z } from "zod";
 import { updateAuthSettings } from "@/application/settings/auth-settings";
 import { updateCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { updateGeneralSettings } from "@/application/settings/general-settings";
+import { updateProjectDefaults } from "@/application/settings/project-defaults";
+import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
 import { PASSWORD_CHAR_CLASSES, SELF_REGISTRATION_MODES, TWOFA_MODES } from "@/domain/settings/auth-settings";
 import { parseKeywordList } from "@/domain/settings/commit-keywords";
 import { PARENT_ISSUE_ROLLUP_VALUES, ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 import { updateMailHandlerSettings } from "@/application/settings/mail-handler-settings";
 import { PREFERRED_BODY_PART_VALUES } from "@/domain/settings/mail-handler-settings";
@@ -23,6 +26,7 @@ const updateCommitKeywordSettingsSchema = z.object({
   refKeywords: z.string(),
   fixKeywords: z.string(),
   logtimeEnabled: z.coerce.boolean().default(false),
+  crossProjectRef: z.coerce.boolean().default(false),
 });
 
 export async function updateCommitKeywordSettingsAction(
@@ -38,6 +42,7 @@ export async function updateCommitKeywordSettingsAction(
     refKeywords: formData.get("refKeywords"),
     fixKeywords: formData.get("fixKeywords"),
     logtimeEnabled: formData.get("logtimeEnabled") === "on",
+    crossProjectRef: formData.get("crossProjectRef") === "on",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -47,6 +52,7 @@ export async function updateCommitKeywordSettingsAction(
     refKeywords: parseKeywordList(parsed.data.refKeywords),
     fixKeywords: parseKeywordList(parsed.data.fixKeywords),
     logtimeEnabled: parsed.data.logtimeEnabled,
+    crossProjectRef: parsed.data.crossProjectRef,
   });
 
   revalidatePath("/admin/settings");
@@ -117,6 +123,53 @@ export async function updateGeneralSettingsAction(
   });
 
   revalidatePath("/admin/settings");
+  return { error: null };
+}
+
+const updateProjectDefaultsSchema = z.object({
+  isPublic: z.coerce.boolean().default(false),
+  enabledModules: z.array(z.enum(PROJECT_MODULES)).default([]),
+  trackerIds: z.array(z.string().uuid()).default([]),
+  sequentialIdentifiers: z.coerce.boolean().default(false),
+  newProjectUserRoleId: z.string().uuid().nullable().default(null),
+});
+
+export async function updateProjectDefaultsAction(
+  _prevState: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const roleIdRaw = formData.get("newProjectUserRoleId");
+  const parsed = updateProjectDefaultsSchema.safeParse({
+    isPublic: formData.get("isPublic") === "on",
+    enabledModules: formData.getAll("enabledModules"),
+    trackerIds: formData.getAll("trackerIds"),
+    sequentialIdentifiers: formData.get("sequentialIdentifiers") === "on",
+    newProjectUserRoleId: roleIdRaw ? roleIdRaw : null,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  // Every tracker checked is stored as "unset", so the setting keeps following the tracker
+  // list as trackers are added later — Redmine's unset default means "all trackers" too.
+  const allTrackerIds = (await new DrizzleTrackerRepository().listAll()).map((tracker) => tracker.id);
+  const everyTrackerChecked = allTrackerIds.length > 0 && allTrackerIds.every((id) => parsed.data.trackerIds.includes(id));
+
+  await updateProjectDefaults(new DrizzleSettingsRepository(), {
+    isPublic: parsed.data.isPublic,
+    enabledModules: parsed.data.enabledModules,
+    trackerIds: everyTrackerChecked ? null : parsed.data.trackerIds,
+    sequentialIdentifiers: parsed.data.sequentialIdentifiers,
+    newProjectUserRoleId: parsed.data.newProjectUserRoleId,
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/projects/new");
   return { error: null };
 }
 

@@ -117,6 +117,20 @@ export const ISSUE_QUERY_COLUMNS: QueryColumn[] = [
  * `view_time_entries` globally (issue_query.rb#initialize_available_columns), because the
  * column is a SUM over time entries the viewer may not be allowed to see. Same gate here.
  */
+/**
+ * Redmine offers the `project` column and the `project_id` filter only on the cross-project
+ * list (`IssueQuery#initialize_available_filters` guards both with `if project.nil?`) — in
+ * a project's own list every row has the same project, so the column would be noise and the
+ * filter a way to ask for rows the page can't show.
+ */
+export const PROJECT_COLUMN: QueryColumn = column("project", "プロジェクト", {
+  sortable: true,
+  groupable: true,
+  filterType: "list",
+  filterInput: "list",
+  filterField: "project_id",
+});
+
 export const SPENT_HOURS_COLUMN: QueryColumn = column("spent_hours", "作業時間", {
   sortable: true,
   totalable: true,
@@ -130,6 +144,9 @@ export function findColumnByFilterField(columns: QueryColumn[], filterField: str
 
 /** Redmine's `Setting.issue_list_default_columns` default (config/settings.yml). */
 export const DEFAULT_ISSUE_COLUMN_KEYS = ["tracker", "status", "priority", "subject", "assigned_to", "updated_on"];
+
+/** `IssueQuery#default_columns_names` prepends `project` when there's no project in scope. */
+export const DEFAULT_GLOBAL_ISSUE_COLUMN_KEYS = ["project", ...DEFAULT_ISSUE_COLUMN_KEYS];
 
 /** Redmine's `IssueQuery#default_sort_criteria`. */
 export const DEFAULT_ISSUE_SORT: [string, "asc" | "desc"][] = [["id", "desc"]];
@@ -206,8 +223,24 @@ function customFieldFilterInput(field: CustomField): FilterInputKind {
  * The full column catalog for one viewer: the static issue columns, `spent_hours` when the
  * viewer may see time entries, and one column per issue custom field.
  */
-export function issueQueryColumns(options: { customFields: CustomField[]; canViewTimeEntries: boolean }): QueryColumn[] {
+export function issueQueryColumns(options: {
+  customFields: CustomField[];
+  canViewTimeEntries: boolean;
+  /** Set on the cross-project list, where Redmine adds the project column and its filter. */
+  crossProject?: boolean;
+}): QueryColumn[] {
   const columns = [...ISSUE_QUERY_COLUMNS];
+  if (options.crossProject) {
+    // Right after the frozen `#` column, where Redmine's default column order puts it.
+    columns.splice(1, 0, PROJECT_COLUMN);
+    // `add_available_filter("category_id", ...) if project` — categories belong to one
+    // project, so there is no cross-project set of values to offer. The column stays
+    // displayable; only its filter goes away.
+    const category = columns.findIndex((column) => column.key === "category");
+    if (category >= 0) {
+      columns[category] = { ...columns[category], filterField: null, filterOperators: null, filterInput: null };
+    }
+  }
   if (options.canViewTimeEntries) {
     columns.push(SPENT_HOURS_COLUMN);
   }
@@ -223,8 +256,8 @@ export function findColumn(columns: QueryColumn[], key: string): QueryColumn | u
  * always present, an empty selection falls back to the defaults, and unknown keys (a stale
  * saved query naming a deleted custom field) are dropped rather than failing the page.
  */
-export function resolveDisplayColumns(columns: QueryColumn[], selectedKeys: string[]): QueryColumn[] {
-  const keys = selectedKeys.length > 0 ? selectedKeys : DEFAULT_ISSUE_COLUMN_KEYS;
+export function resolveDisplayColumns(columns: QueryColumn[], selectedKeys: string[], defaultKeys: string[] = DEFAULT_ISSUE_COLUMN_KEYS): QueryColumn[] {
+  const keys = selectedKeys.length > 0 ? selectedKeys : defaultKeys;
   const selected = keys.map((key) => findColumn(columns, key)).filter((column): column is QueryColumn => column !== undefined);
   const frozen = columns.filter((column) => column.frozen && !selected.includes(column));
   return [...frozen, ...selected];

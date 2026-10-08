@@ -3,13 +3,17 @@ import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { loadMailHandlerSettings } from "@/application/settings/mail-handler-settings";
+import { loadProjectDefaults } from "@/application/settings/project-defaults";
+import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { AuthSettingsForm } from "./auth-settings-form";
 import { CommitKeywordSettingsForm } from "./commit-keyword-settings-form";
 import { GeneralSettingsForm } from "./general-settings-form";
 import { MailHandlerSettingsForm } from "./mail-handler-settings-form";
 import { RemindersForm } from "./reminders-form";
+import { ProjectDefaultsForm } from "./project-defaults-form";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -25,6 +29,11 @@ export default async function SettingsPage() {
   const generalSettings = await loadGeneralSettings(settingsRepository);
   const mailHandlerSettings = await loadMailHandlerSettings(settingsRepository);
   const authSettings = await loadAuthSettings(settingsRepository);
+  const [projectDefaults, trackers, roles] = await Promise.all([
+    loadProjectDefaults(settingsRepository),
+    new DrizzleTrackerRepository().listAll(),
+    new DrizzleRoleRepository().listGivable(),
+  ]);
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -50,6 +59,11 @@ export default async function SettingsPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">認証</h2>
         <AuthSettingsForm settings={authSettings} />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">プロジェクト</h2>
+        <p className="text-sm text-gray-500">新しいプロジェクトの既定値です。</p>
+        <ProjectDefaultsForm settings={projectDefaults} trackers={trackers} roles={roles} />
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">リポジトリ</h2>

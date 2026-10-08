@@ -1,3 +1,4 @@
+import type { IssueSearchOptions } from "@/domain/search/entity";
 import type { CompiledPredicate } from "@/domain/query/filter-builder";
 import type { Issue } from "./entity";
 
@@ -39,6 +40,11 @@ export interface IssueRepository {
   findByAuthor(userId: string): Promise<Issue[]>;
   /** Across every project — callers must filter by per-project visibility themselves. */
   findByIds(ids: string[]): Promise<Issue[]>;
+  /**
+   * Across every project — the archive guard needs to see issues *outside* the subtree it is
+   * about to hide, so this deliberately does not take a project scope.
+   */
+  listByFixedVersionIds(versionIds: string[]): Promise<Issue[]>;
   create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue>;
   /**
    * Applies `changes` only if `expectedLockVersion` still matches the stored row
@@ -55,5 +61,6 @@ export interface IssueRepository {
    */
   deleteWithDependents(issueIds: string[]): Promise<void>;
   /** Full-text search over subject/description, scoped to one project. */
-  search(projectId: string, query: string): Promise<Issue[]>;
+  /** Redmine's `acts_as_searchable` scope for Issue, across every project the caller already decided is in scope. */
+  search(projectIds: string[], criteria: IssueSearchOptions): Promise<Issue[]>;
 }

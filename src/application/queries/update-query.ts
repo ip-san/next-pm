@@ -7,8 +7,8 @@ export class QueryNotFoundError extends Error {}
 
 export interface UpdateQueryInput {
   queryId: string;
-  /** The project the request came through — guards against editing another project's query by id. */
-  projectId: string;
+  /** The project the request came through — guards against editing another project's query by id. Null for the global list, which may only touch global queries. */
+  projectId: string | null;
   settings: QuerySettings;
   actor: QueryActor;
 }

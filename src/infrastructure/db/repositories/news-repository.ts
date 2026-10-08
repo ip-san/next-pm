@@ -1,5 +1,7 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import type { SearchCriteria } from "@/domain/search/entity";
+import { projectScopeCondition, searchMatchCondition } from "@/infrastructure/db/search-tokens";
 import { news, newsComments } from "@/infrastructure/db/schema/news";
 import type { News, NewsComment } from "@/domain/news/entity";
 import type { NewsCommentRepository, NewsRepository } from "@/domain/news/repository";
@@ -48,15 +50,20 @@ export class DrizzleNewsRepository implements NewsRepository {
     await db.delete(news).where(eq(news.id, id));
   }
 
-  async search(projectId: string, query: string): Promise<News[]> {
+  /** News' `acts_as_searchable :columns => [:title, :summary, "#{table_name}.description"]`. */
+  async search(projectIds: string[], criteria: SearchCriteria): Promise<News[]> {
+    if (criteria.tokens.length === 0) return [];
     const rows = await db
       .select()
       .from(news)
       .where(
-        and(
-          eq(news.projectId, projectId),
-          sql`to_tsvector('english', ${news.title} || ' ' || ${news.summary} || ' ' || ${news.description}) @@ plainto_tsquery('english', ${query})`,
-        ),
+        sql`${projectScopeCondition(sql`${news.projectId}`, projectIds)} and ${searchMatchCondition({
+          columns: [sql`${news.title}`, sql`${news.summary}`, sql`${news.description}`],
+          titleColumns: [sql`${news.title}`],
+          criteria,
+          attachmentContainerType: "News",
+          attachmentContainerIdColumn: sql`${news.id}`,
+        })}`,
       )
       .orderBy(desc(news.createdAt));
     return rows.map(toDomain);

@@ -9,7 +9,6 @@ import type {
   IssueSearchRepository,
   IssueSearchResult,
   IssueVisibilityScope,
-  SpentHoursScope,
 } from "@/domain/query/issue-search";
 import type { SortCriterion } from "@/domain/query/sort";
 
@@ -20,7 +19,7 @@ import type { SortCriterion } from "@/domain/query/sort";
  * page of issues into memory.
  *
  * Table aliases used throughout: `i` issues, `t` trackers, `st` issue_statuses,
- * `pr` enumerations (priority), `au` users (author), `asu` users (assignee),
+ * `p` projects, `pr` enumerations (priority), `au` users (author), `asu` users (assignee),
  * `asg` groups (assignee), `cat` issue_categories, `v` versions.
  */
 
@@ -42,6 +41,7 @@ const SORT_EXPRESSIONS: Record<string, SQL> = {
   // next-pm's ids are random UUIDs, so Redmine's `issues.id DESC` ("newest first") has to
   // sort on the creation timestamp instead to mean the same thing.
   id: sql`i.created_at`,
+  project: sql`p.name`,
   tracker: sql`t.position`,
   status: sql`st.position`,
   priority: sql`pr.position`,
@@ -62,17 +62,36 @@ const SORT_EXPRESSIONS: Record<string, SQL> = {
 };
 
 /**
+ * Which `time_entries` rows (alias `te`, joined to their issue as `i`) count towards a
+ * `spent_hours` figure for this viewer — the SQL form of `TimeEntry.visible_condition`.
+ * Null means "no entry at all", which is both the anonymous "own entries only" case and a
+ * cross-project list where no visible project grants `view_time_entries`.
+ */
+function spentHoursFilter(criteria: Pick<IssueSearchCriteria, "projectScopes" | "spentHoursScope" | "visibility">): SQL | null {
+  if (criteria.projectScopes) {
+    const allIds = criteria.projectScopes.filter((scope) => scope.spentHours === "all").map((scope) => scope.projectId);
+    const ownIds = criteria.projectScopes.filter((scope) => scope.spentHours === "own").map((scope) => scope.projectId);
+    const userId = criteria.visibility.userId;
+    const clauses: SQL[] = [];
+    if (allIds.length > 0) clauses.push(sql`i.project_id in ${idList(allIds)}`);
+    // An anonymous visitor owns no entry, so an "own" project contributes nothing to them.
+    if (ownIds.length > 0 && userId) clauses.push(sql`(te.user_id = ${userId}::uuid and i.project_id in ${idList(ownIds)})`);
+    return clauses.length > 0 ? sql`(${sql.join(clauses, sql` or `)})` : null;
+  }
+  if (criteria.spentHoursScope.kind === "all") return sql`true`;
+  if (criteria.spentHoursScope.userId === null) return null;
+  return sql`te.user_id = ${criteria.spentHoursScope.userId}::uuid`;
+}
+
+/**
  * The `spent_hours` sum, narrowed to what this viewer may see. Unlike every other sortable
  * column it depends on who is asking, so it can't live in the static map above.
  */
-function spentHoursExpression(scope: SpentHoursScope): SQL {
-  if (scope.kind === "all") {
-    return sql`coalesce((select sum(te.hours) from time_entries te where te.issue_id = i.id), 0)`;
-  }
-  if (scope.userId === null) {
+function spentHoursExpression(filter: SQL | null): SQL {
+  if (filter === null) {
     return sql`0::numeric`;
   }
-  return sql`coalesce((select sum(te.hours) from time_entries te where te.issue_id = i.id and te.user_id = ${scope.userId}::uuid), 0)`;
+  return sql`coalesce((select sum(te.hours) from time_entries te where te.issue_id = i.id and ${filter}), 0)`;
 }
 
 /**
@@ -81,6 +100,7 @@ function spentHoursExpression(scope: SpentHoursScope): SQL {
  * and two same-named rows never collapse into one group.
  */
 const GROUP_EXPRESSIONS: Record<string, SQL> = {
+  project: sql`i.project_id`,
   tracker: sql`i.tracker_id`,
   status: sql`i.status_id`,
   priority: sql`i.priority_id`,
@@ -101,6 +121,7 @@ const GROUP_EXPRESSIONS: Record<string, SQL> = {
 
 /** Filter field name -> the operand its predicates compare against. */
 const FILTER_OPERANDS: Record<string, Operand> = {
+  project_id: { sql: sql`i.project_id`, type: "id" },
   status_id: { sql: sql`i.status_id`, type: "id" },
   tracker_id: { sql: sql`i.tracker_id`, type: "id" },
   priority_id: { sql: sql`i.priority_id`, type: "id" },
@@ -282,13 +303,13 @@ function customFieldSortExpression(customFieldId: string, numeric: boolean): SQL
   return sql`(select ${value} from custom_values cv where cv.customized_type = 'Issue' and cv.customized_id = i.id and cv.custom_field_id = ${customFieldId}::uuid limit 1)`;
 }
 
-function sortExpression(key: string, customFieldFormats: Map<string, string>, spentHoursScope: SpentHoursScope): SQL | undefined {
+function sortExpression(key: string, customFieldFormats: Map<string, string>, spentHours: SQL | null): SQL | undefined {
   const customFieldId = parseCustomFieldKey(key);
   if (customFieldId) {
     const format = customFieldFormats.get(customFieldId);
     return format ? customFieldSortExpression(customFieldId, format === "int" || format === "float") : undefined;
   }
-  if (key === "spent_hours") return spentHoursExpression(spentHoursScope);
+  if (key === "spent_hours") return spentHoursExpression(spentHours);
   return SORT_EXPRESSIONS[key];
 }
 
@@ -308,6 +329,7 @@ function groupExpression(key: string, customFieldFormats: Map<string, string>): 
  * while ordering by the underlying timestamp would split every day into one group per row.
  */
 const GROUP_ORDER_EXPRESSIONS: Record<string, SQL> = {
+  project: SORT_EXPRESSIONS.project,
   tracker: SORT_EXPRESSIONS.tracker,
   status: SORT_EXPRESSIONS.status,
   priority: SORT_EXPRESSIONS.priority,
@@ -333,7 +355,7 @@ function orderByClause(
   sortCriteria: SortCriterion[],
   groupOrder: SQL | undefined,
   customFieldFormats: Map<string, string>,
-  spentHoursScope: SpentHoursScope,
+  spentHours: SQL | null,
 ): SQL {
   const parts: SQL[] = [];
   // Redmine prepends the group column to the order so rows of one group stay contiguous
@@ -342,7 +364,7 @@ function orderByClause(
   if (groupOrder) parts.push(sql`${groupOrder} asc nulls last`);
 
   for (const [key, direction] of sortCriteria) {
-    const expression = sortExpression(key, customFieldFormats, spentHoursScope);
+    const expression = sortExpression(key, customFieldFormats, spentHours);
     if (!expression) continue;
     parts.push(direction === "desc" ? sql`${expression} desc nulls last` : sql`${expression} asc nulls last`);
   }
@@ -354,6 +376,7 @@ function orderByClause(
 /** The FROM + JOINs every statement below shares. Only the sort expressions need the joins. */
 const BASE_FROM = sql`
   from issues i
+  left join projects p on p.id = i.project_id
   left join trackers t on t.id = i.tracker_id
   left join issue_statuses st on st.id = i.status_id
   left join enumerations pr on pr.id = i.priority_id
@@ -365,10 +388,10 @@ const BASE_FROM = sql`
 `;
 
 /** Per-column SUM expressions for the totals row. */
-function totalExpression(key: string, customFieldFormats: Map<string, string>, spentHoursScope: SpentHoursScope): SQL | undefined {
+function totalExpression(key: string, customFieldFormats: Map<string, string>, spentHours: SQL | null): SQL | undefined {
   if (key === "estimated_hours") return sql`coalesce(sum(i.estimated_hours), 0)`;
   if (key === "spent_hours") {
-    return sql`coalesce(sum(${spentHoursExpression(spentHoursScope)}), 0)`;
+    return sql`coalesce(sum(${spentHoursExpression(spentHours)}), 0)`;
   }
   const customFieldId = parseCustomFieldKey(key);
   if (!customFieldId) return undefined;
@@ -377,14 +400,36 @@ function totalExpression(key: string, customFieldFormats: Map<string, string>, s
   return sql`coalesce(sum(${customFieldSortExpression(customFieldId, true)}), 0)`;
 }
 
+/**
+ * The project scope together with the private-issue rule. For a single project that's one
+ * `project_id = ?` plus that project's rule; for the cross-project list it's the OR of each
+ * project's own rule, the way `Project.allowed_to_condition` emits one disjunct per role
+ * set. Projects sharing a verdict collapse into one `IN` list, so the clause stays two
+ * disjuncts wide however many projects the viewer can see.
+ */
+function projectScopeClause(criteria: Pick<IssueSearchCriteria, "projectId" | "projectScopes" | "visibility">): SQL {
+  if (!criteria.projectScopes) {
+    return sql`i.project_id = ${criteria.projectId}::uuid and ${issueVisibilityClause(criteria.visibility)}`;
+  }
+
+  const unrestricted = criteria.projectScopes.filter((scope) => scope.seesAllPrivateIssues).map((scope) => scope.projectId);
+  const restricted = criteria.projectScopes.filter((scope) => !scope.seesAllPrivateIssues).map((scope) => scope.projectId);
+  const clauses: SQL[] = [];
+  if (unrestricted.length > 0) clauses.push(sql`i.project_id in ${idList(unrestricted)}`);
+  if (restricted.length > 0) {
+    const rule = issueVisibilityClause({ ...criteria.visibility, seesAllPrivateIssues: false });
+    clauses.push(sql`(i.project_id in ${idList(restricted)} and ${rule})`);
+  }
+  // No visible project at all: match nothing rather than every row.
+  return clauses.length > 0 ? sql`(${sql.join(clauses, sql` or `)})` : sql`false`;
+}
+
 /** The project scope, the private-issue rule and the user's filters, in one WHERE. */
 function whereClause(
-  projectId: string,
-  visibility: IssueVisibilityScope,
-  predicates: CompiledPredicate[],
+  criteria: Pick<IssueSearchCriteria, "projectId" | "projectScopes" | "visibility" | "predicates">,
   customFieldFormats: Map<string, string>,
 ): SQL {
-  return sql`where i.project_id = ${projectId}::uuid and ${issueVisibilityClause(visibility)} and ${filterClause(predicates, customFieldFormats)}`;
+  return sql`where ${projectScopeClause(criteria)} and ${filterClause(criteria.predicates, customFieldFormats)}`;
 }
 
 function toDomain(row: Record<string, unknown>): Issue {
@@ -422,7 +467,7 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
   async count(criteria: Omit<IssueSearchCriteria, "sort" | "groupBy" | "totalableKeys" | "offset" | "limit">): Promise<number> {
     const customFieldFormats = await loadCustomFieldFormats();
     const result = await db.execute<{ row_count: string }>(
-      sql`select count(*) as row_count ${BASE_FROM} ${whereClause(criteria.projectId, criteria.visibility, criteria.predicates, customFieldFormats)}`,
+      sql`select count(*) as row_count ${BASE_FROM} ${whereClause(criteria, customFieldFormats)}`,
     );
     return toNumber(result.rows[0]?.row_count);
   }
@@ -437,45 +482,37 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
 
   private async run(criteria: IssueSearchCriteria, limit: number, offset: number): Promise<IssueSearchResult> {
     const customFieldFormats = await loadCustomFieldFormats();
-    const where = whereClause(criteria.projectId, criteria.visibility, criteria.predicates, customFieldFormats);
+    const where = whereClause(criteria, customFieldFormats);
+    const spentHours = spentHoursFilter(criteria);
     const group = criteria.groupBy ? groupExpression(criteria.groupBy, customFieldFormats) : undefined;
     // The key the rows are bucketed by and the expression the buckets are *ordered* by are
     // not the same thing: grouping by status buckets on status_id but orders on the
     // status's position, so the groups come out in workflow order.
     const distinctGroupOrder = criteria.groupBy ? distinctGroupOrderExpression(criteria.groupBy) : undefined;
     const rowGroupOrder = distinctGroupOrder ?? group;
-    const totalKeys = criteria.totalableKeys.filter(
-      (key) => totalExpression(key, customFieldFormats, criteria.spentHoursScope) !== undefined,
-    );
+    const totalKeys = criteria.totalableKeys.filter((key) => totalExpression(key, customFieldFormats, spentHours) !== undefined);
 
     const [summary, groups, rows] = await Promise.all([
-      this.loadSummary(where, totalKeys, customFieldFormats, criteria.spentHoursScope),
-      group
-        ? this.loadGroups(where, group, distinctGroupOrder, totalKeys, customFieldFormats, criteria.spentHoursScope)
-        : Promise.resolve(null),
-      this.loadRows(where, criteria, rowGroupOrder, customFieldFormats, limit, offset),
+      this.loadSummary(where, totalKeys, customFieldFormats, spentHours),
+      group ? this.loadGroups(where, group, distinctGroupOrder, totalKeys, customFieldFormats, spentHours) : Promise.resolve(null),
+      this.loadRows(where, criteria, rowGroupOrder, customFieldFormats, spentHours, limit, offset),
     ]);
 
     // Both of these are bounded by the page size, so they stay one extra round trip each
     // rather than the N+1 a per-row lookup would be.
     const issueIds = rows.map((issue) => issue.id);
-    const [customValues, spentHours] = await Promise.all([
-      loadCustomValues(issueIds),
-      loadSpentHours(issueIds, criteria.spentHoursScope),
-    ]);
+    const [customValues, spentHoursByIssue] = await Promise.all([loadCustomValues(issueIds), loadSpentHours(issueIds, spentHours)]);
 
-    return { issues: rows, customValues, spentHours, ...summary, groups };
+    return { issues: rows, customValues, spentHours: spentHoursByIssue, ...summary, groups };
   }
 
   private async loadSummary(
     where: SQL,
     totalKeys: string[],
     customFieldFormats: Map<string, string>,
-    spentHoursScope: SpentHoursScope,
+    spentHours: SQL | null,
   ): Promise<{ totalCount: number; totals: Record<string, number> }> {
-    const totalSelects = totalKeys.map(
-      (key, index) => sql`${totalExpression(key, customFieldFormats, spentHoursScope)} as ${sql.raw(`total_${index}`)}`,
-    );
+    const totalSelects = totalKeys.map((key, index) => sql`${totalExpression(key, customFieldFormats, spentHours)} as ${sql.raw(`total_${index}`)}`);
     const selects = sql.join([sql`count(*) as row_count`, ...totalSelects], sql`, `);
     const result = await db.execute<Record<string, unknown>>(sql`select ${selects} ${BASE_FROM} ${where}`);
     const row = result.rows[0] ?? {};
@@ -491,11 +528,9 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     distinctGroupOrder: SQL | undefined,
     totalKeys: string[],
     customFieldFormats: Map<string, string>,
-    spentHoursScope: SpentHoursScope,
+    spentHours: SQL | null,
   ): Promise<IssueGroup[]> {
-    const totalSelects = totalKeys.map(
-      (key, index) => sql`${totalExpression(key, customFieldFormats, spentHoursScope)} as ${sql.raw(`total_${index}`)}`,
-    );
+    const totalSelects = totalKeys.map((key, index) => sql`${totalExpression(key, customFieldFormats, spentHours)} as ${sql.raw(`total_${index}`)}`);
     const selects = sql.join([sql`${group} as group_value`, sql`count(*) as row_count`, ...totalSelects], sql`, `);
     // `group by 1` rather than by a second copy of the expression: a custom-field group key
     // is a correlated subquery whose custom_field_id is a bound parameter, so re-emitting
@@ -522,10 +557,11 @@ export class DrizzleIssueSearchRepository implements IssueSearchRepository {
     criteria: IssueSearchCriteria,
     group: SQL | undefined,
     customFieldFormats: Map<string, string>,
+    spentHours: SQL | null,
     limit: number,
     offset: number,
   ): Promise<Issue[]> {
-    const order = orderByClause(criteria.sort, group, customFieldFormats, criteria.spentHoursScope);
+    const order = orderByClause(criteria.sort, group, customFieldFormats, spentHours);
     const result = await db.execute<Record<string, unknown>>(
       sql`select i.* ${BASE_FROM} ${where} order by ${order} limit ${limit} offset ${offset}`,
     );
@@ -548,12 +584,15 @@ async function loadCustomValues(issueIds: string[]): Promise<Map<string, string>
   return new Map(result.rows.filter((row) => row.value !== null).map((row) => [`${row.customized_id}:${row.custom_field_id}`, row.value as string]));
 }
 
-async function loadSpentHours(issueIds: string[], scope: SpentHoursScope): Promise<Map<string, number>> {
-  if (issueIds.length === 0) return new Map();
-  if (scope.kind === "own" && scope.userId === null) return new Map();
-  const ownFilter = scope.kind === "own" ? sql` and user_id = ${scope.userId}::uuid` : sql``;
+/**
+ * The per-row `spent_hours` values, under the same visibility filter the column expression
+ * uses. The join to `issues` is what lets that filter talk about `i.project_id` — the
+ * cross-project reach is decided per project, not per entry.
+ */
+async function loadSpentHours(issueIds: string[], filter: SQL | null): Promise<Map<string, number>> {
+  if (issueIds.length === 0 || filter === null) return new Map();
   const result = await db.execute<{ issue_id: string; hours: string }>(
-    sql`select issue_id, sum(hours) as hours from time_entries where issue_id in ${idList(issueIds)}${ownFilter} group by issue_id`,
+    sql`select te.issue_id, sum(te.hours) as hours from time_entries te join issues i on i.id = te.issue_id where te.issue_id in ${idList(issueIds)} and ${filter} group by te.issue_id`,
   );
   return new Map(result.rows.map((row) => [row.issue_id, toNumber(row.hours)]));
 }

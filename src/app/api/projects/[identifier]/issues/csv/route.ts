@@ -53,7 +53,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   let savedQuery: SavedQuery | null = null;
   if (listParams.queryId) {
     const candidate = await new DrizzleQueryRepository().findById(listParams.queryId);
-    if (candidate && candidate.projectId === project.id && isQueryVisible(candidate, user?.id ?? "", roleIds)) {
+    // Redmine's `global_or_on_project`: a project list may apply its own queries and the global ones.
+    if (candidate && (candidate.projectId === null || candidate.projectId === project.id) && isQueryVisible(candidate, user?.id ?? "", roleIds)) {
       savedQuery = candidate;
     }
   }

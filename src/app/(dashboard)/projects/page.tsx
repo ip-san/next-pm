@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { can } from "@/domain/authorization/authorization-service";
+import { can, canGlobally, type AuthorizationActor } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, resolveGlobalRoles, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 // Always needs a live DB read with no per-request caching benefit — opt out of static
 // prerendering so `next build` doesn't try to reach Postgres at build time.
@@ -17,17 +17,35 @@ export default async function ProjectsIndexPage() {
   // GET /projects already use, so an anonymous or non-admin visitor sees exactly the set
   // they're entitled to and nothing more.
   const visible = [];
+  const visibleActorById = new Map<string, AuthorizationActor>();
   for (const project of allProjects) {
     const { actor } = await resolveActor(user, project.id);
     if (can({ permission: "view_project", project: toAuthorizationProject(project), actor })) {
       visible.push(project);
+      visibleActorById.set(project.id, actor);
     }
   }
   const projectById = new Map(visible.map((project) => [project.id, project]));
 
+  // Redmine shows "New project" to anyone `authorize_global` would let through: add_project
+  // held anywhere, or add_subprojects on some project they can see.
+  const canCreateProject =
+    user !== null &&
+    (canGlobally({ permission: "add_project", isAdmin: user.isAdmin, roles: await resolveGlobalRoles(user) }) ||
+      visible.some((project) => project.status === "active"
+        ? can({ permission: "add_subprojects", project: toAuthorizationProject(project), actor: visibleActorById.get(project.id)! })
+        : false));
+
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">プロジェクト</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">プロジェクト</h1>
+        {canCreateProject ? (
+          <Link href="/projects/new" className="underline text-sm">
+            新しいプロジェクト
+          </Link>
+        ) : null}
+      </div>
       <ul className="flex flex-col gap-2 text-sm">
         {visible.map((project) => (
           <li key={project.id} className="border rounded p-3">

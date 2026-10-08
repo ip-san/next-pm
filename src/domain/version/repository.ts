@@ -3,6 +3,8 @@ import type { Version } from "./entity";
 export interface VersionRepository {
   /** Versions owned by this project only (not versions shared into it from elsewhere). */
   listByProject(projectId: string): Promise<Version[]>;
+  /** Same, for a whole subtree at once — the archive guard's starting set. */
+  listByProjects(projectIds: string[]): Promise<Version[]>;
   /**
    * Mirrors Redmine's Project#shared_versions — every version assignable from this project:
    * its own versions, plus any other project's version whose sharing setting reaches this

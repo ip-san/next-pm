@@ -4,6 +4,15 @@ export type ScmVendor = "git" | "subversion" | "mercurial";
 export interface ScmRepository {
   id: string;
   projectId: string;
+  /**
+   * Redmine's Repository#identifier — the URL-safe name separating one of a project's
+   * repositories from the next. Empty string for the (at most one per project) unnamed
+   * repository, which is then only reachable at the project's default-repository path or by
+   * id — see identifier.ts.
+   */
+  identifier: string;
+  /** Redmine's Repository#is_default — the one repository served at `/projects/:id/repository`. */
+  isDefault: boolean;
   vendor: ScmVendor;
   /**
    * Server-controlled, never client input. For git/mercurial, an absolute filesystem path to
@@ -45,6 +54,12 @@ export interface Changeset {
   revision: string;
   /** Raw committer identity as reported by the SCM (e.g. "Alice <alice@example.com>" or just a name). */
   committerIdentity: string;
+  /**
+   * The next-pm user this commit is attributed to, or null when the committer matches nobody.
+   * Resolved on ingest and re-pointed in bulk when an admin edits the repository's committer
+   * mapping — see domain/scm/committer.ts and application/scm/map-committers.ts.
+   */
+  userId: string | null;
   committedOn: Date;
   comments: string;
   createdAt: Date;

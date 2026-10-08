@@ -27,11 +27,34 @@ export interface IssueVisibilityScope {
  */
 export type SpentHoursScope = { kind: "all" } | { kind: "own"; userId: string | null };
 
-export interface IssueSearchCriteria {
+/**
+ * One project's slice of a cross-project issue list. Membership — and therefore the role
+ * set that decides both the private-issue rule and `time_entries_visibility` — is per
+ * project, so Redmine's `Issue.visible_condition` builds its SQL as an OR of per-project
+ * conditions (`Project.allowed_to_condition` yields the role block once per role set).
+ * The global list does the same, one entry per project the viewer holds `view_issues` in.
+ */
+export interface ProjectIssueScope {
   projectId: string;
+  /** This project's `issues_visibility == "all"` verdict. */
+  seesAllPrivateIssues: boolean;
+  /** How far `spent_hours` reaches in this project; "none" when the viewer lacks `view_time_entries` here. */
+  spentHours: "all" | "own" | "none";
+}
+
+export interface IssueSearchCriteria {
+  /** The single project a project-scoped list runs against. Null for the cross-project list, which uses `projectScopes` instead. */
+  projectId: string | null;
+  /**
+   * Set by the cross-project list in place of `projectId`: one entry per project the viewer
+   * may see issues in. When present, `projectId`, `visibility.seesAllPrivateIssues` and
+   * `spentHoursScope` are not consulted — each project contributes its own rule instead.
+   * An empty array matches nothing, which is what a viewer with no visible project must see.
+   */
+  projectScopes?: ProjectIssueScope[];
   predicates: CompiledPredicate[];
   visibility: IssueVisibilityScope;
-  /** How far the `spent_hours` figures reach — see SpentHoursScope. */
+  /** How far the `spent_hours` figures reach — see SpentHoursScope. Ignored when `projectScopes` is set. */
   spentHoursScope: SpentHoursScope;
   sort: SortCriterion[];
   /** A groupable column key, or null. */

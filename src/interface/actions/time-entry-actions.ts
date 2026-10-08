@@ -18,6 +18,7 @@ import { updateTimeEntry } from "@/application/time-entries/update-time-entry";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -46,6 +47,7 @@ function writeRepositories() {
     timeEntryRepository: new DrizzleTimeEntryRepository(),
     settingsRepository: new DrizzleSettingsRepository(),
     enumerationRepository: new DrizzleEnumerationRepository(),
+    projectActivityRepository: new DrizzleProjectActivityRepository(),
   };
 }
 

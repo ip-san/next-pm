@@ -1,8 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
 import { searchProject, type SearchProjectRepositories } from "./search-project";
+import { SEARCH_RESULT_TYPES, type SearchCriteria } from "@/domain/search/entity";
 import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/authorization/authorization-service";
 import type { Issue } from "@/domain/issue/entity";
 import type { Role } from "@/domain/role/entity";
+
+const searchCriteria = (...tokens: string[]): SearchCriteria => ({ tokens, allWords: true, titlesOnly: false, attachments: "0" });
 
 const activeProject: ProjectAuthorizationContext = { isArchived: false, isActive: true, isPublic: true, enabledModules: ["issue_tracking", "wiki", "news", "boards"] };
 
@@ -67,7 +70,7 @@ describe("searchProject", () => {
       userId: "user-1",
       userGroupIds: [],
       issueVisibilityRoles: [managerRole],
-      query: "   ",
+      criteria: searchCriteria(), types: SEARCH_RESULT_TYPES, openIssues: false,
     });
     expect(results).toEqual([]);
     expect(repositories.issueRepository.search).not.toHaveBeenCalled();
@@ -84,9 +87,9 @@ describe("searchProject", () => {
       userId: "user-1",
       userGroupIds: [],
       issueVisibilityRoles: [managerRole],
-      query: "bug",
+      criteria: searchCriteria("bug"), types: SEARCH_RESULT_TYPES, openIssues: false,
     });
-    expect(results).toEqual([{ type: "issue", id: "a", title: "Fix bug", excerpt: "" }]);
+    expect(results).toEqual([expect.objectContaining({ type: "issue", id: "a", title: "Fix bug" })]);
   });
 
   it("excludes a private issue outside the actor's visibility", async () => {
@@ -103,7 +106,7 @@ describe("searchProject", () => {
       userId: "user-1",
       userGroupIds: [],
       issueVisibilityRoles: [roleWithoutAllVisibility],
-      query: "bug",
+      criteria: searchCriteria("bug"), types: SEARCH_RESULT_TYPES, openIssues: false,
     });
     expect(results).toEqual([]);
   });
@@ -120,7 +123,7 @@ describe("searchProject", () => {
       userId: "user-1",
       userGroupIds: [],
       issueVisibilityRoles: [viewOnlyIssuesRole],
-      query: "announcement",
+      criteria: searchCriteria("announcement"), types: SEARCH_RESULT_TYPES, openIssues: false,
     });
     expect(results).toEqual([]);
     expect(repositories.newsRepository.search).not.toHaveBeenCalled();
@@ -140,7 +143,7 @@ describe("searchProject", () => {
       userId: "user-1",
       userGroupIds: [],
       issueVisibilityRoles: [managerRole],
-      query: "x",
+      criteria: searchCriteria("x"), types: SEARCH_RESULT_TYPES, openIssues: false,
     });
     expect(results.map((r) => r.type).sort()).toEqual(["issue", "news"]);
   });

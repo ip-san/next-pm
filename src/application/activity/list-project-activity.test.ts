@@ -81,9 +81,25 @@ function changeset(overrides: Partial<import("@/domain/scm/entity").Changeset> =
     scmRepositoryId: "repo-1",
     revision: "abcdef1234567890",
     committerIdentity: "Alice <alice@example.com>",
+    userId: null,
     committedOn: inside,
     comments: "Fix login bug\n\nLonger body.",
     createdAt: inside,
+    ...overrides,
+  };
+}
+
+function scmRepository(
+  overrides: Partial<import("@/domain/scm/entity").ScmRepository> = {},
+): import("@/domain/scm/entity").ScmRepository {
+  return {
+    id: "repo-1",
+    projectId: "project-1",
+    identifier: "",
+    isDefault: true,
+    vendor: "git",
+    rootPath: "/repos/x",
+    createdAt: outside,
     ...overrides,
   };
 }
@@ -113,7 +129,7 @@ function makeRepositories(overrides: Partial<ListProjectActivityRepositories> = 
     wikiContentRepository: { listByProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["wikiContentRepository"],
     documentRepository: { listByProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["documentRepository"],
     timeEntryRepository: { listForProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["timeEntryRepository"],
-    scmRepositoryRepository: { findByProject: mock(async () => null) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+    scmRepositoryRepository: { listByProject: mock(async () => []) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
     changesetRepository: { listByScmRepository: mock(async () => []) } as unknown as ListProjectActivityRepositories["changesetRepository"],
     ...overrides,
   };
@@ -303,20 +319,39 @@ describe("listProjectActivity", () => {
 
   it("includes a changeset within the date range, using its first comment line as the title", async () => {
     const repositories = makeRepositories({
-      scmRepositoryRepository: { findByProject: mock(async () => ({ id: "repo-1", projectId: "project-1", rootPath: "/repos/x", createdAt: outside })) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+      scmRepositoryRepository: {
+        listByProject: mock(async () => [scmRepository()]),
+      } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
       changesetRepository: { listByScmRepository: mock(async () => [changeset({ createdAt: inside })]) } as unknown as ListProjectActivityRepositories["changesetRepository"],
     });
     const events = await listProjectActivity(repositories, baseInput());
     expect(events).toEqual([
       {
         type: "changeset",
-        id: "abcdef1234567890",
+        id: "repo-1:abcdef1234567890",
         authorId: null,
         title: "Fix login bug",
         excerpt: "Alice <alice@example.com> — abcdef12",
         occurredAt: inside,
       },
     ]);
+  });
+
+  // Redmine's Changeset.visible joins repositories to the project rather than going through
+  // Project#changesets (which only covers the default repository).
+  it("includes changesets from every repository of the project, not only the default", async () => {
+    const repositories = makeRepositories({
+      scmRepositoryRepository: {
+        listByProject: mock(async () => [scmRepository(), scmRepository({ id: "repo-2", identifier: "docs", isDefault: false })]),
+      } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+      changesetRepository: {
+        listByScmRepository: mock(async (scmRepositoryId: string) => [
+          changeset({ scmRepositoryId, revision: `${scmRepositoryId}-rev`, createdAt: inside }),
+        ]),
+      } as unknown as ListProjectActivityRepositories["changesetRepository"],
+    });
+    const events = await listProjectActivity(repositories, baseInput());
+    expect(events.map((event) => event.id).sort()).toEqual(["repo-1:repo-1-rev", "repo-2:repo-2-rev"]);
   });
 
   it("returns no changeset events when the project has no connected repository", async () => {
@@ -331,12 +366,14 @@ describe("listProjectActivity", () => {
   it("skips the changeset group when the actor lacks view_changesets", async () => {
     const noRepositoryRole: Role = { ...managerRole, permissions: managerRole.permissions.filter((p) => p !== "view_changesets") };
     const repositories = makeRepositories({
-      scmRepositoryRepository: { findByProject: mock(async () => ({ id: "repo-1", projectId: "project-1", rootPath: "/repos/x", createdAt: outside })) } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
+      scmRepositoryRepository: {
+        listByProject: mock(async () => [scmRepository()]),
+      } as unknown as ListProjectActivityRepositories["scmRepositoryRepository"],
       changesetRepository: { listByScmRepository: mock(async () => [changeset({ createdAt: inside })]) } as unknown as ListProjectActivityRepositories["changesetRepository"],
     });
     const events = await listProjectActivity(repositories, baseInput({ actor: { kind: "member", roles: [noRepositoryRole] } }));
     expect(events).toEqual([]);
-    expect(repositories.scmRepositoryRepository.findByProject).not.toHaveBeenCalled();
+    expect(repositories.scmRepositoryRepository.listByProject).not.toHaveBeenCalled();
   });
 });
 

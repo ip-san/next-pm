@@ -9,6 +9,8 @@ import { watchers } from "@/infrastructure/db/schema/watchers";
 import { StaleIssueError, type Issue } from "@/domain/issue/entity";
 import type { IssueRepository, IssueUpdate } from "@/domain/issue/repository";
 import type { CompiledPredicate } from "@/domain/query/filter-builder";
+import type { IssueSearchOptions } from "@/domain/search/entity";
+import { projectScopeCondition, searchMatchCondition } from "@/infrastructure/db/search-tokens";
 import { toDrizzleCondition } from "./compile-predicate";
 
 const ISSUE_FILTER_COLUMNS = {
@@ -91,6 +93,12 @@ export class DrizzleIssueRepository implements IssueRepository {
     return rows.map(toDomain);
   }
 
+  async listByFixedVersionIds(versionIds: string[]): Promise<Issue[]> {
+    if (versionIds.length === 0) return [];
+    const rows = await db.select().from(issues).where(inArray(issues.fixedVersionId, versionIds));
+    return rows.map(toDomain);
+  }
+
   async create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue> {
     const [row] = await db
       .insert(issues)
@@ -133,15 +141,28 @@ export class DrizzleIssueRepository implements IssueRepository {
     return toDomain(row);
   }
 
-  async search(projectId: string, query: string): Promise<Issue[]> {
+  /**
+   * Issue's `acts_as_searchable :columns => ['subject', 'issues.description']`, with the
+   * `:scope => lambda {|options| options[:open_issues] ? self.open : self.all}` switch.
+   * Substring token matching rather than `to_tsvector`, so a partial word still matches the
+   * way Redmine's LIKE search does.
+   */
+  async search(projectIds: string[], criteria: IssueSearchOptions): Promise<Issue[]> {
+    if (criteria.tokens.length === 0) return [];
+    const openOnly = criteria.openIssues
+      ? sql` and exists (select 1 from issue_statuses st where st.id = ${issues.statusId} and st.is_closed = false)`
+      : sql``;
     const rows = await db
       .select()
       .from(issues)
       .where(
-        and(
-          eq(issues.projectId, projectId),
-          sql`to_tsvector('english', ${issues.subject} || ' ' || ${issues.description}) @@ plainto_tsquery('english', ${query})`,
-        ),
+        sql`${projectScopeCondition(sql`${issues.projectId}`, projectIds)} and ${searchMatchCondition({
+          columns: [sql`${issues.subject}`, sql`${issues.description}`],
+          titleColumns: [sql`${issues.subject}`],
+          criteria,
+          attachmentContainerType: "Issue",
+          attachmentContainerIdColumn: sql`${issues.id}`,
+        })}${openOnly}`,
       )
       .orderBy(desc(issues.createdAt));
     return rows.map(toDomain);

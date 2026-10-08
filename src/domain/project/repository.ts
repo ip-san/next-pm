@@ -1,4 +1,4 @@
-import type { Project } from "./entity";
+import type { Project, ProjectStatus } from "./entity";
 import type { NestedSetNode } from "./nested-set";
 
 export interface ProjectSettingsUpdate {
@@ -7,6 +7,19 @@ export interface ProjectSettingsUpdate {
   isPublic: boolean;
   enabledModules: string[];
   trackerIds: string[];
+}
+
+/**
+ * Raised by `deleteSubtree` when the tree read inside the transaction turns out to have
+ * subprojects the caller is not allowed to take with it (Redmine's Project#deletable?
+ * `leaf?` clause). Lives beside the port so both the Drizzle implementation that detects it
+ * and the use case that translates it can see it without depending on each other.
+ */
+export class ProjectHasSubprojectsError extends Error {
+  constructor() {
+    super("The project has subprojects, which only an administrator may delete along with it.");
+    this.name = "ProjectHasSubprojectsError";
+  }
 }
 
 export interface ProjectRepository {
@@ -27,6 +40,37 @@ export interface ProjectRepository {
    * (archive/close have their own cascading semantics) — mirrors Redmine's settings tab.
    */
   updateSettings(id: string, settings: ProjectSettingsUpdate): Promise<Project>;
+  /**
+   * Sets `status` on every listed project in one statement — the archive/unarchive/close/
+   * reopen actions each resolve the projects they touch first (domain/project/status-change.ts)
+   * and then apply the whole set at once, like Redmine's `update_all` on a nested-set scope.
+   */
+  updateStatus(projectIds: string[], status: ProjectStatus): Promise<void>;
+  /**
+   * Deletes `rootProjectId` and its whole subtree, and rewrites the surviving nodes' bounds.
+   *
+   * Everything happens in one transaction that *re-reads* the nested set under
+   * `SELECT ... FOR UPDATE`: the subtree a caller saw a moment ago is not the subtree that
+   * exists now, and a child inserted in between would otherwise be deleted without its own
+   * authorization check, or left behind with the bounds rewritten around it. The row lock
+   * also blocks that insert, because a child's foreign key takes a conflicting key-share
+   * lock on its parent.
+   *
+   * `allowNonLeaf` is the caller's authorization verdict, re-applied inside the transaction
+   * against the freshly read tree: Redmine's Project#deletable? lets an administrator take a
+   * subtree, but a non-admin permission holder only a leaf. Throws
+   * ProjectHasSubprojectsError when the fresh read disagrees.
+   *
+   * Most of the cascade is the schema's own `ON DELETE CASCADE`. What this adds is the rows
+   * no foreign key reaches: the five polymorphic tables (attachments, custom_values,
+   * watchers, reactions, journals) whose target is a type string plus an id. The deleted
+   * attachments' storage keys come back so the caller can unlink the files *after* the
+   * transaction commits.
+   */
+  deleteSubtree(
+    rootProjectId: string,
+    options: { allowNonLeaf: boolean },
+  ): Promise<{ removedProjectIds: string[]; attachmentStorageKeys: string[] }>;
   /**
    * Mirrors Redmine's Project#copy, scoped to what this codebase calls the project
    * "skeleton" — members, issue categories, and versions. Everything else Redmine's copy

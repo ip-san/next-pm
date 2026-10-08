@@ -3,6 +3,7 @@ import { InvalidTimeEntryError, updateTimeEntry } from "./update-time-entry";
 import type { Enumeration } from "@/domain/enumeration/entity";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
+import type { ProjectActivityRepository } from "@/domain/enumeration/project-activity-repository";
 import type { EnumerationRepository } from "@/domain/enumeration/repository";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntry } from "@/domain/time-entry/entity";
@@ -22,12 +23,24 @@ const existing: TimeEntry = {
   updatedAt: new Date(),
 };
 
+/** A fresh stub per call — tests reassign listOverridesForProject, so it must not be shared. */
+const noProjectOverrides = (): ProjectActivityRepository => ({
+  listOverridesForProject: async () => [],
+  createOverride: async () => {
+    throw new Error("not used");
+  },
+  updateOverride: async () => {},
+  deleteOverride: async () => {},
+  reassignTimeEntries: async () => {},
+});
+
 const activity = (overrides: Partial<Enumeration> = {}): Enumeration => ({
   id: "activity-1",
   type: "TimeEntryActivity",
   name: "Development",
   position: 1,
   isDefault: true,
+  active: true,
   projectId: null,
   parentId: null,
   ...overrides,
@@ -60,7 +73,7 @@ function makeRepos(
   const issueRepository = {
     findById: mock(async () => (options.issue === undefined ? issue() : options.issue)),
   } as unknown as IssueRepository;
-  return { timeEntryRepository, settingsRepository, enumerationRepository, issueRepository };
+  return { timeEntryRepository, settingsRepository, enumerationRepository, issueRepository, projectActivityRepository: noProjectOverrides() };
 }
 
 describe("updateTimeEntry", () => {
@@ -109,8 +122,19 @@ describe("updateTimeEntry", () => {
     expect(repos.timeEntryRepository.update).toHaveBeenCalledWith("entry-1", { issueId: null });
   });
 
-  it("rejects an activity that belongs to another project", async () => {
-    const repos = makeRepos({ activities: [activity({ id: "activity-2", projectId: "other-project" })] });
+  it("rejects an activity belonging to another project, which is absent from this one's set", async () => {
+    // listByType returns system rows only, so another project's override can only ever
+    // reach this check as an id that is not in *this* project's effective list.
+    const repos = makeRepos({ activities: [activity()] });
+    await expect(updateTimeEntry(repos, existing, { activityId: "activity-2" })).rejects.toThrow(InvalidTimeEntryError);
+    expect(repos.timeEntryRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects moving an entry onto an activity this project has switched off", async () => {
+    const repos = makeRepos({ activities: [activity(), activity({ id: "activity-2", isDefault: false })] });
+    repos.projectActivityRepository.listOverridesForProject = mock(async () => [
+      activity({ id: "override-2", projectId: "proj-1", parentId: "activity-2", active: false }),
+    ]);
     await expect(updateTimeEntry(repos, existing, { activityId: "activity-2" })).rejects.toThrow(InvalidTimeEntryError);
     expect(repos.timeEntryRepository.update).not.toHaveBeenCalled();
   });

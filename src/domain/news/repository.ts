@@ -1,3 +1,4 @@
+import type { SearchCriteria } from "@/domain/search/entity";
 import type { News, NewsComment } from "./entity";
 
 export interface NewsRepository {
@@ -8,7 +9,7 @@ export interface NewsRepository {
   update(id: string, changes: { title?: string; summary?: string; description?: string }): Promise<News>;
   delete(id: string): Promise<void>;
   /** Full-text search over title/summary/description, scoped to one project. */
-  search(projectId: string, query: string): Promise<News[]>;
+  search(projectIds: string[], criteria: SearchCriteria): Promise<News[]>;
 }
 
 export interface NewsCommentRepository {

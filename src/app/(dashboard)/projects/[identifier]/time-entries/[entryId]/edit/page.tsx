@@ -15,7 +15,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 import { canAccessTimeEntry } from "@/interface/http/time-entry-access";
-import { DeleteTimeEntryButton } from "../../delete-time-entry-button";
+import { DeleteTimeEntryButton } from "@/interface/components/query/delete-time-entry-button";
 import { TimeEntryForm } from "../../time-entry-form";
 
 // Mirrors TimelogController#edit: find_time_entry then check_editability. The read half is

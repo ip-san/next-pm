@@ -2,6 +2,8 @@ import type { CustomField } from "@/domain/custom-field/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import {
+  DEFAULT_GLOBAL_ISSUE_COLUMN_KEYS,
+  DEFAULT_ISSUE_COLUMN_KEYS,
   DEFAULT_ISSUE_FILTERS,
   findColumn,
   issueQueryColumns,
@@ -10,7 +12,7 @@ import {
 } from "@/domain/query/columns";
 import type { QueryOptions, SavedQuery } from "@/domain/query/entity";
 import { compileFilters, DEFAULT_FIRST_DAY_OF_WEEK, type FilterCondition } from "@/domain/query/filter-builder";
-import type { IssueSearchRepository, IssueSearchResult, IssueVisibilityScope, SpentHoursScope } from "@/domain/query/issue-search";
+import type { IssueSearchRepository, IssueSearchResult, IssueVisibilityScope, ProjectIssueScope, SpentHoursScope } from "@/domain/query/issue-search";
 import { paginate, resolvePerPage, type Pagination } from "@/domain/query/pagination";
 import { resolveSortCriteria } from "@/domain/query/sort";
 import { validFilters } from "@/domain/query/validate-filters";
@@ -26,7 +28,15 @@ export interface ListProjectIssuesRepositories {
 }
 
 export interface ListProjectIssuesInput {
-  projectId: string;
+  /** The project this list is scoped to. Null for the cross-project list, which passes `projectScopes` instead. */
+  projectId: string | null;
+  /**
+   * Set by the cross-project list: one entry per project the viewer holds `view_issues` in,
+   * each carrying that project's own private-issue and time-entry verdicts. Its presence is
+   * also what adds the `project` column and the `project_id` filter to the catalog, mirroring
+   * `IssueQuery`'s `if project.nil?` guards.
+   */
+  projectScopes?: ProjectIssueScope[];
   params: IssueListParams;
   /** The saved query named by `query_id`, already checked for visibility by the caller. Null for an ad-hoc list. */
   savedQuery: SavedQuery | null;
@@ -81,9 +91,11 @@ export async function listProjectIssues(
     loadGeneralSettings(repositories.settingsRepository),
   ]);
 
+  const crossProject = input.projectScopes !== undefined;
   const availableColumns = issueQueryColumns({
     customFields: allCustomFields,
     canViewTimeEntries: input.canViewTimeEntries,
+    crossProject,
   });
 
   const requested = resolveQueryOptions(input);
@@ -98,7 +110,11 @@ export async function listProjectIssues(
     totalableNames: requested.totalableNames.filter((key) => findColumn(availableColumns, key)?.totalable),
   };
 
-  const displayColumns = resolveDisplayColumns(availableColumns, effective.columnNames);
+  const displayColumns = resolveDisplayColumns(
+    availableColumns,
+    effective.columnNames,
+    crossProject ? DEFAULT_GLOBAL_ISSUE_COLUMN_KEYS : DEFAULT_ISSUE_COLUMN_KEYS,
+  );
 
   const predicates = compileFilters(effective.filters, {
     today: input.today,
@@ -112,6 +128,7 @@ export async function listProjectIssues(
   // even on page 2 — but only for columns the viewer actually chose to total.
   const criteria = {
     projectId: input.projectId,
+    projectScopes: input.projectScopes,
     predicates,
     visibility: input.visibility,
     sort: effective.sortCriteria,
@@ -138,6 +155,7 @@ export async function listProjectIssues(
   // link lands on the last page rather than on an empty table.
   const itemCount = await repositories.issueSearchRepository.count({
     projectId: criteria.projectId,
+    projectScopes: criteria.projectScopes,
     predicates: criteria.predicates,
     visibility: criteria.visibility,
   });

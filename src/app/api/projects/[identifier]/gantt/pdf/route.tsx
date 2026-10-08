@@ -33,7 +33,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   const user = await currentUserFromCookies();
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  // Same gate as the Gantt page itself — the PDF is the same data in another format, so a
+  // project with the gantt module off must not expose it through the export either.
+  const projectContext = toAuthorizationProject(project);
+  if (
+    !can({ permission: "view_gantt", project: projectContext, actor }) ||
+    !can({ permission: "view_issues", project: projectContext, actor })
+  ) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

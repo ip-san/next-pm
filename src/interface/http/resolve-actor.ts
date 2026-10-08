@@ -80,6 +80,31 @@ export async function resolveActor(user: User | null, projectId: string): Promis
 }
 
 /**
+ * The role set a project-less permission question is answered against — every role the user
+ * holds in any project (direct or group-inherited) plus their builtin role, mirroring
+ * Redmine's `roles | memberships.roles << builtin_role` in the `:global => true` branch of
+ * User#allowed_to?. Feed this to `canGlobally`.
+ */
+export async function resolveGlobalRoles(user: User | null): Promise<Role[]> {
+  const roleRepository = new DrizzleRoleRepository();
+  if (!user) {
+    return [await roleRepository.findBuiltinAnonymous()];
+  }
+
+  // Redmine's Principal#memberships is scoped `where.not(projects: {status: ARCHIVED})`, so
+  // a role held only on an archived project grants nothing globally — without this filter it
+  // would still answer `add_project`, letting an archived membership open a new project.
+  const archivedProjectIds = new Set(
+    (await new DrizzleProjectRepository().listAll()).filter((project) => project.status === "archived").map((project) => project.id),
+  );
+  const memberships = (await new DrizzleMemberRepository().listByUser(user.id)).filter(
+    (member) => !archivedProjectIds.has(member.projectId),
+  );
+  const membershipRoles = await roleRepository.findByIds([...new Set(memberships.flatMap((member) => member.roleIds))]);
+  return [...membershipRoles, await roleRepository.findBuiltinNonMember()];
+}
+
+/**
  * Roles to feed into `isPrivateIssueVisible`. An admin actor carries no real roles here,
  * but Redmine's admin bypass means an admin must always pass the private-issue check too
  * — so this returns a synthetic `{issuesVisibility: "all"}` for admins rather than making
@@ -113,6 +138,25 @@ export function issueVisibilityScope(
  * Every read path that reaches issues other than the one already gated by the page's own
  * `view_issues` + `isPrivateIssueVisible` check must run its results through this.
  */
+/**
+ * Redmine's `Issue#visible?` for an issue in any project: the viewer must see issues in the
+ * issue's own project (`view_issues` there, resolved per project), and the private-issue rule
+ * applies on top. `contexts` is `listVisibleProjectContexts(user, "view_issues")`; an issue
+ * whose project is not in it is hidden. Use this, not `visibleIssueFilter`, for an issue that
+ * may belong to a project other than the page's own.
+ */
+export function issueVisibilityCheck(
+  user: User | null,
+  contexts: VisibleProjectContext[],
+): (issue: Pick<Issue, "projectId" | "isPrivate" | "authorId" | "assignedToId" | "assignedToType">) => boolean {
+  const byProject = new Map(contexts.map((context) => [context.project.id, context]));
+  return (issue) => {
+    const context = byProject.get(issue.projectId);
+    if (!context) return false;
+    return isPrivateIssueVisible(issue, user?.id ?? null, context.userGroupIds, issuesVisibilityRoles(context.actor));
+  };
+}
+
 export function visibleIssueFilter(
   userId: string | null,
   actor: AuthorizationActor,
@@ -147,6 +191,33 @@ export async function listProjectsWithPermission(
     }
   }
   return allowed;
+}
+
+/** A project the viewer may act in, with the actor resolution that said so already done. */
+export interface VisibleProjectContext extends ResolvedActor {
+  project: Project;
+  projectContext: ProjectAuthorizationContext;
+}
+
+/**
+ * The cross-project primitive every global page needs: which projects `permission` reaches,
+ * together with the actor resolved for each. Redmine expresses this as one SQL condition
+ * (`Project.allowed_to_condition`), but the role set — and so every per-project rule that
+ * depends on it, from `issues_visibility` to `time_entries_visibility` — differs per
+ * project, so the resolution has to happen per project either way. Returning it keeps the
+ * callers from resolving the same actor a second time for each rule they apply.
+ */
+export async function listVisibleProjectContexts(user: User | null, permission: PermissionKey): Promise<VisibleProjectContext[]> {
+  const projects = await new DrizzleProjectRepository().listAll();
+  const visible: VisibleProjectContext[] = [];
+  for (const project of projects) {
+    const projectContext = toAuthorizationProject(project);
+    const resolved = await resolveActor(user, project.id);
+    if (can({ permission, project: projectContext, actor: resolved.actor })) {
+      visible.push({ ...resolved, project, projectContext });
+    }
+  }
+  return visible;
 }
 
 /**

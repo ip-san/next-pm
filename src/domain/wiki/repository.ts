@@ -1,3 +1,4 @@
+import type { SearchCriteria } from "@/domain/search/entity";
 import type { Wiki, WikiContentVersion, WikiPage, WikiRedirect } from "./entity";
 
 export interface WikiRepository {
@@ -52,7 +53,7 @@ export interface WikiContentRepository {
   /** Appends a new version — never mutates an existing row (mirrors WikiContentVersion's append-only history). */
   createVersion(entry: Omit<WikiContentVersion, "id" | "createdAt">): Promise<WikiContentVersion>;
   /** Full-text search over each page's title and its *current* version's text, scoped to one project. */
-  search(projectId: string, query: string): Promise<WikiSearchHit[]>;
+  search(projectIds: string[], criteria: SearchCriteria): Promise<WikiSearchHit[]>;
   /** Every version of every page in the project (not just the current one) — activity feed. */
   listByProject(projectId: string): Promise<WikiVersionWithPage[]>;
   /** Each page's current version only — Redmine's `WikiPage.with_updated_on` scope, used by the index views. */

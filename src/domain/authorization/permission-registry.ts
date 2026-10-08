@@ -1,8 +1,13 @@
 export type PermissionKey =
   | "view_project"
+  | "search_project"
+  | "add_project"
   | "edit_project"
   | "close_project"
+  | "delete_project"
+  | "select_project_publicity"
   | "select_project_modules"
+  | "view_members"
   | "manage_members"
   | "manage_versions"
   | "add_subprojects"
@@ -32,6 +37,7 @@ export type PermissionKey =
   | "log_time"
   | "edit_time_entries"
   | "edit_own_time_entries"
+  | "manage_project_activities"
   | "log_time_for_other_users"
   | "import_time_entries"
   | "view_wiki_pages"
@@ -67,7 +73,11 @@ export type PermissionKey =
   | "manage_files"
   | "browse_repository"
   | "view_changesets"
-  | "manage_repository";
+  | "commit_access"
+  | "manage_related_issues"
+  | "manage_repository"
+  | "view_calendar"
+  | "view_gantt";
 
 /**
  * Mirrors the `:require` option of Redmine's `map.permission` (lib/redmine/preparation.rb):
@@ -95,9 +105,25 @@ interface PermissionDefinition {
 
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
   view_project: { module: null, readOnly: true, require: null },
+  // preparation.rb#L38: `map.permission :search_project, {:search => :index}, :public => true,
+  // :read => true`. next-pm has no "public permission" concept — `view_project` is declared
+  // the same way upstream and is modelled here as an ordinary key that the seed grants to
+  // every role, including the builtin Non member and Anonymous. Same treatment, so the two
+  // can't drift.
+  search_project: { module: null, readOnly: true, require: null },
+  add_project: { module: null, readOnly: false, require: "loggedin" },
   edit_project: { module: null, readOnly: false, require: "member" },
-  close_project: { module: null, readOnly: false, require: "member" },
+  // Redmine marks close_project and delete_project `:read => true` so that a *closed*
+  // project can still be reopened or deleted — a non-read permission would be denied by
+  // the `!isActive` rule below and lock the project in place with no way out.
+  close_project: { module: null, readOnly: true, require: "member" },
+  delete_project: { module: null, readOnly: true, require: "member" },
+  select_project_publicity: { module: null, readOnly: false, require: "member" },
   select_project_modules: { module: null, readOnly: false, require: "member" },
+  // preparation.rb#L45 declares it `:public => true, :read => true`, with no `:require`.
+  // `public` has no equivalent here — see the §4.1 note; it is seeded onto the builtin
+  // roles the way view_project (also public in Redmine) already is.
+  view_members: { module: null, readOnly: true, require: null },
   manage_members: { module: null, readOnly: false, require: "member" },
   manage_versions: { module: null, readOnly: false, require: "member" },
   add_subprojects: { module: null, readOnly: false, require: "member" },
@@ -137,6 +163,7 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   edit_own_time_entries: { module: "time_tracking", readOnly: false, require: "loggedin" },
   log_time_for_other_users: { module: "time_tracking", readOnly: false, require: "member" },
   import_time_entries: { module: "time_tracking", readOnly: false, require: null },
+  manage_project_activities: { module: "time_tracking", readOnly: false, require: "member" },
 
   // preparation.rb#L124-135. The `:read => true` keys are read-only; only rename, delete,
   // protect and manage carry `:require => :member`. delete_wiki_pages_attachments
@@ -177,8 +204,38 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_files: { module: "files", readOnly: false, require: "loggedin" },
   browse_repository: { module: "repository", readOnly: true, require: null },
   view_changesets: { module: "repository", readOnly: true, require: null },
+  /** Linking a changeset to an issue by hand on the revision page. Redmine declares it with no :require. */
+  // preparation.rb#L141: an empty permission. Redmine grants it to the default Developer role and
+  // checks it nowhere in core; plugins (SCM hooks) read it.
+  commit_access: { module: "repository", readOnly: false, require: null },
+  manage_related_issues: { module: "repository", readOnly: false, require: null },
   manage_repository: { module: "repository", readOnly: false, require: "member" },
+
+  // preparation.rb#L159-165: both are `:read => true` with no `:require`.
+  view_calendar: { module: "calendar", readOnly: true, require: null },
+  view_gantt: { module: "gantt", readOnly: true, require: null },
 };
+
+/**
+ * Redmine's `Redmine::AccessControl.available_project_modules` — every module some
+ * permission is gated on, in the order the project settings form lists them. Derived from
+ * the registry rather than written out by hand would lose that order, so this stays an
+ * explicit list and `permission-registry.test.ts` asserts the two agree.
+ */
+export const PROJECT_MODULES = [
+  "issue_tracking",
+  "time_tracking",
+  "wiki",
+  "boards",
+  "news",
+  "documents",
+  "files",
+  "repository",
+  "calendar",
+  "gantt",
+] as const;
+
+export type ProjectModule = (typeof PROJECT_MODULES)[number];
 
 export function isPermissionRegistered(key: string): key is PermissionKey {
   return key in PERMISSION_REGISTRY;

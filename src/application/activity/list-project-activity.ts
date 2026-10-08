@@ -167,15 +167,24 @@ export async function listProjectActivity(
   }
 
   if (wantsGroup("changeset") && can({ permission: "view_changesets", project: input.projectContext, actor: input.actor })) {
-    const scmRepository = await repositories.scmRepositoryRepository.findByProject(input.projectId);
-    if (scmRepository) {
+    // Every repository of the project, not only the default one. Redmine's `Project#changesets`
+    // goes through `has_one :repository` and therefore only covers the default, but its
+    // activity provider doesn't use that association — `Changeset.visible` joins repositories
+    // to the project, so a commit in a secondary repository still shows up.
+    const scmRepositories = await repositories.scmRepositoryRepository.listByProject(input.projectId);
+    for (const scmRepository of scmRepositories) {
       const changesets = await repositories.changesetRepository.listByScmRepository(scmRepository.id);
       for (const changeset of changesets) {
         if (!inRange(changeset.committedOn, input.from, input.to)) continue;
         events.push({
           type: "changeset",
-          id: changeset.revision,
-          authorId: null,
+          // Unique across repositories: two of a project's repositories can legitimately hold
+          // the same revision string (a fork, or the same backend registered twice).
+          id: `${scmRepository.id}:${changeset.revision}`,
+          // The committer's mapped user, when there is one — Redmine's activity view shows
+          // Changeset#author, which is the mapped user falling back to the raw committer name
+          // (still rendered in the excerpt below for the unmapped case).
+          authorId: changeset.userId,
           title: changeset.comments.split("\n")[0] || changeset.revision.slice(0, 8),
           excerpt: `${changeset.committerIdentity} — ${changeset.revision.slice(0, 8)}`,
           occurredAt: changeset.committedOn,

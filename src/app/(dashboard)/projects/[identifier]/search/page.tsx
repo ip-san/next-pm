@@ -1,27 +1,48 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { SearchResult } from "@/domain/search/entity";
-import { searchProject } from "@/application/search/search-project";
-import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
-import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
-import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
+import { can } from "@/domain/authorization/authorization-service";
+import type { SearchResultType } from "@/domain/search/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import { SearchOptionsForm, SEARCH_TYPE_LABEL } from "@/interface/components/search/search-options-form";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { runSearch, type SearchHit } from "@/interface/http/run-search";
+import { parseSearchRequest, resolveSearchProjects, SEARCH_RESULTS_PER_PAGE } from "@/interface/http/search-params";
 
 export const dynamic = "force-dynamic";
 
+function resultHref({ project, result }: SearchHit): string {
+  switch (result.type) {
+    case "issue":
+      return `/projects/${project.identifier}/issues/${result.id}`;
+    case "wiki_page":
+      return `/projects/${project.identifier}/wiki/${encodeURIComponent(result.id)}`;
+    case "news":
+      return `/projects/${project.identifier}/news/${result.id}`;
+    case "message":
+      return `/projects/${project.identifier}/boards`;
+  }
+}
+
+/**
+ * `SearchController#index` with a project: the same options as the global page, plus the
+ * two project-relative scopes. The default scope is this project alone.
+ */
 export default async function SearchPage({
   params,
   searchParams,
 }: {
   params: Promise<{ identifier: string }>;
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { identifier } = await params;
-  const { q } = await searchParams;
-  const query = (q ?? "").trim();
+  const raw = await searchParams;
+  const urlParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === undefined) continue;
+    for (const entry of Array.isArray(value) ? value : [value]) urlParams.append(key, entry);
+  }
+  const request = parseSearchRequest(urlParams, "project");
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -29,74 +50,63 @@ export default async function SearchPage({
   }
 
   const user = await currentUserFromCookies();
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor } = await resolveActor(user, project.id);
+  if (!can({ permission: "search_project", project: toAuthorizationProject(project), actor })) {
+    notFound();
+  }
 
-  const results = await searchProject(
-    {
-      issueRepository: new DrizzleIssueRepository(),
-      wikiContentRepository: new DrizzleWikiContentRepository(),
-      newsRepository: new DrizzleNewsRepository(),
-      messageRepository: new DrizzleMessageRepository(),
-    },
-    {
-      projectId: project.id,
-      projectContext: toAuthorizationProject(project),
-      actor,
-      userId: user?.id ?? null,
-      userGroupIds,
-      issueVisibilityRoles: issuesVisibilityRoles(actor),
-      query,
-    },
-  );
+  const projects = await resolveSearchProjects(user, request.scope, project);
+  const run = await runSearch(projects, request, { userId: user?.id ?? null }, SEARCH_RESULTS_PER_PAGE);
 
-  const urlFor = (result: SearchResult): string => {
-    switch (result.type) {
-      case "issue":
-        return `/projects/${identifier}/issues/${result.id}`;
-      case "wiki_page":
-        return `/projects/${identifier}/wiki/${encodeURIComponent(result.id)}`;
-      case "news":
-        return `/projects/${identifier}/news/${result.id}`;
-      case "message":
-        return `/projects/${identifier}/boards`;
-    }
-  };
-
-  const TYPE_LABEL: Record<SearchResult["type"], string> = {
-    issue: "チケット",
-    wiki_page: "Wiki",
-    news: "ニュース",
-    message: "フォーラム",
+  const pageHref = (page: number) => {
+    const next = new URLSearchParams(urlParams);
+    next.set("page", String(page));
+    return `/projects/${identifier}/search?${next.toString()}`;
   };
 
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">検索</h1>
-        <Link href={`/search?q=${encodeURIComponent(query)}`} className="text-sm underline">
+        <h1 className="text-xl font-semibold">{project.name} — 検索</h1>
+        <Link href={`/search?q=${encodeURIComponent(request.question)}`} className="text-sm underline">
           全プロジェクトから検索
         </Link>
       </div>
-      <form className="flex gap-2 max-w-md">
-        <input name="q" defaultValue={query} placeholder="検索語" className="border rounded px-3 py-2 text-sm flex-1" />
-        <button type="submit" className="bg-black text-white rounded px-3 py-2 text-sm">
-          検索
-        </button>
-      </form>
 
-      {query.length > 0 ? (
-        <ul className="flex flex-col gap-2 text-sm">
-          {results.map((result) => (
-            <li key={`${result.type}-${result.id}`} className="border rounded p-3">
-              <span className="text-xs text-gray-500">{TYPE_LABEL[result.type]}</span>
-              <Link href={urlFor(result)} className="font-medium underline block">
-                {result.title}
-              </Link>
-              <p className="text-gray-600 line-clamp-2">{result.excerpt}</p>
-            </li>
-          ))}
-          {results.length === 0 ? <p className="text-gray-500">該当する結果が見つかりませんでした。</p> : null}
-        </ul>
+      <SearchOptionsForm request={request} scopes={["project", "subprojects", "my_projects", "all"]} counts={run.countsByType} />
+
+      {request.question.length > 0 && request.criteria.tokens.length === 0 ? (
+        <p className="text-sm text-gray-500">検索語は2文字以上で入力してください。</p>
+      ) : null}
+
+      {request.criteria.tokens.length > 0 ? (
+        <>
+          <p className="text-sm text-gray-600">{run.totalCount}件</p>
+          <ul className="flex flex-col gap-2 text-sm">
+            {run.hits.map((hit) => (
+              <li key={`${hit.project.identifier}-${hit.result.type}-${hit.result.id}`} className="border rounded p-3">
+                <span className="text-xs text-gray-500">
+                  {hit.project.name} / {SEARCH_TYPE_LABEL[hit.result.type as SearchResultType]}
+                </span>
+                <Link href={resultHref(hit)} className="font-medium underline block">
+                  {hit.result.title}
+                </Link>
+                <p className="text-gray-600 line-clamp-2">{hit.result.excerpt}</p>
+              </li>
+            ))}
+            {run.hits.length === 0 ? <p className="text-gray-500">該当する結果が見つかりませんでした。</p> : null}
+          </ul>
+
+          {run.pageCount > 1 ? (
+            <nav className="flex items-center gap-3 text-sm" aria-label="ページ送り">
+              {Array.from({ length: run.pageCount }, (_, index) => index + 1).map((page) => (
+                <Link key={page} href={pageHref(page)} className={page === request.page ? "font-semibold" : "underline"}>
+                  {page}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
+        </>
       ) : null}
     </main>
   );

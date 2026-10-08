@@ -130,7 +130,6 @@ export class DrizzleMemberRepository implements MemberRepository, MemberAdminRep
     const [withRoles] = await attachRoleIds([row]);
     return withRoles;
   }
-
   async listByUser(userId: string): Promise<Member[]> {
     const rows = await db.select().from(members).where(eq(members.userId, userId));
     return attachRoleIds(rows);

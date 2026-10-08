@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const allQueries = await new DrizzleQueryRepository().listForProject(project.id);
+  const allQueries = await new DrizzleQueryRepository().listAvailableFor(project.id, "IssueQuery");
   const queries = allQueries.filter((q) => isQueryVisible(q, user.id, roleIds));
 
   return NextResponse.json({ queries });

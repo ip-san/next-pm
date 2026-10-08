@@ -5,8 +5,12 @@ export type SavedQueryDraft = Omit<SavedQuery, "id">;
 export type SavedQueryUpdate = Omit<SavedQuery, "id" | "userId" | "type">;
 
 export interface QueryRepository {
-  /** Unfiltered by visibility — callers must apply isQueryVisible themselves. */
-  listForProject(projectId: string, type: QueryType): Promise<SavedQuery[]>;
+  /**
+   * Redmine's `Query.global_or_on_project`: a project's list offers its own queries *and*
+   * the global ones, while a global list offers only the global ones. Unfiltered by
+   * visibility — callers must apply isQueryVisible themselves.
+   */
+  listAvailableFor(projectId: string | null, type: QueryType): Promise<SavedQuery[]>;
   /** Unfiltered by visibility — callers must apply isQueryVisible themselves. */
   findById(id: string): Promise<SavedQuery | null>;
   create(query: SavedQueryDraft): Promise<SavedQuery>;

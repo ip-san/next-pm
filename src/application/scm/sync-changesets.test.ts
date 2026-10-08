@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { DEFAULT_KEYWORD_SCAN_OPTIONS, syncChangesets, type SyncChangesetsRepositories } from "./sync-changesets";
 import type { Enumeration } from "@/domain/enumeration/entity";
+import type { ProjectActivityRepository } from "@/domain/enumeration/project-activity-repository";
 import type { EnumerationRepository } from "@/domain/enumeration/repository";
 import { StaleIssueError } from "@/domain/issue/entity";
 import { makeIssue, makeIssueRepositoryMock } from "@/domain/issue/test-support";
@@ -9,13 +10,24 @@ import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, Commit, ScmRepository } from "@/domain/scm/entity";
 import type { ScmBrowser } from "@/domain/scm/scm-browser";
+import type { Project } from "@/domain/project/entity";
+import type { ProjectRepository } from "@/domain/project/repository";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
 
 function makeScmRepository(overrides: Partial<ScmRepository> = {}): ScmRepository {
-  return { id: "repo-1", projectId: "proj-1", vendor: "git", rootPath: "/repos/example", createdAt: new Date("2020-01-01"), ...overrides };
+  return {
+    id: "repo-1",
+    projectId: "proj-1",
+    identifier: "",
+    isDefault: true,
+    vendor: "git",
+    rootPath: "/repos/example",
+    createdAt: new Date("2020-01-01"),
+    ...overrides,
+  };
 }
 
 function makeCommit(overrides: Partial<Commit> = {}): Commit {
@@ -51,6 +63,31 @@ function makeChangesetRepository(): ChangesetRepository {
       links.filter((l) => l.issueId === issueId).map((l) => [...store.values()].find((c) => c.id === l.changesetId)!),
     ),
     listByScmRepository: mock(async (scmRepositoryId) => [...store.values()].filter((c) => c.scmRepositoryId === scmRepositoryId)),
+    listCommitters: mock(async (scmRepositoryId) => {
+      const seen = new Map<string, string | null>();
+      for (const changeset of store.values()) {
+        if (changeset.scmRepositoryId === scmRepositoryId) seen.set(changeset.committerIdentity, changeset.userId);
+      }
+      return [...seen].map(([committerIdentity, userId]) => ({ committerIdentity, userId }));
+    }),
+    findLatestByCommitter: mock(
+      async (scmRepositoryId, committerIdentity) =>
+        [...store.values()]
+          .filter((c) => c.scmRepositoryId === scmRepositoryId && c.committerIdentity === committerIdentity)
+          .sort((a, b) => b.committedOn.getTime() - a.committedOn.getTime())[0] ?? null,
+    ),
+    unlinkIssue: mock(async (changesetId, issueId) => {
+      const at = links.findIndex((l) => l.changesetId === changesetId && l.issueId === issueId);
+      if (at >= 0) links.splice(at, 1);
+    }),
+    listIssueIds: mock(async (changesetId) => links.filter((l) => l.changesetId === changesetId).map((l) => l.issueId)),
+    remapCommitter: mock(async (scmRepositoryId, committerIdentity, userId) => {
+      for (const [key, changeset] of store) {
+        if (changeset.scmRepositoryId === scmRepositoryId && changeset.committerIdentity === committerIdentity) {
+          store.set(key, { ...changeset, userId });
+        }
+      }
+    }),
   };
 }
 
@@ -92,6 +129,13 @@ function makeEnumerationRepository(activities: Enumeration[]): EnumerationReposi
   };
 }
 
+/** Only findById is exercised: the repository's own project, for the cross-project reference rule. */
+function makeProjectRepository(): ProjectRepository {
+  return {
+    findById: mock(async (id: string) => (id === "proj-1" ? PROJECT : null)),
+  } as unknown as ProjectRepository;
+}
+
 function makeUserRepository(user: User | null): UserRepository {
   return {
     listAll: mock(async () => (user ? [user] : [])),
@@ -122,9 +166,34 @@ function makeSettingsRepository(): SettingsRepository {
   };
 }
 
+const PROJECT: Project = {
+  id: "proj-1",
+  name: "Proj",
+  identifier: "proj-1",
+  description: "",
+  isPublic: true,
+  status: "active",
+  parentId: null,
+  lft: 1,
+  rgt: 2,
+  position: 1,
+  enabledModules: ["issue_tracking", "repository"],
+  trackerIds: [],
+};
+/** A fresh stub per call — tests reassign listOverridesForProject, so it must not be shared. */
+const noProjectOverrides = (): ProjectActivityRepository => ({
+  listOverridesForProject: async () => [],
+  createOverride: async () => {
+    throw new Error("not used");
+  },
+  updateOverride: async () => {},
+  deleteOverride: async () => {},
+  reassignTimeEntries: async () => {},
+});
+
 const OPEN_STATUS: IssueStatus = { id: "status-open", name: "Open", description: "", isClosed: false, defaultDoneRatio: null, position: 1 };
 const CLOSED_STATUS: IssueStatus = { id: "status-closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 2 };
-const ACTIVITY: Enumeration = { id: "activity-1", type: "TimeEntryActivity", name: "Development", position: 1, isDefault: true, projectId: null, parentId: null };
+const ACTIVITY: Enumeration = { id: "activity-1", type: "TimeEntryActivity", name: "Development", position: 1, isDefault: true, active: true, projectId: null, parentId: null };
 const COMMITTER: User = {
   id: "user-1",
   login: "alice",
@@ -158,6 +227,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -181,6 +252,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -200,6 +273,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -220,6 +295,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -242,6 +319,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(null),
       settingsRepository: makeSettingsRepository(),
     };
@@ -262,6 +341,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -271,6 +352,82 @@ describe("syncChangesets", () => {
     // Still linked for display purposes, even though no action fired.
     expect(changesetRepository.linkIssue).toHaveBeenCalledWith("cs-1", issue.id);
     expect(issueRepository.update).not.toHaveBeenCalled();
+    // The cutoff suppresses the commit's *actions*, not its authorship — Redmine assigns the
+    // user in before_create_cs, which doesn't consult repository.created_on at all.
+    expect(changesetRepository.create).toHaveBeenCalledWith(expect.objectContaining({ userId: COMMITTER.id }));
+  });
+
+  it("attributes an ingested commit to the user its committer string resolves to", async () => {
+    const changesetRepository = makeChangesetRepository();
+    const repositories: SyncChangesetsRepositories = {
+      scmBrowser: makeScmBrowser([makeCommit({ message: "No keywords here" })]),
+      changesetRepository,
+      issueRepository: makeIssueRepositoryMock({ findByIdPrefix: mock(async () => []) }),
+      issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
+      timeEntryRepository: makeTimeEntryRepository(),
+      enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
+      userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
+    };
+
+    await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
+    expect(changesetRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ committerIdentity: "Alice <alice@example.com>", userId: COMMITTER.id }),
+    );
+  });
+
+  it("leaves a commit unattributed when its committer matches nobody", async () => {
+    const changesetRepository = makeChangesetRepository();
+    const repositories: SyncChangesetsRepositories = {
+      scmBrowser: makeScmBrowser([makeCommit({ message: "No keywords here" })]),
+      changesetRepository,
+      issueRepository: makeIssueRepositoryMock({ findByIdPrefix: mock(async () => []) }),
+      issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
+      timeEntryRepository: makeTimeEntryRepository(),
+      enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
+      userRepository: makeUserRepository(null),
+      settingsRepository: makeSettingsRepository(),
+    };
+
+    await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
+    expect(changesetRepository.create).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
+  });
+
+  // The mapping an admin saved on the committers screen is stored on the existing changesets,
+  // so the next sync picks it up through resolve-committer-user's first branch.
+  it("reuses an existing mapping over a fresh login/email match", async () => {
+    const changesetRepository = makeChangesetRepository();
+    const mapped: User = { ...COMMITTER, id: "user-mapped", login: "mapped" };
+    const repositories: SyncChangesetsRepositories = {
+      scmBrowser: makeScmBrowser([makeCommit({ hash: "h1", message: "first", date: "2024-06-01 10:00:00 +0000" })]),
+      changesetRepository,
+      issueRepository: makeIssueRepositoryMock({ findByIdPrefix: mock(async () => []) }),
+      issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
+      timeEntryRepository: makeTimeEntryRepository(),
+      enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
+      userRepository: makeUserRepository(COMMITTER),
+      settingsRepository: makeSettingsRepository(),
+    };
+    await syncChangesets(repositories, makeScmRepository(), "HEAD", 50);
+
+    // An admin re-points the committer at somebody else, then a new commit arrives. The
+    // login/email lookups still answer with the *original* user, so the new commit landing on
+    // `mapped` can only have come from the stored mapping.
+    await changesetRepository.remapCommitter("repo-1", "Alice <alice@example.com>", mapped.id);
+    const withMapped: SyncChangesetsRepositories = {
+      ...repositories,
+      scmBrowser: makeScmBrowser([makeCommit({ hash: "h2", message: "second", date: "2024-06-02 10:00:00 +0000" })]),
+      userRepository: { ...makeUserRepository(COMMITTER), findById: mock(async () => mapped) },
+    };
+    await syncChangesets(withMapped, makeScmRepository(), "HEAD", 50);
+
+    expect(changesetRepository.create).toHaveBeenLastCalledWith(expect.objectContaining({ revision: "h2", userId: mapped.id }));
   });
 
   it("ignores an issue found in a different project than the repository", async () => {
@@ -284,6 +441,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -301,6 +460,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -322,6 +483,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -347,6 +510,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -366,6 +531,8 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
+      projectActivityRepository: noProjectOverrides(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };

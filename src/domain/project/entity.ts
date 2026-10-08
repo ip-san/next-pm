@@ -24,3 +24,16 @@ export function isActiveProject(project: Pick<Project, "status">): boolean {
 export function isArchivedProject(project: Pick<Project, "status">): boolean {
   return project.status === "archived";
 }
+
+/**
+ * Redmine's Project#deletable?(user) — an admin may delete any project, including one with
+ * subprojects (they go with it). A non-admin needs `delete_project` *and* the project must
+ * be a leaf: Redmine 5.1 opened deletion to permission holders but refuses to let one wipe
+ * out a subtree they may not hold the permission on project by project.
+ *
+ * `hasDeletePermission` is the caller's `can({permission: "delete_project", ...})` verdict;
+ * delete_project is a read permission, so a *closed* project can still be deleted.
+ */
+export function isProjectDeletable(input: { isAdmin: boolean; hasDeletePermission: boolean; hasSubprojects: boolean }): boolean {
+  return input.isAdmin || (input.hasDeletePermission && !input.hasSubprojects);
+}

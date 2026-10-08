@@ -6,7 +6,8 @@ import { QueryNotFoundError } from "./update-query";
 
 export interface CopyQueryInput {
   queryId: string;
-  projectId: string;
+  /** Null for the global list — a global request may only copy a global query. */
+  projectId: string | null;
   /** The copy's name. */
   name: string;
   actor: QueryActor;

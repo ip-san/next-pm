@@ -7,6 +7,7 @@ import { parseCsv } from "@/domain/csv/decode";
 import { CustomFieldValidationError } from "@/domain/custom-field/errors";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
 import { InvalidTimeEntryError, logTime } from "@/application/time-entries/log-time";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import {
   setTimeEntryCustomFieldValues,
   validateTimeEntryCustomFieldValues,
@@ -16,6 +17,7 @@ import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/c
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
@@ -91,8 +93,11 @@ export async function importTimeEntriesCsvAction(
   }
   const columnIndex = new Map(header.map((name, index) => [name, index]));
 
-  const [activities, customFields, assignableUsers] = await Promise.all([
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+  const projectActivityRepository = new DrizzleProjectActivityRepository();
+  const [{ offered: activities }, customFields, assignableUsers] = await Promise.all([
+    // Project#activities, so a CSV naming an activity this project switched off is rejected
+    // row by row rather than silently imported against it.
+    loadProjectActivities({ enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository }, project.id),
     new DrizzleCustomFieldRepository().listForCustomizedType("TimeEntry"),
     canLogForOthers
       ? listAssignableTimeEntryUsers(
@@ -205,7 +210,7 @@ export async function importTimeEntriesCsvAction(
 
     try {
       const entry = await logTime(
-        { timeEntryRepository, settingsRepository, enumerationRepository },
+        { timeEntryRepository, settingsRepository, enumerationRepository, projectActivityRepository },
         {
           projectId: project.id,
           issueId,

@@ -33,11 +33,15 @@ async function seed() {
     .insert(roles)
     // Mirrors Redmine's default data: Non member may save its own queries, Anonymous may
     // not (save_queries is declared `:require => :loggedin`).
-    .values({ name: "Non member", builtin: ROLE_BUILTIN_NON_MEMBER, permissions: ["view_project", "view_issues", "save_queries"] })
+    .values({
+      name: "Non member",
+      builtin: ROLE_BUILTIN_NON_MEMBER,
+      permissions: ["view_project", "search_project", "view_members", "view_issues", "view_calendar", "view_gantt", "save_queries"],
+    })
     .returning();
   const [anonymous] = await db
     .insert(roles)
-    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_project", "view_issues"] })
+    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_project", "search_project", "view_members", "view_issues", "view_calendar", "view_gantt"] })
     .returning();
   const [manager] = await db
     .insert(roles)
@@ -46,6 +50,12 @@ async function seed() {
       permissions: [
         "view_project",
         "use_webhooks",
+        "search_project",
+        "add_project",
+        "close_project",
+        "delete_project",
+        "select_project_publicity",
+        "view_members",
         "save_queries",
         "manage_public_queries",
         "view_issues",
@@ -70,6 +80,7 @@ async function seed() {
         "edit_own_time_entries",
         "log_time_for_other_users",
         "import_time_entries",
+        "manage_project_activities",
         "view_wiki_pages",
         "view_wiki_edits",
         "edit_wiki_pages",
@@ -101,7 +112,11 @@ async function seed() {
         "manage_files",
         "browse_repository",
         "view_changesets",
+        "commit_access",
+        "manage_related_issues",
         "manage_repository",
+        "view_calendar",
+        "view_gantt",
       ],
     })
     .returning();
