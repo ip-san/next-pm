@@ -1,9 +1,18 @@
+import { IssueQueryBlockForm } from "./issue-query-block-form";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { loadMyPagePreferences } from "@/application/my-page/load-preferences";
-import { MY_PAGE_BLOCK_TYPES, MY_PAGE_GROUPS, type MyPageBlockType, type MyPageGroup } from "@/domain/my-page/entity";
+import {
+  isIssueQueryBlock,
+  MY_PAGE_BLOCK_TYPES,
+  MY_PAGE_GROUPS,
+  nextIssueQueryBlockId,
+  type MyPageBlockType,
+  type MyPageGroup,
+  type StaticMyPageBlockType,
+} from "@/domain/my-page/entity";
 import { resolveTimelogDays } from "@/domain/my-page/resolve";
 import { DrizzleMyPageRepository } from "@/infrastructure/db/repositories/my-page-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -13,7 +22,9 @@ import {
   loadCalendarBlock,
   loadDocumentsBlock,
   loadIssueBlocks,
+  loadIssueQueryBlock,
   loadNewsBlock,
+  loadSelectableIssueQueries,
   loadTimelogBlock,
   loadUpdatedByMeBlock,
   type ActivityBlockItem,
@@ -28,7 +39,7 @@ import { TimelogDaysForm } from "./timelog-days-form";
 
 export const dynamic = "force-dynamic";
 
-const BLOCK_LABEL: Record<MyPageBlockType, string> = {
+const BLOCK_LABEL: Record<StaticMyPageBlockType, string> = {
   issues_assigned_to_me: "担当しているチケット",
   issues_reported_by_me: "登録したチケット",
   issues_updated_by_me: "更新したチケット",
@@ -39,6 +50,11 @@ const BLOCK_LABEL: Record<MyPageBlockType, string> = {
   timelog: "工数",
   activity: "活動",
 };
+
+/** Labels for every block on the page; the saved-query blocks share one label, the query's name is shown in the block. */
+function blockLabel(block: MyPageBlockType): string {
+  return isIssueQueryBlock(block) ? "保存済みクエリ" : BLOCK_LABEL[block];
+}
 
 function CalendarBlockList({ items }: { items: CalendarBlockItem[] }) {
   if (items.length === 0) {
@@ -181,6 +197,16 @@ export default async function MyPage() {
   const activityTo = new Date();
   const activityFrom = new Date(activityTo.getTime() - activityDaysDefault * 86_400_000);
   const activity = placedBlocks.has("activity") ? await loadActivityBlock(user, activityFrom, activityTo) : [];
+  const issueQueryBlockIds = [...prefs.layout.top, ...prefs.layout.left, ...prefs.layout.right].filter(isIssueQueryBlock);
+  const issueQueryBlocks = await Promise.all(
+    issueQueryBlockIds.map(async (block) => {
+      const stored = prefs.blockSettings[block]?.queryId;
+      const queryId = typeof stored === "string" ? stored : null;
+      const data = queryId ? await loadIssueQueryBlock(user, queryId, today) : null;
+      return { block, queryId, data };
+    }),
+  );
+  const selectableQueries = issueQueryBlockIds.length > 0 ? await loadSelectableIssueQueries(user) : [];
 
   function renderBlockContent(block: MyPageBlockType) {
     switch (block) {
@@ -194,6 +220,23 @@ export default async function MyPage() {
         return <CalendarBlockList items={calendar} />;
       case "activity":
         return <ActivityBlockList items={activity} />;
+      default: {
+        const queryBlock = issueQueryBlocks.find((entry) => entry.block === block);
+        if (!queryBlock) return null;
+        return (
+          <div className="flex flex-col gap-2">
+            {queryBlock.data ? (
+              <>
+                <p className="text-xs text-gray-500">{queryBlock.data.name}</p>
+                <IssueBlockList items={queryBlock.data.items} />
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">{queryBlock.queryId ? "選んだクエリは表示できません。" : "表示するクエリを選んでください。"}</p>
+            )}
+            <IssueQueryBlockForm block={block} queries={selectableQueries} selectedId={queryBlock.queryId} />
+          </div>
+        );
+      }
       case "issues_watched":
         return <IssueBlockList items={issueBlocks.watched} />;
       case "news":
@@ -205,10 +248,12 @@ export default async function MyPage() {
     }
   }
 
-  const availableBlockOptions = MY_PAGE_BLOCK_TYPES.filter((block) => !placedBlocks.has(block)).map((block) => ({
-    value: block,
-    label: BLOCK_LABEL[block],
-  }));
+  const availableBlockOptions: { value: string; label: string }[] = MY_PAGE_BLOCK_TYPES.filter((block) => !placedBlocks.has(block)).map(
+    (block) => ({ value: block, label: BLOCK_LABEL[block] }),
+  );
+  if (nextIssueQueryBlockId(Object.values(prefs.layout).flat())) {
+    availableBlockOptions.push({ value: "issuequery", label: "保存済みクエリ" });
+  }
 
   return (
     <main className="p-8 flex flex-col gap-8 max-w-5xl">
@@ -227,7 +272,7 @@ export default async function MyPage() {
           {prefs.layout.top.map((block, index) => (
             <section key={block} className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-sm">{BLOCK_LABEL[block]}</h2>
+                <h2 className="font-semibold text-sm">{blockLabel(block)}</h2>
                 <BlockControls block={block} group="top" isFirst={index === 0} isLast={index === prefs.layout.top.length - 1} />
               </div>
               {renderBlockContent(block)}
@@ -242,7 +287,7 @@ export default async function MyPage() {
             {prefs.layout[group].map((block, index) => (
               <section key={block} className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-semibold text-sm">{BLOCK_LABEL[block]}</h2>
+                  <h2 className="font-semibold text-sm">{blockLabel(block)}</h2>
                   <BlockControls block={block} group={group} isFirst={index === 0} isLast={index === prefs.layout[group].length - 1} />
                 </div>
                 {renderBlockContent(block)}

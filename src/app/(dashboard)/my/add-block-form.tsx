@@ -2,11 +2,10 @@
 
 import { useActionState } from "react";
 import { addMyPageBlockAction, type MyPageActionState } from "@/interface/actions/my-page-actions";
-import type { MyPageBlockType } from "@/domain/my-page/entity";
 
 const initialState: MyPageActionState = { error: null };
 
-export function AddBlockForm({ options }: { options: { value: MyPageBlockType; label: string }[] }) {
+export function AddBlockForm({ options }: { options: { value: string; label: string }[] }) {
   const [state, formAction, pending] = useActionState(addMyPageBlockAction, initialState);
 
   if (options.length === 0) {

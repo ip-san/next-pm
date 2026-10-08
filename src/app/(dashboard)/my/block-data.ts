@@ -1,3 +1,11 @@
+import { listProjectIssues } from "@/application/issues/list-project-issues";
+import { isQueryVisible } from "@/domain/query/visibility";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleIssueSearchRepository } from "@/infrastructure/db/repositories/issue-search-repository";
+import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { resolveGlobalIssueListScope } from "@/interface/http/global-issue-list";
+import { parseIssueListParams } from "@/interface/query/issue-query-params";
 import { activityEventPath } from "@/domain/activity/entity";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
 import { listProjectActivityFeed } from "@/interface/http/project-activity-feed";
@@ -249,4 +257,62 @@ export async function loadActivityBlock(user: User, from: Date, to: Date): Promi
     items.push({ key, title: event.title, occurredAt: event.occurredAt, href: activityEventPath(identifier, event) });
   }
   return items.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, 10);
+}
+
+/** The saved issue queries the viewer may put on a My Page block: global ones they can see (as the global list offers). */
+export async function loadSelectableIssueQueries(user: User): Promise<{ id: string; name: string }[]> {
+  const scope = await resolveGlobalIssueListScope(user);
+  const queries = await new DrizzleQueryRepository().listAvailableFor(null, "IssueQuery");
+  return queries
+    .filter((query) => user.isAdmin || isQueryVisible(query, user.id, scope.roleIds))
+    .map((query) => ({ id: query.id, name: query.name }));
+}
+
+/**
+ * Redmine's issuequery block: the first ten issues a saved query returns, run the way the global issue list runs it.
+ * Returns null when the query isn't one the viewer may use anymore, so the block asks for a new choice.
+ */
+export async function loadIssueQueryBlock(
+  user: User,
+  queryId: string,
+  today: string,
+): Promise<{ name: string; items: IssueBlockItem[] } | null> {
+  const scope = await resolveGlobalIssueListScope(user);
+  const queries = await new DrizzleQueryRepository().listAvailableFor(null, "IssueQuery");
+  const query = queries.find((candidate) => candidate.id === queryId && (user.isAdmin || isQueryVisible(candidate, user.id, scope.roleIds)));
+  if (!query) return null;
+
+  const result = await listProjectIssues(
+    {
+      issueSearchRepository: new DrizzleIssueSearchRepository(),
+      issueStatusRepository: new DrizzleIssueStatusRepository(),
+      customFieldRepository: new DrizzleCustomFieldRepository(),
+      settingsRepository: new DrizzleSettingsRepository(),
+    },
+    {
+      projectId: null,
+      projectScopes: scope.projectScopes,
+      customFieldViewers: scope.customFieldViewers,
+      params: parseIssueListParams({}),
+      savedQuery: query,
+      visibility: { userId: user.id, userGroupIds: scope.userGroupIds, seesAllPrivateIssues: false },
+      canViewTimeEntries: scope.canViewTimeEntries,
+      spentHoursScope: { kind: "own", userId: user.id },
+      today,
+      exportLimit: 10,
+    },
+  );
+
+  const [statuses, projects] = await Promise.all([new DrizzleIssueStatusRepository().listAll(), new DrizzleProjectRepository().listAll()]);
+  const statusNameById = new Map(statuses.map((status) => [status.id, status.name]));
+  const identifierById = new Map(projects.map((project) => [project.id, project.identifier]));
+  return {
+    name: query.name,
+    items: result.search.issues.map((issue) => ({
+      id: issue.id,
+      subject: issue.subject,
+      statusName: statusNameById.get(issue.statusId) ?? "?",
+      projectIdentifier: identifierById.get(issue.projectId) ?? "",
+    })),
+  };
 }

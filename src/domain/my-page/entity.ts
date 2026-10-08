@@ -23,7 +23,28 @@ export const MY_PAGE_BLOCK_TYPES = [
   "timelog",
   "activity",
 ] as const;
-export type MyPageBlockType = (typeof MY_PAGE_BLOCK_TYPES)[number];
+/**
+ * Redmine's `issuequery` block: shows a saved issue query, and up to three of them can sit on a page
+ * (`issuequery`, then `issuequery__1` and `issuequery__2`, as Redmine's block_options numbers them).
+ */
+export const ISSUE_QUERY_BLOCK_IDS = ["issuequery", "issuequery__1", "issuequery__2"] as const;
+export type IssueQueryBlock = (typeof ISSUE_QUERY_BLOCK_IDS)[number];
+
+export type StaticMyPageBlockType = (typeof MY_PAGE_BLOCK_TYPES)[number];
+export type MyPageBlockType = StaticMyPageBlockType | IssueQueryBlock;
+
+export function isIssueQueryBlock(block: string): block is IssueQueryBlock {
+  return (ISSUE_QUERY_BLOCK_IDS as readonly string[]).includes(block);
+}
+
+export function isMyPageBlockType(block: string): block is MyPageBlockType {
+  return (MY_PAGE_BLOCK_TYPES as readonly string[]).includes(block) || isIssueQueryBlock(block);
+}
+
+/** The id a new issue-query block takes: the first of the three not already on the page; null when all are placed. */
+export function nextIssueQueryBlockId(placed: readonly string[]): IssueQueryBlock | null {
+  return ISSUE_QUERY_BLOCK_IDS.find((id) => !placed.includes(id)) ?? null;
+}
 
 export type MyPageLayout = Record<MyPageGroup, MyPageBlockType[]>;
 
