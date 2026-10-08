@@ -48,6 +48,20 @@ export class DrizzleChangesetRepository implements ChangesetRepository {
     await db.insert(changesetIssues).values({ changesetId, issueId }).onConflictDoNothing();
   }
 
+  async unlinkIssue(changesetId: string, issueId: string): Promise<void> {
+    await db
+      .delete(changesetIssues)
+      .where(and(eq(changesetIssues.changesetId, changesetId), eq(changesetIssues.issueId, issueId)));
+  }
+
+  async listIssueIds(changesetId: string): Promise<string[]> {
+    const rows = await db
+      .select({ issueId: changesetIssues.issueId })
+      .from(changesetIssues)
+      .where(eq(changesetIssues.changesetId, changesetId));
+    return rows.map((row) => row.issueId);
+  }
+
   async listForIssue(issueId: string): Promise<Changeset[]> {
     const rows = await db
       .select({ changeset: changesets })

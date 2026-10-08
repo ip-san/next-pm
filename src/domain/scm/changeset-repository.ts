@@ -6,6 +6,9 @@ export interface ChangesetRepository {
   create(changeset: Omit<Changeset, "id" | "createdAt">): Promise<Changeset>;
   /** No-op if the pair is already linked — mirrors the unique constraint on (changesetId, issueId). */
   linkIssue(changesetId: string, issueId: string): Promise<void>;
+  /** No-op if the pair isn't linked, matching how permissive Redmine's remove_related_issue is. */
+  unlinkIssue(changesetId: string, issueId: string): Promise<void>;
+  listIssueIds(changesetId: string): Promise<string[]>;
   listForIssue(issueId: string): Promise<Changeset[]>;
   listByScmRepository(scmRepositoryId: string): Promise<Changeset[]>;
   /**

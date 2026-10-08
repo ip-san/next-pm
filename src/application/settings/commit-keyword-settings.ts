@@ -14,6 +14,7 @@ export interface UpdateCommitKeywordSettingsInput {
   refKeywords: string[];
   fixKeywords: string[];
   logtimeEnabled: boolean;
+  crossProjectRef: boolean;
 }
 
 export async function updateCommitKeywordSettings(
@@ -24,5 +25,6 @@ export async function updateCommitKeywordSettings(
     commit_ref_keywords: serializeKeywordList(input.refKeywords),
     commit_update_keywords: serializeKeywordList(input.fixKeywords),
     commit_logtime_enabled: input.logtimeEnabled ? "1" : "0",
+    commit_cross_project_ref: input.crossProjectRef ? "1" : "0",
   });
 }

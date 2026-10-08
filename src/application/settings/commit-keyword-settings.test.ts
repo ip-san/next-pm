@@ -36,12 +36,14 @@ describe("updateCommitKeywordSettings", () => {
       refKeywords: ["refs", "see"],
       fixKeywords: ["fixes"],
       logtimeEnabled: false,
+      crossProjectRef: true,
     });
 
     expect(settingsRepository.setMany).toHaveBeenCalledWith({
       commit_ref_keywords: "refs,see",
       commit_update_keywords: "fixes",
       commit_logtime_enabled: "0",
+      commit_cross_project_ref: "1",
     });
 
     const settings = await loadCommitKeywordSettings(settingsRepository);

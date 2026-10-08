@@ -4,8 +4,11 @@ import { StaleIssueError } from "@/domain/issue/entity";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
 import type { IssueStatusRepository } from "@/domain/issue-status/repository";
+import type { Project } from "@/domain/project/entity";
+import type { ProjectRepository } from "@/domain/project/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, Commit, ScmRepository } from "@/domain/scm/entity";
+import { canReferenceIssueProject } from "@/domain/scm/issue-reference";
 import { scanCommitMessage, type KeywordScanOptions } from "@/domain/scm/keyword-scan";
 import type { ScmBrowser } from "@/domain/scm/scm-browser";
 import { resolveCommitKeywordSettings } from "@/domain/settings/commit-keywords";
@@ -22,6 +25,7 @@ export interface SyncChangesetsRepositories {
   timeEntryRepository: TimeEntryRepository;
   enumerationRepository: EnumerationRepository;
   userRepository: UserRepository;
+  projectRepository: ProjectRepository;
   settingsRepository: SettingsRepository;
 }
 
@@ -41,6 +45,18 @@ export interface SyncChangesetsResult {
   ingested: number;
   fixed: number;
   timeLogged: number;
+}
+
+/** Redmine's find_referenced_issue_by_id: the issue, unless its project is out of the reference's reach. */
+async function referenceableIssue(
+  repositories: SyncChangesetsRepositories,
+  issue: Issue,
+  repositoryProject: Project,
+  crossProjectRef: boolean,
+): Promise<Issue | null> {
+  if (issue.projectId === repositoryProject.id) return issue;
+  const issueProject = await repositories.projectRepository.findById(issue.projectId);
+  return issueProject && canReferenceIssueProject(repositoryProject, issueProject, crossProjectRef) ? issue : null;
 }
 
 /** Redmine's Changeset#committer: "Name <email>" when the SCM reports one, otherwise the bare name. */
@@ -110,8 +126,8 @@ async function applyTimeLog(
  * Ingests commits from `scmRepository`'s working copy as Changeset rows, and — mirroring
  * Changeset#scan_comment_for_issue_ids — scans each new commit's message for issue references,
  * applying a status-closing "fix" action and/or `@Nh` time logging where a keyword and matching
- * issue are found. Only issues in the SAME project as the repository are considered (a
- * simplification of Redmine's commit_cross_project_ref + parent/subproject tree walk).
+ * issue are found. Which issues a reference may reach follows Redmine's
+ * `find_referenced_issue_by_id` — see domain/scm/issue-reference.ts.
  *
  * Idempotent: re-running against the same repository/ref only ingests commits not already
  * stored (by revision), so it's safe to call repeatedly (e.g. from a manual "sync" button)
@@ -124,8 +140,11 @@ export async function syncChangesets(
   limit: number,
   keywordScanOptions: KeywordScanOptions = DEFAULT_KEYWORD_SCAN_OPTIONS,
   logtimeEnabled: boolean = true,
+  crossProjectRef: boolean = false,
 ): Promise<SyncChangesetsResult> {
   const commits = await repositories.scmBrowser.log(scmRepository.rootPath, ref, limit);
+  const repositoryProject = await repositories.projectRepository.findById(scmRepository.projectId);
+  if (!repositoryProject) return { ingested: 0, fixed: 0, timeLogged: 0 };
 
   let ingested = 0;
   let fixed = 0;
@@ -162,7 +181,10 @@ export async function syncChangesets(
     const seenIssueIds = new Set<string>();
     for (const match of matches) {
       const candidates = await repositories.issueRepository.findByIdPrefix(match.issueIdPrefix);
-      const issue = candidates.find((candidate) => candidate.projectId === scmRepository.projectId);
+      // Redmine resolves `#id` to exactly one issue and then applies the cross-project rule to
+      // it; next-pm's shorthand is an id *prefix*, so an ambiguous one is dropped rather than
+      // resolved arbitrarily.
+      const issue = candidates.length === 1 ? await referenceableIssue(repositories, candidates[0], repositoryProject, crossProjectRef) : null;
       if (!issue || seenIssueIds.has(issue.id)) continue;
       seenIssueIds.add(issue.id);
 

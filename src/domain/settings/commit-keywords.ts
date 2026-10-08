@@ -19,6 +19,7 @@ export const COMMIT_KEYWORD_SETTING_KEYS = [
   "commit_ref_keywords",
   "commit_update_keywords",
   "commit_logtime_enabled",
+  "commit_cross_project_ref",
 ] as const;
 
 export type CommitKeywordSettingKey = (typeof COMMIT_KEYWORD_SETTING_KEYS)[number];
@@ -27,11 +28,16 @@ export const COMMIT_KEYWORD_SETTING_DEFAULTS: Record<CommitKeywordSettingKey, st
   commit_ref_keywords: "refs,references",
   commit_update_keywords: "fixes,closes,fix,close",
   commit_logtime_enabled: "1",
+  // Redmine's own default is also "0" (off): a commit may only reference issues in the
+  // repository's project, its ancestors or its descendants.
+  commit_cross_project_ref: "0",
 };
 
 export interface CommitKeywordSettings {
   keywordScanOptions: KeywordScanOptions;
   logtimeEnabled: boolean;
+  /** Redmine's Setting.commit_cross_project_ref — see domain/scm/issue-reference.ts. */
+  crossProjectRef: boolean;
 }
 
 export function parseKeywordList(raw: string): string[] {
@@ -50,6 +56,7 @@ export function resolveCommitKeywordSettings(overrides: Record<string, string>):
   const refKeywordsRaw = overrides.commit_ref_keywords ?? COMMIT_KEYWORD_SETTING_DEFAULTS.commit_ref_keywords;
   const fixKeywordsRaw = overrides.commit_update_keywords ?? COMMIT_KEYWORD_SETTING_DEFAULTS.commit_update_keywords;
   const logtimeEnabledRaw = overrides.commit_logtime_enabled ?? COMMIT_KEYWORD_SETTING_DEFAULTS.commit_logtime_enabled;
+  const crossProjectRefRaw = overrides.commit_cross_project_ref ?? COMMIT_KEYWORD_SETTING_DEFAULTS.commit_cross_project_ref;
 
   return {
     keywordScanOptions: {
@@ -57,5 +64,6 @@ export function resolveCommitKeywordSettings(overrides: Record<string, string>):
       fixKeywords: parseKeywordList(fixKeywordsRaw),
     },
     logtimeEnabled: logtimeEnabledRaw === "1",
+    crossProjectRef: crossProjectRefRaw === "1",
   };
 }

@@ -5,8 +5,11 @@ import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
 import type { Project } from "@/domain/project/entity";
 import type { ScmRepository } from "@/domain/scm/entity";
+import { resolveScmRepositoryByParam } from "@/domain/scm/identifier";
 import { connectRepository, InvalidRepositoryError } from "@/application/scm/connect-repository";
+import { InvalidChangesetIssueLinkError, linkChangesetIssue } from "@/application/scm/link-changeset-issue";
 import { mapCommitters } from "@/application/scm/map-committers";
+import { unlinkChangesetIssue } from "@/application/scm/unlink-changeset-issue";
 import { updateRepository } from "@/application/scm/update-repository";
 import { syncChangesets } from "@/application/scm/sync-changesets";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
@@ -21,7 +24,7 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 export type ScmActionState = {
   error: string | null;
@@ -222,6 +225,135 @@ export async function mapCommittersAction(_prevState: ScmActionState, formData: 
   return { error: null };
 }
 
+/**
+ * The changeset↔issue link actions run under `manage_related_issues`, which Redmine declares
+ * *without* `:require => :member`, so a non-member role may legitimately hold it on a public
+ * project. Unlike the repository CRUD actions this also resolves the viewer, because both
+ * sides apply issue visibility.
+ */
+async function authorizeRelatedIssues(
+  projectIdentifier: string,
+  repositoryParam: string,
+): Promise<{ project: Project; scmRepository: ScmRepository; viewer: ResolvedViewer } | { error: string }> {
+  const user = await currentUserFromCookies();
+  const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
+  if (!project) {
+    return { error: "プロジェクトが見つかりません。" };
+  }
+
+  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  if (!can({ permission: "manage_related_issues", project: toAuthorizationProject(project), actor })) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  const repositories = await new DrizzleScmRepositoryRepository().listByProject(project.id);
+  const scmRepository =
+    repositoryParam.length > 0
+      ? resolveScmRepositoryByParam(repositories, repositoryParam)
+      : (repositories.find((candidate) => candidate.isDefault) ?? repositories[0] ?? null);
+  if (!scmRepository) {
+    return { error: "リポジトリが見つかりません。" };
+  }
+
+  return {
+    project,
+    scmRepository,
+    viewer: { viewerId: user?.id ?? null, viewerGroupIds: userGroupIds, issueVisibilityRoles: issuesVisibilityRoles(actor) },
+  };
+}
+
+interface ResolvedViewer {
+  viewerId: string | null;
+  viewerGroupIds: string[];
+  issueVisibilityRoles: ReturnType<typeof issuesVisibilityRoles>;
+}
+
+const changesetIssueLinkSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  /** Empty for the project's default repository, which lives at the bare /repository path. */
+  repositoryParam: z.string(),
+  revision: z.string().min(1),
+  issueRef: z.string().min(1),
+});
+
+export async function linkChangesetIssueAction(_prevState: ScmActionState, formData: FormData): Promise<ScmActionState> {
+  const parsed = changesetIssueLinkSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    repositoryParam: formData.get("repositoryParam") ?? "",
+    revision: formData.get("revision"),
+    issueRef: formData.get("issueRef"),
+  });
+  if (!parsed.success) {
+    return { error: "チケットが不正です。" };
+  }
+
+  const authorized = await authorizeRelatedIssues(parsed.data.projectIdentifier, parsed.data.repositoryParam);
+  if ("error" in authorized) {
+    return authorized;
+  }
+
+  const { crossProjectRef } = await loadCommitKeywordSettings(new DrizzleSettingsRepository());
+  try {
+    await linkChangesetIssue(
+      {
+        scmBrowser: scmBrowserFor(authorized.scmRepository.vendor),
+        changesetRepository: new DrizzleChangesetRepository(),
+        issueRepository: new DrizzleIssueRepository(),
+        projectRepository: new DrizzleProjectRepository(),
+        userRepository: new DrizzleUserRepository(),
+      },
+      {
+        scmRepository: authorized.scmRepository,
+        repositoryProject: authorized.project,
+        revision: parsed.data.revision,
+        issueRef: parsed.data.issueRef,
+        crossProjectRef,
+        ...authorized.viewer,
+      },
+    );
+  } catch (error) {
+    if (error instanceof InvalidChangesetIssueLinkError) {
+      return { error: error.message };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/repository`, "layout");
+  return { error: null };
+}
+
+const changesetIssueUnlinkSchema = changesetIssueLinkSchema.omit({ issueRef: true }).extend({ issueId: z.string().uuid() });
+
+export async function unlinkChangesetIssueAction(_prevState: ScmActionState, formData: FormData): Promise<ScmActionState> {
+  const parsed = changesetIssueUnlinkSchema.safeParse({
+    projectIdentifier: formData.get("projectIdentifier"),
+    repositoryParam: formData.get("repositoryParam") ?? "",
+    revision: formData.get("revision"),
+    issueId: formData.get("issueId"),
+  });
+  if (!parsed.success) {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  const authorized = await authorizeRelatedIssues(parsed.data.projectIdentifier, parsed.data.repositoryParam);
+  if ("error" in authorized) {
+    return authorized;
+  }
+
+  await unlinkChangesetIssue(
+    { changesetRepository: new DrizzleChangesetRepository(), issueRepository: new DrizzleIssueRepository() },
+    {
+      scmRepository: authorized.scmRepository,
+      revision: parsed.data.revision,
+      issueId: parsed.data.issueId,
+      ...authorized.viewer,
+    },
+  );
+
+  revalidatePath(`/projects/${parsed.data.projectIdentifier}/repository`, "layout");
+  return { error: null };
+}
+
 export type SyncRepositoryActionState = {
   error: string | null;
   summary: string | null;
@@ -255,7 +387,7 @@ export async function syncRepositoryAction(
     return { error: "リポジトリが見つかりません。", summary: null };
   }
 
-  const { keywordScanOptions, logtimeEnabled } = await loadCommitKeywordSettings(new DrizzleSettingsRepository());
+  const { keywordScanOptions, logtimeEnabled, crossProjectRef } = await loadCommitKeywordSettings(new DrizzleSettingsRepository());
 
   const result = await syncChangesets(
     {
@@ -266,6 +398,7 @@ export async function syncRepositoryAction(
       timeEntryRepository: new DrizzleTimeEntryRepository(),
       enumerationRepository: new DrizzleEnumerationRepository(),
       userRepository: new DrizzleUserRepository(),
+      projectRepository: new DrizzleProjectRepository(),
       settingsRepository: new DrizzleSettingsRepository(),
     },
     scmRepository,
@@ -273,6 +406,7 @@ export async function syncRepositoryAction(
     200,
     keywordScanOptions,
     logtimeEnabled,
+    crossProjectRef,
   );
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/repository`);

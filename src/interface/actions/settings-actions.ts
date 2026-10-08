@@ -17,6 +17,7 @@ const updateCommitKeywordSettingsSchema = z.object({
   refKeywords: z.string(),
   fixKeywords: z.string(),
   logtimeEnabled: z.coerce.boolean().default(false),
+  crossProjectRef: z.coerce.boolean().default(false),
 });
 
 export async function updateCommitKeywordSettingsAction(
@@ -32,6 +33,7 @@ export async function updateCommitKeywordSettingsAction(
     refKeywords: formData.get("refKeywords"),
     fixKeywords: formData.get("fixKeywords"),
     logtimeEnabled: formData.get("logtimeEnabled") === "on",
+    crossProjectRef: formData.get("crossProjectRef") === "on",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -41,6 +43,7 @@ export async function updateCommitKeywordSettingsAction(
     refKeywords: parseKeywordList(parsed.data.refKeywords),
     fixKeywords: parseKeywordList(parsed.data.fixKeywords),
     logtimeEnabled: parsed.data.logtimeEnabled,
+    crossProjectRef: parsed.data.crossProjectRef,
   });
 
   revalidatePath("/admin/settings");

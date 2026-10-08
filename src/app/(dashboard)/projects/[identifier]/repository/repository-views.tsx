@@ -4,8 +4,12 @@ import { can } from "@/domain/authorization/authorization-service";
 import type { ScmRepository } from "@/domain/scm/entity";
 import { InvalidRefError, InvalidRepositoryPathError } from "@/domain/scm/validate-path";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
+import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
+import { visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { LinkRelatedIssueForm, UnlinkRelatedIssueForm } from "./related-issue-forms";
 import { loadRepositoryContext, repositoryPath } from "./repository-context";
 import { SyncRepositoryButton } from "./sync-repository-button";
 
@@ -228,6 +232,64 @@ function diffLineClassName(line: string): string {
   return "";
 }
 
+/**
+ * Redmine's `_related_issues` partial. It renders whenever the changeset already has visible
+ * issues or the viewer may manage them, which is also when the whole section has anything to
+ * say. The list is empty for a revision no sync has stored yet — adding one materializes the
+ * changeset row on demand (application/scm/find-or-create-changeset.ts).
+ */
+async function RelatedIssues({
+  projectIdentifier,
+  repositoryParam,
+  context,
+  revision,
+}: {
+  projectIdentifier: string;
+  repositoryParam: string;
+  context: Awaited<ReturnType<typeof loadRepositoryContext>>;
+  revision: string;
+}) {
+  const canManage = can({ permission: "manage_related_issues", project: context.projectContext, actor: context.actor });
+
+  const changeset = await new DrizzleChangesetRepository().findByRevision(context.scmRepository.id, revision);
+  const issueRepository = new DrizzleIssueRepository();
+  const linkedIssues = changeset
+    ? (await Promise.all((await new DrizzleChangesetRepository().listIssueIds(changeset.id)).map((id) => issueRepository.findById(id))))
+        .filter((issue) => issue !== null)
+        .filter(visibleIssueFilter(context.user?.id ?? null, context.actor, context.userGroupIds))
+    : [];
+
+  if (linkedIssues.length === 0 && !canManage) return null;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="font-medium text-sm">関連するチケット</h2>
+      {linkedIssues.length === 0 ? (
+        <p className="text-sm text-gray-500">関連付けられたチケットはありません。</p>
+      ) : (
+        <ul className="flex flex-col gap-1 text-sm">
+          {linkedIssues.map((issue) => (
+            <li key={issue.id} className="flex items-center gap-2">
+              <Link href={`/projects/${projectIdentifier}/issues/${issue.id}`} className="underline">
+                #{issue.id.slice(0, 8)} {issue.subject}
+              </Link>
+              {canManage ? (
+                <UnlinkRelatedIssueForm
+                  projectIdentifier={projectIdentifier}
+                  repositoryParam={repositoryParam}
+                  revision={revision}
+                  issueId={issue.id}
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canManage ? <LinkRelatedIssueForm projectIdentifier={projectIdentifier} repositoryParam={repositoryParam} revision={revision} /> : null}
+    </section>
+  );
+}
+
 export async function RepositoryRevisionView({
   projectIdentifier,
   repositoryParam,
@@ -256,6 +318,9 @@ export async function RepositoryRevisionView({
           リポジトリ
         </Link>
       </div>
+      {error ? null : (
+        <RelatedIssues projectIdentifier={projectIdentifier} repositoryParam={repositoryParam ?? ""} context={context} revision={hash} />
+      )}
       {error ? (
         <p className="text-sm text-red-600">{error}</p>
       ) : (

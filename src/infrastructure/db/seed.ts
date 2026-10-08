@@ -69,6 +69,7 @@ async function seed() {
         "manage_files",
         "browse_repository",
         "view_changesets",
+        "manage_related_issues",
         "manage_repository",
       ],
     })

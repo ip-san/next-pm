@@ -33,6 +33,10 @@ export function CommitKeywordSettingsForm({ settings }: { settings: CommitKeywor
         <input type="checkbox" name="logtimeEnabled" defaultChecked={settings.logtimeEnabled} />
         コミットメッセージの <code>@1h30</code> 等から作業時間を自動記録する
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="crossProjectRef" defaultChecked={settings.crossProjectRef} />
+        すべてのプロジェクトのチケットを参照できるようにする（オフの場合はリポジトリのプロジェクトとその上位/下位プロジェクトのみ）
+      </label>
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">

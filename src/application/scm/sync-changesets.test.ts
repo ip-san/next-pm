@@ -9,6 +9,8 @@ import type { IssueStatusRepository } from "@/domain/issue-status/repository";
 import type { ChangesetRepository } from "@/domain/scm/changeset-repository";
 import type { Changeset, Commit, ScmRepository } from "@/domain/scm/entity";
 import type { ScmBrowser } from "@/domain/scm/scm-browser";
+import type { Project } from "@/domain/project/entity";
+import type { ProjectRepository } from "@/domain/project/repository";
 import type { SettingsRepository } from "@/domain/settings/repository";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import type { User } from "@/domain/user/entity";
@@ -73,6 +75,11 @@ function makeChangesetRepository(): ChangesetRepository {
           .filter((c) => c.scmRepositoryId === scmRepositoryId && c.committerIdentity === committerIdentity)
           .sort((a, b) => b.committedOn.getTime() - a.committedOn.getTime())[0] ?? null,
     ),
+    unlinkIssue: mock(async (changesetId, issueId) => {
+      const at = links.findIndex((l) => l.changesetId === changesetId && l.issueId === issueId);
+      if (at >= 0) links.splice(at, 1);
+    }),
+    listIssueIds: mock(async (changesetId) => links.filter((l) => l.changesetId === changesetId).map((l) => l.issueId)),
     remapCommitter: mock(async (scmRepositoryId, committerIdentity, userId) => {
       for (const [key, changeset] of store) {
         if (changeset.scmRepositoryId === scmRepositoryId && changeset.committerIdentity === committerIdentity) {
@@ -112,6 +119,13 @@ function makeEnumerationRepository(activities: Enumeration[]): EnumerationReposi
   };
 }
 
+/** Only findById is exercised: the repository's own project, for the cross-project reference rule. */
+function makeProjectRepository(): ProjectRepository {
+  return {
+    findById: mock(async (id: string) => (id === "proj-1" ? PROJECT : null)),
+  } as unknown as ProjectRepository;
+}
+
 function makeUserRepository(user: User | null): UserRepository {
   return {
     listAll: mock(async () => (user ? [user] : [])),
@@ -138,6 +152,20 @@ function makeSettingsRepository(): SettingsRepository {
   };
 }
 
+const PROJECT: Project = {
+  id: "proj-1",
+  name: "Proj",
+  identifier: "proj-1",
+  description: "",
+  isPublic: true,
+  status: "active",
+  parentId: null,
+  lft: 1,
+  rgt: 2,
+  position: 1,
+  enabledModules: ["issue_tracking", "repository"],
+  trackerIds: [],
+};
 const OPEN_STATUS: IssueStatus = { id: "status-open", name: "Open", description: "", isClosed: false, defaultDoneRatio: null, position: 1 };
 const CLOSED_STATUS: IssueStatus = { id: "status-closed", name: "Closed", description: "", isClosed: true, defaultDoneRatio: 100, position: 2 };
 const ACTIVITY: Enumeration = { id: "activity-1", type: "TimeEntryActivity", name: "Development", position: 1, isDefault: true, projectId: null, parentId: null };
@@ -172,6 +200,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -195,6 +224,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -214,6 +244,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -234,6 +265,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -256,6 +288,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(null),
       settingsRepository: makeSettingsRepository(),
     };
@@ -276,6 +309,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -299,6 +333,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -318,6 +353,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(null),
       settingsRepository: makeSettingsRepository(),
     };
@@ -338,6 +374,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -368,6 +405,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -385,6 +423,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -406,6 +445,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -431,6 +471,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository: makeTimeEntryRepository(),
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };
@@ -450,6 +491,7 @@ describe("syncChangesets", () => {
       issueStatusRepository: makeIssueStatusRepository([OPEN_STATUS, CLOSED_STATUS]),
       timeEntryRepository,
       enumerationRepository: makeEnumerationRepository([ACTIVITY]),
+      projectRepository: makeProjectRepository(),
       userRepository: makeUserRepository(COMMITTER),
       settingsRepository: makeSettingsRepository(),
     };

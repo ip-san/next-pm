@@ -43,6 +43,7 @@ export type PermissionKey =
   | "manage_files"
   | "browse_repository"
   | "view_changesets"
+  | "manage_related_issues"
   | "manage_repository";
 
 interface PermissionDefinition {
@@ -105,6 +106,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   manage_files: { module: "files", readOnly: false },
   browse_repository: { module: "repository", readOnly: true },
   view_changesets: { module: "repository", readOnly: true },
+  /** Linking a changeset to an issue by hand on the revision page. Not :read in Redmine, so it's unavailable on a closed project. */
+  manage_related_issues: { module: "repository", readOnly: false },
   manage_repository: { module: "repository", readOnly: false },
 };
 
