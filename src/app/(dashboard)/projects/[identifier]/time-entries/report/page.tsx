@@ -14,7 +14,9 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 
 export const dynamic = "force-dynamic";
@@ -63,28 +65,50 @@ export default async function TimeEntryReportPage({
   const criterion = parseCriterion(criteriaParam);
   const columnUnit = parseColumnUnit(columnsParam);
 
-  const [allEntries, { byId: activityById }] = await Promise.all([
-    new DrizzleTimeEntryRepository().listForProject(project.id),
-    // See the time-entries list: the lookup must cover deactivated activities too.
-    loadProjectActivities(
-      { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
-      project.id,
-    ),
-  ]);
+  // display_subprojects_issues: the report also covers the subprojects' entries, each project's entries filtered
+  // with that project's own actor and rules, and its activity names read from that project.
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const subtree = displaySubprojectsIssues
+    ? (await listVisibleProjectContexts(user, "view_time_entries")).filter(
+        (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
+      )
+    : [];
+  const scopes =
+    subtree.length > 0
+      ? subtree
+      : [{ project, projectContext, actor, userGroupIds }];
 
-  const issueIds = [...new Set(allEntries.map((entry) => entry.issueId).filter((id): id is string => id !== null))];
+  const perScope = await Promise.all(
+    scopes.map(async (scope) => {
+      const [scopeEntries, { byId }] = await Promise.all([
+        new DrizzleTimeEntryRepository().listForProject(scope.project.id),
+        // See the time-entries list: the lookup must cover deactivated activities too.
+        loadProjectActivities(
+          { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+          scope.project.id,
+        ),
+      ]);
+      return { scope, scopeEntries, activities: byId };
+    }),
+  );
+  const activityById = new Map(perScope.flatMap((entry) => [...entry.activities]));
+  const allEntries = perScope.flatMap((entry) => entry.scopeEntries.map((timeEntry) => ({ entry: timeEntry, scope: entry.scope })));
+
+  const issueIds = [...new Set(allEntries.map(({ entry }) => entry.issueId).filter((id): id is string => id !== null))];
   const issueRepository = new DrizzleIssueRepository();
   const issues = await Promise.all(issueIds.map((id) => issueRepository.findById(id)));
   const issueById = new Map(issues.filter((issue) => issue !== null).map((issue) => [issue.id, issue]));
 
-  // Same shared predicate as the plain time-entries list.
-  const entries = filterAccessibleTimeEntries(allEntries, {
-    userId: user?.id ?? null,
-    actor,
-    userGroupIds,
-    projectContext,
-    issueById,
-  });
+  // Same shared predicate as the plain time-entries list, applied with each entry's own project's context.
+  const entries = allEntries.flatMap(({ entry, scope }) =>
+    filterAccessibleTimeEntries([entry], {
+      userId: user?.id ?? null,
+      actor: scope.actor,
+      userGroupIds: scope.userGroupIds,
+      projectContext: scope.projectContext,
+      issueById,
+    }),
+  );
 
   const users = await new DrizzleUserRepository().findByIds([...new Set(entries.map((entry) => entry.userId))]);
   const userById = new Map(users.map((u) => [u.id, u]));
