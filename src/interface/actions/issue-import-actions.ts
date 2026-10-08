@@ -71,7 +71,8 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
 
   const { actor, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
-  if (!can({ permission: "add_issues", project: projectContext, actor })) {
+  // Redmine's IssueImport#authorized?: both import_issues and add_issues.
+  if (!can({ permission: "import_issues", project: projectContext, actor }) || !can({ permission: "add_issues", project: projectContext, actor })) {
     return { error: "この操作を行う権限がありません。", summary: null };
   }
   // Mirrors Redmine's create_categories?/create_versions?: auto-creating a category or

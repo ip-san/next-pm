@@ -74,6 +74,7 @@ export type PermissionKey =
   | "browse_repository"
   | "view_changesets"
   | "commit_access"
+  | "import_issues"
   | "manage_related_issues"
   | "manage_repository"
   | "view_calendar"
@@ -208,6 +209,8 @@ export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = 
   // preparation.rb#L141: an empty permission. Redmine grants it to the default Developer role and
   // checks it nowhere in core; plugins (SCM hooks) read it.
   commit_access: { module: "repository", readOnly: false, require: null },
+  // preparation.rb#L84: an empty permission in the issue_tracking module. The import also needs add_issues (IssueImport#authorized?).
+  import_issues: { module: "issue_tracking", readOnly: false, require: null },
   manage_related_issues: { module: "repository", readOnly: false, require: null },
   manage_repository: { module: "repository", readOnly: false, require: "member" },
 

@@ -68,7 +68,7 @@
 | 変更履歴の記録 | done | `journal_details.property` は `attr` / `cf` / `relation` / `attachment` の 4 種。`attr` はプロジェクト・トラッカー・説明・親課題を含む(本家と同じ)。添付の追加/削除は本家の `Journal#journalize_attachment` と同じ形(`prop_key` = 添付 ID、ファイル名を追加時は `value`・削除時は `old_value`)で記録する。課題作成時に同時に添付したファイルは本家同様に履歴を作らない(その時点で journal が無い)。単票の履歴表示は本家 `details_to_strings` 相当に整形する(`domain/journal/detail-label.ts`): 属性名を日本語ラベルに、id を名称に解決し、添付は「ファイル foo.png を追加」、説明は「説明 を更新」と表示。解決に使う名称は画面がすでに表示した対象だけに限定し、未解決の id は短縮 id のまま出す(非公開プロジェクト名や閲覧できないチケット名が履歴から漏れないようにするため)。活動画面/Atom も注記が無い journal は同じ整形で要約を出す(フィードには閲覧者ごとの名称表がないため id は解決せず短縮 id のまま) |
 | 添付ファイル | partial | 課題・Wiki・文書・プロジェクト・バージョンに添付可能。説明(description)は課題・Wiki・文書・ファイルのアップロード時に入力でき、`PATCH /api/v1/attachments/[id]` とファイル一覧から編集できる。課題・Wiki・文書の添付一覧は共通コンポーネント(`app/(dashboard)/projects/attachment-list.tsx`)で、画像はサムネイルをインライン表示する。注記への添付は無い |
 | リアクション | done | journal への 👍(本家 6.1 の Reaction 相当) |
-| CSV インポート | partial | 課題(`issue-import-actions.ts`)と工数(`time-entry-import-actions.ts`、`import_time_entries`)。課題側の権限 `import_issues` は未定義のまま |
+| CSV インポート | partial | 課題(`issue-import-actions.ts`)と工数(`time-entry-import-actions.ts`、`import_time_entries`)。課題の取り込みは本家 `IssueImport#authorized?` どおり `import_issues` と `add_issues` の両方を要求し、一覧のリンクも同じ条件で出す。既存ロールには `add_issues` を持つものに `import_issues` を付与(migration 0045)。工数のインポータ UI の整理は未着手 |
 | カスタムフィールド: 書式 | partial | `string` / `text` / `int` / `float` / `date` / `bool` / `list` の 7 種のみ。本家の `user` / `version` / `link` / `enumeration` / `attachment` / key-value list / **複数選択** が無い |
 | カスタムフィールド: 対象 | partial | `Issue` / `Project` / `TimeEntry`。User / Group / Version が無い |
 | カスタムフィールド: 適用範囲 | partial | トラッカー単位の紐付け + プロジェクト設定での有効化。ロール別の可視/編集可否(本家の `visible` / `role_ids`)が無い |
@@ -116,12 +116,12 @@
 | 可視性設定 | done | `issues_visibility` と `time_entries_visibility` は読み取り側で効いている。`users_visibility` は本家 `Principal.visible`(`app/models/principal.rb`)どおり、管理者以外の閲覧者に対して、活動の作者フィルタ(`/activity?user_id=`)とメンバー追加のログインID 照会で強制する(見えない利用者は存在しない利用者と同じ扱い)。管理者は全員を見る。プロジェクト単位の候補(メンバー・フィルタ)は本家どおりプロジェクトのメンバーから作るため、規則の対象外 |
 | ワークフロー(遷移) | done | ロール × トラッカー × 遷移元/先 |
 | ワークフロー(フィールド権限) | done | 必須/読取専用(`workflow_field_permissions`) |
-| 権限キーの網羅 | partial | 本家 約 80 に対し next-pm は 79(`permission-registry.ts` 実数)。本家の `manage_categories` は next-pm では `manage_issue_categories`(命名の差異)。未登録は `import_issues` のみ。下表参照 |
+| 権限キーの網羅 | done | 本家 80 に対し next-pm は 80(`permission-registry.ts` 実数)。本家の `manage_categories` は next-pm では `manage_issue_categories`(命名の差異)。未登録のキーは無い。 |
 | プロジェクトモジュール | done | 本家 10 と同数。`calendar` / `gantt` を追加し、`PROJECT_MODULES` を権限レジストリから一元化した |
 
 ### 4.1 未実装の権限キー(本家 `lib/redmine/preparation.rb` 比)
 
-`import_issues`
+なし(本家の全キーを登録済み)
 
 > 命名の差異(欠落ではない): next-pm の `manage_issue_categories` は本家の `manage_categories` に対応する。
 
@@ -269,7 +269,7 @@
 |---|---|---|
 | Markdown 記法 | done | |
 | Textile 記法 | missing | 本家は既定で両対応(旧データの互換用) |
-| 本文プレビュー | missing | 本家 `PreviewsController` |
+| 本文プレビュー | missing(保留) | 本家 `PreviewsController` は Textile / Markdown を HTML にして返す。next-pm の説明文・コメントは記法を持たず、`whitespace-pre-wrap` の素のテキストとして表示している(`issues/[id]/page.tsx`)ため、プレビューの対象となる描画が無い。記法を入れる時(§4 の大項目「Textile 記法」)にあわせて作る |
 | 国際化(i18n) | missing | 文言が直書き。ユーザー別言語設定も無い |
 | テーマ切り替え | missing | |
 | 添付画像のサムネイル/インライン表示 | done | 課題・Wiki・文書の添付一覧で表示。`/api/attachments/[id]/thumbnail` が sharp で PNG に再エンコードして返す(本家の `Redmine::Thumbnail.convert_available?` と同じく、使えない環境ではサムネイル無しに縮退)。本家 `Redmine::Thumbnail.generate` と同じくレンダラに渡す前に**ファイル先頭のバイト列から実フォーマットを判定**し、許可したラスタ形式以外(SVG/HTML 等)は宣言された content-type が `image/png` でも 404。サイズは 50 刻み・最大 800 に丸め、40 メガピクセル超の入力はデコードしない。元のバイト列は常に `Content-Disposition: attachment` のままなので SVG/HTML はインライン描画されない |

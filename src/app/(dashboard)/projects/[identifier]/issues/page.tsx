@@ -61,6 +61,9 @@ export default async function ProjectIssuesPage({
 
   const canViewTimeEntries = can({ permission: "view_time_entries", project: projectContext, actor });
   const canSaveQueries = can({ permission: "save_queries", project: projectContext, actor });
+  // Redmine's issues/index shows the import link only with both permissions (IssueImport#authorized?).
+  const canImportIssues =
+    can({ permission: "import_issues", project: projectContext, actor }) && can({ permission: "add_issues", project: projectContext, actor });
   const canManagePublicQueries = can({ permission: "manage_public_queries", project: projectContext, actor });
   // The context menu renders only the entries the viewer may use; bulkUpdateIssuesAction and
   // the destroy/copy pages re-check per issue regardless, so this is presentation only.
@@ -214,9 +217,11 @@ export default async function ProjectIssuesPage({
           >
             Atom
           </a>
-          <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
-            CSV取り込み
-          </Link>
+          {canImportIssues ? (
+            <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
+              CSV取り込み
+            </Link>
+          ) : null}
           <Link href={`/projects/${identifier}/issues/new`} className="bg-black text-white rounded px-3 py-2 text-sm">
             新しいチケット
           </Link>

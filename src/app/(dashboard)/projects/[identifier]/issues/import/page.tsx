@@ -16,7 +16,8 @@ export default async function ImportIssuesPage({ params }: { params: Promise<{ i
   const user = await currentUserFromCookies();
   const { actor } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
-  if (!can({ permission: "add_issues", project: projectContext, actor })) {
+  // Redmine's IssueImport#authorized?: both import_issues and add_issues.
+  if (!can({ permission: "import_issues", project: projectContext, actor }) || !can({ permission: "add_issues", project: projectContext, actor })) {
     notFound();
   }
   const canManageCategories = can({ permission: "manage_issue_categories", project: projectContext, actor });

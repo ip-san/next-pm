@@ -120,6 +120,7 @@ async function seed() {
         "browse_repository",
         "view_changesets",
         "commit_access",
+        "import_issues",
         "manage_related_issues",
         "manage_repository",
         "view_calendar",
