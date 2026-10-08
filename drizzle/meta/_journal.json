@@ -309,6 +309,13 @@
       "when": 1791456075442,
       "tag": "0043_ambitious_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791460448342,
+      "tag": "0044_builtin_roles_users_visibility",
+      "breakpoints": true
     }
   ]
 }

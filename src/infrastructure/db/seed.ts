@@ -36,12 +36,19 @@ async function seed() {
     .values({
       name: "Non member",
       builtin: ROLE_BUILTIN_NON_MEMBER,
+      // Redmine's builtin roles default to members_of_visible_projects (migration 20241103184550).
+      usersVisibility: "members_of_visible_projects",
       permissions: ["view_project", "search_project", "view_members", "view_issues", "view_calendar", "view_gantt", "save_queries"],
     })
     .returning();
   const [anonymous] = await db
     .insert(roles)
-    .values({ name: "Anonymous", builtin: ROLE_BUILTIN_ANONYMOUS, permissions: ["view_project", "search_project", "view_members", "view_issues", "view_calendar", "view_gantt"] })
+    .values({
+      name: "Anonymous",
+      builtin: ROLE_BUILTIN_ANONYMOUS,
+      usersVisibility: "members_of_visible_projects",
+      permissions: ["view_project", "search_project", "view_members", "view_issues", "view_calendar", "view_gantt"],
+    })
     .returning();
   const [manager] = await db
     .insert(roles)
