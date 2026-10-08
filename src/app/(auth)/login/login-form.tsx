@@ -6,7 +6,15 @@ import { loginAction, type LoginActionState } from "@/interface/actions/auth-act
 
 const initialState: LoginActionState = { error: null };
 
-export function LoginForm() {
+export function LoginForm({
+  autologinEnabled,
+  lostPasswordEnabled,
+  selfRegistrationEnabled,
+}: {
+  autologinEnabled: boolean;
+  lostPasswordEnabled: boolean;
+  selfRegistrationEnabled: boolean;
+}) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
   return (
@@ -36,6 +44,12 @@ export function LoginForm() {
           className="border rounded px-3 py-2"
         />
       </div>
+      {autologinEnabled ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="rememberMe" />
+          次回から自動的にログインする
+        </label>
+      ) : null}
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
           {state.error}
@@ -48,9 +62,16 @@ export function LoginForm() {
       >
         {pending ? "ログイン中…" : "ログイン"}
       </button>
-      <Link href="/account/lost_password" className="text-sm underline self-start">
-        パスワードをお忘れですか？
-      </Link>
+      {lostPasswordEnabled ? (
+        <Link href="/account/lost_password" className="text-sm underline self-start">
+          パスワードをお忘れですか？
+        </Link>
+      ) : null}
+      {selfRegistrationEnabled ? (
+        <Link href="/account/register" className="text-sm underline self-start">
+          アカウントを登録する
+        </Link>
+      ) : null}
     </form>
   );
 }

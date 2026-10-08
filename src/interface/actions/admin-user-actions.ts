@@ -4,12 +4,18 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { changeUserStatus, UserStatusChangeError } from "@/application/users/change-user-status";
 import { deleteUser, UserNotDeletableError } from "@/application/users/delete-user";
+import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { isMembershipEditable } from "@/domain/member/repository";
 import { generateSalt, hashPassword } from "@/domain/user/password";
+import { describePasswordPolicyFailure } from "@/domain/user/password-policy";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { requireAdmin } from "@/interface/http/require-admin";
 import type { AdminActionState } from "./admin-action-state";
@@ -65,13 +71,35 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
   if (isLdap && parsed.data.password.length > 0) {
     return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
   }
-  if (!isLdap && parsed.data.password.length < 8) {
-    return { error: "パスワードは8文字以上で入力してください。" };
+  if (!isLdap) {
+    // The configured policy, not a literal: Redmine applies password_min_length and
+    // password_required_char_classes to the admin user form exactly as it does to a
+    // self-service change (User#validate_password_length runs on every save).
+    const { passwordMinLength, passwordRequiredCharClasses } = await loadAuthSettings(new DrizzleSettingsRepository());
+    const policyFailure = describePasswordPolicyFailure(
+      parsed.data.password,
+      { minLength: passwordMinLength, requiredCharClasses: passwordRequiredCharClasses },
+      {
+        login: parsed.data.login,
+        firstname: parsed.data.firstname,
+        lastname: parsed.data.lastname,
+        mails: [parsed.data.mail],
+      },
+    );
+    if (policyFailure) {
+      return { error: policyFailure };
+    }
   }
 
   const userRepository = new DrizzleUserRepository();
   if (await userRepository.findByLogin(parsed.data.login)) {
     return { error: "そのログインIDは既に使用されています。" };
+  }
+  // users.mail's unique constraint no longer covers every address: one may be held as
+  // somebody's *additional* address in email_addresses. findByMail searches both tables, so
+  // this catches what the constraint (and duplicateMailError below) cannot.
+  if (await userRepository.findByMail(parsed.data.mail)) {
+    return { error: "そのメールアドレスは既に使用されています。" };
   }
 
   const salt = isLdap ? "" : generateSalt();
@@ -83,6 +111,8 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
       lastname: parsed.data.lastname,
       isAdmin: parsed.data.isAdmin,
       status: "active",
+      language: null,
+      mailNotification: "all",
       passwordSalt: salt,
       passwordHash: isLdap ? "" : hashPassword(parsed.data.password, salt),
       mustChangePassword: !isLdap,
@@ -205,6 +235,8 @@ export async function changeUserStatusAction(
   }
 
   const userRepository = new DrizzleUserRepository();
+  // Read before the write: the mail below depends on where the account is coming *from*.
+  const before = await userRepository.findById(parsed.data.userId);
   try {
     await changeUserStatus(
       { userRepository, userAdminRepository: userRepository },
@@ -217,6 +249,24 @@ export async function changeUserStatusAction(
       return { error: error.message };
     }
     throw error;
+  }
+
+  // Redmine's Mailer.deliver_account_activated, which fires on exactly this transition: an
+  // account that self-registered under self_registration '2' (manual approval) has been
+  // approved, and otherwise would never learn it can log in. Unlocking (locked -> active)
+  // sends nothing, matching Redmine. Addressed literally rather than by user id because it is
+  // a transactional mail — dispatchJob's preference filter must not be able to swallow it.
+  if (before?.status === "registered" && parsed.data.status === "active") {
+    await enqueueNotification(
+      { jobRepository: new DrizzleJobRepository() },
+      {
+        recipientGroups: [],
+        recipientAddresses: [before.mail],
+        excludeUserId: null,
+        subject: "アカウントが有効になりました",
+        body: `アカウント(${before.login})が有効になりました。以下からログインできます:\n\n${await resolveAppOrigin()}/login`,
+      },
+    );
   }
 
   revalidatePath("/admin/users");

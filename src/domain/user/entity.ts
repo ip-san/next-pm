@@ -1,3 +1,5 @@
+import type { MailNotificationOption } from "@/domain/notification/mail-notification";
+
 /**
  * Mirrors Redmine's User::STATUS_* set. "anonymous" belongs to the single AnonymousUser row
  * that owns the records of deleted users (see User#remove_references_before_destroy) — it is
@@ -11,11 +13,15 @@ export const ANONYMOUS_USER_LOGIN = "";
 export interface User {
   id: string;
   login: string;
+  /** The default address. Additional ones live in domain/email-address — see that schema's comment. */
   mail: string;
   firstname: string;
   lastname: string;
   isAdmin: boolean;
   status: UserStatus;
+  /** Stored but not yet read: next-pm has no i18n framework. See schema/users.ts. */
+  language: string | null;
+  mailNotification: MailNotificationOption;
   passwordHash: string;
   passwordSalt: string;
   mustChangePassword: boolean;

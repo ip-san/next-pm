@@ -8,12 +8,23 @@ process.env.JWT_SECRET ??= "test-secret-for-session-token-tests";
 
 describe("session-token / twofa-pending-token purpose isolation", () => {
   it("round-trips a normal session token", async () => {
-    const token = await createSessionToken({ userId: "user-1" });
-    expect(await verifySessionToken(token)).toEqual({ userId: "user-1" });
+    const token = await createSessionToken({ userId: "user-1", sessionId: "session-1" });
+    expect(await verifySessionToken(token)).toEqual({ userId: "user-1", sessionId: "session-1" });
+  });
+
+  it("rejects a session token with no sessionId — such a session has no row to expire against", async () => {
+    const { SignJWT } = await import("jose");
+    const { jwtSecretKey } = await import("./jwt-secret");
+    const legacy = await new SignJWT({ userId: "user-1", purpose: "session" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(jwtSecretKey());
+    expect(await verifySessionToken(legacy)).toBeNull();
   });
 
   it("REJECTS a pending-2FA token presented as a session token — this is the 2FA bypass this test guards against", async () => {
-    const pendingToken = await createTwofaPendingToken({ userId: "user-1", attempts: 0 });
+    const pendingToken = await createTwofaPendingToken({ userId: "user-1", attempts: 0, rememberMe: false });
     expect(await verifySessionToken(pendingToken)).toBeNull();
   });
 

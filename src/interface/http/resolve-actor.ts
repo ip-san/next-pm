@@ -12,6 +12,21 @@ import type { IssuesVisibility, Role } from "@/domain/role/entity";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { resolveAuthSettings } from "@/domain/settings/auth-settings";
+import { ROLE_BUILTIN_ANONYMOUS, type Role } from "@/domain/role/entity";
+
+/**
+ * Not a stored role: what an anonymous visitor gets while login_required is on — nothing at
+ * all. Both visibility fields take their most restrictive value, so that even if a future
+ * caller reads them without first checking a permission, they cannot widen anything.
+ */
+const NO_ACCESS_ROLE: Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility"> = {
+  builtin: ROLE_BUILTIN_ANONYMOUS,
+  permissions: [],
+  issuesVisibility: "own",
+  timeEntriesVisibility: "own",
+};
 
 export interface ResolvedActor {
   actor: AuthorizationActor;
@@ -34,6 +49,15 @@ export async function resolveActor(user: User | null, projectId: string): Promis
   const roleRepository = new DrizzleRoleRepository();
 
   if (!user) {
+    // Redmine's check_if_login_required denies an anonymous request outright when
+    // Setting.login_required is on. Enforcing it here rather than only in a layout is what
+    // makes it real: Route Handlers (attachment downloads, Atom feeds, CSV/PDF exports) and
+    // Server Actions all resolve their actor through this function and would otherwise keep
+    // serving public projects to logged-out visitors.
+    const { loginRequired } = resolveAuthSettings(await new DrizzleSettingsRepository().getAll());
+    if (loginRequired) {
+      return { actor: { kind: "anonymous", role: NO_ACCESS_ROLE }, roleIds: [], userGroupIds: [] };
+    }
     const anonymous = await roleRepository.findBuiltinAnonymous();
     return { actor: { kind: "anonymous", role: anonymous }, roleIds: [anonymous.id], userGroupIds: [] };
   }

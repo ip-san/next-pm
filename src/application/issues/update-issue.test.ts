@@ -89,6 +89,8 @@ function makeRepositories(
   };
   const userPreferencesRepository: UserPreferencesRepository = {
     findByUserId: mock(async () => overrides.userPreferences ?? null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => undefined),
   };
   const watcherRepository = {
@@ -646,6 +648,8 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
   };
   const userPreferencesRepository: UserPreferencesRepository = {
     findByUserId: mock(async () => null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => undefined),
   };
   const watcherRepository = {

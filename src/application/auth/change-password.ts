@@ -1,4 +1,5 @@
 import { generateSalt, hashPassword, verifyPassword } from "@/domain/user/password";
+import { describePasswordPolicyFailure, type PasswordPolicy } from "@/domain/user/password-policy";
 import type { UserRepository } from "@/domain/user/repository";
 
 export class LdapPasswordChangeNotAllowedError extends Error {}
@@ -9,6 +10,10 @@ export interface ChangePasswordInput {
   userId: string;
   currentPassword: string;
   newPassword: string;
+  /** The configured policy (domain/settings/auth-settings.ts) — never a literal, so admins can tighten it. */
+  policy: PasswordPolicy;
+  /** Additional addresses the new password must not simply repeat; the default address is read from the user. */
+  additionalMails?: string[];
 }
 
 /**
@@ -26,8 +31,14 @@ export async function changePassword(repositories: { userRepository: UserReposit
   if (user.authSource === "ldap") {
     throw new LdapPasswordChangeNotAllowedError("LDAP認証のアカウントはパスワードを変更できません。");
   }
-  if (input.newPassword.length < 8) {
-    throw new InvalidPasswordError("パスワードは8文字以上で入力してください。");
+  const policyFailure = describePasswordPolicyFailure(input.newPassword, input.policy, {
+    login: user.login,
+    firstname: user.firstname,
+    lastname: user.lastname,
+    mails: [user.mail, ...(input.additionalMails ?? [])],
+  });
+  if (policyFailure) {
+    throw new InvalidPasswordError(policyFailure);
   }
   if (!verifyPassword(input.currentPassword, user.passwordSalt, user.passwordHash)) {
     throw new CurrentPasswordMismatchError("現在のパスワードが正しくありません。");

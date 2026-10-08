@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { loadCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { loadProjectDefaults } from "@/application/settings/project-defaults";
@@ -6,6 +7,7 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { AuthSettingsForm } from "./auth-settings-form";
 import { CommitKeywordSettingsForm } from "./commit-keyword-settings-form";
 import { GeneralSettingsForm } from "./general-settings-form";
 import { ProjectDefaultsForm } from "./project-defaults-form";
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
   const settingsRepository = new DrizzleSettingsRepository();
   const commitKeywordSettings = await loadCommitKeywordSettings(settingsRepository);
   const generalSettings = await loadGeneralSettings(settingsRepository);
+  const authSettings = await loadAuthSettings(settingsRepository);
   const [projectDefaults, trackers, roles] = await Promise.all([
     loadProjectDefaults(settingsRepository),
     new DrizzleTrackerRepository().listAll(),
@@ -34,6 +37,10 @@ export default async function SettingsPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">全般</h2>
         <GeneralSettingsForm settings={generalSettings} />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">認証</h2>
+        <AuthSettingsForm settings={authSettings} />
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">プロジェクト</h2>

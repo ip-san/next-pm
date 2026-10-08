@@ -20,6 +20,8 @@ import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
+import { resolvePreferences } from "@/domain/user-preferences/entity";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
@@ -91,6 +93,14 @@ export default async function IssueDetailPage({
   // Loaded only once the actor is known: the repository filters private notes in SQL, so a
   // note this viewer may not read never reaches the page (nor its reaction counts).
   const journals = await new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project));
+
+  // Redmine's UserPreference#comments_sorting, applied by IssuesHelper when it renders the
+  // history. Ordering comes after the visibility-filtered load above, never instead of it:
+  // reversing is purely presentational and must not decide which notes exist.
+  const preferences = user ? await new DrizzleUserPreferencesRepository().findByUserId(user.id) : null;
+  const orderedJournals =
+    resolvePreferences(preferences, user?.id ?? "").commentsSorting === "desc" ? [...journals].reverse() : journals;
+
   const reactions = await new DrizzleReactionRepository().listForReactables(
     "Journal",
     journals.map((journal) => journal.id),
@@ -315,7 +325,7 @@ export default async function IssueDetailPage({
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">履歴</h2>
         <ul className="flex flex-col gap-2 text-sm">
-          {journals.map((journal) => {
+          {orderedJournals.map((journal) => {
             const reaction = reactionsByJournalId.get(journal.id) ?? { count: 0, reacted: false };
             return (
               <li key={journal.id} className="border rounded p-2 flex flex-col gap-1">

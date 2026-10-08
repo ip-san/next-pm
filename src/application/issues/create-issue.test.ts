@@ -57,6 +57,8 @@ function makeFieldPermissionRepository(permissions: WorkflowFieldPermission[] = 
 function makeUserPreferencesRepository(): UserPreferencesRepository {
   return {
     findByUserId: mock(async () => null as UserPreferences | null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => {}),
   };
 }

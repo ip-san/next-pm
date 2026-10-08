@@ -35,7 +35,7 @@
 | 4 | ~~管理画面の更新・削除~~ (実装済み) | マスタを一度でも間違えると DB を直接触るしかない現状の解消 | §6 |
 | 5 | プライベート注記・注記の編集/削除 | `journals` にフラグ列追加 + 権限 3 種の追加が前提 | §1, §4 |
 | 6 | ~~工数の編集・削除~~(対応済み) | 編集/削除・他ユーザー名義の記録・工数カスタムフィールド・CSV 入出力・REST の個別操作まで実装 | §9 |
-| 7 | アカウントのセルフ登録・有効化・自動ログイン | 運用開始時に管理者が全ユーザーを手作りする必要がある | §5 |
+| 7 | ~~アカウントのセルフ登録・有効化・自動ログイン~~ (対応済み) | 運用開始時に管理者が全ユーザーを手作りする必要がある | §5 |
 | 8 | カスタムフィールドの書式追加と対象拡大 | `user`/`version`/複数選択が無く、実運用の型が表現できない | §1 |
 | 9 | ~~課題のコピー・削除・親子の付け替え~~ (対応済み) | 本家の日常操作で頻度が高い | §1 |
 
@@ -131,34 +131,34 @@
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| ログイン/ログアウト | done | 自前 JWT セッション(`jose`) |
-| 二要素認証 | partial | TOTP + バックアップコード、ログインフローのゲートまで。管理者による「2FA 必須化」設定が無い |
-| パスワード変更 | done | セルフサービス |
-| パスワード再設定 | done | メールトークン方式、Host ヘッダ注入対策済み |
-| 自動ログイン(remember me) | missing | |
-| セルフ登録 | missing | 本家の `self_registration`(即時/メール確認/管理者承認の 3 モード)が無く、ユーザーは管理者が作るしかない |
-| メールアドレスの確認 | missing | |
-| 複数メールアドレス | missing | 本家の `email_addresses` テーブル相当が無い |
+| ログイン/ログアウト | done | 自前 JWT セッション(`jose`)。JWT は `user_sessions` 行の id を持ち、セッションの実体はサーバ側にある(有効期限・無操作タイムアウト・パスワード変更時の全端末ログアウトのため)。ログイン経路はパスワード・LDAP・LDAP オンザフライ・2FA 通過後・自動ログインのすべてが `domain/user/login-gate.ts` の `evaluateLoginGate` を通る |
+| 二要素認証 | done | TOTP + バックアップコード、ログイン時のゲート、設定 `twofa`(無効/任意/管理者に必須/全員に必須)による強制まで。**本家との差**: 本家は `check_twofa_activation` で先にログインさせてから毎リクエスト設定画面へ飛ばすが、next-pm のレイアウトはパスを知らないためリダイレクトループを作れない。代わりにセッション発行の**前**に `/login/twofa/setup` でペアリングさせる(到達状態は同じ)。設定で必須になっているアカウントは 2FA を無効化できない |
+| パスワード変更 | done | セルフサービス。設定 `password_min_length` / `password_required_char_classes` を適用(本家 `User#validate_password_length` / `#validate_password_complexity`)。変更時に本家 `User#destroy_tokens` と同じく全セッションと自動ログイントークンを破棄し、操作した本人だけ再発行する |
+| パスワード再設定 | done | メールトークン方式、Host ヘッダ注入対策済み(`interface/http/app-origin.ts`、有効化メールと共用)。設定 `lost_password` で無効化でき、送信アクション側でも検査する。再設定後は全セッションと自動ログイントークンを破棄 |
+| 自動ログイン(remember me) | done | 設定 `autologin`(0/1/7/30/365 日)、`user_tokens` にハッシュのみ保存、ログアウト・パスワード変更・再設定で失効。**本家との差**: 本家は `user_setup` で毎リクエスト引き換えるが、Cookie を書けるのは Route Handler だけなので `proxy.ts` が「セッション Cookie 無し + 自動ログイン Cookie 有り」だけを検知して `/api/account/autologin?back=…` に渡す(DB は触らない)。ディープリンクでも動き、失敗時は必ず Cookie を消すのでループしない |
+| セルフ登録 | done | 設定 `self_registration` の 4 モード(無効/メールで有効化/管理者が手動で有効化/自動)。モード判定はフォームの出し分けではなくユースケース内で行う(本家 `AccountController#register` の 1 行目と同じ)。`registered` 状態・有効化トークンのメール・管理者への有効化依頼メール・ユーザー一覧からの「有効化」まで。有効化リンクはログインさせず(本家も `signin_path` で終わる)、`registered` 以外のアカウントには効かないのでロック済みアカウントの解除には使えない |
+| メールアドレスの確認 | done | **本家 6.x にトークンによる確認フローは存在しない**(ソースを確認: `email_verification` 設定も `EmailAddress` のトークン関連も無い)。本家が行うのは `EmailAddress` の `after_*_commit` によるセキュリティ通知と `destroy_tokens` で、next-pm もそれに合わせた: 変更時は**変更前**のアドレスへ、追加時は本人へ、削除時は削除されたアドレスへ、通知 ON/OFF 時はそのアドレスへ通知し、アドレスの変更・削除時はパスワード再設定トークンを破棄する |
+| 複数メールアドレス | done | `email_addresses` テーブル(追加・削除・通知 ON/OFF、上限は設定 `max_additional_emails`)。**本家との差**: 本家は既定アドレスも同テーブルに `is_default` で持つが、next-pm は `users.mail` を既定アドレスのまま残し、このテーブルは追加分だけを持つ(`users.mail` は NOT NULL/UNIQUE でメールハンドラ・通知・REST API・seed が読むため)。代償として一意性が 2 テーブルに跨り DB 制約にできないので、登録・マイアカウント・管理画面・アドレス追加のすべてが両方を検査し、`findByMail` も両方を検索する(本家 `User.find_by_mail` → `having_mail` と同じく、追加アドレスでもパスワード再設定とメールハンドラの送信者照合が当たる)。通知は本家 `User#notified_mails` と同じく既定アドレス + `notify` が有効な追加アドレス全部に届く。有効化・パスワード再設定・管理者への有効化依頼・有効化完了のメールはトランザクションメールとしてアドレス直指定で送る(本家 `Mailer.deliver_register` 等と同じ。ユーザー ID 経由だと `registered` のアカウントや `mail_notification = none` の相手に届かない) |
 | LDAP 認証 | partial | `.env` の `LDAP_URL` による単一接続。**管理画面の認証方式(auth_sources)登録・複数ソース・属性マッピング・オンザフライのアカウント作成が無い** |
-| API キー | partial | `users.api_key` 列と認証は実装済み。マイアカウント画面での表示・再生成が無い |
-| Atom キー | partial | 同上(`get-or-create-atom-key.ts` で発行はされる) |
-| ユーザー個人設定 | partial | 自動ウォッチ条件のみ(`user_preferences.auto_watch_on`)。言語・タイムゾーン・メール通知方式・コメント表示順・メールアドレス非公開が無い |
-| アバター | missing | Gravatar 連携なし |
-| アカウントの自己削除 | missing | |
+| API キー | done | マイアカウント画面の表示・再生成(本家 `MyController#show_api_key` / `#reset_api_key`)。**これが入るまで `users.api_key` に値を書く経路が存在せず、REST API は事実上到達不能だった** |
+| Atom キー | done | 初回フィード表示時の自動発行(`get-or-create-atom-key.ts`)に加え、マイアカウント画面からの再生成(本家 `MyController#reset_atom_key`) |
+| ユーザー個人設定 | partial | 自動ウォッチ条件に加え、氏名・メールアドレス・言語・タイムゾーン・履歴の表示順・メール通知方式・メールアドレス非公開・自己通知不要をマイアカウント画面で編集できる。実際に効くのは**履歴の表示順**(課題単票の journal 並び、本家 `comments_sorting`)と**自己通知不要**(通知の配信時フィルタ、本家 `no_self_notified`、既定 true で従来の挙動と同じ)と**メール通知方式の `none`**。言語は i18n 基盤が無いため(§0.1)、メール通知方式の中間 3 択はプロジェクト単位の通知購読が無いため(§11)、メールアドレス非公開は管理画面以外に他人のアドレスを出す画面がまだ無いため、保存されるが未反映 |
+| アバター | partial | 設定 `gravatar_enabled`(既定 OFF。有効にするとレンダリングのたびにアドレスのハッシュが gravatar.com に渡るため)。OFF のときはイニシャルを表示する。現状の表示箇所はマイアカウント画面のみで、課題の作成者・担当者やメンバー一覧にはまだ出していない |
+| アカウントの自己削除 | done | 設定 `unsubscribe`(既定 OFF)+ マイアカウント画面の削除セクション。可否は本家 `User#own_account_deletable?` のとおり `Setting.unsubscribe?` かつ(管理者でない **または** 他に有効な管理者が居る)で、管理者も最後の一人でなければ退会できる。削除は本家 `User#remove_references_before_destroy` と同じく作成物を匿名ユーザーへ付け替えてから行う(`UserAdminRepository.reassignReferencesAndDelete`、管理画面 CRUD 側と共用)。管理画面の削除は本家 `UsersController#destroy` と同じく自分自身を拒否し、こちらが本家 `MyController#destroy` にあたる許可経路 |
 
 ## 6. 管理画面
 
 | 機能 | 状態 | 備考 |
 |---|---|---|
-| ユーザー | done | 作成/編集(ログインID・氏名・メール・管理者・認証方式・パスワード設定)/ロック・ロック解除・有効化/削除/所属プロジェクト編集(本家 `principal_memberships`)。削除時は本家 `User#remove_references_before_destroy` 準拠で、作成物を匿名ユーザーへ引き継ぎ、担当は解除、非公開クエリのみ破棄 |
+| ユーザー | done | 作成/編集(ログインID・氏名・メール・管理者・認証方式・パスワード設定)/ロック・ロック解除・有効化/削除/所属プロジェクト編集(本家 `principal_memberships`)。削除時は本家 `User#remove_references_before_destroy` 準拠で、作成物を匿名ユーザーへ引き継ぎ、担当は解除、非公開クエリのみ破棄。`registered` → `active` への「有効化」はセルフ登録の手動承認モードの受け口でもあり、本家 `Mailer.deliver_account_activated` と同じく本人へ通知メールを送る。パスワードは設定 `password_min_length` / `password_required_char_classes` を適用し、メールアドレスの重複は `email_addresses` の追加アドレスも含めて検査する |
 | グループ | done | 作成/削除/メンバー増減 |
 | ロール | done | 作成/編集/削除/複製、組み込みロール(非メンバー/匿名)の権限編集、並べ替え、ワークフローのコピー。削除は本家 `Role#check_deletable` 準拠で、組み込みロールと割り当て済みロールは拒否 |
 | トラッカー | done | 作成/編集/削除/並べ替え/ワークフローのコピー/標準フィールドの無効化(本家 `core_fields`)。削除は本家 `Tracker#check_integrity` 準拠で、チケットが1件でもあれば拒否。無効化したフィールドは `createIssue` / `updateIssue` で本家 `safe_attribute_names` の `names -= disabled_core_fields` と同じく送信値を捨て(作成/編集/コピー/一括編集/REST/メールの全経路が同じ扱い)、作成・編集フォームでも項目自体を出さない |
 | 課題ステータス | done | 作成/編集(名称・説明・完了フラグ・既定の進捗率)/削除/並べ替え。削除は本家 `IssueStatus#check_integrity` 準拠で、使用中のチケットまたは既定ステータスにしているトラッカーがあれば拒否 |
 | ワークフロー | done | 遷移とフィールド権限の編集 |
 | カスタムフィールド | done | 作成/編集/削除(入力済みの値ごと)/並べ替え。本家同様、保存後の形式(`field_format`)と対象(STI の型)は変更不可 |
-| 列挙項目(優先度・作業分類・文書カテゴリ) | done | 作成/編集(名称・既定フラグ)/削除/並べ替え。削除は本家 `EnumerationsController#destroy` 準拠で、使用中なら付け替え先(`reassign_to`)必須。プロジェクト単位の作業分類の上書きは §3 で対応済み |
-| アプリケーション設定 | partial | 20 項目(添付上限・REST API 有効化・活動日数・フィード件数・0 時間工数の可否・進捗率の算出方式・プロジェクト間の関連許可・リポジトリログ表示件数・親チケットの日付/優先度/進捗率の算出方式・1 ページあたりの表示件数・エクスポート上限・コミットキーワード各種・新規プロジェクトの既定値 5 種 `default_projects_public` / `default_projects_modules` / `default_projects_tracker_ids` / `sequential_project_identifiers` / `new_project_user_role_id`)。本家は 100 前後の設定を持ち、認証(`login_required`, セッション有効期限)・表示(日時書式、既定言語)・課題追跡(既定トラッカー、添付の既定)・メール通知の設定が未対応 |
+| 列挙項目(優先度・作業分類・文書カテゴリ) | done | 作成/編集(名称・既定フラグ・有効フラグ)/削除/並べ替え。削除は本家 `EnumerationsController#destroy` 準拠で、使用中なら付け替え先(`reassign_to`)必須。プロジェクト単位の作業分類の上書きは §3 で対応済み |
+| アプリケーション設定 | partial | 「全般」15 項目(添付上限・REST API 有効化・活動日数・フィード件数・0 時間工数の可否・進捗率の算出方式・プロジェクト間の関連許可・リポジトリログ表示件数・親チケットの日付/優先度/進捗率の算出方式・1 ページあたりの表示件数・エクスポート上限)+「認証」12 項目 +「プロジェクト」5 項目(`default_projects_public` / `default_projects_modules` / `default_projects_tracker_ids` / `sequential_project_identifiers` / `new_project_user_role_id`)+「リポジトリ」のコミットキーワード各種。認証タブは本家とほぼ同じ構成(`login_required` / `autologin` / `self_registration` / `password_min_length` / `password_required_char_classes` / `lost_password` / `twofa` / `unsubscribe` / `gravatar_enabled` / `session_lifetime` / `session_timeout` / `max_additional_emails`)。認証タブの既定値は本家の既定ではなく **next-pm の従来の挙動**に合わせてある(`self_registration` と `unsubscribe` は本家の既定と逆の OFF。既存環境でこの画面が出た瞬間に公開登録とアカウント削除が開くのを避けるため)。未対応は表示(日時書式、既定言語)・課題追跡(既定トラッカー、添付の既定)・メール通知の設定、および `password_max_age` / `show_custom_fields_on_registration` / `email_domains_allowed|denied` |
 | 情報画面(環境情報) | missing | 本家 `/admin/info` |
 | プラグイン一覧 | out-of-scope | プラグイン機構そのものが無い |
 
@@ -224,7 +224,7 @@
 |---|---|---|
 | 課題の作成・更新の通知 | done | jobs テーブル + worker ポーリング |
 | フォーラム投稿 / Wiki 編集 / News 投稿・コメントの通知 | done | |
-| 通知先の決定 | partial | 候補プールを union して一括フィルタする一本道。本家の `mail_notification` ティア(all / selected / only_my_events 等)と `notified_events` によるイベント別オプトインは対象外(§15) |
+| 通知先の決定 | partial | 候補プールを union し、配信時に受信者ごとの設定で絞る(本家 `User#notified_users` と同じ位置)。効くのは `mail_notification = none` と `no_self_notified`(既定 true)。宛先は本家 `User#notified_mails` と同じく既定アドレス + `notify` が有効な追加アドレス全部。`mail_notification` の中間 3 択(selected / only_my_events / only_assigned / only_owner)と `notified_events` によるイベント別オプトインは、プロジェクト単位の通知購読が無いため未対応 |
 | 受信メールからの課題作成・返信 | partial | 単一パートの text/plain のみ。添付・To/Cc からのウォッチャー・`Status:` 等のキーワード抽出・未知の送信者からのアカウント作成・サブアドレスによるプロジェクト振り分けが未対応(`api/mail_handler/route.ts` の冒頭コメントに明記) |
 | リマインダーメール | missing | 本家は rake タスク + cron。next-pm には時刻トリガーが無い(§15) |
 | Webhook | missing | 本家 6.1 の `use_webhooks` |
