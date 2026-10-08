@@ -12,6 +12,8 @@ import { deliverWebhook } from "@/application/webhooks/deliver-webhook";
 import { WEBHOOK_JOB_TYPE, type WebhookJobPayload } from "@/application/webhooks/trigger-webhooks";
 import { sendReminders, REMINDERS_JOB_TYPE, type RemindersJobPayload } from "@/application/jobs/send-reminders";
 import type { RemindersRepositories } from "@/application/jobs/send-reminders";
+import type { IssueNotifyEvent } from "@/domain/notification/issue-tier";
+import { notifyAboutIssue } from "@/domain/notification/issue-tier";
 
 export class UnknownJobTypeError extends Error {}
 
@@ -19,6 +21,8 @@ export interface NotifyJobPayload {
   recipientIds: string[];
   /** Literal addresses, bypassing user resolution and preferences — see enqueue-notification.ts. */
   recipientAddresses?: string[];
+  /** The issue this mail is about, when it is one; drives the per-recipient mail_notification tier. */
+  issueEvent?: IssueNotifyEvent;
   /** Whose action caused this; their own copy is suppressed unless they turned no_self_notified off. */
   actorUserId?: string | null;
   subject: string;
@@ -50,13 +54,31 @@ export async function dispatchJob(repositories: DispatchJobRepositories, job: Jo
       // Redmine's User#notified_users applies mail_notification and no_self_notified at send
       // time, and User#notified_mails then fans each recipient out to every address they
       // flagged notify — the default one plus any additional.
-      const wanted = users.filter((user) => {
+      const notified = users.filter((user) => {
         const preference = resolvePreferences(preferencesByUser.get(user.id) ?? null, user.id);
         return shouldNotifyRecipient(
           { userId: user.id, mailNotification: user.mailNotification, noSelfNotified: preference.noSelfNotified },
           payload.actorUserId ?? null,
         );
       });
+
+      // For an issue, each recipient's mail_notification tier narrows the list further, by their
+      // relation to the issue: author, assignee, or a member of the assigned group.
+      let wanted = notified;
+      if (payload.issueEvent) {
+        if (!repositories.groupRepository) {
+          throw new Error("issue notification needs groupRepository to resolve assigned groups");
+        }
+        const groupRepository = repositories.groupRepository;
+        const kept: typeof notified = [];
+        for (const user of notified) {
+          const groupIds = await groupRepository.listGroupIdsForUser(user.id);
+          if (notifyAboutIssue(user.mailNotification, { userId: user.id, groupIds }, payload.issueEvent)) {
+            kept.push(user);
+          }
+        }
+        wanted = kept;
+      }
 
       const additional = await repositories.emailAddressRepository.listForUsers(wanted.map((user) => user.id));
       const emails = new Set<string>(payload.recipientAddresses ?? []);

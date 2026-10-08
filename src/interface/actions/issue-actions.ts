@@ -19,6 +19,7 @@ import { moveIssue, MoveIssueNotPermittedError, ProjectHasNoTrackerError } from 
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { CustomFieldValidationError } from "@/application/issues/set-custom-field-values";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { issueNotifyEvent } from "@/domain/notification/issue-tier";
 import { issueMailSubject } from "@/domain/mail/subject";
 import { triggerIssueWebhook } from "@/interface/http/webhook-trigger";
 import {
@@ -232,6 +233,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
       excludeUserId: user.id,
       subject: issueMailSubject(project.name, issue.id, issue.subject),
       body: issue.description,
+      issueEvent: issueNotifyEvent(issue, null),
     },
   );
   await triggerIssueWebhook("issue.created", project, issue);
@@ -488,12 +490,12 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
 
     await enqueueNotification(
       { jobRepository: new DrizzleJobRepository() },
-      { recipientGroups: [permitted], excludeUserId: user.id, subject: `[${project.name}] ${updated.subject}`, body: noteBody },
+      { recipientGroups: [permitted], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing), subject: `[${project.name}] ${updated.subject}`, body: noteBody },
     );
     if (others.length > 0) {
       await enqueueNotification(
         { jobRepository: new DrizzleJobRepository() },
-        { recipientGroups: [others], excludeUserId: user.id, subject: `[${project.name}] ${updated.subject}`, body: genericBody },
+        { recipientGroups: [others], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing), subject: `[${project.name}] ${updated.subject}`, body: genericBody },
       );
     }
   } else {
@@ -502,6 +504,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
       {
         recipientGroups,
         excludeUserId: user.id,
+        issueEvent: issueNotifyEvent(updated, existing),
         subject: `[${project.name}] ${updated.subject}`,
         body: noteBody.length > 0 ? noteBody : genericBody,
       },

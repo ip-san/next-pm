@@ -1,6 +1,7 @@
 import { unionRecipients } from "@/domain/notification/recipients";
 import type { JobRepository } from "@/domain/job/repository";
 import type { NotifyJobPayload } from "./dispatch-job";
+import type { IssueNotifyEvent } from "@/domain/notification/issue-tier";
 
 export interface EnqueueNotificationInput {
   recipientGroups: (string | null | undefined)[][];
@@ -18,6 +19,12 @@ export interface EnqueueNotificationInput {
    * true, so the observable behaviour is unchanged for anyone who has not opted in.
    */
   excludeUserId: string | null;
+  /**
+   * For an issue event: who the issue concerns, so the send step can apply each recipient's
+   * mail_notification tier (Redmine's User#notify_about?). Omitted for other events, which then
+   * aren't narrowed by tier.
+   */
+  issueEvent?: IssueNotifyEvent;
   subject: string;
   body: string;
 }
@@ -36,6 +43,7 @@ export async function enqueueNotification(
     recipientIds,
     recipientAddresses,
     actorUserId: input.excludeUserId,
+    ...(input.issueEvent ? { issueEvent: input.issueEvent } : {}),
     subject: input.subject,
     body: input.body,
   };
