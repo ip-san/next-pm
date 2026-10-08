@@ -87,7 +87,7 @@
 | ソート | done | `queries.sort_criteria`。列見出しクリックで多段ソート(本家同様 3 キーまで、クリックした列が先頭へ)。UUID 主キーには順序が無いため `id` 列のソートは `created_at` に対応付け、ページングが安定するよう常に `id` を最終キーに付ける |
 | 合計行(予定工数/作業時間などの total) | done | 本家 `options[:totalable_names]` 相当を `queries.totalable_names` に保持。予定工数・作業時間・数値カスタムフィールドの合計を、全体とグループ単位の両方で SQL 集計。作業時間の列と合計は `view_time_entries` 保持者にのみ出し、本家 `TimeEntry.visible_condition` 相当(ロールの `time_entries_visibility` が `own` ならそのプロジェクトでは自分の分だけ数える)も効かせる。横断一覧ではこの判定がプロジェクトごとに異なるため、SQL 側で「`all` のプロジェクト、または `own` のプロジェクトで自分名義」という条件に展開する |
 | ページネーション | done | 件数・行・グループ集計・合計すべて SQL 側で処理し、1 ページ分しかメモリに載せない。プライベート課題の可視性も `Array#filter` ではなく WHERE 句で効かせてあるため、件数と合計が可視範囲とずれない。ページサイズは本家 `Setting.per_page_options`(既定 `25,50,100`)。範囲外のページ番号は最終ページに丸める |
-| CSV エクスポート | partial | 課題のみ(`/api/projects/[identifier]/issues/csv`)。工数・ユーザーの CSV が無い。一覧と同じ URL 契約・同じユースケースを使うため、選択した表示列・フィルタ・ソートをそのまま反映する(行数の上限は本家同様 `issues_export_limit`、既定 500) |
+| CSV エクスポート | partial | 課題(`/api/projects/[identifier]/issues/csv`)と工数(`/api/time_entries/csv`、行「工数の CSV エクスポート・インポート」)。ユーザーの CSV が無い(本家の管理画面の利用者一覧は CSV で出せる)。一覧と同じ URL 契約・同じユースケースを使うため、選択した表示列・フィルタ・ソートをそのまま反映する(行数の上限は本家同様 `issues_export_limit`、既定 500) |
 | PDF エクスポート | done | 課題一覧・Wiki・ガント |
 | Atom フィード | done | プロジェクト活動(`/api/projects/[identifier]/activity/atom`)、横断活動(`/api/activity/atom`)、課題一覧のプロジェクト単位・横断の両方(`/api/projects/[identifier]/issues/atom`, `/api/issues/atom`)。課題フィードは一覧と同じ `f[]`/`query_id` を読むため、絞り込んだ一覧をそのまま購読できる。本家 `Issue` の `acts_as_event` に合わせ、並び順は作成日の降順・件名は `トラッカー #id (ステータス): 題名` |
 
