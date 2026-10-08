@@ -3,6 +3,8 @@ import type { Project } from "@/domain/project/entity";
 import type { ProjectIssueScope } from "@/domain/query/issue-search";
 import { seesOnlyOwnTimeEntries } from "@/domain/time-entry/visibility";
 import type { User } from "@/domain/user/entity";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { issuesVisibilityRoles, listVisibleProjectContexts } from "@/interface/http/resolve-actor";
 import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
 
@@ -34,4 +36,17 @@ export async function subprojectIssueScope(
     projectScopes,
     identifierByProjectId: new Map(contexts.map((entry) => [entry.project.id, entry.project.identifier])),
   };
+}
+
+/**
+ * The project-scoped issue list's `projectScopes`, when display_subprojects_issues is on; nothing (the
+ * project alone) when it is off. The exports use this so they match the list on screen.
+ */
+export async function projectIssueListScopeFor(
+  user: User | null,
+  project: Pick<Project, "lft" | "rgt">,
+): Promise<{ projectScopes?: ProjectIssueScope[] }> {
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  if (!displaySubprojectsIssues) return {};
+  return { projectScopes: (await subprojectIssueScope(user, project)).projectScopes };
 }

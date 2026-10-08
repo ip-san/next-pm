@@ -1,3 +1,4 @@
+import { projectIssueListScopeFor } from "@/interface/http/project-issue-scope";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import { listProjectIssues } from "@/application/issues/list-project-issues";
@@ -62,6 +63,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       },
       {
         projectId: project.id,
+        ...(await projectIssueListScopeFor(user, project)),
         params: listParams,
         savedQuery,
         visibility: issueVisibilityScope(user?.id ?? null, actor, userGroupIds),
