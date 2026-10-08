@@ -8,7 +8,7 @@ import type { AuthorizationActor, ProjectAuthorizationContext } from "@/domain/a
 import type { Issue } from "@/domain/issue/entity";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { IssueVisibilityScope } from "@/domain/query/issue-search";
-import type { IssuesVisibility, Role } from "@/domain/role/entity";
+import type { IssuesVisibility } from "@/domain/role/entity";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
