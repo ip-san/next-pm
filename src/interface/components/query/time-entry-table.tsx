@@ -9,6 +9,8 @@ import { issueListHref, type IssueListParams } from "@/interface/query/issue-que
 import { timeEntryColumnValue, timeEntryGroupLabel, timeEntryGroupValue, type TimeEntryListLookups } from "@/interface/query/time-entry-list-view";
 import { DeleteTimeEntryButton } from "./delete-time-entry-button";
 
+const BULK_EDIT_FORM_ID = "time-entry-bulk-edit";
+
 export interface TimeEntryTableProps {
   result: ListTimeEntriesResult;
   lookups: TimeEntryListLookups;
@@ -112,7 +114,7 @@ export function TimeEntryTable({
                 <tr className="border-b">
                   {bulkEditHref ? (
                     <td className="pr-2 py-1">
-                      {isEditable(entry) ? <input type="checkbox" name="ids" value={entry.id} aria-label="選択" /> : null}
+                      {isEditable(entry) ? <input type="checkbox" form={BULK_EDIT_FORM_ID} name="ids" value={entry.id} aria-label="選択" /> : null}
                     </td>
                   ) : null}
                   {result.displayColumns.map((column) => (
@@ -178,18 +180,20 @@ export function TimeEntryTable({
         {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
       </p>
 
+      {/*
+        The selection form is empty and sits outside the table: the delete buttons in the rows are
+        forms of their own, and a form can't nest. Checkboxes and the submit button join it with the
+        `form` attribute instead.
+      */}
+      {bulkEditHref ? <form id={BULK_EDIT_FORM_ID} method="get" action={bulkEditHref} /> : null}
+      {table}
       {bulkEditHref ? (
-        <form method="get" action={bulkEditHref} className="flex flex-col gap-2">
-          {table}
-          <div>
-            <button type="submit" className="border rounded px-3 py-1.5 text-sm">
-              選択した工数を一括編集
-            </button>
-          </div>
-        </form>
-      ) : (
-        table
-      )}
+        <div>
+          <button type="submit" form={BULK_EDIT_FORM_ID} className="border rounded px-3 py-1.5 text-sm">
+            選択した工数を一括編集
+          </button>
+        </div>
+      ) : null}
 
       <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label="ページ送り">
         {linkedPages(result.pagination).map((page) => (

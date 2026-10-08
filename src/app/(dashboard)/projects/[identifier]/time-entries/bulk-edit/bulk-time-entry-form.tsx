@@ -42,7 +42,7 @@ export function BulkTimeEntryForm({
         <label htmlFor="bulk-hours" className="text-sm font-medium">
           時間（空欄は変更しない）
         </label>
-        <input id="bulk-hours" name="hours" type="number" min="0.01" step="0.25" className="border rounded px-3 py-2" />
+        <input id="bulk-hours" name="hours" type="number" min="0.01" step="any" className="border rounded px-3 py-2" />
       </div>
 
       <div className="flex flex-col gap-1">

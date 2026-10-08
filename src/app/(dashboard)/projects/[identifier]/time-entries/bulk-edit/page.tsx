@@ -64,7 +64,7 @@ export default async function BulkEditTimeEntriesPage({
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name} — 工数の一括編集（{entries.length}件）</h1>
       {entries.length === 0 ? (
-        <p className="text-sm text-gray-600">この project の工数が選択されていません。一覧で工数にチェックを入れてください。</p>
+        <p className="text-sm text-gray-600">このプロジェクトの工数が選択されていません。一覧で工数にチェックを入れてください。</p>
       ) : (
         <>
           <ul className="text-sm text-gray-600 flex flex-col gap-1">
