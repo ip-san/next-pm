@@ -74,7 +74,7 @@ function makeRepositories(options: {
       ),
     },
     trackerRepository: {
-      findById: mock(async (id: string) => ({ id, name: "T", defaultStatusId: "new", position: 1, isInRoadmap: true }) as Tracker),
+      findById: mock(async (id: string) => ({ id, name: "T", defaultStatusId: "new", position: 1, isInRoadmap: true, disabledCoreFields: [] }) as Tracker),
     },
     issueCategoryRepository: { listByProject: mock(async () => []) },
     versionRepository: { listSharedWith: mock(async () => options.versions ?? []) },

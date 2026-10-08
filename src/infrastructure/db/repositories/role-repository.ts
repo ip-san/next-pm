@@ -1,8 +1,8 @@
-import { count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { memberRoles } from "@/infrastructure/db/schema/members";
 import { roles } from "@/infrastructure/db/schema/roles";
-import { ROLE_BUILTIN_ANONYMOUS, ROLE_BUILTIN_NON_MEMBER, type Role } from "@/domain/role/entity";
+import { ROLE_BUILTIN_ANONYMOUS, ROLE_BUILTIN_MEMBER, ROLE_BUILTIN_NON_MEMBER, type Role } from "@/domain/role/entity";
 import type { Positioned } from "@/domain/ordering/positioned";
 import type { RoleAdminRepository, RoleRepository } from "@/domain/role/repository";
 
@@ -54,6 +54,15 @@ export class DrizzleRoleRepository implements RoleRepository, RoleAdminRepositor
 
   async listAssignable(): Promise<Role[]> {
     const rows = await db.select().from(roles).where(eq(roles.assignable, true));
+    return rows.map(toDomain);
+  }
+
+  async listGivable(): Promise<Role[]> {
+    const rows = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.assignable, true), eq(roles.builtin, ROLE_BUILTIN_MEMBER)))
+      .orderBy(roles.position, roles.id);
     return rows.map(toDomain);
   }
 

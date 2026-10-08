@@ -7,4 +7,6 @@ export const MODULE_OPTIONS = [
   { key: "documents", label: "ドキュメント" },
   { key: "files", label: "ファイル" },
   { key: "repository", label: "リポジトリ" },
+  { key: "calendar", label: "カレンダー" },
+  { key: "gantt", label: "ガントチャート" },
 ];

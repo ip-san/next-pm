@@ -1,4 +1,5 @@
 import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { MAIL_NOTIFICATION_OPTIONS } from "@/domain/notification/mail-notification";
 
 /**
  * Mirrors Redmine's User::STATUS_* set. "anonymous" is the single AnonymousUser row Redmine
@@ -14,6 +15,14 @@ export const users = pgTable("users", {
   firstname: text("firstname").notNull(),
   lastname: text("lastname").notNull(),
   isAdmin: boolean("is_admin").notNull().default(false),
+  /**
+   * Redmine stores the user's locale here. next-pm has no i18n framework (§0.1 of the parity
+   * checklist), so nothing reads it yet — it is stored so the my-account form round-trips the
+   * field, as Redmine's does, rather than silently discarding a choice the user made.
+   */
+  language: text("language"),
+  /** Redmine users.mail_notification — how much mail this account wants. See domain/notification/mail-notification.ts. */
+  mailNotification: text("mail_notification", { enum: MAIL_NOTIFICATION_OPTIONS }).notNull().default("all"),
   status: text("status", { enum: userStatusEnum }).notNull().default("registered"),
   /**
    * Empty string for an LDAP-backed user (see authSource) — safe by construction, not just by

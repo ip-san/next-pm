@@ -57,6 +57,7 @@ export async function createEnumerationAction(
     name: parsed.data.name,
     position: nextPosition(siblings),
     isDefault: parsed.data.isDefault,
+    active: true,
     projectId: null,
     parentId: null,
   });
@@ -70,6 +71,7 @@ const enumerationIdSchema = z.object({ enumerationId: z.string().uuid() });
 const updateEnumerationSchema = enumerationIdSchema.extend({
   name: z.string().min(1).max(30),
   isDefault: z.coerce.boolean().default(false),
+  active: z.coerce.boolean().default(false),
 });
 
 export async function updateEnumerationAction(
@@ -85,6 +87,7 @@ export async function updateEnumerationAction(
     enumerationId: formData.get("enumerationId"),
     name: formData.get("name"),
     isDefault: formData.get("isDefault") === "on",
+    active: formData.get("active") === "on",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -100,7 +103,7 @@ export async function updateEnumerationAction(
   if (parsed.data.isDefault) {
     await repository.unsetSystemDefaultsForType(existing.type);
   }
-  await repository.update(existing.id, { name: parsed.data.name, isDefault: parsed.data.isDefault });
+  await repository.update(existing.id, { name: parsed.data.name, isDefault: parsed.data.isDefault, active: parsed.data.active });
 
   revalidatePath("/admin/enumerations");
   return { error: null };

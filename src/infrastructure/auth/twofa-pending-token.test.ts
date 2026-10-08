@@ -7,12 +7,12 @@ process.env.JWT_SECRET ??= "test-secret-for-session-token-tests";
 
 describe("twofa-pending-token", () => {
   it("round-trips userId and attempts", async () => {
-    const token = await createTwofaPendingToken({ userId: "user-1", attempts: 2 });
-    expect(await verifyTwofaPendingToken(token)).toEqual({ userId: "user-1", attempts: 2 });
+    const token = await createTwofaPendingToken({ userId: "user-1", attempts: 2, rememberMe: false });
+    expect(await verifyTwofaPendingToken(token)).toEqual({ userId: "user-1", attempts: 2, rememberMe: false });
   });
 
   it("rejects a full session token presented as a pending-2FA token", async () => {
-    const sessionToken = await createSessionToken({ userId: "user-1" });
+    const sessionToken = await createSessionToken({ userId: "user-1", sessionId: "session-1" });
     expect(await verifyTwofaPendingToken(sessionToken)).toBeNull();
   });
 

@@ -15,18 +15,25 @@ function toDomain(row: typeof enumerations.$inferSelect): Enumeration {
     name: row.name,
     position: row.position,
     isDefault: row.isDefault !== 0,
+    active: row.active,
     projectId: row.projectId,
     parentId: row.parentId,
   };
 }
 
 export class DrizzleEnumerationRepository implements EnumerationRepository, EnumerationAdminRepository {
+  /**
+   * System-wide rows only (`project_id IS NULL`). A project's TimeEntryActivity override is
+   * a row of the same type, and every caller of this wants the system list: the admin
+   * enumerations screen, the REST endpoint and the pickers that have no project in hand.
+   * Project-scoped rows are reached through ProjectActivityRepository instead.
+   */
   async listByType(type: EnumerationType): Promise<Enumeration[]> {
     // See DrizzleIssueStatusRepository#listAll for why the id tiebreak is needed.
     const rows = await db
       .select()
       .from(enumerations)
-      .where(eq(enumerations.type, type))
+      .where(and(eq(enumerations.type, type), isNull(enumerations.projectId)))
       .orderBy(enumerations.position, enumerations.id);
     return rows.map(toDomain);
   }
@@ -44,6 +51,7 @@ export class DrizzleEnumerationRepository implements EnumerationRepository, Enum
         name: enumeration.name,
         position: enumeration.position,
         isDefault: enumeration.isDefault ? 1 : 0,
+        active: enumeration.active,
         projectId: enumeration.projectId,
         parentId: enumeration.parentId,
       })
@@ -58,10 +66,10 @@ export class DrizzleEnumerationRepository implements EnumerationRepository, Enum
       .where(and(eq(enumerations.type, type), isNull(enumerations.projectId)));
   }
 
-  async update(id: string, changes: Pick<Enumeration, "name" | "isDefault">): Promise<Enumeration> {
+  async update(id: string, changes: Pick<Enumeration, "name" | "isDefault" | "active">): Promise<Enumeration> {
     const [row] = await db
       .update(enumerations)
-      .set({ name: changes.name, isDefault: changes.isDefault ? 1 : 0 })
+      .set({ name: changes.name, isDefault: changes.isDefault ? 1 : 0, active: changes.active })
       .where(eq(enumerations.id, id))
       .returning();
     return toDomain(row);

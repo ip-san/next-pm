@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
+import { isMembershipEditable } from "@/domain/member/repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -11,6 +12,7 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 import { ProjectSettingsTabs } from "../../project-settings-tabs";
 import { AddGroupMemberForm } from "./add-group-member-form";
 import { AddMemberForm } from "./add-member-form";
+import { MemberRolesForm } from "./member-roles-form";
 import { RemoveMemberButton } from "./remove-member-button";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
@@ -31,10 +33,13 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
     notFound();
   }
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
+  const hasWiki = project.enabledModules.includes("wiki");
 
   const [members, roles, groups] = await Promise.all([
     new DrizzleMemberRepository().listByProject(project.id),
-    new DrizzleRoleRepository().listAssignable(),
+    // Role.givable: the builtin Non member / Anonymous roles describe people who are
+    // *not* members, so they must not be offerable here.
+    new DrizzleRoleRepository().listGivable(),
     new DrizzleGroupRepository().listAll(),
   ]);
   const users = await new DrizzleUserRepository().findByIds(memberUserIds(members));
@@ -68,6 +73,8 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
           members: true,
           versions: hasIssueTracking && can({ permission: "view_issues", project: projectContext, actor }),
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          activities: can({ permission: "manage_project_activities", project: projectContext, actor }),
+          wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
       <table className="text-sm border-collapse">
@@ -82,9 +89,22 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
           {members.map((member) => (
             <tr key={member.id} className="border-b">
               <td className="pr-4 py-1">{principalLabel(member)}</td>
-              <td className="pr-4 py-1">{member.roleIds.map((roleId) => roleById.get(roleId)?.name ?? "?").join(", ")}</td>
               <td className="pr-4 py-1">
-                <RemoveMemberButton projectIdentifier={identifier} memberId={member.id} />
+                {/* A group-inherited row's roles belong to the group, so they are shown but
+                    not editable — Member#any_inherited_role? blocks both edit and removal. */}
+                {isMembershipEditable(member) ? (
+                  <MemberRolesForm
+                    projectIdentifier={identifier}
+                    memberId={member.id}
+                    roles={roles}
+                    selectedRoleIds={member.roleIds}
+                  />
+                ) : (
+                  member.roleIds.map((roleId) => roleById.get(roleId)?.name ?? "?").join(", ")
+                )}
+              </td>
+              <td className="pr-4 py-1">
+                {isMembershipEditable(member) ? <RemoveMemberButton projectIdentifier={identifier} memberId={member.id} /> : null}
               </td>
             </tr>
           ))}

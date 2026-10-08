@@ -42,7 +42,7 @@ export async function updateTimeEntry(
     await assertValidHours(repositories.settingsRepository, input.hours);
   }
   if (input.activityId !== undefined && input.activityId !== entry.activityId) {
-    await assertActivityAvailable(repositories.enumerationRepository, entry.projectId, input.activityId);
+    await assertActivityAvailable(repositories, entry.projectId, input.activityId);
   }
   // `errors.add :issue_id, :invalid if (issue_id && !issue) || (issue && project != issue.project)`
   if (input.issueId !== undefined && input.issueId !== entry.issueId && input.issueId !== null) {

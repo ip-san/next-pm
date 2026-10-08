@@ -3,6 +3,7 @@ import { isActiveUser } from "@/domain/user/entity";
 import { generateToken } from "@/domain/user/token";
 import type { UserRepository } from "@/domain/user/repository";
 import type { PasswordResetTokenRepository } from "@/domain/password-reset/repository";
+import type { EmailAddressRepository } from "@/domain/email-address/repository";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import type { JobRepository } from "@/domain/job/repository";
 
@@ -28,7 +29,12 @@ export function hashResetToken(token: string): string {
  * uniformity for this case, telling the user outright that a reset isn't possible locally.
  */
 export async function requestPasswordReset(
-  repositories: { userRepository: UserRepository; passwordResetTokenRepository: PasswordResetTokenRepository; jobRepository: JobRepository },
+  repositories: {
+    userRepository: UserRepository;
+    passwordResetTokenRepository: PasswordResetTokenRepository;
+    emailAddressRepository: EmailAddressRepository;
+    jobRepository: JobRepository;
+  },
   mail: string,
   appOrigin: string,
 ): Promise<void> {
@@ -49,8 +55,18 @@ export async function requestPasswordReset(
   await repositories.passwordResetTokenRepository.create(user.id, hashResetToken(token), expiresAt);
 
   const resetUrl = `${appOrigin}/account/lost_password?token=${token}`;
+  // Redmine sends this to the address that matched, not to the account's default one
+  // (`user.mails.detect {|e| email.casecmp(e) == 0} || user.mail`), so someone who asked from
+  // an additional address gets the link where they are reading. Addressed literally for the
+  // second reason too: a transactional mail must not be suppressed by the recipient's
+  // mail_notification preference — being unable to reset a password is not a notification
+  // setting anyone intends to choose.
+  const matchedAddress = (await repositories.emailAddressRepository.listForUser(user.id)).find(
+    (address) => address.address.toLowerCase() === mail.toLowerCase(),
+  );
   await enqueueNotification(repositories, {
-    recipientGroups: [[user.id]],
+    recipientGroups: [],
+    recipientAddresses: [matchedAddress?.address ?? user.mail],
     excludeUserId: null,
     subject: "パスワード再設定",
     body: `パスワードを再設定するには、以下のリンクをクリックしてください:\n\n${resetUrl}\n\nこのリンクの有効期限は24時間です。心当たりがない場合は、このメールを無視してください。`,

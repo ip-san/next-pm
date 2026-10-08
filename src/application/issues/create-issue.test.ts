@@ -57,6 +57,8 @@ function makeFieldPermissionRepository(permissions: WorkflowFieldPermission[] = 
 function makeUserPreferencesRepository(): UserPreferencesRepository {
   return {
     findByUserId: mock(async () => null as UserPreferences | null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => {}),
   };
 }
@@ -68,6 +70,7 @@ function makeWatcherRepository() {
     unwatch: mock(async () => {}),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
 }
 
@@ -313,5 +316,87 @@ describe("createIssue", () => {
     );
 
     expect(watcherRepository.watch).not.toHaveBeenCalledWith("Issue", expect.anything(), "group-1");
+  });
+});
+
+describe("createIssue — disabled core fields", () => {
+  const tracker: Tracker = {
+    id: "tracker-1",
+    name: "Bug",
+    defaultStatusId: "new",
+    position: 1,
+    isInRoadmap: true,
+    disabledCoreFields: ["dueDate", "estimatedHours", "assignedToId"],
+  };
+
+  it("falls back to the default for every field the tracker switched off", async () => {
+    // Mirrors `names -= disabled_core_fields` in safe_attribute_names: the value is dropped
+    // rather than rejected, so the issue still saves.
+    const issueRepository = makeIssueRepositoryMock({
+      create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
+    });
+
+    const issue = await createIssue(
+      {
+        ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
+        issueRepository,
+        trackerRepository: makeTrackerRepository(tracker),
+        workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+        userPreferencesRepository: makeUserPreferencesRepository(),
+        watcherRepository: makeWatcherRepository(),
+      },
+      { ...baseInput, dueDate: "2026-05-01", estimatedHours: 8, assignedToId: "user-2", assignedToType: "user" },
+    );
+
+    expect(issue.dueDate).toBeNull();
+    expect(issue.estimatedHours).toBeNull();
+    expect(issue.assignedToId).toBeNull();
+    expect(issue.assignedToType).toBeNull();
+  });
+
+  it("does not reject a stale id in a disabled field", async () => {
+    // safe_attributes strips before assignment, so validation never sees the dropped value —
+    // an assignee who is no longer assignable must not fail a save that discards them anyway.
+    const issueRepository = makeIssueRepositoryMock({
+      create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
+    });
+
+    const issue = await createIssue(
+      {
+        ...makeIssueAttributeRepositoriesMock({ members: [], roles: [], users: [] }),
+        ...makeRollupRepositoriesMock(),
+        issueRepository,
+        trackerRepository: makeTrackerRepository(tracker),
+        workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+        userPreferencesRepository: makeUserPreferencesRepository(),
+        watcherRepository: makeWatcherRepository(),
+      },
+      { ...baseInput, assignedToId: "no-longer-a-member", assignedToType: "user" },
+    );
+
+    expect(issue.assignedToId).toBeNull();
+  });
+
+  it("keeps fields the tracker still enables", async () => {
+    const issueRepository = makeIssueRepositoryMock({
+      create: mock(async (issue) => ({ ...issue, id: "issue-1", lockVersion: 0, createdAt: new Date(), updatedAt: new Date() }) as Issue),
+    });
+
+    const issue = await createIssue(
+      {
+        ...makeIssueAttributeRepositoriesMock(),
+        ...makeRollupRepositoriesMock(),
+        issueRepository,
+        trackerRepository: makeTrackerRepository({ ...tracker, disabledCoreFields: [] }),
+        workflowFieldPermissionRepository: makeFieldPermissionRepository(),
+        userPreferencesRepository: makeUserPreferencesRepository(),
+        watcherRepository: makeWatcherRepository(),
+      },
+      { ...baseInput, dueDate: "2026-05-01", estimatedHours: 8 },
+    );
+
+    expect(issue.dueDate).toBe("2026-05-01");
+    expect(issue.estimatedHours).toBe(8);
   });
 });

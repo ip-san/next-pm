@@ -3,10 +3,12 @@ import { memberUserIds } from "@/domain/member/entity";
 import type { ProjectTimeEntryScope, TimeEntryVisibilityScope } from "@/domain/query/time-entry-search";
 import { seesOnlyOwnTimeEntries } from "@/domain/time-entry/visibility";
 import type { User } from "@/domain/user/entity";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { issuesVisibilityRoles, listVisibleProjectContexts, type VisibleProjectContext } from "@/interface/http/resolve-actor";
 import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
@@ -64,8 +66,17 @@ export async function loadTimeEntryLookups(
   rows: { issueIds: string[]; userIds: string[] },
 ): Promise<TimeEntryListLookups> {
   const memberRepository = new DrizzleMemberRepository();
-  const [activities, memberLists, issues] = await Promise.all([
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+  // Per project, not the system list alone: an entry recorded before a project deactivated an
+  // activity still has to show that activity's name, and that row may be a project override.
+  const [activityViews, memberLists, issues] = await Promise.all([
+    Promise.all(
+      projects.map((entry) =>
+        loadProjectActivities(
+          { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+          entry.project.id,
+        ),
+      ),
+    ),
     Promise.all(projects.map((entry) => memberRepository.listByProject(entry.project.id))),
     rows.issueIds.length > 0 ? new DrizzleIssueRepository().findByIds(rows.issueIds) : Promise.resolve([]),
   ]);
@@ -79,7 +90,9 @@ export async function loadTimeEntryLookups(
   return {
     projects: new Map(projects.map((entry) => [entry.project.id, entry.project.name])),
     users: new Map(users.map((user) => [user.id, `${user.lastname} ${user.firstname}`])),
-    activities: new Map(activities.map((activity) => [activity.id, activity.name])),
+    activities: new Map(
+      activityViews.flatMap((view) => [...view.byId].map(([id, activity]) => [id, activity.name] as const)),
+    ),
     issues: new Map(issues.map((issue) => [issue.id, issue.subject])),
   };
 }

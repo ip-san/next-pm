@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
-import { describeJournalDetail } from "@/domain/journal/detail-label";
+import { describeJournalDetail, summariseJournalDetail } from "@/domain/journal/detail-label";
 import { memberUserIds } from "@/domain/member/entity";
 import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
@@ -11,13 +11,17 @@ import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
 import { DrizzleIssueRelationRepository } from "@/infrastructure/db/repositories/issue-relation-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journal-repository";
+import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
+import { resolvePreferences } from "@/domain/user-preferences/entity";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reaction-repository";
@@ -89,6 +93,14 @@ export default async function IssueDetailPage({
   // Loaded only once the actor is known: the repository filters private notes in SQL, so a
   // note this viewer may not read never reaches the page (nor its reaction counts).
   const journals = await new DrizzleJournalRepository().listForIssue(id, journalViewerFor(user?.id ?? null, actor, project));
+
+  // Redmine's UserPreference#comments_sorting, applied by IssuesHelper when it renders the
+  // history. Ordering comes after the visibility-filtered load above, never instead of it:
+  // reversing is purely presentational and must not decide which notes exist.
+  const preferences = user ? await new DrizzleUserPreferencesRepository().findByUserId(user.id) : null;
+  const orderedJournals =
+    resolvePreferences(preferences, user?.id ?? "").commentsSorting === "desc" ? [...journals].reverse() : journals;
+
   const reactions = await new DrizzleReactionRepository().listForReactables(
     "Journal",
     journals.map((journal) => journal.id),
@@ -105,7 +117,12 @@ export default async function IssueDetailPage({
     await Promise.all([
       new DrizzleCustomValueRepository().listForCustomized("Issue", issue.id),
       new DrizzleTimeEntryRepository().listForIssue(issue.id),
-      new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+      // The picker offers what *this project* allows, not every system activity
+      // (Redmine's Project#activities).
+      loadProjectActivities(
+        { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+        project.id,
+      ).then((view) => view.offered),
       new DrizzleAttachmentRepository().listByContainer("Issue", issue.id),
       user ? new DrizzleWatcherRepository().isWatching("Issue", issue.id, user.id) : Promise.resolve(false),
       new DrizzleVersionRepository().listSharedWith(project.id),
@@ -308,7 +325,7 @@ export default async function IssueDetailPage({
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">履歴</h2>
         <ul className="flex flex-col gap-2 text-sm">
-          {journals.map((journal) => {
+          {orderedJournals.map((journal) => {
             const reaction = reactionsByJournalId.get(journal.id) ?? { count: 0, reacted: false };
             return (
               <li key={journal.id} className="border rounded p-2 flex flex-col gap-1">
@@ -325,10 +342,7 @@ export default async function IssueDetailPage({
                   });
                   return (
                     <p key={index} className="text-xs text-gray-600">
-                      {described.kind === "updated" ? `${described.label} を更新` : null}
-                      {described.kind === "changed" ? `${described.label}: ${described.from} → ${described.to}` : null}
-                      {described.kind === "added" ? `${described.label} ${described.value} を追加` : null}
-                      {described.kind === "removed" ? `${described.label} ${described.value} を削除` : null}
+                      {summariseJournalDetail(described)}
                     </p>
                   );
                 })}

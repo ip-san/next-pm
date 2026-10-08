@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isWithinSubtree, planInsert, type NestedSetNode } from "./nested-set";
+import { isWithinSubtree, planDelete, planInsert, type NestedSetNode } from "./nested-set";
 
 describe("nested-set planInsert", () => {
   it("places the first root at lft=1, rgt=2", () => {
@@ -68,5 +68,35 @@ describe("isWithinSubtree", () => {
     const ancestor: NestedSetNode = { id: "branchA", lft: 2, rgt: 5 };
     const sibling: NestedSetNode = { id: "branchB", lft: 6, rgt: 9 };
     expect(isWithinSubtree(ancestor, sibling)).toBe(false);
+  });
+});
+
+describe("nested-set planDelete", () => {
+  //   root (1,10)
+  //   ├── branchA (2,5)
+  //   │   └── leaf (3,4)
+  //   └── branchB (6,9)
+  //       └── leafB (7,8)
+  const root: NestedSetNode = { id: "root", lft: 1, rgt: 10 };
+  const branchA: NestedSetNode = { id: "branchA", lft: 2, rgt: 5 };
+  const leaf: NestedSetNode = { id: "leaf", lft: 3, rgt: 4 };
+  const branchB: NestedSetNode = { id: "branchB", lft: 6, rgt: 9 };
+  const leafB: NestedSetNode = { id: "leafB", lft: 7, rgt: 8 };
+  const forest = [root, branchA, leaf, branchB, leafB];
+
+  it("removes the subtree deepest first and closes the gap it leaves", () => {
+    const plan = planDelete(forest, branchA);
+
+    expect(plan.removed.map((node) => node.id)).toEqual(["leaf", "branchA"]);
+    expect(plan.shifted).toEqual([
+      { id: "root", lft: 1, rgt: 6 },
+      { id: "branchB", lft: 2, rgt: 5 },
+      { id: "leafB", lft: 3, rgt: 4 },
+    ]);
+  });
+
+  it("leaves nothing behind when the only root goes", () => {
+    const only: NestedSetNode = { id: "only", lft: 1, rgt: 2 };
+    expect(planDelete([only], only)).toEqual({ removed: [only], shifted: [] });
   });
 });

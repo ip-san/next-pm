@@ -1,8 +1,10 @@
+import type { ProjectActivityRepository } from "@/domain/enumeration/project-activity-repository";
 import type { EnumerationRepository } from "@/domain/enumeration/repository";
 import type { TimeEntry } from "@/domain/time-entry/entity";
 import type { TimeEntryRepository } from "@/domain/time-entry/repository";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import { loadProjectActivities } from "./project-activities";
 
 export class InvalidTimeEntryError extends Error {}
 
@@ -10,6 +12,7 @@ export interface TimeEntryWriteRepositories {
   timeEntryRepository: TimeEntryRepository;
   settingsRepository: SettingsRepository;
   enumerationRepository: EnumerationRepository;
+  projectActivityRepository: ProjectActivityRepository;
 }
 
 export interface LogTimeInput {
@@ -44,26 +47,26 @@ export async function assertValidHours(settingsRepository: SettingsRepository, h
  * issue priority, another project's activity — is accepted, because the only thing
  * standing behind the column is a foreign key to `enumerations`.
  *
- * `project.activities` in Redmine also excludes a system-wide activity that this project
- * has overridden with its own row; that refinement needs the parent/child override pair to
- * be resolved per project, which no caller here can express yet, so a system-wide activity
- * stays acceptable.
+ * The set checked against is `Project#activities` exactly: the system-wide activities with
+ * this project's overrides substituted in, minus the inactive ones. So it rejects an
+ * activity this project switched off, rejects the *parent* of an override this project
+ * owns (the override stands in for it), and accepts the override's own id — which a check
+ * over the system list alone could not do, since those rows are project-scoped.
  */
 export async function assertActivityAvailable(
-  enumerationRepository: EnumerationRepository,
+  repositories: Pick<TimeEntryWriteRepositories, "enumerationRepository" | "projectActivityRepository">,
   projectId: string,
   activityId: string,
 ): Promise<void> {
-  const activities = await enumerationRepository.listByType("TimeEntryActivity");
-  const activity = activities.find((candidate) => candidate.id === activityId);
-  if (!activity || (activity.projectId !== null && activity.projectId !== projectId)) {
+  const { offered } = await loadProjectActivities(repositories, projectId);
+  if (!offered.some((activity) => activity.id === activityId)) {
     throw new InvalidTimeEntryError("作業分類が不正です。");
   }
 }
 
 export async function logTime(repositories: TimeEntryWriteRepositories, input: LogTimeInput): Promise<TimeEntry> {
   await assertValidHours(repositories.settingsRepository, input.hours);
-  await assertActivityAvailable(repositories.enumerationRepository, input.projectId, input.activityId);
+  await assertActivityAvailable(repositories, input.projectId, input.activityId);
 
   return repositories.timeEntryRepository.create({
     projectId: input.projectId,

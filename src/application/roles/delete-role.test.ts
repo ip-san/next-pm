@@ -26,6 +26,7 @@ function makeRepos(found: Role | null, membershipCount: number) {
     findBuiltinNonMember: mock(async () => role()),
     findBuiltinAnonymous: mock(async () => role()),
     listAssignable: mock(async () => []),
+    listGivable: mock(async () => []),
     create: mock(async () => role()),
     updatePermissions: mock(async () => {}),
   } satisfies RoleRepository;

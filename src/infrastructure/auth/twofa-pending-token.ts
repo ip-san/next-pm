@@ -12,6 +12,8 @@ export interface TwofaPendingPayload {
   userId: string;
   /** Verification attempts made so far against this pending login. */
   attempts: number;
+  /** The remember-me choice made on the password form — Redmine's session[:twofa_autologin]. */
+  rememberMe: boolean;
 }
 
 /** `purpose: "twofa_pending"` — never accepted by verifySessionToken; see its doc comment. */
@@ -29,7 +31,7 @@ export async function verifyTwofaPendingToken(token: string): Promise<TwofaPendi
     if (payload.purpose !== "twofa_pending") return null;
     if (typeof payload.userId !== "string") return null;
     if (typeof payload.attempts !== "number") return null;
-    return { userId: payload.userId, attempts: payload.attempts };
+    return { userId: payload.userId, attempts: payload.attempts, rememberMe: payload.rememberMe === true };
   } catch {
     return null;
   }

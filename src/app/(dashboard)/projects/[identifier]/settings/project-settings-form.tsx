@@ -52,11 +52,17 @@ export function ProjectSettingsForm({
   trackers,
   customFields,
   customValueByFieldId,
+  showPublicity = true,
+  showModules = true,
 }: {
   project: Project;
   trackers: Tracker[];
   customFields: CustomField[];
   customValueByFieldId: Record<string, string | null>;
+  /** False without select_project_publicity — the server keeps the stored value either way. */
+  showPublicity?: boolean;
+  /** False without select_project_modules. */
+  showModules?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateProjectSettingsAction, initialState);
 
@@ -75,19 +81,23 @@ export function ProjectSettingsForm({
         </label>
         <textarea id="description" name="description" defaultValue={project.description} className="border rounded px-3 py-2" />
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isPublic" defaultChecked={project.isPublic} />
-        公開プロジェクト
-      </label>
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-sm font-medium">モジュール</legend>
-        {MODULE_OPTIONS.map((module) => (
-          <label key={module.key} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="enabledModules" value={module.key} defaultChecked={project.enabledModules.includes(module.key)} />
-            {module.label}
-          </label>
-        ))}
-      </fieldset>
+      {showPublicity ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="isPublic" defaultChecked={project.isPublic} />
+          公開プロジェクト
+        </label>
+      ) : null}
+      {showModules ? (
+        <fieldset className="flex flex-col gap-1">
+          <legend className="text-sm font-medium">モジュール</legend>
+          {MODULE_OPTIONS.map((module) => (
+            <label key={module.key} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="enabledModules" value={module.key} defaultChecked={project.enabledModules.includes(module.key)} />
+              {module.label}
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">トラッカー</legend>
         {trackers.map((tracker) => (

@@ -18,6 +18,7 @@ import { DrizzleWikiContentRepository } from "@/infrastructure/db/repositories/w
 import { atomResponse, resolveAtomUser } from "@/interface/http/atom-feed";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { timeEntriesVisibilityRoles } from "@/interface/http/time-entry-access";
+import { can } from "@/domain/authorization/authorization-service";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   const user = await resolveAtomUser(url);
   const { actor, userGroupIds } = await resolveActor(user, project.id);
+  // The feed's *entries* were already filtered by actor, but its title is the project's name,
+  // which was being served to anyone who guessed the identifier — a private project's name
+  // leaked, and with login_required on the whole feed stayed readable while logged out. The
+  // same `view_project` gate the project page uses, and the same 404 rather than 403, so the
+  // endpoint does not confirm that the project exists.
+  if (!can({ permission: "view_project", project: toAuthorizationProject(project), actor })) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const { activityDaysDefault, feedsLimit } = resolveGeneralSettings(await new DrizzleSettingsRepository().getAll());
 
   const to = new Date();

@@ -53,6 +53,10 @@ export function EnumerationRow({
           <input type="checkbox" name="isDefault" defaultChecked={enumeration.isDefault} />
           既定値
         </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" name="active" defaultChecked={enumeration.active} />
+          有効
+        </label>
         <button type="submit" disabled={updating} className="border rounded px-2 py-1 disabled:opacity-50">
           {updating ? "保存中…" : "保存"}
         </button>

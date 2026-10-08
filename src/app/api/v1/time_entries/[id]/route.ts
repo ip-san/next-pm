@@ -12,6 +12,7 @@ import { InvalidTimeEntryError, updateTimeEntry } from "@/application/time-entri
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -189,6 +190,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         timeEntryRepository: loaded.timeEntryRepository,
         settingsRepository: new DrizzleSettingsRepository(),
         enumerationRepository: new DrizzleEnumerationRepository(),
+        projectActivityRepository: new DrizzleProjectActivityRepository(),
         issueRepository: new DrizzleIssueRepository(),
       },
       entry,

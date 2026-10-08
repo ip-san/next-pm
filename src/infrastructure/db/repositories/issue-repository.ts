@@ -93,6 +93,12 @@ export class DrizzleIssueRepository implements IssueRepository {
     return rows.map(toDomain);
   }
 
+  async listByFixedVersionIds(versionIds: string[]): Promise<Issue[]> {
+    if (versionIds.length === 0) return [];
+    const rows = await db.select().from(issues).where(inArray(issues.fixedVersionId, versionIds));
+    return rows.map(toDomain);
+  }
+
   async create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue> {
     const [row] = await db
       .insert(issues)

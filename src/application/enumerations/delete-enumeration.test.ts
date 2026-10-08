@@ -13,6 +13,7 @@ function enumeration(overrides: Partial<Enumeration> = {}): Enumeration {
     type: "IssuePriority",
     name: "高め",
     position: 1,
+    active: true,
     isDefault: false,
     projectId: null,
     parentId: null,

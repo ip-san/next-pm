@@ -2,11 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { updateAuthSettings } from "@/application/settings/auth-settings";
 import { updateCommitKeywordSettings } from "@/application/settings/commit-keyword-settings";
 import { updateGeneralSettings } from "@/application/settings/general-settings";
+import { updateProjectDefaults } from "@/application/settings/project-defaults";
+import { PROJECT_MODULES } from "@/domain/authorization/permission-registry";
+import { PASSWORD_CHAR_CLASSES, SELF_REGISTRATION_MODES, TWOFA_MODES } from "@/domain/settings/auth-settings";
 import { parseKeywordList } from "@/domain/settings/commit-keywords";
 import { PARENT_ISSUE_ROLLUP_VALUES, ISSUE_DONE_RATIO_VALUES } from "@/domain/settings/general-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 
 export type SettingsActionState = {
@@ -56,6 +61,8 @@ const updateGeneralSettingsSchema = z.object({
   repositoryLogDisplayLimit: z.coerce.number().int().positive("正の整数を入力してください。"),
   crossProjectIssueRelations: z.coerce.boolean().default(false),
   issueDoneRatio: z.enum(ISSUE_DONE_RATIO_VALUES).default("issue_field"),
+  perPageOptions: z.string().default(""),
+  issuesExportLimit: z.coerce.number().int().min(1),
   parentIssueDates: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
   parentIssuePriority: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
   parentIssueDoneRatio: z.enum(PARENT_ISSUE_ROLLUP_VALUES).default("independent"),
@@ -79,6 +86,8 @@ export async function updateGeneralSettingsAction(
     repositoryLogDisplayLimit: formData.get("repositoryLogDisplayLimit"),
     crossProjectIssueRelations: formData.get("crossProjectIssueRelations") === "on",
     issueDoneRatio: formData.get("issueDoneRatio"),
+    perPageOptions: formData.get("perPageOptions"),
+    issuesExportLimit: formData.get("issuesExportLimit"),
     parentIssueDates: formData.get("parentIssueDates"),
     parentIssuePriority: formData.get("parentIssuePriority"),
     parentIssueDoneRatio: formData.get("parentIssueDoneRatio"),
@@ -96,10 +105,108 @@ export async function updateGeneralSettingsAction(
     repositoryLogDisplayLimit: parsed.data.repositoryLogDisplayLimit,
     crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
     issueDoneRatio: parsed.data.issueDoneRatio,
+    perPageOptions: parsed.data.perPageOptions,
+    issuesExportLimit: parsed.data.issuesExportLimit,
     parentIssueDates: parsed.data.parentIssueDates,
     parentIssuePriority: parsed.data.parentIssuePriority,
     parentIssueDoneRatio: parsed.data.parentIssueDoneRatio,
   });
+
+  revalidatePath("/admin/settings");
+  return { error: null };
+}
+
+const updateProjectDefaultsSchema = z.object({
+  isPublic: z.coerce.boolean().default(false),
+  enabledModules: z.array(z.enum(PROJECT_MODULES)).default([]),
+  trackerIds: z.array(z.string().uuid()).default([]),
+  sequentialIdentifiers: z.coerce.boolean().default(false),
+  newProjectUserRoleId: z.string().uuid().nullable().default(null),
+});
+
+export async function updateProjectDefaultsAction(
+  _prevState: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const roleIdRaw = formData.get("newProjectUserRoleId");
+  const parsed = updateProjectDefaultsSchema.safeParse({
+    isPublic: formData.get("isPublic") === "on",
+    enabledModules: formData.getAll("enabledModules"),
+    trackerIds: formData.getAll("trackerIds"),
+    sequentialIdentifiers: formData.get("sequentialIdentifiers") === "on",
+    newProjectUserRoleId: roleIdRaw ? roleIdRaw : null,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  // Every tracker checked is stored as "unset", so the setting keeps following the tracker
+  // list as trackers are added later — Redmine's unset default means "all trackers" too.
+  const allTrackerIds = (await new DrizzleTrackerRepository().listAll()).map((tracker) => tracker.id);
+  const everyTrackerChecked = allTrackerIds.length > 0 && allTrackerIds.every((id) => parsed.data.trackerIds.includes(id));
+
+  await updateProjectDefaults(new DrizzleSettingsRepository(), {
+    isPublic: parsed.data.isPublic,
+    enabledModules: parsed.data.enabledModules,
+    trackerIds: everyTrackerChecked ? null : parsed.data.trackerIds,
+    sequentialIdentifiers: parsed.data.sequentialIdentifiers,
+    newProjectUserRoleId: parsed.data.newProjectUserRoleId,
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/projects/new");
+  return { error: null };
+}
+
+const updateAuthSettingsSchema = z.object({
+  loginRequired: z.coerce.boolean().default(false),
+  autologinDays: z.coerce.number().int().min(0),
+  selfRegistration: z.enum(SELF_REGISTRATION_MODES),
+  passwordMinLength: z.coerce.number().int().positive("正の整数を入力してください。"),
+  passwordRequiredCharClasses: z.array(z.enum(PASSWORD_CHAR_CLASSES)),
+  lostPasswordEnabled: z.coerce.boolean().default(false),
+  twofa: z.enum(TWOFA_MODES),
+  unsubscribeEnabled: z.coerce.boolean().default(false),
+  gravatarEnabled: z.coerce.boolean().default(false),
+  sessionLifetimeMinutes: z.coerce.number().int().min(0),
+  sessionTimeoutMinutes: z.coerce.number().int().min(0),
+  maxAdditionalEmails: z.coerce.number().int().min(0),
+});
+
+/** Redmine's Administration > Settings > Authentication tab (SettingsController#edit, tab=authentication). */
+export async function updateAuthSettingsAction(
+  _prevState: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = updateAuthSettingsSchema.safeParse({
+    loginRequired: formData.get("loginRequired") === "on",
+    autologinDays: formData.get("autologinDays"),
+    selfRegistration: formData.get("selfRegistration"),
+    passwordMinLength: formData.get("passwordMinLength"),
+    passwordRequiredCharClasses: formData.getAll("passwordRequiredCharClasses"),
+    lostPasswordEnabled: formData.get("lostPasswordEnabled") === "on",
+    twofa: formData.get("twofa"),
+    unsubscribeEnabled: formData.get("unsubscribeEnabled") === "on",
+    gravatarEnabled: formData.get("gravatarEnabled") === "on",
+    sessionLifetimeMinutes: formData.get("sessionLifetimeMinutes"),
+    sessionTimeoutMinutes: formData.get("sessionTimeoutMinutes"),
+    maxAdditionalEmails: formData.get("maxAdditionalEmails"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+  }
+
+  await updateAuthSettings(new DrizzleSettingsRepository(), parsed.data);
 
   revalidatePath("/admin/settings");
   return { error: null };

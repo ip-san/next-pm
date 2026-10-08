@@ -11,7 +11,7 @@ export interface EnumerationRepository {
 /** Admin-screen writes — see IssueStatusAdminRepository for why these sit apart. */
 export interface EnumerationAdminRepository {
   findById(id: string): Promise<Enumeration | null>;
-  update(id: string, changes: Pick<Enumeration, "name" | "isDefault">): Promise<Enumeration>;
+  update(id: string, changes: Pick<Enumeration, "name" | "isDefault" | "active">): Promise<Enumeration>;
   delete(id: string): Promise<void>;
   /**
    * Mirrors each Enumeration subclass's `objects_count`: issues for IssuePriority, documents

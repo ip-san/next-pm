@@ -5,6 +5,8 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 export interface SessionPayload {
   userId: string;
+  /** The user_sessions row backing this token — see that table's comment for why it exists. */
+  sessionId: string;
 }
 
 /**
@@ -27,7 +29,11 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     const { payload } = await jwtVerify(token, jwtSecretKey());
     if (payload.purpose !== "session") return null;
     if (typeof payload.userId !== "string") return null;
-    return { userId: payload.userId };
+    // A token minted before user_sessions existed carries no sessionId, and there is no row to
+    // apply session_lifetime/session_timeout against. Rejecting it (one forced re-login) is the
+    // only answer that doesn't leave a population of sessions permanently exempt from both.
+    if (typeof payload.sessionId !== "string") return null;
+    return { userId: payload.userId, sessionId: payload.sessionId };
   } catch {
     return null;
   }

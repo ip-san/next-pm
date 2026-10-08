@@ -3,6 +3,9 @@ import { changePassword, CurrentPasswordMismatchError, InvalidPasswordError, Lda
 import { generateSalt, hashPassword, verifyPassword } from "@/domain/user/password";
 import type { User } from "@/domain/user/entity";
 import type { UserRepository } from "@/domain/user/repository";
+import type { PasswordPolicy } from "@/domain/user/password-policy";
+
+const TEST_POLICY: PasswordPolicy = { minLength: 8, requiredCharClasses: [] };
 
 function makeUser(overrides: Partial<User> = {}): User {
   const salt = generateSalt();
@@ -16,6 +19,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     status: "active",
     passwordSalt: salt,
     passwordHash: hashPassword("s3cret-pass", salt),
+    language: null,
+    mailNotification: "all" as const,
     mustChangePassword: false,
     apiKey: null,
     atomKey: null,
@@ -39,6 +44,10 @@ function repoWith(user: User | null) {
     findByMail: mock(async () => user),
     create: mock(async (u) => ({ ...u, id: "generated" })),
     updatePassword,
+    updateProfile: mock(async () => {}),
+    updateMail: mock(async () => {}),
+    updateStatus: mock(async () => {}),
+    setApiKey: mock(async () => {}),
     setAtomKey: mock(async () => {}),
     setTotpPairing: mock(async () => {}),
     confirmTotpPairing: mock(async () => {}),
@@ -52,7 +61,7 @@ describe("changePassword", () => {
   it("updates the password when the current password is correct", async () => {
     const user = makeUser();
     const { userRepository, updatePassword } = repoWith(user);
-    await changePassword({ userRepository }, { userId: "user-1", currentPassword: "s3cret-pass", newPassword: "new-password-1" });
+    await changePassword({ userRepository }, { userId: "user-1", currentPassword: "s3cret-pass", newPassword: "new-password-1", policy: TEST_POLICY });
     expect(updatePassword).toHaveBeenCalledTimes(1);
     const [userId, hash, salt] = updatePassword.mock.calls[0] as unknown as [string, string, string];
     expect(userId).toBe("user-1");
@@ -62,7 +71,7 @@ describe("changePassword", () => {
   it("rejects a wrong current password without updating anything", async () => {
     const { userRepository, updatePassword } = repoWith(makeUser());
     await expect(
-      changePassword({ userRepository }, { userId: "user-1", currentPassword: "wrong", newPassword: "new-password-1" }),
+      changePassword({ userRepository }, { userId: "user-1", currentPassword: "wrong", newPassword: "new-password-1", policy: TEST_POLICY }),
     ).rejects.toThrow(CurrentPasswordMismatchError);
     expect(updatePassword).not.toHaveBeenCalled();
   });
@@ -70,7 +79,7 @@ describe("changePassword", () => {
   it("rejects a new password shorter than 8 characters", async () => {
     const { userRepository, updatePassword } = repoWith(makeUser());
     await expect(
-      changePassword({ userRepository }, { userId: "user-1", currentPassword: "s3cret-pass", newPassword: "short" }),
+      changePassword({ userRepository }, { userId: "user-1", currentPassword: "s3cret-pass", newPassword: "short", policy: TEST_POLICY }),
     ).rejects.toThrow(InvalidPasswordError);
     expect(updatePassword).not.toHaveBeenCalled();
   });
@@ -79,7 +88,7 @@ describe("changePassword", () => {
     const user = makeUser({ authSource: "ldap", passwordHash: "", passwordSalt: "" });
     const { userRepository, updatePassword } = repoWith(user);
     await expect(
-      changePassword({ userRepository }, { userId: "user-1", currentPassword: "anything", newPassword: "new-password-1" }),
+      changePassword({ userRepository }, { userId: "user-1", currentPassword: "anything", newPassword: "new-password-1", policy: TEST_POLICY }),
     ).rejects.toThrow(LdapPasswordChangeNotAllowedError);
     expect(updatePassword).not.toHaveBeenCalled();
   });
@@ -87,7 +96,7 @@ describe("changePassword", () => {
   it("rejects an unknown user", async () => {
     const { userRepository, updatePassword } = repoWith(null);
     await expect(
-      changePassword({ userRepository }, { userId: "ghost", currentPassword: "anything", newPassword: "new-password-1" }),
+      changePassword({ userRepository }, { userId: "ghost", currentPassword: "anything", newPassword: "new-password-1", policy: TEST_POLICY }),
     ).rejects.toThrow(CurrentPasswordMismatchError);
     expect(updatePassword).not.toHaveBeenCalled();
   });

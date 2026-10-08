@@ -8,4 +8,6 @@ export interface WatcherRepository {
   listWatchedIds(watchableType: WatchableType, userId: string): Promise<string[]>;
   /** User ids currently watching this specific watchable. */
   listWatcherUserIds(watchableType: WatchableType, watchableId: string): Promise<string[]>;
+  /** Drops every watcher of one watchable — the watchers table is polymorphic, so nothing cascades. */
+  unwatchAll(watchableType: WatchableType, watchableId: string): Promise<void>;
 }

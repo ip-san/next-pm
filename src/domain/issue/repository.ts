@@ -40,6 +40,11 @@ export interface IssueRepository {
   findByAuthor(userId: string): Promise<Issue[]>;
   /** Across every project — callers must filter by per-project visibility themselves. */
   findByIds(ids: string[]): Promise<Issue[]>;
+  /**
+   * Across every project — the archive guard needs to see issues *outside* the subtree it is
+   * about to hide, so this deliberately does not take a project scope.
+   */
+  listByFixedVersionIds(versionIds: string[]): Promise<Issue[]>;
   create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue>;
   /**
    * Applies `changes` only if `expectedLockVersion` still matches the stored row

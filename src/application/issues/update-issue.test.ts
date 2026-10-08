@@ -89,6 +89,8 @@ function makeRepositories(
   };
   const userPreferencesRepository: UserPreferencesRepository = {
     findByUserId: mock(async () => overrides.userPreferences ?? null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => undefined),
   };
   const watcherRepository = {
@@ -97,6 +99,7 @@ function makeRepositories(
     unwatch: mock(async () => undefined),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => overrides.customFields ?? []),
@@ -645,6 +648,8 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
   };
   const userPreferencesRepository: UserPreferencesRepository = {
     findByUserId: mock(async () => null),
+    findByUserIds: mock(async () => []),
+    upsertAccountPreferences: mock(async () => {}),
     upsert: mock(async () => undefined),
   };
   const watcherRepository = {
@@ -653,6 +658,7 @@ function makeCascadeRepositories(options: { issues: Issue[]; relations: IssueRel
     unwatch: mock(async () => undefined),
     listWatchedIds: mock(async () => [] as string[]),
     listWatcherUserIds: mock(async () => [] as string[]),
+    unwatchAll: mock(async () => {}),
   } satisfies WatcherRepository;
   const customFieldRepository: CustomFieldRepository = {
     listAll: mock(async () => []),
@@ -1749,5 +1755,48 @@ describe("updateIssue — what the caller may notify about", () => {
 
     expect(outcome.persistedNotes).toBe("");
     expect(outcome.persistedNotesPrivate).toBe(false);
+  });
+});
+
+describe("updateIssue — disabled core fields", () => {
+  it("drops a change to a field the tracker switched off", async () => {
+    const repos = makeRepositories({ issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", dueDate: null }) });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ disabledCoreFields: ["dueDate"] }));
+
+    const { issue: result } = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { dueDate: "2026-05-01", subject: "Still applied" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(result.dueDate).toBeNull();
+    expect(result.subject).toBe("Still applied");
+  });
+
+  it("drops both assignee columns together when the assignee field is off", async () => {
+    const repos = makeRepositories({
+      issue: makeIssue({ id: "issue-1", statusId: "new", priorityId: "normal", assignedToId: null, assignedToType: null }),
+    });
+    Object.assign(repos, makeIssueAttributeRepositoriesMock({ disabledCoreFields: ["assignedToId"] }));
+
+    const { issue: result } = await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: { assignedToId: "user-2", assignedToType: "user" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    // Dropping only the id would leave a dangling assignedToType.
+    expect(result.assignedToId).toBeNull();
+    expect(result.assignedToType).toBeNull();
   });
 });

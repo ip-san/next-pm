@@ -14,6 +14,7 @@ import type { Tracker } from "@/domain/tracker/entity";
 import type { User } from "@/domain/user/entity";
 import type { Version } from "@/domain/version/entity";
 import type { WorkflowFieldPermission, WorkflowTransition } from "@/domain/workflow/entity";
+import { isCoreFieldDisabled, type TrackerCoreField } from "@/domain/tracker/core-fields";
 import { workflowRuleByAttribute } from "@/domain/workflow/field-permission-rules";
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { IssueAutocomplete } from "../issue-autocomplete";
@@ -185,6 +186,13 @@ export function IssueEditForm({
     priorityId: derivedFields.priority,
     doneRatio: derivedFields.doneRatio,
   };
+  // A core field the selected tracker switched off isn't offered at all — Redmine removes it
+  // from safe_attribute_names, and updateIssue drops it server-side regardless.
+  const selectedTracker = trackers.find((candidate) => candidate.id === state.trackerId);
+  // Typed on TrackerCoreField rather than the workflow field set: the two overlap but
+  // parentId is a core field with no workflow rule, and subject/isPrivate are the reverse.
+  const isDisabledForTracker = (field: TrackerCoreField) =>
+    selectedTracker !== undefined && isCoreFieldDisabled(selectedTracker, field);
   const isReadOnly = (field: keyof typeof rules) =>
     !canEditAttributes || rules[field] === "readonly" || derivedByParentRollup[field] === true;
   const isRequired = (field: keyof typeof rules) => rules[field] === "required";
@@ -304,7 +312,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("description") ? (
+      {isDisabledForTracker("description") ? null : isReadOnly("description") ? (
         <ReadOnlyField label="説明" value={issue.description} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -321,7 +329,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("priorityId") ? (
+      {isDisabledForTracker("priorityId") ? null : isReadOnly("priorityId") ? (
         <ReadOnlyField label="優先度" value={priorities.find((p) => p.id === issue.priorityId)?.name ?? "?"} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -343,7 +351,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("assignedToId") ? (
+      {isDisabledForTracker("assignedToId") ? null : isReadOnly("assignedToId") ? (
         <ReadOnlyField label="担当者" value={currentAssigneeLabel} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -378,7 +386,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("categoryId") ? (
+      {isDisabledForTracker("categoryId") ? null : isReadOnly("categoryId") ? (
         <ReadOnlyField label="カテゴリ" value={categories.find((c) => c.id === issue.categoryId)?.name ?? "(なし)"} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -401,7 +409,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {isReadOnly("fixedVersionId") ? (
+      {isDisabledForTracker("fixedVersionId") ? null : isReadOnly("fixedVersionId") ? (
         <ReadOnlyField label="対象バージョン" value={versions.find((v) => v.id === issue.fixedVersionId)?.name ?? "(なし)"} />
       ) : (
         <div className="flex flex-col gap-1">
@@ -424,7 +432,7 @@ export function IssueEditForm({
         </div>
       )}
 
-      {canManageSubtasks ? (
+      {canManageSubtasks && !isDisabledForTracker("parentId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="parentId" className="text-sm font-medium">
             親チケット
@@ -440,7 +448,7 @@ export function IssueEditForm({
       ) : null}
 
       <div className="flex gap-4 flex-wrap">
-        {isReadOnly("startDate") ? (
+        {isDisabledForTracker("startDate") ? null : isReadOnly("startDate") ? (
           <ReadOnlyField label="開始日" value={issue.startDate ?? "(なし)"} />
         ) : (
           <div className="flex flex-col gap-1">
@@ -456,7 +464,7 @@ export function IssueEditForm({
             />
           </div>
         )}
-        {isReadOnly("dueDate") ? (
+        {isDisabledForTracker("dueDate") ? null : isReadOnly("dueDate") ? (
           <ReadOnlyField label="期日" value={issue.dueDate ?? "(なし)"} />
         ) : (
           <div className="flex flex-col gap-1">
@@ -472,7 +480,7 @@ export function IssueEditForm({
             />
           </div>
         )}
-        {isReadOnly("estimatedHours") ? (
+        {isDisabledForTracker("estimatedHours") ? null : isReadOnly("estimatedHours") ? (
           <ReadOnlyField label="予定工数" value={issue.estimatedHours === null ? "(なし)" : String(issue.estimatedHours)} />
         ) : (
           <div className="flex flex-col gap-1">
@@ -494,7 +502,7 @@ export function IssueEditForm({
             "issue_status" the ratio follows the status and the field is not shown at all.
             The 10-point step is Redmine's default issue_done_ratio_interval, which next-pm
             has no setting for. */}
-        {doneRatioEditable && !isReadOnly("doneRatio") ? (
+        {isDisabledForTracker("doneRatio") ? null : doneRatioEditable && !isReadOnly("doneRatio") ? (
           <div className="flex flex-col gap-1">
             <label htmlFor="doneRatio" className="text-sm font-medium">
               {label("doneRatio", "進捗率")}

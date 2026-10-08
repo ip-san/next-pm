@@ -260,6 +260,34 @@
       "when": 1791356023439,
       "tag": "0036_serious_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791356371883,
+      "tag": "0037_deep_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791356593892,
+      "tag": "0038_sloppy_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791358206121,
+      "tag": "0039_reflective_exodus",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791436415209,
+      "tag": "0040_gray_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

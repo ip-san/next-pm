@@ -12,6 +12,21 @@ import type { IssuesVisibility } from "@/domain/role/entity";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { resolveAuthSettings } from "@/domain/settings/auth-settings";
+import { ROLE_BUILTIN_ANONYMOUS, type Role } from "@/domain/role/entity";
+
+/**
+ * Not a stored role: what an anonymous visitor gets while login_required is on — nothing at
+ * all. Both visibility fields take their most restrictive value, so that even if a future
+ * caller reads them without first checking a permission, they cannot widen anything.
+ */
+const NO_ACCESS_ROLE: Pick<Role, "builtin" | "permissions" | "issuesVisibility" | "timeEntriesVisibility"> = {
+  builtin: ROLE_BUILTIN_ANONYMOUS,
+  permissions: [],
+  issuesVisibility: "own",
+  timeEntriesVisibility: "own",
+};
 
 export interface ResolvedActor {
   actor: AuthorizationActor;
@@ -34,6 +49,15 @@ export async function resolveActor(user: User | null, projectId: string): Promis
   const roleRepository = new DrizzleRoleRepository();
 
   if (!user) {
+    // Redmine's check_if_login_required denies an anonymous request outright when
+    // Setting.login_required is on. Enforcing it here rather than only in a layout is what
+    // makes it real: Route Handlers (attachment downloads, Atom feeds, CSV/PDF exports) and
+    // Server Actions all resolve their actor through this function and would otherwise keep
+    // serving public projects to logged-out visitors.
+    const { loginRequired } = resolveAuthSettings(await new DrizzleSettingsRepository().getAll());
+    if (loginRequired) {
+      return { actor: { kind: "anonymous", role: NO_ACCESS_ROLE }, roleIds: [], userGroupIds: [] };
+    }
     const anonymous = await roleRepository.findBuiltinAnonymous();
     return { actor: { kind: "anonymous", role: anonymous }, roleIds: [anonymous.id], userGroupIds: [] };
   }
@@ -53,6 +77,31 @@ export async function resolveActor(user: User | null, projectId: string): Promis
 
   const nonMember = await roleRepository.findBuiltinNonMember();
   return { actor: { kind: "non_member", role: nonMember }, roleIds: [nonMember.id], userGroupIds };
+}
+
+/**
+ * The role set a project-less permission question is answered against — every role the user
+ * holds in any project (direct or group-inherited) plus their builtin role, mirroring
+ * Redmine's `roles | memberships.roles << builtin_role` in the `:global => true` branch of
+ * User#allowed_to?. Feed this to `canGlobally`.
+ */
+export async function resolveGlobalRoles(user: User | null): Promise<Role[]> {
+  const roleRepository = new DrizzleRoleRepository();
+  if (!user) {
+    return [await roleRepository.findBuiltinAnonymous()];
+  }
+
+  // Redmine's Principal#memberships is scoped `where.not(projects: {status: ARCHIVED})`, so
+  // a role held only on an archived project grants nothing globally — without this filter it
+  // would still answer `add_project`, letting an archived membership open a new project.
+  const archivedProjectIds = new Set(
+    (await new DrizzleProjectRepository().listAll()).filter((project) => project.status === "archived").map((project) => project.id),
+  );
+  const memberships = (await new DrizzleMemberRepository().listByUser(user.id)).filter(
+    (member) => !archivedProjectIds.has(member.projectId),
+  );
+  const membershipRoles = await roleRepository.findByIds([...new Set(memberships.flatMap((member) => member.roleIds))]);
+  return [...membershipRoles, await roleRepository.findBuiltinNonMember()];
 }
 
 /**

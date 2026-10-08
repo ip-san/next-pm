@@ -1,11 +1,8 @@
-import { cookies } from "next/headers";
 import { isActiveUser, type User } from "@/domain/user/entity";
 import { resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { verifySessionToken } from "@/infrastructure/auth/session-token";
-
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? "next_pm_session";
+import { resolveSessionUserId } from "./session";
 
 /** Only an active account resolves — see the note on activeOrNull. */
 function activeOrNull(user: User | null): User | null {
@@ -15,20 +12,20 @@ function activeOrNull(user: User | null): User | null {
 /**
  * Resolves the current user for Server Components / Server Actions from the session cookie.
  *
- * The status re-check mirrors Redmine's `User.active.find(session[:user_id])` in
- * ApplicationController#find_current_user, and it is what makes an admin locking an account
- * take effect: the session token is a stateless JWT, so without re-reading the status on every
- * request a locked user would keep working until their token expired.
+ * Two independent gates, and both are load-bearing:
+ *
+ * - `resolveSessionUserId` (session.ts) owns the cookie: signature, the backing user_sessions
+ *   row, session_lifetime and the idle session_timeout. Without it those settings have
+ *   nothing to act on, because a stateless JWT cannot carry a server-owned idle clock.
+ * - `activeOrNull` re-reads the status on every request, mirroring Redmine's
+ *   `User.active.find(session[:user_id])` in ApplicationController#find_current_user. Without
+ *   it, locking an account is cosmetic: the JWT keeps working until it expires.
  */
 export async function currentUserFromCookies(): Promise<User | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  if (!token) return null;
+  const userId = await resolveSessionUserId();
+  if (!userId) return null;
 
-  const payload = await verifySessionToken(token);
-  if (!payload) return null;
-
-  return activeOrNull(await new DrizzleUserRepository().findById(payload.userId));
+  return activeOrNull(await new DrizzleUserRepository().findById(userId));
 }
 
 /**

@@ -6,9 +6,11 @@ import type { SavedQuery } from "@/domain/query/entity";
 import { isQueryEditable, isQueryVisible } from "@/domain/query/visibility";
 import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
+import { DrizzleProjectActivityRepository } from "@/infrastructure/db/repositories/project-activity-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -85,7 +87,10 @@ export default async function ProjectTimeEntriesPage({
   });
 
   const [activities, members, roles] = await Promise.all([
-    new DrizzleEnumerationRepository().listByType("TimeEntryActivity"),
+    loadProjectActivities(
+      { enumerationRepository: new DrizzleEnumerationRepository(), projectActivityRepository: new DrizzleProjectActivityRepository() },
+      project.id,
+    ).then((view) => view.offered),
     new DrizzleMemberRepository().listByProject(project.id),
     new DrizzleRoleRepository().listAssignable(),
   ]);

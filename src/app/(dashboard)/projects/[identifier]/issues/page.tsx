@@ -27,6 +27,8 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
+import { issueIndentLevels } from "@/domain/issue/tree";
+import { IssueContextMenu } from "./issue-context-menu";
 import { issueColumnValue, issueGroupLabel, issueGroupValue, type IssueListLookups } from "@/interface/query/issue-list-view";
 import { issueListHref, normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
 import { IssueQueryForm, type FilterValueOption } from "@/interface/components/query/issue-query-form";
@@ -60,6 +62,15 @@ export default async function ProjectIssuesPage({
   const canViewTimeEntries = can({ permission: "view_time_entries", project: projectContext, actor });
   const canSaveQueries = can({ permission: "save_queries", project: projectContext, actor });
   const canManagePublicQueries = can({ permission: "manage_public_queries", project: projectContext, actor });
+  // The context menu renders only the entries the viewer may use; bulkUpdateIssuesAction and
+  // the destroy/copy pages re-check per issue regardless, so this is presentation only.
+  const contextMenuPermissions = {
+    edit:
+      can({ permission: "edit_issues", project: projectContext, actor }) ||
+      can({ permission: "edit_own_issues", project: projectContext, actor }),
+    copy: can({ permission: "copy_issues", project: projectContext, actor }),
+    delete: can({ permission: "delete_issues", project: projectContext, actor }),
+  };
 
   const queryRepository = new DrizzleQueryRepository();
   const allQueries = await queryRepository.listAvailableFor(project.id, "IssueQuery");
@@ -155,6 +166,13 @@ export default async function ProjectIssuesPage({
   // Group boundaries are worked out before rendering rather than with a running variable
   // inside the row map — the rows arrive already ordered by the group column, so a row
   // starts a new group whenever its group value differs from the previous row's.
+  // Subtask indentation, Redmine's issue_list helper: relative to the issues actually in
+  // this list, so a child whose parent is filtered out or on another page stays flush left.
+  const indentLevels = issueIndentLevels(
+    result.search.issues,
+    new Map(result.search.issues.map((issue) => [issue.id, issue.parentId])),
+  );
+
   const groupBy = result.effective.groupBy;
   const tableRows = result.search.issues.map((issue, index) => {
     const groupValue = groupBy ? issueGroupValue(groupBy, issue, result.search.customValues) : undefined;
@@ -269,6 +287,19 @@ export default async function ProjectIssuesPage({
           {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
         </p>
 
+        <IssueContextMenu
+          projectIdentifier={identifier}
+          basePath={basePath}
+          statuses={statuses.map((status) => ({ id: status.id, name: status.name }))}
+          trackers={trackers.map((tracker) => ({ id: tracker.id, name: tracker.name }))}
+          priorities={priorities.map((priority) => ({ id: priority.id, name: priority.name }))}
+          assignees={[
+            ...memberUsers.map((member) => ({ id: member.id, name: `${member.lastname} ${member.firstname}` })),
+            ...allGroups.map((group) => ({ id: `group:${group.id}`, name: `${group.name}（グループ）` })),
+          ]}
+          versions={versions.map((version) => ({ id: version.id, name: version.name }))}
+          permissions={contextMenuPermissions}
+        />
         <table className="text-sm border-collapse">
           <thead>
             <tr className="text-left border-b">
@@ -318,14 +349,20 @@ export default async function ProjectIssuesPage({
                       </td>
                     </tr>
                   ) : null}
-                  <tr className="border-b">
+                  <tr className="border-b" data-issue-id={issue.id}>
                     <td className="pr-4 py-1">
                       <input type="checkbox" name="ids" value={issue.id} aria-label={`${issue.subject}を選択`} />
                     </td>
                     {result.displayColumns.map((column) => (
                       <td key={column.key} className="pr-4 py-1">
                         {column.key === "id" || column.key === "subject" ? (
-                          <Link href={`${basePath}/${issue.id}`} className="underline">
+                          <Link
+                            href={`${basePath}/${issue.id}`}
+                            className="underline"
+                            style={
+                              column.key === "subject" ? { marginLeft: `${(indentLevels.get(issue.id) ?? 0) * 1.25}rem` } : undefined
+                            }
+                          >
                             {issueColumnValue(column, issue, rowContext)}
                           </Link>
                         ) : (

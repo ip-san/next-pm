@@ -28,7 +28,12 @@ export default async function ProjectGanttPage({
 
   const user = await currentUserFromCookies();
   const { actor, userGroupIds } = await resolveActor(user, project.id);
-  if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
+  // See the calendar page: Redmine authorizes `view_gantt` and then renders `Issue.visible`.
+  const projectContext = toAuthorizationProject(project);
+  if (
+    !can({ permission: "view_gantt", project: projectContext, actor }) ||
+    !can({ permission: "view_issues", project: projectContext, actor })
+  ) {
     notFound();
   }
 

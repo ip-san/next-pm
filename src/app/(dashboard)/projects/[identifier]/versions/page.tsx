@@ -38,6 +38,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
   }
   const canManageVersions = can({ permission: "manage_versions", project: projectContext, actor });
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
+  const hasWiki = project.enabledModules.includes("wiki");
 
   const [versions, allIssues, statuses] = await Promise.all([
     new DrizzleVersionRepository().listByProject(project.id),
@@ -63,6 +64,8 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
           members: can({ permission: "manage_members", project: projectContext, actor }),
           versions: true,
           issueCategories: hasIssueTracking && can({ permission: "manage_issue_categories", project: projectContext, actor }),
+          activities: can({ permission: "manage_project_activities", project: projectContext, actor }),
+          wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
 

@@ -8,8 +8,10 @@ import { InvalidAttachmentError } from "@/domain/attachment/validate";
 import { filterMembersWithPermission, memberUserIds } from "@/domain/member/entity";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { isWikiPageEditable } from "@/domain/wiki/protection";
 import { WikiPageNotFoundError, WikiTitleConflictError, renameWikiPage } from "@/application/wiki/rename-wiki-page";
-import { saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { WikiPageProtectedError, saveWikiPage } from "@/application/wiki/save-wiki-page";
+import { InvalidWikiParentError } from "@/application/wiki/set-wiki-page-parent";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
@@ -21,6 +23,7 @@ import {
   DrizzleWikiContentRepository,
   DrizzleWikiPageRepository,
   DrizzleWikiRedirectRepository,
+  DrizzleWikiRepository,
 } from "@/infrastructure/db/repositories/wiki-repository";
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -36,6 +39,8 @@ const saveWikiPageSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください。"),
   text: z.string(),
   comments: z.string().default(""),
+  /** Absent (the form hides the select) leaves the parent alone; "" detaches the page to the root. */
+  parentId: z.union([z.string().uuid(), z.literal("")]).optional(),
 });
 
 export async function saveWikiPageAction(
@@ -48,6 +53,7 @@ export async function saveWikiPageAction(
     title: formData.get("title"),
     text: formData.get("text") ?? "",
     comments: formData.get("comments") ?? "",
+    parentId: formData.get("parentId") ?? undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -68,17 +74,30 @@ export async function saveWikiPageAction(
     return { error: "この操作を行う権限がありません。" };
   }
 
-  const { page } = await saveWikiPage(
-    { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
-    {
-      projectId: parsed.data.projectId,
-      title: parsed.data.title,
-      text: parsed.data.text,
-      comments: parsed.data.comments,
-      authorId: user.id,
-      parentId: null,
-    },
-  );
+  let page;
+  try {
+    ({ page } = await saveWikiPage(
+      { wikiPageRepository: new DrizzleWikiPageRepository(), wikiContentRepository: new DrizzleWikiContentRepository() },
+      {
+        projectId: parsed.data.projectId,
+        title: parsed.data.title,
+        text: parsed.data.text,
+        comments: parsed.data.comments,
+        authorId: user.id,
+        parentId: parsed.data.parentId === undefined ? undefined : parsed.data.parentId || null,
+        canReparentExisting: can({ permission: "rename_wiki_pages", project: toAuthorizationProject(project), actor }),
+        canProtect: can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }),
+      },
+    ));
+  } catch (error) {
+    if (error instanceof WikiPageProtectedError) {
+      return { error: "このページは保護されています。" };
+    }
+    if (error instanceof InvalidWikiParentError) {
+      return { error: "親ページとして指定できないページです。" };
+    }
+    throw error;
+  }
 
   const members = await new DrizzleMemberRepository().listByProject(project.id);
   const rolesById = new Map(
@@ -111,9 +130,9 @@ const uploadWikiAttachmentSchema = z.object({
   file: z.instanceof(File),
 });
 
-// Mirrors Redmine's acts_as_attachable default for WikiPage: attaching a file requires the same
-// edit_wiki_pages permission as editing the page's text (no separate "manage wiki attachments"
-// permission is modeled here, same simplification already used for issue notes elsewhere).
+// Mirrors Redmine's WikiController#add_attachment: edit_wiki_pages plus the page's own
+// protection gate (acts_as_attachable's default :add_permission is the container's edit
+// permission; the controller additionally requires editable?).
 export async function uploadWikiAttachmentAction(
   _prevState: UploadWikiAttachmentActionState,
   formData: FormData,
@@ -150,6 +169,9 @@ export async function uploadWikiAttachmentAction(
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
+  }
+  if (!isWikiPageEditable(wikiPage, can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }))) {
+    return { error: "このページは保護されています。" };
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
@@ -225,9 +247,15 @@ export async function deleteWikiAttachmentAction(
     return { error: "プロジェクトが見つかりません。" };
   }
 
+  // Redmine's acts_as_attachable :delete_permission => :delete_wiki_pages_attachments
+  // (wiki_page.rb#L30) — a dedicated permission, not edit_wiki_pages — combined with
+  // WikiPage#attachments_deletable?, which also demands the page be editable.
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
+  if (!can({ permission: "delete_wiki_pages_attachments", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
+  }
+  if (!isWikiPageEditable(wikiPage, can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }))) {
+    return { error: "このページは保護されています。" };
   }
 
   await attachmentRepository.delete(attachment.id);
@@ -246,6 +274,8 @@ const renameWikiPageSchema = z.object({
   projectIdentifier: z.string().min(1),
   newTitle: z.string().min(1, "タイトルを入力してください。"),
   keepRedirect: z.literal("on").optional(),
+  parentId: z.union([z.string().uuid(), z.literal("")]).optional(),
+  isStartPage: z.literal("on").optional(),
 });
 
 export async function renameWikiPageAction(
@@ -257,6 +287,8 @@ export async function renameWikiPageAction(
     projectIdentifier: formData.get("projectIdentifier"),
     newTitle: formData.get("newTitle"),
     keepRedirect: formData.get("keepRedirect") ?? undefined,
+    parentId: formData.get("parentId") ?? undefined,
+    isStartPage: formData.get("isStartPage") ?? undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -277,16 +309,37 @@ export async function renameWikiPageAction(
     return { error: "プロジェクトが見つかりません。" };
   }
 
+  // Redmine maps `wiki#rename` to both rename_wiki_pages and manage_wiki
+  // (preparation.rb#L128,#L135), so either one grants it.
   const { actor } = await resolveActor(user, project.id);
-  if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
+  const projectContext = toAuthorizationProject(project);
+  // Redmine's safe_attributes put title and parent_id behind rename_wiki_pages alone, so
+  // manage_wiki opens the rename screen but may not retitle or move the page.
+  const canReparent = can({ permission: "rename_wiki_pages", project: projectContext, actor });
+  const canManageWiki = can({ permission: "manage_wiki", project: projectContext, actor });
+  const canRename = canReparent || canManageWiki;
+  if (!canRename) {
     return { error: "この操作を行う権限がありません。" };
   }
+
+
 
   let renamed;
   try {
     renamed = await renameWikiPage(
-      { wikiPageRepository: new DrizzleWikiPageRepository(), wikiRedirectRepository: new DrizzleWikiRedirectRepository() },
-      { pageId: parsed.data.pageId, newTitle: parsed.data.newTitle, keepRedirect: parsed.data.keepRedirect === "on" },
+      {
+        wikiPageRepository: new DrizzleWikiPageRepository(),
+        wikiRedirectRepository: new DrizzleWikiRedirectRepository(),
+        wikiRepository: new DrizzleWikiRepository(),
+      },
+      {
+        pageId: parsed.data.pageId,
+        newTitle: canReparent ? parsed.data.newTitle : wikiPage.title,
+        keepRedirect: parsed.data.keepRedirect === "on",
+        parentId: canReparent ? (parsed.data.parentId === undefined ? undefined : parsed.data.parentId || null) : undefined,
+        markAsStartPage: canManageWiki && parsed.data.isStartPage === "on",
+        canProtect: can({ permission: "protect_wiki_pages", project: projectContext, actor }),
+      },
     );
   } catch (error) {
     if (error instanceof WikiTitleConflictError) {
@@ -294,6 +347,12 @@ export async function renameWikiPageAction(
     }
     if (error instanceof WikiPageNotFoundError) {
       return { error: "Wikiページが見つかりません。" };
+    }
+    if (error instanceof WikiPageProtectedError) {
+      return { error: "このページは保護されています。" };
+    }
+    if (error instanceof InvalidWikiParentError) {
+      return { error: "親ページとして指定できないページです。" };
     }
     throw error;
   }
