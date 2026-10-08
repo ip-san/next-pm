@@ -26,6 +26,8 @@ export interface TimeEntryTableProps {
    * button sends the chosen ids as `ids` to this URL (Redmine's bulk edit from the timelog list).
    */
   bulkEditHref?: string;
+  /** Which rows get a bulk-edit checkbox. Defaults to the rows that offer edit. */
+  isSelectable?: (entry: TimeEntry) => boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export function TimeEntryTable({
   projectIdentifierById,
   isEditable,
   bulkEditHref,
+  isSelectable = isEditable,
 }: TimeEntryTableProps) {
   const groupsByValue = new Map((result.search.groups ?? []).map((group) => [group.value, group]));
   const totalColumns = result.effective.totalableNames
@@ -114,7 +117,7 @@ export function TimeEntryTable({
                 <tr className="border-b">
                   {bulkEditHref ? (
                     <td className="pr-2 py-1">
-                      {isEditable(entry) ? <input type="checkbox" form={BULK_EDIT_FORM_ID} name="ids" value={entry.id} aria-label="選択" /> : null}
+                      {isSelectable(entry) ? <input type="checkbox" form={BULK_EDIT_FORM_ID} name="ids" value={entry.id} aria-label="選択" /> : null}
                     </td>
                   ) : null}
                   {result.displayColumns.map((column) => (

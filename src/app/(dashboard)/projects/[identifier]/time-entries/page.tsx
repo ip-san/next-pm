@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { listTimeEntries } from "@/application/time-entries/list-time-entries";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { can } from "@/domain/authorization/authorization-service";
 import type { SavedQuery } from "@/domain/query/entity";
 import { isQueryEditable, isQueryVisible } from "@/domain/query/visibility";
@@ -22,7 +23,7 @@ import { IssueQueryForm, type FilterValueOption } from "@/interface/components/q
 import { SaveQueryForm, SavedQueryControls } from "@/interface/components/query/save-query-form";
 import { TimeEntryTable } from "@/interface/components/query/time-entry-table";
 import { currentUserFromCookies } from "@/interface/http/current-user";
-import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { loadTimeEntryLookups, timeEntryProjectScope } from "@/interface/http/time-entry-list";
 import { normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
 
@@ -66,6 +67,16 @@ export default async function ProjectTimeEntriesPage({
     savedQuery = visibleQueries.find((query) => query.id === listParams.queryId) ?? null;
   }
 
+  // display_subprojects_issues: the list also covers the subprojects, each judged by its own project's rules.
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const subtreeEntries = displaySubprojectsIssues
+    ? (await listVisibleProjectContexts(user, "view_project")).filter(
+        (entry) => entry.project.lft >= project.lft && entry.project.rgt <= project.rgt,
+      )
+    : [];
+  const scopeEntries = subtreeEntries.length > 0 ? subtreeEntries : [projectEntry];
+  const projectIdentifierById = new Map(scopeEntries.map((entry) => [entry.project.id, entry.project.identifier]));
+
   const result = await listTimeEntries(
     {
       timeEntrySearchRepository: new DrizzleTimeEntrySearchRepository(),
@@ -75,13 +86,13 @@ export default async function ProjectTimeEntriesPage({
     {
       params: listParams,
       savedQuery,
-      visibility: { userId: user?.id ?? null, userGroupIds, projects: [timeEntryProjectScope(projectEntry)] },
+      visibility: { userId: user?.id ?? null, userGroupIds, projects: scopeEntries.map(timeEntryProjectScope) },
       crossProject: false,
       today: new Date().toISOString().slice(0, 10),
     },
   );
 
-  const lookups = await loadTimeEntryLookups([projectEntry], {
+  const lookups = await loadTimeEntryLookups(scopeEntries, {
     issueIds: [...new Set(result.search.entries.map((entry) => entry.issueId).filter((id): id is string => id !== null))],
     userIds: [...new Set(result.search.entries.flatMap((entry) => [entry.userId, entry.authorId]))],
   });
@@ -214,8 +225,13 @@ export default async function ProjectTimeEntriesPage({
         lookups={lookups}
         basePath={basePath}
         listParams={listParams}
-        projectIdentifierById={new Map([[project.id, identifier]])}
+        projectIdentifierById={projectIdentifierById}
         isEditable={(entry) =>
+          canEditTimeEntry({ entry, userId: user?.id ?? null, visible: true, canEditTimeEntries, canEditOwnTimeEntries })
+        }
+        // Bulk edit acts on this project's entries only, so a subproject's entry gets no checkbox.
+        isSelectable={(entry) =>
+          entry.projectId === project.id &&
           canEditTimeEntry({ entry, userId: user?.id ?? null, visible: true, canEditTimeEntries, canEditOwnTimeEntries })
         }
         bulkEditHref={canEditTimeEntries || canEditOwnTimeEntries ? `${basePath}/bulk-edit` : undefined}
