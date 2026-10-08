@@ -1,5 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
+import type { SearchCriteria } from "@/domain/search/entity";
+import { projectScopeCondition, searchMatchCondition } from "@/infrastructure/db/search-tokens";
 import { boards } from "@/infrastructure/db/schema/boards";
 import { messages } from "@/infrastructure/db/schema/messages";
 import type { Message } from "@/domain/message/entity";
@@ -82,16 +84,25 @@ export class DrizzleMessageRepository implements MessageRepository {
       .where(eq(messages.id, parentId));
   }
 
-  async search(projectId: string, query: string): Promise<Message[]> {
+  /**
+   * Message's `acts_as_searchable :columns => ['subject', 'content'], :project_key =>
+   * "#{Board.table_name}.project_id"` — a message reaches its project only through its board,
+   * which is why the project scope is applied to the joined `boards` row.
+   */
+  async search(projectIds: string[], criteria: SearchCriteria): Promise<Message[]> {
+    if (criteria.tokens.length === 0) return [];
     const rows = await db
       .select({ message: messages })
       .from(messages)
       .innerJoin(boards, eq(boards.id, messages.boardId))
       .where(
-        and(
-          eq(boards.projectId, projectId),
-          sql`to_tsvector('english', ${messages.subject} || ' ' || ${messages.content}) @@ plainto_tsquery('english', ${query})`,
-        ),
+        sql`${projectScopeCondition(sql`${boards.projectId}`, projectIds)} and ${searchMatchCondition({
+          columns: [sql`${messages.subject}`, sql`${messages.content}`],
+          titleColumns: [sql`${messages.subject}`],
+          criteria,
+          attachmentContainerType: "Message",
+          attachmentContainerIdColumn: sql`${messages.id}`,
+        })}`,
       )
       .orderBy(messages.createdAt);
     return rows.map((row) => toDomain(row.message));

@@ -1,3 +1,4 @@
+import type { SearchCriteria } from "@/domain/search/entity";
 import type { Message } from "./entity";
 
 export interface MessageRepository {
@@ -14,5 +15,5 @@ export interface MessageRepository {
    * Full-text search over subject/content, scoped to one project. Messages have no projectId
    * column of their own — the implementation must join through boards.project_id.
    */
-  search(projectId: string, query: string): Promise<Message[]>;
+  search(projectIds: string[], criteria: SearchCriteria): Promise<Message[]>;
 }

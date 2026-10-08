@@ -1,3 +1,4 @@
+import type { IssueSearchOptions } from "@/domain/search/entity";
 import type { CompiledPredicate } from "@/domain/query/filter-builder";
 import type { Issue } from "./entity";
 
@@ -55,5 +56,6 @@ export interface IssueRepository {
    */
   deleteWithDependents(issueIds: string[]): Promise<void>;
   /** Full-text search over subject/description, scoped to one project. */
-  search(projectId: string, query: string): Promise<Issue[]>;
+  /** Redmine's `acts_as_searchable` scope for Issue, across every project the caller already decided is in scope. */
+  search(projectIds: string[], criteria: IssueSearchOptions): Promise<Issue[]>;
 }

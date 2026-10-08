@@ -1,6 +1,8 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { wikiContentVersions, wikiPages, wikiRedirects } from "@/infrastructure/db/schema/wiki";
+import type { SearchCriteria } from "@/domain/search/entity";
+import { projectScopeCondition, searchMatchCondition } from "@/infrastructure/db/search-tokens";
 import type { WikiContentVersion, WikiPage, WikiRedirect } from "@/domain/wiki/entity";
 import type {
   WikiContentRepository,
@@ -165,7 +167,17 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
    * builder has no clean way to express "latest row per group" joins, so this one query
    * is raw SQL rather than the builder used everywhere else in this file.
    */
-  async search(projectId: string, query: string): Promise<WikiSearchHit[]> {
+  async search(projectIds: string[], criteria: SearchCriteria): Promise<WikiSearchHit[]> {
+    if (criteria.tokens.length === 0) return [];
+    // WikiPage's `acts_as_searchable :columns => ['title', "#{WikiContent.table_name}.text"]`
+    // — the title lives on the page, the text on its current version.
+    const match = searchMatchCondition({
+      columns: [sql`wp.title`, sql`wcv.text`],
+      titleColumns: [sql`wp.title`],
+      criteria,
+      attachmentContainerType: "WikiPage",
+      attachmentContainerIdColumn: sql`wp.id`,
+    });
     const result = await db.execute(sql`
       select wp.id as page_id, wp.project_id, wp.title, wp.parent_id, wp.is_protected,
              wcv.id as version_id, wcv.version, wcv.author_id, wcv.text, wcv.comments, wcv.created_at
@@ -175,8 +187,8 @@ export class DrizzleWikiContentRepository implements WikiContentRepository {
         order by page_id, version desc
       ) wcv
       join ${wikiPages} wp on wp.id = wcv.page_id
-      where wp.project_id = ${projectId}
-        and to_tsvector('english', wp.title || ' ' || wcv.text) @@ plainto_tsquery('english', ${query})
+      where ${projectScopeCondition(sql`wp.project_id`, projectIds)}
+        and ${match}
       order by wp.title
     `);
 

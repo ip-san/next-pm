@@ -1,5 +1,6 @@
 export type PermissionKey =
   | "view_project"
+  | "search_project"
   | "edit_project"
   | "close_project"
   | "select_project_modules"
@@ -83,6 +84,12 @@ interface PermissionDefinition {
 
 export const PERMISSION_REGISTRY: Record<PermissionKey, PermissionDefinition> = {
   view_project: { module: null, readOnly: true, require: null },
+  // preparation.rb#L38: `map.permission :search_project, {:search => :index}, :public => true,
+  // :read => true`. next-pm has no "public permission" concept — `view_project` is declared
+  // the same way upstream and is modelled here as an ordinary key that the seed grants to
+  // every role, including the builtin Non member and Anonymous. Same treatment, so the two
+  // can't drift.
+  search_project: { module: null, readOnly: true, require: null },
   edit_project: { module: null, readOnly: false, require: "member" },
   close_project: { module: null, readOnly: false, require: "member" },
   select_project_modules: { module: null, readOnly: false, require: "member" },
