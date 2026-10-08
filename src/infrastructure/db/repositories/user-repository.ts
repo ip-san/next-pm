@@ -49,6 +49,34 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
     return rows.map(toDomain);
   }
 
+  /**
+   * The columns the users CSV export needs, including created_at (the domain User doesn't carry it).
+   * Same listing rule as listAll: the AnonymousUser placeholder is excluded.
+   */
+  async listForCsvExport(): Promise<{
+    login: string;
+    firstname: string;
+    lastname: string;
+    mail: string;
+    isAdmin: boolean;
+    status: UserStatus;
+    createdAt: Date;
+  }[]> {
+    return db
+      .select({
+        login: users.login,
+        firstname: users.firstname,
+        lastname: users.lastname,
+        mail: users.mail,
+        isAdmin: users.isAdmin,
+        status: users.status,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(ne(users.status, "anonymous"))
+      .orderBy(users.login, users.id);
+  }
+
   async findById(id: string): Promise<User | null> {
     const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return row ? toDomain(row) : null;
