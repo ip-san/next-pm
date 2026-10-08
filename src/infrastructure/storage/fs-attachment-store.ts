@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AttachmentStorage } from "@/domain/attachment/repository";
 
-const STORAGE_DIR = process.env.ATTACHMENTS_STORAGE_PATH ?? join(process.cwd(), "storage", "attachments");
+export const STORAGE_DIR = process.env.ATTACHMENTS_STORAGE_PATH ?? join(process.cwd(), "storage", "attachments");
 
 /**
  * The storage key is always a server-generated UUID (see save()) and is only ever taken from

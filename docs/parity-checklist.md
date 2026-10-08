@@ -159,7 +159,7 @@
 | カスタムフィールド | done | 作成/編集/削除(入力済みの値ごと)/並べ替え。本家同様、保存後の形式(`field_format`)と対象(STI の型)は変更不可 |
 | 列挙項目(優先度・作業分類・文書カテゴリ) | done | 作成/編集(名称・既定フラグ・有効フラグ)/削除/並べ替え。削除は本家 `EnumerationsController#destroy` 準拠で、使用中なら付け替え先(`reassign_to`)必須。プロジェクト単位の作業分類の上書きは §3 で対応済み |
 | アプリケーション設定 | partial | 「全般」15 項目(添付上限・REST API 有効化・活動日数・フィード件数・0 時間工数の可否・進捗率の算出方式・プロジェクト間の関連許可・リポジトリログ表示件数・親チケットの日付/優先度/進捗率の算出方式・1 ページあたりの表示件数・エクスポート上限)+「認証」12 項目 +「プロジェクト」5 項目(`default_projects_public` / `default_projects_modules` / `default_projects_tracker_ids` / `sequential_project_identifiers` / `new_project_user_role_id`)+「リポジトリ」のコミットキーワード各種。認証タブは本家とほぼ同じ構成(`login_required` / `autologin` / `self_registration` / `password_min_length` / `password_required_char_classes` / `lost_password` / `twofa` / `unsubscribe` / `gravatar_enabled` / `session_lifetime` / `session_timeout` / `max_additional_emails`)。認証タブの既定値は本家の既定ではなく **next-pm の従来の挙動**に合わせてある(`self_registration` と `unsubscribe` は本家の既定と逆の OFF。既存環境でこの画面が出た瞬間に公開登録とアカウント削除が開くのを避けるため)。未対応は表示(日時書式、既定言語)・課題追跡(既定トラッカー、添付の既定)・メール通知の設定、および `password_max_age` / `show_custom_fields_on_registration` / `email_domains_allowed|denied` |
-| 情報画面(環境情報) | missing | 本家 `/admin/info` |
+| 情報画面(環境情報) | partial | 本家 `AdminController#info` の 3 項目(既定の管理者パスワード、添付の保存先、マイグレーションの実行状況)を `/admin/info` で確認できる。環境は next-pm・Next.js・ランタイム・PostgreSQL・Git / Mercurial / Subversion の版。サムネイル・PDF 変換(本家の ImageMagick / Ghostscript / Pandoc)は next-pm に該当機能が無いため項目に入れていない |
 | プラグイン一覧 | out-of-scope | プラグイン機構そのものが無い |
 
 ## 7. Wiki

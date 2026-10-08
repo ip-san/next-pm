@@ -18,6 +18,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/custom-fields", label: "カスタムフィールド" },
   { href: "/admin/enumerations", label: "その他の値" },
   { href: "/admin/settings", label: "設定" },
+  { href: "/admin/info", label: "情報" },
 ] as const;
 
 const STATUS_LABEL: Record<string, string> = {
