@@ -199,6 +199,7 @@ function customFieldFilterType(field: CustomField): FilterType {
     case "text":
       return "text";
     case "string":
+    case "link":
       return "string";
   }
 }

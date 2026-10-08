@@ -17,6 +17,7 @@ const FORMAT_LABEL: Record<string, string> = {
   date: "日付",
   bool: "真偽値",
   list: "リスト",
+  link: "リンク",
 };
 
 const CUSTOMIZED_TYPE_LABEL: Record<string, string> = {

@@ -54,6 +54,7 @@ import { IssueRelationForm } from "./issue-relation-form";
 import { JournalEditForm } from "./journal-edit-form";
 import { MoveIssueForm } from "./move-issue-form";
 import { LogTimeForm } from "./log-time-form";
+import { linkHref } from "@/domain/custom-field/link";
 import { ReactionButton } from "./reaction-button";
 import { WatcherManager } from "./watcher-manager";
 import { WatchToggleForm } from "./watch-toggle-form";
@@ -315,7 +316,15 @@ export default async function IssueDetailPage({
             {customFields.map((field) => (
               <div key={field.id}>
                 <dt className="inline font-medium">{field.name}: </dt>
-                <dd className="inline">{customValueByFieldId.get(field.id) ?? "(未設定)"}</dd>
+                <dd className="inline">
+                  {field.fieldFormat === "link" && customValueByFieldId.get(field.id) ? (
+                    <a href={linkHref(customValueByFieldId.get(field.id)!)} className="underline" target="_blank" rel="noopener noreferrer">
+                      {customValueByFieldId.get(field.id)}
+                    </a>
+                  ) : (
+                    (customValueByFieldId.get(field.id) ?? "(未設定)")
+                  )}
+                </dd>
               </div>
             ))}
           </dl>

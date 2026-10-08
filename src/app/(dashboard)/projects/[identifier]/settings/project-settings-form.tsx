@@ -42,6 +42,7 @@ function CustomFieldInput({ field, defaultValue }: { field: CustomField; default
         </select>
       );
     case "string":
+    case "link":
     default:
       return <input id={id} name={name} type="text" defaultValue={defaultValue ?? ""} className="border rounded px-3 py-2" />;
   }

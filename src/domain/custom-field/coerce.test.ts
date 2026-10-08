@@ -18,6 +18,10 @@ describe("coerceCustomFieldValue", () => {
     });
   });
 
+  it("keeps a link value as typed, since the href is built when it is shown", () => {
+    expect(coerceCustomFieldValue(field({ fieldFormat: "link" }), "example.com/docs")).toEqual({ ok: true, value: "example.com/docs" });
+  });
+
   it("accepts an empty value on an optional field, normalizing to null", () => {
     expect(coerceCustomFieldValue(field({ isRequired: false }), "")).toEqual({ ok: true, value: null });
   });

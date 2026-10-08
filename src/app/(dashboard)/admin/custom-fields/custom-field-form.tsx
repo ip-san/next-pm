@@ -16,6 +16,7 @@ const FORMAT_OPTIONS = [
   { value: "date", label: "日付" },
   { value: "bool", label: "真偽値" },
   { value: "list", label: "リスト" },
+  { value: "link", label: "リンク" },
 ] as const;
 
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [

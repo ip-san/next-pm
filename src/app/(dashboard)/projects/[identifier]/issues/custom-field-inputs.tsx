@@ -93,6 +93,7 @@ function renderInput(
         </select>
       );
     case "string":
+    case "link":
       return <input {...common} type="text" />;
   }
 }

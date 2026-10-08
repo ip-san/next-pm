@@ -23,6 +23,7 @@ export function coerceCustomFieldValue(field: Pick<CustomField, "name" | "fieldF
   switch (field.fieldFormat) {
     case "string":
     case "text":
+    case "link":
       return { ok: true, value: raw };
 
     case "int":
