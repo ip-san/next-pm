@@ -66,7 +66,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
           {authorLabelById.get(item.authorId) ?? ""} · {item.createdAt.toISOString()}
         </p>
         {item.summary ? <p className="text-sm text-gray-600 mt-1">{item.summary}</p> : null}
-        <FormattedText text={item.description} className="mt-2" />
+        <FormattedText project={project} text={item.description} className="mt-2" />
         {canManageNews ? (
           <div className="flex gap-3 mt-2 items-start">
             <NewsEditForm
@@ -102,7 +102,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
               <p className="text-xs text-gray-500">
                 {authorLabelById.get(comment.authorId) ?? ""} · {comment.createdAt.toISOString()}
               </p>
-              <FormattedText text={comment.content} />
+              <FormattedText project={project} text={comment.content} />
               {canManageNews ? (
                 <DeleteNewsCommentButton projectIdentifier={identifier} newsId={item.id} commentId={comment.id} />
               ) : null}

@@ -164,7 +164,7 @@ export default async function MessageThreadPage({
         <p className="text-xs text-gray-500">
           {userLabelById.get(topic.authorId) ?? ""} · {topic.createdAt.toISOString()}
         </p>
-        <FormattedText text={topic.content} className="mt-2" />
+        <FormattedText project={project} text={topic.content} className="mt-2" />
         {messageAttachments(topic)}
         {messageActions(topic)}
       </article>
@@ -188,7 +188,7 @@ export default async function MessageThreadPage({
             <p className="text-xs text-gray-500">
               {userLabelById.get(reply.authorId) ?? ""} · {reply.createdAt.toISOString()}
             </p>
-            <FormattedText text={reply.content} className="mt-1" />
+            <FormattedText project={project} text={reply.content} className="mt-1" />
             {messageAttachments(reply)}
             {messageActions(reply)}
           </li>

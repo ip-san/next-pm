@@ -51,7 +51,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
         <p className="text-sm text-gray-500">{category?.name ?? "?"}</p>
       </div>
 
-      <FormattedText text={document.description} />
+      <FormattedText project={project} text={document.description} />
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium text-sm">添付ファイル</h2>

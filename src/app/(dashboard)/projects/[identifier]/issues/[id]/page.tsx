@@ -348,7 +348,7 @@ export default async function IssueDetailPage({
         </div>
       </div>
 
-      <FormattedText text={issue.description} />
+      <FormattedText project={project} text={issue.description} />
 
       {customFields.length > 0 ? (
         <section className="flex flex-col gap-1">
@@ -384,7 +384,7 @@ export default async function IssueDetailPage({
                   {journal.privateNotes ? <span className="ml-2 text-amber-700">（プライベート注記）</span> : null}
                   {journal.updatedById ? <span className="ml-2">（編集済み）</span> : null}
                 </p>
-                {journal.notes ? <FormattedText text={journal.notes} /> : null}
+                {journal.notes ? <FormattedText project={project} text={journal.notes} /> : null}
                 {journal.details
                   .filter((detail) => detail.property !== "cf" || visibleFieldIds.has(detail.fieldName))
                   .map((detail, index) => {

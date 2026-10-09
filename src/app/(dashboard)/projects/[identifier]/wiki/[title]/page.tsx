@@ -213,7 +213,7 @@ export default async function WikiPageView({
 
       {current ? (
         <>
-          <WikiContent blocks={blocks} identifier={identifier} />
+          <WikiContent blocks={blocks} identifier={identifier} project={{ id: project.id, identifier }} />
           <p className="text-xs text-gray-500 flex items-center gap-2">
             <span>バージョン {current.version}</span>
             {canViewEdits ? (

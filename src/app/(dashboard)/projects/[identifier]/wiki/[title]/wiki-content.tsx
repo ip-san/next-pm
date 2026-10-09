@@ -1,3 +1,4 @@
+import type { TextProject } from "@/interface/http/project-text-links";
 import { FormattedText } from "@/interface/components/formatted-text";
 import Link from "next/link";
 import type { WikiBlock } from "@/domain/wiki/macro-blocks";
@@ -7,7 +8,7 @@ import type { WikiBlock } from "@/domain/wiki/macro-blocks";
  * as a child or attribute, so page content is never interpolated into markup — the reason the
  * macro pass returns data rather than an HTML string.
  */
-export function WikiContent({ blocks, identifier }: { blocks: WikiBlock[]; identifier: string }) {
+export async function WikiContent({ blocks, identifier, project }: { blocks: WikiBlock[]; identifier: string; project: TextProject }) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       {blocks.map((block, index) => {
@@ -24,7 +25,7 @@ export function WikiContent({ blocks, identifier }: { blocks: WikiBlock[]; ident
             return (
               <details key={index} className="border rounded px-3 py-2">
                 <summary className="cursor-pointer select-none">{block.showLabel}</summary>
-                <FormattedText text={block.body} className="pt-2" />
+                <FormattedText project={project} text={block.body} className="pt-2" />
               </details>
             );
 
