@@ -9,7 +9,7 @@ export interface IssueLink {
   title: string;
 }
 
-const CODE_SEGMENT = /(```[\s\S]*?```|`[^`\n]*`)/g;
+const CODE_SEGMENT = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g;
 const ISSUE_REFERENCE = /(^|[^\w&#/])#(\d+)(?!\w)/g;
 
 /** The text outside code, split into alternating [prose, code, prose, …] segments. */

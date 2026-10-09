@@ -69,7 +69,12 @@ export async function deleteLdapAuthSourceAction(_prev: LdapAuthSourceActionStat
   if (authError) return { error: authError };
   const id = idSchema.safeParse(formData.get("ldapAuthSourceId"));
   if (!id.success) return { error: "認証元が見つかりません。" };
-  await new DrizzleLdapAuthSourceRepository().delete(id.data);
+  const repository = new DrizzleLdapAuthSourceRepository();
+  // Accounts keep the source that created them (Redmine's auth_source_id), so a source with accounts stays.
+  if ((await repository.countUsers(id.data)) > 0) {
+    return { error: "この認証元で作られたユーザーがいるため削除できません。" };
+  }
+  await repository.delete(id.data);
   revalidatePath("/admin/ldap-auth-sources");
   return { error: null };
 }

@@ -23,6 +23,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     apiKey: null,
     atomKey: null,
     authSource: null,
+    ldapAuthSourceId: null,
     twofaScheme: null,
     twofaTotpKey: null,
     twofaTotpLastUsedStep: null,
@@ -55,17 +56,17 @@ function repoWith(user: User | null): UserRepository {
 
 describe("verifyCurrentPassword", () => {
   it("returns true for the correct local password", async () => {
-    const ok = await verifyCurrentPassword({ userRepository: repoWith(makeUser()), ldapAuthenticator: null }, "user-1", "s3cret-pass");
+    const ok = await verifyCurrentPassword({ userRepository: repoWith(makeUser()), ldapSources: [] }, "user-1", "s3cret-pass");
     expect(ok).toBe(true);
   });
 
   it("returns false for a wrong local password", async () => {
-    const ok = await verifyCurrentPassword({ userRepository: repoWith(makeUser()), ldapAuthenticator: null }, "user-1", "wrong");
+    const ok = await verifyCurrentPassword({ userRepository: repoWith(makeUser()), ldapSources: [] }, "user-1", "wrong");
     expect(ok).toBe(false);
   });
 
   it("returns false for an unknown user", async () => {
-    const ok = await verifyCurrentPassword({ userRepository: repoWith(null), ldapAuthenticator: null }, "ghost", "whatever");
+    const ok = await verifyCurrentPassword({ userRepository: repoWith(null), ldapSources: [] }, "ghost", "whatever");
     expect(ok).toBe(false);
   });
 
@@ -74,14 +75,29 @@ describe("verifyCurrentPassword", () => {
     const ldapAuthenticator: LdapAuthenticator = {
       authenticate: mock(async () => ({ firstname: "Alice", lastname: "Doe", mail: "alice@example.com" }) as LdapUserAttributes),
     };
-    const ok = await verifyCurrentPassword({ userRepository: repoWith(user), ldapAuthenticator }, "user-1", "directory-password");
+    const ok = await verifyCurrentPassword({ userRepository: repoWith(user), ldapSources: [{ id: null, authenticator: ldapAuthenticator }] }, "user-1", "directory-password");
     expect(ok).toBe(true);
     expect(ldapAuthenticator.authenticate).toHaveBeenCalledWith("alice", "directory-password");
   });
 
   it("returns false when LDAP is required but unavailable", async () => {
     const user = makeUser({ authSource: "ldap", passwordHash: "", passwordSalt: "" });
-    const ok = await verifyCurrentPassword({ userRepository: repoWith(user), ldapAuthenticator: null }, "user-1", "whatever");
+    const ok = await verifyCurrentPassword({ userRepository: repoWith(user), ldapSources: [] }, "user-1", "whatever");
     expect(ok).toBe(false);
+  });
+});
+
+describe("verifyCurrentPassword LDAP sources", () => {
+  it("doesn't accept an LDAP user's password from a source other than the one that created them", async () => {
+    const user = { ...makeUser(), authSource: "ldap" as const, ldapAuthSourceId: "source-a", passwordHash: "", passwordSalt: "" };
+    const a: LdapAuthenticator = { authenticate: mock(async () => null) };
+    const b: LdapAuthenticator = { authenticate: mock(async () => ({ firstname: "A", lastname: "B", mail: "a@b.test", onthefly: true })) };
+    const ok = await verifyCurrentPassword(
+      { userRepository: repoWith(user), ldapSources: [{ id: "source-a", authenticator: a }, { id: "source-b", authenticator: b }] },
+      "user-1",
+      "password",
+    );
+    expect(ok).toBe(false);
+    expect(b.authenticate).not.toHaveBeenCalled();
   });
 });

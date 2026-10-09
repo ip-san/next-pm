@@ -13,7 +13,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { ldapAuthenticatorFromConfiguration } from "@/interface/http/ldap-authenticator";
+import { ldapSourcesFromConfiguration } from "@/interface/http/ldap-authenticator";
 import { verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { establishSession } from "@/interface/http/session";
@@ -129,7 +129,7 @@ export async function deactivateTwofaAction(
   }
 
   const passwordOk = await verifyCurrentPassword(
-    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: await ldapAuthenticatorFromConfiguration(process.env) },
+    { userRepository: new DrizzleUserRepository(), ldapSources: await ldapSourcesFromConfiguration(process.env) },
     user.id,
     parsed.data.password,
   );

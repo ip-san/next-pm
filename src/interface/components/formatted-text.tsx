@@ -1,6 +1,10 @@
+import { cache } from "react";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { formattedTextHtml } from "@/interface/http/formatted-text-html";
 import type { TextProject } from "@/interface/http/project-text-links";
+
+/** Read once per request: a page with many texts reads the session once, not once per text. */
+const currentViewer = cache(() => currentUserFromCookies());
 
 /**
  * A text field rendered as CommonMark (Redmine's text_formatting), with the references in it linked for the viewer.
@@ -8,7 +12,7 @@ import type { TextProject } from "@/interface/http/project-text-links";
  * here. A server component.
  */
 export async function FormattedText({ text, project, className = "" }: { text: string; project: TextProject; className?: string }) {
-  const user = await currentUserFromCookies();
+  const user = await currentViewer();
   const html = await formattedTextHtml(user, project, text);
   return (
     <div

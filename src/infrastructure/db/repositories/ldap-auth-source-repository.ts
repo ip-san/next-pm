@@ -1,6 +1,7 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { ldapAuthSources } from "@/infrastructure/db/schema/ldap-auth-sources";
+import { users } from "@/infrastructure/db/schema/users";
 import type { LdapAuthSource, LdapAuthSourceInput } from "@/domain/ldap/auth-source";
 import type { LdapAuthSourceRepository } from "@/domain/ldap/repository";
 
@@ -80,6 +81,11 @@ export class DrizzleLdapAuthSourceRepository implements LdapAuthSourceRepository
   async listWithEncryptedPasswords(): Promise<{ source: LdapAuthSource; encryptedPassword: string | null }[]> {
     const rows = await db.select().from(ldapAuthSources).orderBy(asc(ldapAuthSources.name));
     return rows.map((row) => ({ source: toDomain(row), encryptedPassword: row.accountPasswordEncrypted }));
+  }
+
+  async countUsers(id: string): Promise<number> {
+    const [row] = await db.select({ total: count() }).from(users).where(eq(users.ldapAuthSourceId, id));
+    return row?.total ?? 0;
   }
 
   async delete(id: string): Promise<void> {

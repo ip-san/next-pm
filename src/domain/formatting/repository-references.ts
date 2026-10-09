@@ -7,7 +7,7 @@ export interface LinkTarget {
   href: string;
 }
 
-const CODE_SEGMENT = /(```[\s\S]*?```|`[^`\n]*`)/g;
+const CODE_SEGMENT = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g;
 const WIKI_REFERENCE = /\[\[([^\]\n|]+?)(?:\|([^\]\n]+?))?\]\]/g;
 
 function proseSegments(source: string): { text: string; code: boolean }[] {

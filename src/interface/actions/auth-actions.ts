@@ -19,7 +19,7 @@ import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
-import { ldapAuthenticatorFromConfiguration } from "@/interface/http/ldap-authenticator";
+import { ldapSourcesFromConfiguration } from "@/interface/http/ldap-authenticator";
 import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { destroyCurrentSession, establishSession, revokeAllSessions } from "@/interface/http/session";
@@ -50,7 +50,7 @@ export async function loginAction(
 
   const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
   const result = await login(
-    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: await ldapAuthenticatorFromConfiguration(process.env) },
+    { userRepository: new DrizzleUserRepository(), ldapSources: await ldapSourcesFromConfiguration(process.env) },
     parsed.data.login,
     parsed.data.password,
     twofa,

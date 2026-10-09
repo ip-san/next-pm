@@ -30,6 +30,8 @@ export interface User {
   atomKey: string | null;
   /** Null for a locally-authenticated user; "ldap" delegates password checks to LDAP on every login. */
   authSource: "ldap" | null;
+  /** The admin-managed LDAP source that created this account; null for the environment source or a local account. */
+  ldapAuthSourceId: string | null;
   /** Null until a TOTP pairing is confirmed. */
   twofaScheme: "totp" | null;
   /** AES-256-GCM ciphertext (domain/crypto/symmetric.ts) of the base32 TOTP secret — never plaintext. */

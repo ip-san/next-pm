@@ -3,7 +3,7 @@ import { evaluateLoginGate, type LoginGateOutcome } from "@/domain/user/login-ga
 import type { UserRepository } from "@/domain/user/repository";
 import type { User } from "@/domain/user/entity";
 import type { TwofaMode } from "@/domain/settings/auth-settings";
-import type { LdapAuthenticator } from "@/domain/ldap/authenticator";
+import { ldapSourceForUser, type LdapSource, type LdapUserAttributes } from "@/domain/ldap/authenticator";
 
 export type LoginResult =
   /** The password (or LDAP bind) was wrong — deliberately indistinguishable from "no such login". */
@@ -17,16 +17,18 @@ export type LoginResult =
 
 export interface LoginRepositories {
   userRepository: UserRepository;
-  /** Null when LDAP isn't configured — local-only authentication, matching today's behavior. */
-  ldapAuthenticator: LdapAuthenticator | null;
+  /** The LDAP sources a sign-in may be checked against; empty when LDAP isn't configured (local-only sign-in). */
+  ldapSources: LdapSource[];
 }
 
 /**
  * Mirrors Redmine's User.try_to_login!: a local account tied to LDAP (authSource === "ldap")
  * always has its password checked against the directory, never the local hash — the local
  * passwordHash/passwordSalt are empty strings for such a user (see schema/users.ts) and would
- * never match anyway. A login with no local record falls back to LDAP on-the-fly registration:
- * on a successful bind, a new local user is created from the directory's attributes.
+ * never match anyway. An LDAP account is checked against the source that created it and no other:
+ * another source accepting the same login doesn't prove it is this user. A login with no local
+ * record falls back to LDAP on-the-fly registration: the first source that accepts it, if it allows
+ * on-the-fly registration, creates a local user from the directory's attributes, linked to that source.
  */
 export async function login(
   repositories: LoginRepositories,
@@ -37,9 +39,10 @@ export async function login(
   const user = await repositories.userRepository.findByLogin(loginName);
 
   if (user) {
+    const createdBy = user.authSource === "ldap" ? ldapSourceForUser(repositories.ldapSources, user.ldapAuthSourceId) : undefined;
     const authenticated =
       user.authSource === "ldap"
-        ? repositories.ldapAuthenticator !== null && (await repositories.ldapAuthenticator.authenticate(loginName, clearPassword)) !== null
+        ? createdBy !== undefined && (await createdBy.authenticator.authenticate(loginName, clearPassword)) !== null
         : verifyPassword(clearPassword, user.passwordSalt, user.passwordHash);
     if (!authenticated) {
       return { ok: false, reason: "invalid_credentials" };
@@ -47,12 +50,24 @@ export async function login(
     return { ok: true, user, outcome: evaluateLoginGate(user, twofa) };
   }
 
-  if (!repositories.ldapAuthenticator) {
-    return { ok: false, reason: "invalid_credentials" };
+  for (const source of repositories.ldapSources) {
+    const attrs = await source.authenticator.authenticate(loginName, clearPassword);
+    if (attrs) {
+      return provisionLdapUser(repositories, source, loginName, attrs, twofa);
+    }
   }
-  const attrs = await repositories.ldapAuthenticator.authenticate(loginName, clearPassword);
+  return { ok: false, reason: "invalid_credentials" };
+}
+
+async function provisionLdapUser(
+  repositories: LoginRepositories,
+  source: LdapSource,
+  loginName: string,
+  attrs: LdapUserAttributes,
+  twofa: TwofaMode,
+): Promise<LoginResult> {
   // A source that doesn't allow on-the-fly registration signs an existing account in, but never creates one.
-  if (!attrs || !attrs.onthefly) {
+  if (!attrs.onthefly) {
     return { ok: false, reason: "invalid_credentials" };
   }
   if (!attrs.mail) {
@@ -83,6 +98,7 @@ export async function login(
     apiKey: null,
     atomKey: null,
     authSource: "ldap",
+    ldapAuthSourceId: source.id,
     twofaScheme: null,
     twofaTotpKey: null,
     twofaTotpLastUsedStep: null,

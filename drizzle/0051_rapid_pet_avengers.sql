@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "ldap_auth_source_id" uuid;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_ldap_auth_source_id_ldap_auth_sources_id_fk" FOREIGN KEY ("ldap_auth_source_id") REFERENCES "public"."ldap_auth_sources"("id") ON DELETE restrict ON UPDATE no action;

@@ -1,5 +1,6 @@
 import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { MAIL_NOTIFICATION_OPTIONS } from "@/domain/notification/mail-notification";
+import { ldapAuthSources } from "./ldap-auth-sources";
 
 /**
  * Mirrors Redmine's User::STATUS_* set. "anonymous" is the single AnonymousUser row Redmine
@@ -41,6 +42,11 @@ export const users = pgTable("users", {
   atomKey: text("atom_key").unique(),
   /** Null for a locally-authenticated user; "ldap" delegates password checks to LDAP on every login. */
   authSource: text("auth_source", { enum: ["ldap"] }),
+  /**
+   * The admin-managed LDAP source that created this account (Redmine's auth_source_id). Null with authSource "ldap" means
+   * the environment-configured source. A user is only ever checked against the source that created them.
+   */
+  ldapAuthSourceId: uuid("ldap_auth_source_id").references(() => ldapAuthSources.id, { onDelete: "restrict" }),
   /** Null until a pairing is confirmed — see application/twofa/pairing.ts. Only "totp" exists for now. */
   twofaScheme: text("twofa_scheme", { enum: ["totp"] }),
   /**

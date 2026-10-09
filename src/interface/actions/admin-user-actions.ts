@@ -120,6 +120,8 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
       apiKey: null,
       atomKey: null,
       authSource: parsed.data.authSource,
+      // The admin form offers the environment source only, so the account is linked to no admin-managed source.
+      ldapAuthSourceId: null,
       twofaScheme: null,
       twofaTotpKey: null,
       twofaTotpLastUsedStep: null,

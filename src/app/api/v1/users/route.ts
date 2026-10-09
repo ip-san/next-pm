@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       apiKey: null,
       atomKey: null,
       authSource: null,
+      ldapAuthSourceId: null,
       twofaScheme: null,
       twofaTotpKey: null,
       twofaTotpLastUsedStep: null,

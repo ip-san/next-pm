@@ -1,10 +1,10 @@
 import { verifyPassword } from "@/domain/user/password";
 import type { UserRepository } from "@/domain/user/repository";
-import type { LdapAuthenticator } from "@/domain/ldap/authenticator";
+import { ldapSourceForUser, type LdapSource } from "@/domain/ldap/authenticator";
 
 export interface VerifyCurrentPasswordRepositories {
   userRepository: UserRepository;
-  ldapAuthenticator: LdapAuthenticator | null;
+  ldapSources: LdapSource[];
 }
 
 /**
@@ -22,8 +22,10 @@ export async function verifyCurrentPassword(
   if (!user) return false;
 
   if (user.authSource === "ldap") {
-    if (!repositories.ldapAuthenticator) return false;
-    return (await repositories.ldapAuthenticator.authenticate(user.login, clearPassword)) !== null;
+    // Checked against the source that created the account, as login() does.
+    const createdBy = ldapSourceForUser(repositories.ldapSources, user.ldapAuthSourceId);
+    if (!createdBy) return false;
+    return (await createdBy.authenticator.authenticate(user.login, clearPassword)) !== null;
   }
   return verifyPassword(clearPassword, user.passwordSalt, user.passwordHash);
 }

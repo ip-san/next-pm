@@ -88,6 +88,7 @@ export async function registerAccount(
     apiKey: null,
     atomKey: null,
     authSource: null,
+    ldapAuthSourceId: null,
     twofaScheme: null,
     twofaTotpKey: null,
     twofaTotpLastUsedStep: null,
