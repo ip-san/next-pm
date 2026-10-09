@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useEffect, useRef, useState } from "react";
 
 interface IssueMatch {
@@ -19,13 +21,16 @@ export function IssueAutocomplete({
   inputName,
   initialLabel,
   onSelect,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   inputId: string;
   inputName: string;
   initialLabel?: string;
   onSelect: (issueId: string) => void;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [query, setQuery] = useState(initialLabel ?? "");
   const [matches, setMatches] = useState<IssueMatch[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -52,7 +57,7 @@ export function IssueAutocomplete({
       <input type="hidden" id={inputId} name={inputName} value={selectedId} />
       <input
         type="text"
-        placeholder="件名で検索"
+        placeholder={t("search.issueSubject")}
         value={query}
         onChange={(event) => {
           setSelectedId("");

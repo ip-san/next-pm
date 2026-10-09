@@ -16,7 +16,7 @@ export function LoginForm({
   lostPasswordEnabled: boolean;
   selfRegistrationEnabled: boolean;
   /** The sign-in form's text, translated by the page for the request's language. */
-  labels: { loginId: string; password: string; rememberMe: string; submit: string; submitting: string; lostPassword: string };
+  labels: { loginId: string; password: string; rememberMe: string; submit: string; submitting: string; lostPassword: string; register: string };
 }) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
@@ -72,7 +72,7 @@ export function LoginForm({
       ) : null}
       {selfRegistrationEnabled ? (
         <Link href="/account/register" className="text-sm underline self-start">
-          アカウントを登録する
+          {labels.register}
         </Link>
       ) : null}
     </form>

@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateMyAccountAction, type MyAccountActionState } from "@/interface/actions/my-account-actions";
 import { MAIL_NOTIFICATION_LABELS, MAIL_NOTIFICATION_OPTIONS, type MailNotificationOption } from "@/domain/notification/mail-notification";
@@ -29,54 +31,55 @@ export interface ProfileValues {
   noSelfNotified: boolean;
 }
 
-export function ProfileSection({ values }: { values: ProfileValues }) {
+export function ProfileSection({ locale = "ja", values }: { values: ProfileValues; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateMyAccountAction, initialState);
 
   return (
     <section className="flex flex-col gap-3 border rounded p-4">
-      <h2 className="font-medium">基本情報</h2>
+      <h2 className="font-medium">{translate(locale, "account.basicInfo")}</h2>
       <form action={formAction} className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
-          姓
+          {translate(locale, "account.lastname")}
           <input name="lastname" defaultValue={values.lastname} required className="border rounded px-2 py-1" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          名
+          {translate(locale, "account.firstname")}
           <input name="firstname" defaultValue={values.firstname} required className="border rounded px-2 py-1" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          メールアドレス
+          {translate(locale, "account.mail")}
           <input name="mail" type="email" defaultValue={values.mail} required className="border rounded px-2 py-1" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          言語
+          {translate(locale, "account.language")}
           <select name="language" defaultValue={values.language ?? ""} className="border rounded px-2 py-1">
             {LANGUAGES.map((language) => (
               <option key={language.value} value={language.value}>
-                {language.label}
+                {language.value === "" ? translate(locale, "account.defaultOption") : language.label}
               </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          タイムゾーン
+          {translate(locale, "account.timezone")}
           <select name="timeZone" defaultValue={values.timeZone ?? ""} className="border rounded px-2 py-1">
             {TIME_ZONES.map((zone) => (
               <option key={zone} value={zone}>
-                {zone === "" ? "(既定)" : zone}
+                {zone === "" ? translate(locale, "account.defaultOption") : zone}
               </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          履歴の表示順
+          {translate(locale, "account.journalOrder")}
           <select name="commentsSorting" defaultValue={values.commentsSorting} className="border rounded px-2 py-1">
-            <option value="asc">古い順</option>
-            <option value="desc">新しい順</option>
+            <option value="asc">{translate(locale, "account.oldestFirst")}</option>
+            <option value="desc">{translate(locale, "account.newestFirst")}</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          メール通知
+          {translate(locale, "account.mailNotification")}
           <select name="mailNotification" defaultValue={values.mailNotification} className="border rounded px-2 py-1">
             {MAIL_NOTIFICATION_OPTIONS.map((option) => (
               <option key={option} value={option}>
@@ -87,11 +90,11 @@ export function ProfileSection({ values }: { values: ProfileValues }) {
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="hideMail" defaultChecked={values.hideMail} />
-          メールアドレスを隠す
+          {translate(locale, "account.hideEmail")}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="noSelfNotified" defaultChecked={values.noSelfNotified} />
-          自分自身による変更の通知は不要
+          {translate(locale, "account.noSelfNotify")}
         </label>
 
         {state.error ? (
@@ -99,9 +102,9 @@ export function ProfileSection({ values }: { values: ProfileValues }) {
             {state.error}
           </p>
         ) : null}
-        {state.ok ? <p className="text-sm text-green-700">保存しました。</p> : null}
+        {state.ok ? <p className="text-sm text-green-700">{translate(locale, "account.saved")}</p> : null}
         <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start text-sm">
-          {pending ? "保存中…" : "保存"}
+          {pending ? t("issue.saving") : t("issue.save")}
         </button>
       </form>
     </section>

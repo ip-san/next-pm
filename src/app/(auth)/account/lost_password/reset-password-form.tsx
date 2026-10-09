@@ -1,20 +1,23 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import Link from "next/link";
 import { resetPasswordAction, type ResetPasswordActionState } from "@/interface/actions/auth-actions";
 
 const initialState: ResetPasswordActionState = { error: null, success: false };
 
-export function ResetPasswordForm({ token }: { token: string }) {
+export function ResetPasswordForm({ locale = "ja", token }: { token: string; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(resetPasswordAction, initialState);
 
   if (state.success) {
     return (
       <p className="text-sm w-full max-w-sm">
-        パスワードを再設定しました。
+        {t("auth.resetDone")}
         <Link href="/login" className="underline ml-1">
-          ログインページへ
+          {t("auth.toLogin")}
         </Link>
       </p>
     );
@@ -25,7 +28,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
       <div className="flex flex-col gap-1">
         <label htmlFor="newPassword" className="text-sm font-medium">
-          新しいパスワード
+          {t("account.newPassword")}
         </label>
         <input
           id="newPassword"
@@ -43,7 +46,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "設定中…" : "パスワードを再設定"}
+        {pending ? t("auth.resetting") : t("auth.resetSubmit")}
       </button>
     </form>
   );

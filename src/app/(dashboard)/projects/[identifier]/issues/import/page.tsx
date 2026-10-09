@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -7,6 +9,7 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 import { ImportForm } from "./import-form";
 
 export default async function ImportIssuesPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -26,20 +29,23 @@ export default async function ImportIssuesPage({ params }: { params: Promise<{ i
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — チケットの取り込み (CSV)</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "issueImport.title"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/issues`} className="underline text-sm">
-          チケット一覧
+          {translate(locale, "issueImport.issueList")}
         </Link>
       </div>
       <p className="text-sm text-gray-600">
-        1行目をヘッダー行として扱います。列名: <code className="font-mono">subject</code>（必須）,{" "}
-        <code className="font-mono">tracker</code>, <code className="font-mono">priority</code>,{" "}
-        <code className="font-mono">description</code>, <code className="font-mono">assignee</code>（ログインID）,{" "}
+        {translate(locale, "issueImport.intro")}
+        <code className="font-mono">subject</code>
+        {translate(locale, "issueImport.subjectNote")}
+        <code className="font-mono">tracker</code>, <code className="font-mono">priority</code>, <code className="font-mono">description</code>,{" "}
+        <code className="font-mono">assignee</code>
+        {translate(locale, "issueImport.assigneeNote")}
         <code className="font-mono">category</code>, <code className="font-mono">fixed_version</code>,{" "}
-        <code className="font-mono">is_private</code>。tracker・priority・category・fixed_versionは名称一致で解決され、
-        tracker・priorityは省略時に既定値を使用します。
+        <code className="font-mono">is_private</code>
+        {translate(locale, "issueImport.resolveNote")}
       </p>
-      <ImportForm projectIdentifier={identifier} canManageCategories={canManageCategories} canManageVersions={canManageVersions} />
+      <ImportForm locale={locale} projectIdentifier={identifier} canManageCategories={canManageCategories} canManageVersions={canManageVersions} />
     </main>
   );
 }

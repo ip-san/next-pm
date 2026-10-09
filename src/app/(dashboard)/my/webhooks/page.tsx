@@ -1,4 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { WEBHOOK_EVENT_LABELS } from "@/domain/webhook/events";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
@@ -12,6 +14,7 @@ import { WebhookForm } from "./webhook-form";
 export const dynamic = "force-dynamic";
 
 export default async function WebhooksPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user) {
     redirect("/login");
@@ -36,35 +39,35 @@ export default async function WebhooksPage() {
     <main className="p-8 flex flex-col gap-6 max-w-2xl">
       <h1 className="text-xl font-semibold">Webhook</h1>
       <p className="text-sm text-gray-500">
-        自分が見られるデータだけが送信されます。配信はジョブワーカー経由で行われ、失敗した場合は再試行されます。
+        {translate(locale, "webhooks.intro")}
       </p>
 
       <section className="flex flex-col gap-4">
-        <h2 className="font-medium">登録済み</h2>
+        <h2 className="font-medium">{translate(locale, "webhooks.registered")}</h2>
         {webhooks.length === 0 ? (
-          <p className="text-sm text-gray-500">まだ登録されていません。</p>
+          <p className="text-sm text-gray-500">{translate(locale, "webhooks.none")}</p>
         ) : (
           webhooks.map((webhook) => (
             <div key={webhook.id} className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-sm font-mono break-all">{webhook.url}</span>
-                <span className="text-xs text-gray-500">{webhook.active ? "有効" : "無効"}</span>
-                <DeleteWebhookForm webhookId={webhook.id} />
+                <span className="text-xs text-gray-500">{webhook.active ? translate(locale, "webhooks.active") : translate(locale, "webhooks.inactive")}</span>
+                <DeleteWebhookForm locale={locale} webhookId={webhook.id} />
               </div>
               <p className="text-xs text-gray-500">
                 {webhook.events.map((event) => WEBHOOK_EVENT_LABELS[event]).join(" / ")}
                 {" — "}
                 {webhook.projectIds.map((projectId) => projectName.get(projectId) ?? projectId).join(", ")}
               </p>
-              <WebhookForm webhook={webhook} projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
+              <WebhookForm locale={locale} webhook={webhook} projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
             </div>
           ))
         )}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">新しいWebhook</h2>
-        <WebhookForm webhook={null} projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
+        <h2 className="font-medium">{translate(locale, "webhooks.new")}</h2>
+        <WebhookForm locale={locale} webhook={null} projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
       </section>
     </main>
   );

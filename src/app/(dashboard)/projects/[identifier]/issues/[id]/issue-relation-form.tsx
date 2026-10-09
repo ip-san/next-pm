@@ -42,7 +42,7 @@ export function IssueRelationForm({ projectIdentifier, issueId, locale }: { proj
         <label htmlFor="targetIssueId" className="text-xs font-medium">
           {t("issue.targetIssue")}
         </label>
-        <IssueAutocomplete projectIdentifier={projectIdentifier} inputId="targetIssueId" inputName="targetIssueId" onSelect={() => {}} />
+        <IssueAutocomplete locale={locale} projectIdentifier={projectIdentifier} inputId="targetIssueId" inputName="targetIssueId" onSelect={() => {}} />
       </div>
       {state.error ? <p role="alert" className="text-xs text-red-600 w-full">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-1 text-sm disabled:opacity-50">

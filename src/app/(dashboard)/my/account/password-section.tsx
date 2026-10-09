@@ -1,12 +1,15 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { changePasswordAction, type ChangePasswordActionState } from "@/interface/actions/auth-actions";
 
 const initialState: ChangePasswordActionState = { error: null, ok: false };
 
-export function PasswordSection({ authSource }: { authSource: "ldap" | null }) {
+export function PasswordSection({ locale = "ja", authSource }: { authSource: "ldap" | null; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const router = useRouter();
   const [state, formAction, pending] = useActionState(changePasswordAction, initialState);
   const formRef = useRef<HTMLFormElement>(null);
@@ -24,18 +27,18 @@ export function PasswordSection({ authSource }: { authSource: "ldap" | null }) {
   if (authSource === "ldap") {
     return (
       <section className="flex flex-col gap-3 border rounded p-4">
-        <h2 className="font-medium">パスワード</h2>
-        <p className="text-sm text-gray-600">LDAP認証のアカウントのため、ここからはパスワードを変更できません。</p>
+        <h2 className="font-medium">{translate(locale, "account.password")}</h2>
+        <p className="text-sm text-gray-600">{translate(locale, "account.ldapPassword")}</p>
       </section>
     );
   }
 
   return (
     <section className="flex flex-col gap-3 border rounded p-4">
-      <h2 className="font-medium">パスワード</h2>
+      <h2 className="font-medium">{translate(locale, "account.password")}</h2>
       <form ref={formRef} action={formAction} className="flex flex-col gap-2">
         <label htmlFor="currentPassword" className="text-sm font-medium">
-          現在のパスワード
+          {t("account.currentPassword")}
         </label>
         <input
           id="currentPassword"
@@ -46,7 +49,7 @@ export function PasswordSection({ authSource }: { authSource: "ldap" | null }) {
           className="border rounded px-3 py-2"
         />
         <label htmlFor="newPassword" className="text-sm font-medium">
-          新しいパスワード
+          {t("account.newPassword")}
         </label>
         <input
           id="newPassword"
@@ -62,9 +65,9 @@ export function PasswordSection({ authSource }: { authSource: "ldap" | null }) {
             {state.error}
           </p>
         ) : null}
-        {state.ok ? <p className="text-sm text-green-700">パスワードを変更しました。</p> : null}
+        {state.ok ? <p className="text-sm text-green-700">{t("account.passwordChanged")}</p> : null}
         <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start text-sm">
-          {pending ? "変更中…" : "パスワードを変更する"}
+          {pending ? t("account.changing") : t("account.changePassword")}
         </button>
       </form>
     </section>

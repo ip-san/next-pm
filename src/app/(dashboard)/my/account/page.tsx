@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { redirect } from "next/navigation";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
@@ -23,6 +25,7 @@ import { TwofaSection } from "./twofa-section";
 export const dynamic = "force-dynamic";
 
 export default async function MyAccountPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user) {
     redirect("/login");
@@ -49,7 +52,7 @@ export default async function MyAccountPage() {
     <main className="p-8 flex flex-col gap-6 max-w-lg">
       <div className="flex items-center gap-3">
         <UserAvatar mail={user.mail} gravatarEnabled={settings.gravatarEnabled} size={48} />
-        <h1 className="text-xl font-semibold">アカウント設定</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "account.title")}</h1>
       </div>
       {canUseWebhooks ? (
         <Link href="/my/webhooks" className="text-sm underline self-start">
@@ -57,7 +60,7 @@ export default async function MyAccountPage() {
         </Link>
       ) : null}
 
-      <ProfileSection
+      <ProfileSection locale={locale}
         values={{
           firstname: user.firstname,
           lastname: user.lastname,
@@ -70,15 +73,15 @@ export default async function MyAccountPage() {
           noSelfNotified: preferences.noSelfNotified,
         }}
       />
-      <EmailAddressesSection
+      <EmailAddressesSection locale={locale}
         defaultMail={user.mail}
         addresses={additionalAddresses.map((address) => ({ id: address.id, address: address.address, notify: address.notify }))}
         maxAdditionalEmails={settings.maxAdditionalEmails}
       />
-      <PasswordSection authSource={user.authSource} />
-      {isTwofaAvailable(settings) ? <TwofaSection enabled={user.twofaScheme !== null} /> : null}
-      <AccessKeysSection hasApiKey={user.apiKey !== null} atomKey={user.atomKey} />
-      {canDeleteOwnAccount ? <DeleteAccountSection /> : null}
+      <PasswordSection locale={locale} authSource={user.authSource} />
+      {isTwofaAvailable(settings) ? <TwofaSection locale={locale} enabled={user.twofaScheme !== null} /> : null}
+      <AccessKeysSection locale={locale} hasApiKey={user.apiKey !== null} atomKey={user.atomKey} />
+      {canDeleteOwnAccount ? <DeleteAccountSection locale={locale} /> : null}
     </main>
   );
 }

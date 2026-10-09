@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import type { SearchResultType } from "@/domain/search/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
-import { SearchOptionsForm, SEARCH_TYPE_LABEL } from "@/interface/components/search/search-options-form";
+import { SearchOptionsForm, SEARCH_TYPE_KEY } from "@/interface/components/search/search-options-form";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { runSearch, type SearchHit } from "@/interface/http/run-search";
@@ -76,7 +76,7 @@ export default async function SearchPage({
         </Link>
       </div>
 
-      <SearchOptionsForm request={request} scopes={["project", "subprojects", "my_projects", "all"]} counts={run.countsByType} />
+      <SearchOptionsForm locale={locale} request={request} scopes={["project", "subprojects", "my_projects", "all"]} counts={run.countsByType} />
 
       {request.question.length > 0 && request.criteria.tokens.length === 0 ? (
         <p className="text-sm text-gray-500">{translate(locale, "search.minLength")}</p>
@@ -89,7 +89,7 @@ export default async function SearchPage({
             {run.hits.map((hit) => (
               <li key={`${hit.project.identifier}-${hit.result.type}-${hit.result.id}`} className="border rounded p-3">
                 <span className="text-xs text-gray-500">
-                  {hit.project.name} / {SEARCH_TYPE_LABEL[hit.result.type as SearchResultType]}
+                  {hit.project.name} / {translate(locale, SEARCH_TYPE_KEY[hit.result.type as SearchResultType])}
                 </span>
                 <Link href={resultHref(hit)} className="font-medium underline block">
                   {hit.result.title}

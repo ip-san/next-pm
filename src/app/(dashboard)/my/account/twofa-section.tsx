@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import {
@@ -15,7 +17,8 @@ const startInitial: StartTwofaPairingState = { error: null, pairing: null };
 const confirmInitial: ConfirmTwofaPairingState = { error: null, backupCodes: null };
 const deactivateInitial: DeactivateTwofaState = { error: null, ok: false };
 
-export function TwofaSection({ enabled }: { enabled: boolean }) {
+export function TwofaSection({ locale = "ja", enabled }: { enabled: boolean; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const router = useRouter();
   const [startState, startAction, startPending] = useActionState(startTwofaPairingAction, startInitial);
   const [confirmState, confirmAction, confirmPending] = useActionState(confirmTwofaPairingAction, confirmInitial);
@@ -32,9 +35,9 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
   if (confirmState.backupCodes) {
     return (
       <section className="flex flex-col gap-3 border rounded p-4">
-        <h2 className="font-medium">二段階認証を有効にしました</h2>
+        <h2 className="font-medium">{translate(locale, "account.twofaEnabled")}</h2>
         <p className="text-sm text-gray-600">
-          以下のバックアップコードは今だけ表示されます。認証アプリを利用できないときのために、安全な場所に保存してください。
+          {t("account.backupCodesNotice")}
         </p>
         <ul className="font-mono text-sm grid grid-cols-2 gap-1 bg-gray-50 rounded p-3">
           {confirmState.backupCodes.map((code) => (
@@ -42,7 +45,7 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
           ))}
         </ul>
         <button type="button" onClick={() => router.refresh()} className="bg-black text-white rounded px-3 py-2 self-start text-sm">
-          完了
+          {t("account.done")}
         </button>
       </section>
     );
@@ -51,10 +54,10 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
   if (enabled) {
     return (
       <section className="flex flex-col gap-3 border rounded p-4">
-        <h2 className="font-medium">二段階認証: 有効</h2>
+        <h2 className="font-medium">{translate(locale, "account.twofaOn")}</h2>
         <form action={deactivateAction} className="flex flex-col gap-2">
           <label htmlFor="password" className="text-sm font-medium">
-            現在のパスワード
+            {t("account.currentPassword")}
           </label>
           <input id="password" name="password" type="password" autoComplete="current-password" required className="border rounded px-3 py-2" />
           {deactivateState.error ? (
@@ -67,7 +70,7 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
             disabled={deactivatePending}
             className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start text-sm"
           >
-            {deactivatePending ? "無効化中…" : "二段階認証を無効にする"}
+            {deactivatePending ? t("account.disabling") : t("account.disableTwofa")}
           </button>
         </form>
       </section>
@@ -77,16 +80,16 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
   if (startState.pairing) {
     return (
       <section className="flex flex-col gap-3 border rounded p-4">
-        <h2 className="font-medium">認証アプリを設定</h2>
+        <h2 className="font-medium">{translate(locale, "account.setupApp")}</h2>
         {/* eslint-disable-next-line @next/next/no-img-element -- data: URL, next/image can't optimize it anyway */}
-        <img src={startState.pairing.qrDataUrl} alt="QRコード" width={200} height={200} />
-        <p className="text-sm text-gray-600">QRコードを読み取るか、以下のキーを認証アプリに手動で入力してください:</p>
+        <img src={startState.pairing.qrDataUrl} alt={translate(locale, "account.qrAlt")} width={200} height={200} />
+        <p className="text-sm text-gray-600">{translate(locale, "account.qrHelp")}</p>
         <code className="text-sm bg-gray-50 rounded p-2 break-all">
           {startState.pairing.secretBase32.match(/.{1,4}/g)?.join(" ") ?? startState.pairing.secretBase32}
         </code>
         <form action={confirmAction} className="flex flex-col gap-2">
           <label htmlFor="code" className="text-sm font-medium">
-            確認コード
+            {t("account.confirmCode")}
           </label>
           <input id="code" name="code" autoComplete="one-time-code" required className="border rounded px-3 py-2" />
           {confirmState.error ? (
@@ -99,7 +102,7 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
             disabled={confirmPending}
             className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start text-sm"
           >
-            {confirmPending ? "確認中…" : "有効にする"}
+            {confirmPending ? t("account.confirming") : t("account.enable")}
           </button>
         </form>
       </section>
@@ -108,7 +111,7 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
 
   return (
     <section className="flex flex-col gap-3 border rounded p-4">
-      <h2 className="font-medium">二段階認証: 無効</h2>
+      <h2 className="font-medium">{translate(locale, "account.twofaOff")}</h2>
       <form action={startAction} className="flex flex-col gap-2 items-start">
         {startState.error ? (
           <p role="alert" className="text-sm text-red-600">
@@ -116,7 +119,7 @@ export function TwofaSection({ enabled }: { enabled: boolean }) {
           </p>
         ) : null}
         <button type="submit" disabled={startPending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 text-sm">
-          {startPending ? "準備中…" : "二段階認証を設定する"}
+          {startPending ? t("account.preparing") : t("account.setupTwofa")}
         </button>
       </form>
     </section>

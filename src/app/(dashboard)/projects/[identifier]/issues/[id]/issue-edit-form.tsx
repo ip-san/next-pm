@@ -443,7 +443,7 @@ export function IssueEditForm({
           <label htmlFor="parentId" className="text-sm font-medium">
             {t("issue.attr.parentId")}
           </label>
-          <IssueAutocomplete
+          <IssueAutocomplete locale={locale}
             projectIdentifier={projectIdentifier}
             inputId="parentId"
             inputName="parentId"

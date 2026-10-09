@@ -221,7 +221,7 @@ export function NewIssueForm({
           <label htmlFor="parentId" className="text-sm font-medium">
             {t("issue.attr.parentId")}
           </label>
-          <IssueAutocomplete
+          <IssueAutocomplete locale={locale}
             projectIdentifier={identifier}
             inputId="parentId"
             inputName="parentId"

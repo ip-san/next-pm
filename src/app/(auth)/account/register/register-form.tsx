@@ -1,12 +1,15 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import Link from "next/link";
 import { useActionState } from "react";
 import { registerAction, type RegisterActionState } from "@/interface/actions/account-actions";
 
 const initialState: RegisterActionState = { error: null, outcome: null };
 
-export function RegisterForm({ passwordMinLength }: { passwordMinLength: number }) {
+export function RegisterForm({ locale = "ja", passwordMinLength }: { passwordMinLength: number; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(registerAction, initialState);
 
   if (state.outcome) {
@@ -14,11 +17,11 @@ export function RegisterForm({ passwordMinLength }: { passwordMinLength: number 
       <div className="flex flex-col gap-4 w-full max-w-sm">
         <p className="text-sm">
           {state.outcome === "activation_email_sent"
-            ? "確認メールを送信しました。メール内のリンクを開くとアカウントが有効になります。"
-            : "登録を受け付けました。管理者がアカウントを有効化するまでお待ちください。"}
+            ? t("auth.registerSent")
+            : t("auth.registerReceived")}
         </p>
         <Link href="/login" className="text-sm underline self-start">
-          ログイン画面へ
+          {t("auth.toLoginPage")}
         </Link>
       </div>
     );
@@ -28,13 +31,13 @@ export function RegisterForm({ passwordMinLength }: { passwordMinLength: number 
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
       <div className="flex flex-col gap-1">
         <label htmlFor="login" className="text-sm font-medium">
-          ログインID
+          {t("login.loginId")}
         </label>
         <input id="login" name="login" autoComplete="username" required maxLength={30} className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="password" className="text-sm font-medium">
-          パスワード
+          {t("login.password")}
         </label>
         <input
           id="password"
@@ -44,23 +47,23 @@ export function RegisterForm({ passwordMinLength }: { passwordMinLength: number 
           required
           className="border rounded px-3 py-2"
         />
-        <span className="text-xs text-gray-500">{passwordMinLength}文字以上</span>
+        <span className="text-xs text-gray-500">{interpolate(translate(locale, "auth.minLength"), { count: passwordMinLength })}</span>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="lastname" className="text-sm font-medium">
-          姓
+          {t("account.lastname")}
         </label>
         <input id="lastname" name="lastname" autoComplete="family-name" required className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="firstname" className="text-sm font-medium">
-          名
+          {t("account.firstname")}
         </label>
         <input id="firstname" name="firstname" autoComplete="given-name" required className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="mail" className="text-sm font-medium">
-          メールアドレス
+          {t("account.mail")}
         </label>
         <input id="mail" name="mail" type="email" autoComplete="email" required className="border rounded px-3 py-2" />
       </div>
@@ -70,10 +73,10 @@ export function RegisterForm({ passwordMinLength }: { passwordMinLength: number 
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "登録中…" : "登録"}
+        {pending ? t("auth.registering") : t("auth.register")}
       </button>
       <Link href="/login" className="text-sm underline self-start">
-        ログイン画面へ
+        {t("auth.toLoginPage")}
       </Link>
     </form>
   );

@@ -20,18 +20,18 @@ export default async function LoginPage({
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
       <div className="flex flex-col gap-6 items-center">
-        <h1 className="text-2xl font-semibold">next-pm にログイン</h1>
+        <h1 className="text-2xl font-semibold">{translate(locale, "auth.loginTitle")}</h1>
         {error === "twofa_too_many_tries" ? (
           <p role="alert" className="text-sm text-red-600">
-            確認コードの試行回数が上限に達しました。もう一度ログインしてください。
+            {translate(locale, "auth.twofaLocked")}
           </p>
         ) : null}
         {error === "activation_failed" ? (
           <p role="alert" className="text-sm text-red-600">
-            リンクが無効か、有効期限が切れています。
+            {translate(locale, "auth.linkInvalid")}
           </p>
         ) : null}
-        {activated === "1" ? <p className="text-sm text-green-700">アカウントが有効になりました。ログインしてください。</p> : null}
+        {activated === "1" ? <p className="text-sm text-green-700">{translate(locale, "auth.activated")}</p> : null}
         <LoginForm
           autologinEnabled={settings.autologinDays > 0}
           lostPasswordEnabled={settings.lostPasswordEnabled}
@@ -43,6 +43,7 @@ export default async function LoginPage({
             submit: translate(locale, "login.submit"),
             submitting: translate(locale, "login.submitting"),
             lostPassword: translate(locale, "login.lostPassword"),
+            register: translate(locale, "auth.registerLink"),
           }}
         />
       </div>

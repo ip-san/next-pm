@@ -2,7 +2,7 @@ import Link from "next/link";
 import { currentLocale } from "@/interface/http/locale";
 import { interpolate, translate } from "@/domain/i18n/messages";
 import type { SearchResultType } from "@/domain/search/entity";
-import { SearchOptionsForm, SEARCH_TYPE_LABEL } from "@/interface/components/search/search-options-form";
+import { SearchOptionsForm, SEARCH_TYPE_KEY } from "@/interface/components/search/search-options-form";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { runSearch, type SearchHit } from "@/interface/http/run-search";
 import { parseSearchRequest, resolveSearchProjects, SEARCH_RESULTS_PER_PAGE } from "@/interface/http/search-params";
@@ -56,7 +56,7 @@ export default async function GlobalSearchPage({
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{translate(locale, "search.allTitle")}</h1>
 
-      <SearchOptionsForm request={request} scopes={["all", "my_projects"]} counts={run.countsByType} />
+      <SearchOptionsForm locale={locale} request={request} scopes={["all", "my_projects"]} counts={run.countsByType} />
 
       {request.question.length > 0 && request.criteria.tokens.length === 0 ? (
         <p className="text-sm text-gray-500">{translate(locale, "search.minLength")}</p>
@@ -69,7 +69,7 @@ export default async function GlobalSearchPage({
             {run.hits.map((hit) => (
               <li key={`${hit.project.identifier}-${hit.result.type}-${hit.result.id}`} className="border rounded p-3">
                 <span className="text-xs text-gray-500">
-                  {hit.project.name} / {SEARCH_TYPE_LABEL[hit.result.type as SearchResultType]}
+                  {hit.project.name} / {translate(locale, SEARCH_TYPE_KEY[hit.result.type as SearchResultType])}
                 </span>
                 <Link href={resultHref(hit)} className="font-medium underline block">
                   {hit.result.title}

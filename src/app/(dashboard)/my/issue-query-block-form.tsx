@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { setIssueQueryBlockQueryAction, type MyPageActionState } from "@/interface/actions/my-page-actions";
 
@@ -10,10 +12,12 @@ export function IssueQueryBlockForm({
   block,
   queries,
   selectedId,
+  locale = "ja",
 }: {
   block: string;
   queries: { id: string; name: string }[];
   selectedId: string | null;
+  locale?: Locale;
 }) {
   const [state, formAction, pending] = useActionState(setIssueQueryBlockQueryAction, initialState);
 
@@ -22,7 +26,7 @@ export function IssueQueryBlockForm({
       <input type="hidden" name="block" value={block} />
       <select name="queryId" defaultValue={selectedId ?? ""} className="border rounded px-1 py-0.5" required>
         <option value="" disabled>
-          クエリを選ぶ
+          {translate(locale, "my.chooseQueryLabel")}
         </option>
         {queries.map((query) => (
           <option key={query.id} value={query.id}>
@@ -31,7 +35,7 @@ export function IssueQueryBlockForm({
         ))}
       </select>
       <button type="submit" disabled={pending} className="underline">
-        表示する
+        {translate(locale, "my.showBlock")}
       </button>
       {state.error ? <span className="text-red-600">{state.error}</span> : null}
     </form>
