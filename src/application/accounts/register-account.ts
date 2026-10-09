@@ -26,6 +26,8 @@ export interface RegisterAccountInput {
   firstname: string;
   lastname: string;
   password: string;
+  /** The language the form was shown in; Redmine's AccountController#register stores current_language on the new user. */
+  language?: string | null;
 }
 
 export type RegisterAccountResult =
@@ -84,7 +86,7 @@ export async function registerAccount(
     status: activateImmediately ? "active" : "registered",
     passwordSalt: salt,
     passwordHash: hashPassword(input.password, salt),
-    language: null,
+    language: input.language ?? null,
     mailNotification: "all",
     mustChangePassword: false,
     apiKey: null,
@@ -117,7 +119,11 @@ export async function registerAccount(
       `${translate(locale, "mail.registration.action")}\n${appOrigin}/admin/users`,
   }));
   // One mail per admin language, since each admin reads it in their own (literal addresses carry one language).
-  const adminsByLanguage = Map.groupBy(admins, (admin) => admin.language ?? "");
+  const adminsByLanguage = new Map<string, User[]>();
+  for (const admin of admins) {
+    const language = admin.language ?? "";
+    adminsByLanguage.set(language, [...(adminsByLanguage.get(language) ?? []), admin]);
+  }
   for (const [language, group] of adminsByLanguage) {
     await enqueueNotification(repositories, {
       recipientGroups: [],

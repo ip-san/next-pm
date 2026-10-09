@@ -14,6 +14,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleUserTokenRepository } from "@/infrastructure/db/repositories/user-token-repository";
 import { resolveAppOrigin } from "@/interface/http/app-origin";
+import { currentLocale } from "@/interface/http/locale";
 import { startPendingTwofaSetup } from "@/interface/http/twofa-pending-cookie";
 import { establishSession } from "@/interface/http/session";
 
@@ -55,7 +56,7 @@ export async function registerAction(
         userTokenRepository: new DrizzleUserTokenRepository(),
         jobRepository: new DrizzleJobRepository(),
       },
-      parsed.data,
+      { ...parsed.data, language: await currentLocale() },
       settings,
       await resolveAppOrigin(),
     );

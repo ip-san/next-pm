@@ -129,6 +129,27 @@ describe("registerAccount", () => {
     expect((jobs[0].payload as { recipientAddresses: string[] }).recipientAddresses).toEqual(["admin1@example.com"]);
   });
 
+  it("mode 2 queues one request per administrator language, each carrying that language", async () => {
+    const all = [
+      makeUser({ id: "admin-1", mail: "admin1@example.com", isAdmin: true, status: "active", language: "en" }),
+      makeUser({ id: "admin-2", mail: "admin2@example.com", isAdmin: true, status: "active", language: null }),
+      makeUser({ id: "admin-3", mail: "admin3@example.com", isAdmin: true, status: "active", language: "en" }),
+    ];
+    const { repositories, jobs } = makeRepositories({ all });
+    await registerAccount(repositories, INPUT, settingsFor("2"), ORIGIN);
+
+    const payloads = jobs.map((job) => job.payload as { recipientAddresses: string[]; addressLanguage?: string });
+    expect(payloads).toHaveLength(2);
+    expect(payloads.find((payload) => payload.addressLanguage === "en")?.recipientAddresses).toEqual(["admin1@example.com", "admin3@example.com"]);
+    expect(payloads.find((payload) => payload.addressLanguage === undefined)?.recipientAddresses).toEqual(["admin2@example.com"]);
+  });
+
+  it("stores the language the form was shown in on the new account, as Redmine's register does", async () => {
+    const { repositories, created } = makeRepositories({ all: [] });
+    await registerAccount(repositories, { ...INPUT, language: "en" }, settingsFor("3"), ORIGIN);
+    expect(created[0].language).toBe("en");
+  });
+
   it("mode 3 creates an already-active account and mails nothing", async () => {
     const { repositories, created, tokens, jobs } = makeRepositories();
     const result = await registerAccount(repositories, INPUT, settingsFor("3"), ORIGIN);
