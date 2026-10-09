@@ -97,6 +97,8 @@ export async function listProjectActivity(
         journal.notes.trim().length > 0
           ? journal.notes
           : journal.details
+              // Custom field changes stay out: the feed can't judge a restricted field's visibility per viewer.
+              .filter((detail) => detail.property !== "cf")
               .map((detail) => summariseJournalDetail(describeJournalDetail(detail, EMPTY_DETAIL_NAMES)))
               .join(" / ");
       events.push({ type: "issue_updated", id: issue.id, authorId: journal.userId, title: issue.subject, excerpt, occurredAt: journal.createdAt });

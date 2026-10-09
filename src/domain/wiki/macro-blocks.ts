@@ -16,7 +16,7 @@ export const AVAILABLE_MACROS: MacroDescription[] = [
   { name: "child_pages", description: "現在のページの子ページの一覧を表示します。" },
   { name: "collapse", description: "既定で折りたたまれたテキストブロックを挿入します。例: {{collapse(詳細を表示)\n本文\n}}" },
   { name: "include", description: "他の Wiki ページを取り込みます。例: {{include(ページ名)}}" },
-  { name: "issue", description: "チケットへのリンクを表示します。例: {{issue(eb0b2d1a)}}、{{issue(eb0b2d1a, subject=false)}}" },
+  { name: "issue", description: "チケットへのリンクを表示します。例: {{issue(42)}}、{{issue(42, subject=false)}}(8 桁の id 接頭辞 {{issue(eb0b2d1a)}} も使える)" },
   { name: "macro_list", description: "利用できるマクロの一覧を表示します。" },
   { name: "recent_pages", description: "最近更新された Wiki ページを表示します。例: {{recent_pages(days=3)}}、{{recent_pages(limit=5)}}" },
   { name: "thumbnail", description: "添付画像のサムネイルを表示します。例: {{thumbnail(image.png)}}、{{thumbnail(image.png, size=300)}}" },

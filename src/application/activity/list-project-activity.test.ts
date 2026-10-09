@@ -205,6 +205,27 @@ describe("listProjectActivity", () => {
     expect(events[0].type).toBe("issue_updated");
   });
 
+  it("keeps a restricted custom field's value out of the excerpt of a status change", async () => {
+    const repositories = makeRepositories({
+      issueRepository: { listByProject: mock(async () => [issue({})]) } as unknown as ListProjectActivityRepositories["issueRepository"],
+      journalRepository: {
+        listByProject: mock(async () => [
+          journal({
+            notes: "",
+            details: [
+              { property: "attr", fieldName: "statusId", oldValue: "open", newValue: "closed" },
+              { property: "cf", fieldName: "secret-field", oldValue: "hidden-old", newValue: "hidden-new" },
+            ],
+          }),
+        ]),
+      } as unknown as ListProjectActivityRepositories["journalRepository"],
+    });
+    const events = await listProjectActivity(repositories, baseInput());
+    expect(events).toHaveLength(1);
+    expect(events[0].excerpt).not.toContain("hidden-new");
+    expect(events[0].excerpt).not.toContain("hidden-old");
+  });
+
   it("drops a journal with no notes and no status change (e.g. custom-field-only edit)", async () => {
     const repositories = makeRepositories({
       issueRepository: { listByProject: mock(async () => [issue({})]) } as unknown as ListProjectActivityRepositories["issueRepository"],

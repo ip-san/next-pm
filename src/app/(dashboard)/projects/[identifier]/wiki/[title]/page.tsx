@@ -1,3 +1,4 @@
+import { findIssuesByReference } from "@/application/issues/find-issues-by-reference";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -320,10 +321,11 @@ async function resolveMacroIssues(
   const trackerRepository = new DrizzleTrackerRepository();
 
   for (const prefix of prefixes) {
-    if (!/^[0-9a-f]{1,8}$/i.test(prefix)) {
+    // A macro names an issue by its number ({{issue(42)}}) or by the older 8-hex id prefix.
+    if (!/^(?:[1-9]\d*|[0-9a-f]{1,8})$/i.test(prefix)) {
       continue;
     }
-    const matches = await issueRepository.findByIdPrefix(prefix);
+    const matches = await findIssuesByReference(issueRepository, prefix);
     if (matches.length !== 1) {
       continue;
     }

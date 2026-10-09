@@ -1448,9 +1448,32 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nextval('issues_number_seq')"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "issues_number_key": {
+          "name": "issues_number_key",
+          "columns": [
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "issues_project_id_projects_id_fk": {
           "name": "issues_project_id_projects_id_fk",
