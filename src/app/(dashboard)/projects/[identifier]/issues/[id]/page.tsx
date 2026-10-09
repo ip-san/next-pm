@@ -558,7 +558,7 @@ export default async function IssueDetailPage({
           {relatedIssues.map(({ relation, issue: other }) =>
             other ? (
               <li key={relation.id} className="flex items-center gap-2">
-                <span className="text-gray-500 text-xs">{relationLabelFor(relation, issue.id)}</span>
+                <span className="text-gray-500 text-xs">{translate(locale, `issue.relation.${relationLabelFor(relation, issue.id)}`)}</span>
                 <Link href={`/projects/${identifier}/issues/${other.id}`} className="underline">
                   {other.subject}
                 </Link>

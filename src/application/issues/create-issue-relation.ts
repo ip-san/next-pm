@@ -106,11 +106,14 @@ export function otherIssueId(relation: IssueRelation, issueId: string): string {
 }
 
 /** The relation-type label to show *from the perspective of* `issueId` (the sym/reverse form when issueId is the "to" side). */
-export function relationLabelFor(relation: IssueRelation, issueId: string): string {
+/** A relation as read from one side: its own type, or the reverse name seen from the other issue. */
+export type RelationLabel = IssueRelation["relationType"] | "duplicated" | "blocked" | "follows" | "copied_from";
+
+export function relationLabelFor(relation: IssueRelation, issueId: string): RelationLabel {
   if (relation.issueFromId === issueId) {
     return relation.relationType;
   }
-  const REVERSE_LABEL: Record<IssueRelation["relationType"], string> = {
+  const REVERSE_LABEL: Record<IssueRelation["relationType"], RelationLabel> = {
     relates: "relates",
     duplicates: "duplicated",
     blocks: "blocked",
