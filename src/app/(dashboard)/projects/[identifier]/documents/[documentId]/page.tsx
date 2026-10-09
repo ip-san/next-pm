@@ -1,3 +1,4 @@
+import { FormattedText } from "@/interface/components/formatted-text";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
@@ -50,7 +51,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
         <p className="text-sm text-gray-500">{category?.name ?? "?"}</p>
       </div>
 
-      <p className="whitespace-pre-wrap text-sm">{document.description}</p>
+      <FormattedText text={document.description} />
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium text-sm">添付ファイル</h2>

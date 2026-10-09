@@ -1,3 +1,4 @@
+import { FormattedText } from "@/interface/components/formatted-text";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -163,7 +164,7 @@ export default async function MessageThreadPage({
         <p className="text-xs text-gray-500">
           {userLabelById.get(topic.authorId) ?? ""} · {topic.createdAt.toISOString()}
         </p>
-        <p className="whitespace-pre-wrap text-sm mt-2">{topic.content}</p>
+        <FormattedText text={topic.content} className="mt-2" />
         {messageAttachments(topic)}
         {messageActions(topic)}
       </article>
@@ -187,7 +188,7 @@ export default async function MessageThreadPage({
             <p className="text-xs text-gray-500">
               {userLabelById.get(reply.authorId) ?? ""} · {reply.createdAt.toISOString()}
             </p>
-            <p className="whitespace-pre-wrap text-sm mt-1">{reply.content}</p>
+            <FormattedText text={reply.content} className="mt-1" />
             {messageAttachments(reply)}
             {messageActions(reply)}
           </li>

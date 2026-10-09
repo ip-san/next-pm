@@ -1,3 +1,4 @@
+import { FormattedText } from "@/interface/components/formatted-text";
 import Link from "next/link";
 import type { WikiBlock } from "@/domain/wiki/macro-blocks";
 
@@ -23,7 +24,7 @@ export function WikiContent({ blocks, identifier }: { blocks: WikiBlock[]; ident
             return (
               <details key={index} className="border rounded px-3 py-2">
                 <summary className="cursor-pointer select-none">{block.showLabel}</summary>
-                <p className="whitespace-pre-wrap pt-2">{block.body}</p>
+                <FormattedText text={block.body} className="pt-2" />
               </details>
             );
 

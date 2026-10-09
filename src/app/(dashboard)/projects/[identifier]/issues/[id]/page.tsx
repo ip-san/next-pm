@@ -1,3 +1,4 @@
+import { FormattedText } from "@/interface/components/formatted-text";
 import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
@@ -347,7 +348,7 @@ export default async function IssueDetailPage({
         </div>
       </div>
 
-      <p className="whitespace-pre-wrap text-sm">{issue.description}</p>
+      <FormattedText text={issue.description} />
 
       {customFields.length > 0 ? (
         <section className="flex flex-col gap-1">
@@ -383,7 +384,7 @@ export default async function IssueDetailPage({
                   {journal.privateNotes ? <span className="ml-2 text-amber-700">（プライベート注記）</span> : null}
                   {journal.updatedById ? <span className="ml-2">（編集済み）</span> : null}
                 </p>
-                {journal.notes ? <p>{journal.notes}</p> : null}
+                {journal.notes ? <FormattedText text={journal.notes} /> : null}
                 {journal.details
                   .filter((detail) => detail.property !== "cf" || visibleFieldIds.has(detail.fieldName))
                   .map((detail, index) => {

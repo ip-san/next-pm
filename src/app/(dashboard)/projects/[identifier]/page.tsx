@@ -1,3 +1,4 @@
+import { FormattedText } from "@/interface/components/formatted-text";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -171,7 +172,7 @@ export default async function ProjectPage({
       {project.status === "closed" ? (
         <p className="text-sm text-amber-700">このプロジェクトは閉鎖されています。参照はできますが、変更はできません。</p>
       ) : null}
-      <p className="text-sm text-gray-600">{project.description}</p>
+      <FormattedText text={project.description} className="text-gray-600" />
       <dl className="text-sm flex flex-col gap-1">
         <div>
           <dt className="inline font-medium">識別子: </dt>

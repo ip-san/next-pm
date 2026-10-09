@@ -1,3 +1,4 @@
+import { FormattedText } from "@/interface/components/formatted-text";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
@@ -65,7 +66,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
           {authorLabelById.get(item.authorId) ?? ""} · {item.createdAt.toISOString()}
         </p>
         {item.summary ? <p className="text-sm text-gray-600 mt-1">{item.summary}</p> : null}
-        <p className="whitespace-pre-wrap text-sm mt-2">{item.description}</p>
+        <FormattedText text={item.description} className="mt-2" />
         {canManageNews ? (
           <div className="flex gap-3 mt-2 items-start">
             <NewsEditForm
@@ -101,7 +102,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
               <p className="text-xs text-gray-500">
                 {authorLabelById.get(comment.authorId) ?? ""} · {comment.createdAt.toISOString()}
               </p>
-              <p className="whitespace-pre-wrap">{comment.content}</p>
+              <FormattedText text={comment.content} />
               {canManageNews ? (
                 <DeleteNewsCommentButton projectIdentifier={identifier} newsId={item.id} commentId={comment.id} />
               ) : null}
