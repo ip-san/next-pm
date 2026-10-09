@@ -1,23 +1,14 @@
-import path from "node:path";
-import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { GanttMonthTick } from "@/domain/gantt/layout";
 import type { Locale } from "@/domain/i18n/locales";
 import { translate } from "@/domain/i18n/messages";
+import { PDF_FONT_FAMILY } from "@/interface/pdf/japanese-font";
 
 const ROW_HEIGHT = 18;
 const LABEL_WIDTH = 220;
 
-// Every label on this page is Japanese; React-PDF's built-in fonts (Helvetica etc.) have
-// no CJK glyphs and silently render mojibake instead — this registers a Japanese-subset
-// font (bundled locally rather than fetched from a CDN at render time, since this app is
-// meant to run self-hosted with no assumed internet access) before the document renders.
-Font.register({
-  family: "Noto Sans JP",
-  src: path.join(process.cwd(), "src/app/api/projects/[identifier]/gantt/pdf/fonts/noto-sans-jp-400.woff"),
-});
-
 const styles = StyleSheet.create({
-  page: { padding: 24, fontSize: 8, fontFamily: "Noto Sans JP" },
+  page: { padding: 24, fontSize: 8, fontFamily: PDF_FONT_FAMILY },
   title: { fontSize: 12, marginBottom: 4 },
   subtitle: { fontSize: 9, marginBottom: 12, color: "#555555" },
   headerRow: { flexDirection: "row", borderBottom: 1, borderColor: "#999999", height: ROW_HEIGHT, alignItems: "center" },

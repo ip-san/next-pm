@@ -1,18 +1,10 @@
-import path from "node:path";
-import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Locale } from "@/domain/i18n/locales";
 import { translate } from "@/domain/i18n/messages";
-
-// Same registration as the gantt PDF export — React-PDF's built-in fonts have no CJK glyphs,
-// and this app is meant to run self-hosted with no assumed internet access, so the font is
-// bundled locally rather than fetched from a CDN at render time.
-Font.register({
-  family: "Noto Sans JP",
-  src: path.join(process.cwd(), "src/app/api/projects/[identifier]/gantt/pdf/fonts/noto-sans-jp-400.woff"),
-});
+import { PDF_FONT_FAMILY } from "@/interface/pdf/japanese-font";
 
 const styles = StyleSheet.create({
-  page: { padding: 24, fontSize: 8, fontFamily: "Noto Sans JP" },
+  page: { padding: 24, fontSize: 8, fontFamily: PDF_FONT_FAMILY },
   title: { fontSize: 12, marginBottom: 12 },
   headerRow: { flexDirection: "row", borderBottom: 1, borderColor: "#999999", paddingBottom: 4, marginBottom: 2, fontWeight: "bold" },
   row: { flexDirection: "row", borderBottom: 0.5, borderColor: "#dddddd", paddingVertical: 3 },
