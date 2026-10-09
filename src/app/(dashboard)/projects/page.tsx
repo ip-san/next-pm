@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { can, canGlobally, type AuthorizationActor } from "@/domain/authorization/authorization-service";
+import { translate } from "@/domain/i18n/messages";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { currentLocale } from "@/interface/http/locale";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, resolveGlobalRoles, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
@@ -9,6 +11,7 @@ import { resolveActor, resolveGlobalRoles, toAuthorizationProject } from "@/inte
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsIndexPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   const allProjects = await new DrizzleProjectRepository().listAll();
 
@@ -39,10 +42,10 @@ export default async function ProjectsIndexPage() {
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">プロジェクト</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "projects.title")}</h1>
         {canCreateProject ? (
           <Link href="/projects/new" className="underline text-sm">
-            新しいプロジェクト
+            {translate(locale, "projects.newProject")}
           </Link>
         ) : null}
       </div>
@@ -53,12 +56,12 @@ export default async function ProjectsIndexPage() {
               {project.name}
             </Link>
             {project.parentId ? (
-              <span className="text-xs text-gray-500 ml-2">親: {projectById.get(project.parentId)?.name ?? "-"}</span>
+              <span className="text-xs text-gray-500 ml-2">{translate(locale, "projects.parent")}: {projectById.get(project.parentId)?.name ?? "-"}</span>
             ) : null}
             {project.description ? <p className="text-xs text-gray-500 mt-1">{project.description}</p> : null}
           </li>
         ))}
-        {visible.length === 0 ? <li className="text-gray-400">参照できるプロジェクトがありません。</li> : null}
+        {visible.length === 0 ? <li className="text-gray-400">{translate(locale, "projects.noneVisible")}</li> : null}
       </ul>
     </main>
   );

@@ -2,6 +2,7 @@ import { FormattedText } from "@/interface/components/formatted-text";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { memberUserIds } from "@/domain/member/entity";
 import { aggregateIssueCounts } from "@/domain/report/issue-report";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
@@ -14,6 +15,7 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 import { DeleteProjectForm } from "../delete-project-form";
 import { ProjectStatusButton } from "../project-status-button";
@@ -21,18 +23,18 @@ import { ProjectStatusButton } from "../project-status-button";
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
 
-const NAV_LINKS: { module: string; path: string; label: string }[] = [
-  { module: "issue_tracking", path: "issues", label: "チケット" },
-  { module: "issue_tracking", path: "roadmap", label: "ロードマップ" },
-  { module: "calendar", path: "calendar", label: "カレンダー" },
-  { module: "gantt", path: "gantt", label: "ガントチャート" },
-  { module: "time_tracking", path: "time-entries", label: "工数" },
-  { module: "wiki", path: "wiki", label: "Wiki" },
-  { module: "boards", path: "boards", label: "フォーラム" },
-  { module: "news", path: "news", label: "ニュース" },
-  { module: "documents", path: "documents", label: "ドキュメント" },
-  { module: "files", path: "files", label: "ファイル" },
-  { module: "repository", path: "repository", label: "リポジトリ" },
+const NAV_LINKS: { module: string; path: string; labelKey: MessageKey }[] = [
+  { module: "issue_tracking", path: "issues", labelKey: "projectMenu.issues" },
+  { module: "issue_tracking", path: "roadmap", labelKey: "projectMenu.roadmap" },
+  { module: "calendar", path: "calendar", labelKey: "projectMenu.calendar" },
+  { module: "gantt", path: "gantt", labelKey: "projectMenu.gantt" },
+  { module: "time_tracking", path: "time-entries", labelKey: "projectMenu.timeEntries" },
+  { module: "wiki", path: "wiki", labelKey: "projectMenu.wiki" },
+  { module: "boards", path: "boards", labelKey: "projectMenu.boards" },
+  { module: "news", path: "news", labelKey: "projectMenu.news" },
+  { module: "documents", path: "documents", labelKey: "projectMenu.documents" },
+  { module: "files", path: "files", labelKey: "projectMenu.files" },
+  { module: "repository", path: "repository", labelKey: "projectMenu.repository" },
 ];
 
 export default async function ProjectPage({
@@ -40,6 +42,7 @@ export default async function ProjectPage({
 }: {
   params: Promise<{ identifier: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -137,29 +140,29 @@ export default async function ProjectPage({
       <h1 className="text-xl font-semibold">{project.name}</h1>
       <nav className="flex gap-3 text-sm">
         <Link href={`/projects/${identifier}/activity`} className="underline">
-          アクティビティ
+          {translate(locale, "projectMenu.activity")}
         </Link>
         {NAV_LINKS.filter((link) => project.enabledModules.includes(link.module)).map((link) => (
           <Link key={link.path} href={`/projects/${identifier}/${link.path}`} className="underline">
-            {link.label}
+            {translate(locale, link.labelKey)}
           </Link>
         ))}
         <Link href={`/projects/${identifier}/search`} className="underline">
-          検索
+          {translate(locale, "projectMenu.search")}
         </Link>
         {canManageIssueCategories ? (
           <Link href={`/projects/${identifier}/issue-categories`} className="underline">
-            カテゴリ
+            {translate(locale, "projectMenu.issueCategories")}
           </Link>
         ) : null}
         {canEditProject ? (
           <Link href={`/projects/${identifier}/settings`} className="underline">
-            設定
+            {translate(locale, "projectMenu.settings")}
           </Link>
         ) : null}
         {user?.isAdmin ? (
           <Link href={`/projects/${identifier}/copy`} className="underline">
-            コピー
+            {translate(locale, "projectMenu.copy")}
           </Link>
         ) : null}
         {canCloseProject ? (
@@ -170,21 +173,21 @@ export default async function ProjectPage({
         {canDeleteProject ? <DeleteProjectForm projectIdentifier={identifier} /> : null}
       </nav>
       {project.status === "closed" ? (
-        <p className="text-sm text-amber-700">このプロジェクトは閉鎖されています。参照はできますが、変更はできません。</p>
+        <p className="text-sm text-amber-700">{translate(locale, "project.closedNotice")}</p>
       ) : null}
       <FormattedText project={project} text={project.description} className="text-gray-600" />
       <dl className="text-sm flex flex-col gap-1">
         <div>
-          <dt className="inline font-medium">識別子: </dt>
+          <dt className="inline font-medium">{translate(locale, "project.identifier")}: </dt>
           <dd className="inline">{project.identifier}</dd>
         </div>
         <div>
-          <dt className="inline font-medium">公開: </dt>
-          <dd className="inline">{project.isPublic ? "はい" : "いいえ"}</dd>
+          <dt className="inline font-medium">{translate(locale, "project.isPublic")}: </dt>
+          <dd className="inline">{project.isPublic ? translate(locale, "project.yes") : translate(locale, "project.no")}</dd>
         </div>
         <div>
-          <dt className="inline font-medium">有効なモジュール: </dt>
-          <dd className="inline">{project.enabledModules.join(", ") || "(なし)"}</dd>
+          <dt className="inline font-medium">{translate(locale, "project.enabledModules")}: </dt>
+          <dd className="inline">{project.enabledModules.join(", ") || translate(locale, "project.noModules")}</dd>
         </div>
         <div>
           <dt className="inline font-medium">nested set: </dt>
@@ -198,15 +201,15 @@ export default async function ProjectPage({
         <div className="flex flex-col gap-6">
           {canViewIssues ? (
             <section className="flex flex-col gap-2">
-              <h2 className="font-semibold text-sm">チケットトラッキング</h2>
+              <h2 className="font-semibold text-sm">{translate(locale, "project.issueTracking")}</h2>
               {trackerRows.length > 0 ? (
                 <table className="text-sm border-collapse w-full">
                   <thead>
                     <tr className="border-b text-left">
                       <th scope="col" className="pr-4 py-0.5" />
-                      <th scope="col" className="pr-4 py-0.5 text-right">未対応</th>
-                      <th scope="col" className="pr-4 py-0.5 text-right">完了</th>
-                      <th scope="col" className="pr-4 py-0.5 text-right">合計</th>
+                      <th scope="col" className="pr-4 py-0.5 text-right">{translate(locale, "project.statusOpen")}</th>
+                      <th scope="col" className="pr-4 py-0.5 text-right">{translate(locale, "project.statusClosed")}</th>
+                      <th scope="col" className="pr-4 py-0.5 text-right">{translate(locale, "project.total")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -223,15 +226,15 @@ export default async function ProjectPage({
                   </tbody>
                 </table>
               ) : (
-                <p className="text-sm text-gray-500">チケットはありません。</p>
+                <p className="text-sm text-gray-500">{translate(locale, "project.noIssues")}</p>
               )}
               <p className="text-sm">
                 <Link href={`/projects/${identifier}/issues`} className="underline">
-                  すべてのチケットを表示
+                  {translate(locale, "project.viewAllIssues")}
                 </Link>
                 {" | "}
                 <Link href={`/projects/${identifier}/reports`} className="underline">
-                  集計
+                  {translate(locale, "project.reports")}
                 </Link>
               </p>
             </section>
@@ -241,7 +244,7 @@ export default async function ProjectPage({
         <div className="flex flex-col gap-6">
           {canViewNews && latestNews.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h2 className="font-semibold text-sm">最新ニュース</h2>
+              <h2 className="font-semibold text-sm">{translate(locale, "project.latestNews")}</h2>
               <ul className="flex flex-col gap-1 text-sm">
                 {latestNews.map((item) => (
                   <li key={item.id}>
@@ -253,7 +256,7 @@ export default async function ProjectPage({
               </ul>
               <p className="text-sm">
                 <Link href={`/projects/${identifier}/news`} className="underline">
-                  すべてのニュースを表示
+                  {translate(locale, "project.viewAllNews")}
                 </Link>
               </p>
             </section>
@@ -262,7 +265,7 @@ export default async function ProjectPage({
           {/* Redmine gates the members box on view_members (MembersController#index). */}
           {canViewMembers && principalsByRole.size > 0 ? (
             <section className="flex flex-col gap-1">
-              <h2 className="font-semibold text-sm">メンバー</h2>
+              <h2 className="font-semibold text-sm">{translate(locale, "project.members")}</h2>
               {[...principalsByRole.keys()].sort().map((roleName) => (
                 <p key={roleName} className="text-sm">
                   <span className="font-medium">{roleName}: </span>
@@ -274,7 +277,7 @@ export default async function ProjectPage({
 
           {subprojects.length > 0 ? (
             <section className="flex flex-col gap-1">
-              <h2 className="font-semibold text-sm">サブプロジェクト</h2>
+              <h2 className="font-semibold text-sm">{translate(locale, "project.subprojects")}</h2>
               <ul className="flex flex-col gap-1 text-sm">
                 {subprojects.map((subproject) => (
                   <li key={subproject.id}>
