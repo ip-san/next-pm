@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, localeFor, type Locale } from "@/domain/i18n/locales";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
@@ -54,6 +56,7 @@ export async function sendReminders(
   repositories: RemindersRepositories,
   payload: RemindersJobPayload,
   today: Date = new Date(),
+  defaultLocale: Locale = DEFAULT_LOCALE,
 ): Promise<{ recipients: number; issues: number }> {
   const days = payload.days && payload.days > 0 ? payload.days : DEFAULT_REMINDER_DAYS;
   const cutoff = cutoffDate(days, today);
@@ -120,10 +123,12 @@ export async function sendReminders(
     const lines = issues.map(
       (issue) => `- ${issue.dueDate} [${projectNames.get(issue.projectId) ?? ""} #${issue.number}] ${issue.subject}`,
     );
+    // Mailer.reminders renders in the assignee's language, falling back to the default language.
+    const locale = localeFor(user.language) ?? defaultLocale;
     await repositories.mailer.send({
       to: [user.mail],
-      subject: `期日が近づいているチケットが ${issues.length} 件あります`,
-      body: [`${days}日以内に期日を迎える、あなたが担当のチケットです。`, "", ...lines].join("\n"),
+      subject: interpolate(translate(locale, "mail.reminder.subject"), { count: issues.length, days }),
+      body: [interpolate(translate(locale, "mail.reminder.body"), { days }), "", ...lines].join("\n"),
     });
     recipients += 1;
     reminded += issues.length;

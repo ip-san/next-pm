@@ -2,6 +2,7 @@ import { unionRecipients } from "@/domain/notification/recipients";
 import type { JobRepository } from "@/domain/job/repository";
 import type { NotifyJobPayload } from "./dispatch-job";
 import type { IssueNotifyEvent } from "@/domain/notification/issue-tier";
+import type { LocalizedMailText } from "@/domain/i18n/mail-text";
 
 export interface EnqueueNotificationInput {
   recipientGroups: (string | null | undefined)[][];
@@ -27,6 +28,10 @@ export interface EnqueueNotificationInput {
   issueEvent?: IssueNotifyEvent;
   subject: string;
   body: string;
+  /** The text in every language (localizedMail); each recipient gets their own. Without it everyone gets subject/body. */
+  localized?: LocalizedMailText;
+  /** The language of whoever reads `recipientAddresses`, when that is one known user; otherwise the default language. */
+  addressLanguage?: string | null;
 }
 
 /** Enqueues a "notify" job for the deduped recipient union, or does nothing if it would be empty. */
@@ -46,6 +51,8 @@ export async function enqueueNotification(
     ...(input.issueEvent ? { issueEvent: input.issueEvent } : {}),
     subject: input.subject,
     body: input.body,
+    ...(input.localized ? { localized: input.localized } : {}),
+    ...(input.addressLanguage ? { addressLanguage: input.addressLanguage } : {}),
   };
   await repositories.jobRepository.enqueue("notify", payload);
 }

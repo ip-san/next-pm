@@ -23,6 +23,8 @@ import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { requireAdmin } from "@/interface/http/require-admin";
 import type { AdminActionState } from "./admin-action-state";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { interpolate, translate } from "@/domain/i18n/messages";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -257,14 +259,18 @@ export async function changeUserStatusAction(
   // sends nothing, matching Redmine. Addressed literally rather than by user id because it is
   // a transactional mail — dispatchJob's preference filter must not be able to swallow it.
   if (before?.status === "registered" && parsed.data.status === "active") {
+    const appOrigin = await resolveAppOrigin();
     await enqueueNotification(
       { jobRepository: new DrizzleJobRepository() },
       {
         recipientGroups: [],
         recipientAddresses: [before.mail],
         excludeUserId: null,
-        subject: "アカウントが有効になりました",
-        body: `アカウント(${before.login})が有効になりました。以下からログインできます:\n\n${await resolveAppOrigin()}/login`,
+        addressLanguage: before.language,
+        ...localizedMail((locale) => ({
+          subject: translate(locale, "mail.accountActivated.subject"),
+          body: `${interpolate(translate(locale, "mail.accountActivated.body"), { login: before.login })}\n\n${appOrigin}/login`,
+        })),
       },
     );
   }

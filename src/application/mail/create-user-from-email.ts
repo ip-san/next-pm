@@ -7,6 +7,8 @@ import type { GroupRepository } from "@/domain/group/repository";
 import type { PasswordResetTokenRepository } from "@/domain/password-reset/repository";
 import type { JobRepository } from "@/domain/job/repository";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { interpolate, translate } from "@/domain/i18n/messages";
 
 /** Mirrors Redmine's Token::LOST_PASSWORD_VALIDITY (1 day), same as request-password-reset.ts. */
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -88,11 +90,13 @@ export async function createUserFromEmail(
     await enqueueNotification(repositories, {
       recipientGroups: [[user.id]],
       excludeUserId: null,
-      subject: "アカウントが作成されました",
-      body:
-        `受信したメールをもとにアカウント(ログインID: ${login})を作成しました。\n\n` +
-        `以下のリンクからパスワードを設定してください:\n\n${input.appOrigin}/account/lost_password?token=${token}\n\n` +
-        "このリンクの有効期限は24時間です。",
+      ...localizedMail((locale) => ({
+        subject: translate(locale, "mail.createdFromEmail.subject"),
+        body:
+          `${interpolate(translate(locale, "mail.createdFromEmail.intro"), { login })}\n\n` +
+          `${translate(locale, "mail.createdFromEmail.action")}\n\n${input.appOrigin}/account/lost_password?token=${token}\n\n` +
+          translate(locale, "mail.linkExpires"),
+      })),
     });
   }
 

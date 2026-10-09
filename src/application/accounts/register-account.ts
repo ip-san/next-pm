@@ -8,6 +8,8 @@ import type { UserRepository } from "@/domain/user/repository";
 import { generateToken } from "@/domain/user/token";
 import { ACTIVATION_TOKEN_TTL_MS, hashUserToken } from "@/domain/user-token/entity";
 import type { UserTokenRepository } from "@/domain/user-token/repository";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { interpolate, translate } from "@/domain/i18n/messages";
 
 export class SelfRegistrationDisabledError extends Error {}
 export class RegistrationInputError extends Error {}
@@ -105,19 +107,29 @@ export async function registerAccount(
 
   // Mode '2' — Redmine's Mailer.deliver_account_activation_request, sent to every active admin.
   const admins = (await repositories.userRepository.listAll()).filter((u) => u.isAdmin && u.status === "active");
-  await enqueueNotification(repositories, {
-    recipientGroups: [],
-    // Also literal: an administrator who set mail_notification = none still has to hear about
-    // an account waiting on them, or mode '2' quietly stalls. Redmine treats
-    // deliver_account_activation_request the same way.
-    recipientAddresses: admins.map((admin) => admin.mail),
-    excludeUserId: null,
-    subject: "アカウントの有効化依頼",
+  const mail = localizedMail((locale) => ({
+    subject: translate(locale, "mail.registration.subject"),
     body:
-      `新しいアカウントの登録申請がありました。\n\n` +
-      `ログインID: ${user.login}\n氏名: ${user.lastname} ${user.firstname}\nメール: ${user.mail}\n\n` +
-      `有効化するには以下のページを開いてください:\n${appOrigin}/admin/users`,
-  });
+      `${translate(locale, "mail.registration.intro")}\n\n` +
+      `${interpolate(translate(locale, "mail.registration.login"), { login: user.login })}\n` +
+      `${interpolate(translate(locale, "mail.registration.name"), { name: `${user.lastname} ${user.firstname}` })}\n` +
+      `${interpolate(translate(locale, "mail.registration.mail"), { mail: user.mail })}\n\n` +
+      `${translate(locale, "mail.registration.action")}\n${appOrigin}/admin/users`,
+  }));
+  // One mail per admin language, since each admin reads it in their own (literal addresses carry one language).
+  const adminsByLanguage = Map.groupBy(admins, (admin) => admin.language ?? "");
+  for (const [language, group] of adminsByLanguage) {
+    await enqueueNotification(repositories, {
+      recipientGroups: [],
+      // Also literal: an administrator who set mail_notification = none still has to hear about
+      // an account waiting on them, or mode '2' quietly stalls. Redmine treats
+      // deliver_account_activation_request the same way.
+      recipientAddresses: group.map((admin) => admin.mail),
+      excludeUserId: null,
+      addressLanguage: language || null,
+      ...mail,
+    });
+  }
   return { kind: "pending_admin_activation", user };
 }
 
@@ -150,8 +162,11 @@ export async function sendActivationEmail(
     recipientGroups: [],
     recipientAddresses: [user.mail],
     excludeUserId: null,
-    subject: "アカウントの有効化",
-    body: `アカウントを有効にするには、以下のリンクをクリックしてください:\n\n${appOrigin}/account/activate?token=${token}\n\nこのリンクの有効期限は24時間です。`,
+    addressLanguage: user.language,
+    ...localizedMail((locale) => ({
+      subject: translate(locale, "mail.activation.subject"),
+      body: `${translate(locale, "mail.activation.body")}\n\n${appOrigin}/account/activate?token=${token}\n\n${translate(locale, "mail.linkExpires")}`,
+    })),
   });
 }
 

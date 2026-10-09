@@ -129,6 +129,20 @@ function makeRepositories(options: {
 }
 
 describe("sendReminders", () => {
+  it("writes the reminder in the assignee's language, or the default language when they have none", async () => {
+    const english = makeRepositories({ issues: [makeIssue()], users: [makeUser({ language: "en" })] });
+    await sendReminders(english.repositories, { days: 7 }, TODAY);
+    expect(english.sent[0].subject).toBe("1 issue(s) due in the next 7 days");
+
+    const fallback = makeRepositories({ issues: [makeIssue()] });
+    await sendReminders(fallback.repositories, { days: 7 }, TODAY, "en");
+    expect(fallback.sent[0].subject).toBe("1 issue(s) due in the next 7 days");
+
+    const japanese = makeRepositories({ issues: [makeIssue()] });
+    await sendReminders(japanese.repositories, { days: 7 }, TODAY);
+    expect(japanese.sent[0].subject).toBe("期日が近づいているチケットが 1 件あります");
+  });
+
   it("mails each assignee the issues due inside the window", async () => {
     const { repositories, sent } = makeRepositories({ issues: [makeIssue()] });
 

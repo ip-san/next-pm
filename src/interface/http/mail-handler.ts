@@ -75,6 +75,8 @@ import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/work
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "./resolve-actor";
 import { triggerIssueWebhook } from "./webhook-trigger";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { translate } from "@/domain/i18n/messages";
 
 /**
  * next-pm's MailHandler — the port of Redmine's `MailHandler#receive` / `#dispatch`. It lives
@@ -457,7 +459,8 @@ function mapWriteFailure(error: unknown): MailHandlerResult | null {
  * watchers, with the private-issue rejection applied to the groups that need it) — an issue
  * created or commented by mail must reach exactly the people it would have reached from the UI.
  */
-async function notifyIssueRecipients(project: Project, issue: Issue, actingUserId: string, body: string) {
+/** `body` null sends the generic "issue updated" line, in each recipient's language. */
+async function notifyIssueRecipients(project: Project, issue: Issue, actingUserId: string, body: string | null) {
   const assigneeUserIds =
     issue.assignedToType === "group" && issue.assignedToId
       ? await new DrizzleGroupRepository().listUserIds(issue.assignedToId)
@@ -496,8 +499,12 @@ async function notifyIssueRecipients(project: Project, issue: Issue, actingUserI
     {
       recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds],
       excludeUserId: actingUserId,
-      subject: issueMailSubject(project.name, issue.number, issue.subject),
-      body,
+      ...(body !== null
+        ? { subject: issueMailSubject(project.name, issue.number, issue.subject), body }
+        : localizedMail((locale) => ({
+            subject: issueMailSubject(project.name, issue.number, issue.subject),
+            body: translate(locale, "mail.issueUpdated"),
+          }))),
     },
   );
 }
@@ -710,7 +717,7 @@ async function handleIssueReply(base: BaseContext, cleanedBody: string, issueRef
       project,
       issue,
       base.sender.id,
-      keywords.body.length > 0 ? keywords.body : "チケットが更新されました。",
+      keywords.body.length > 0 ? keywords.body : null,
     );
   }
 

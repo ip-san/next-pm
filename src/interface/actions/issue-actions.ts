@@ -57,6 +57,8 @@ import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/work
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { translate } from "@/domain/i18n/messages";
 import {
   createIssueFormSchema,
   copyIssueFormSchema,
@@ -478,7 +480,8 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   );
   const notifiableWatcherUserIds = filterUserIdsVisibleToPrivateIssue(updated, watcherUserIds, rolesByUserId);
 
-  const genericBody = "チケットが更新されました。";
+  const subject = `[${project.name}] ${updated.subject}`;
+  const genericMail = localizedMail((locale) => ({ subject, body: translate(locale, "mail.issueUpdated") }));
   const recipientGroups = [[updated.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds];
 
   if (noteIsPrivate && noteBody.length > 0) {
@@ -496,12 +499,12 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
 
     await enqueueNotification(
       { jobRepository: new DrizzleJobRepository() },
-      { recipientGroups: [permitted], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds), subject: `[${project.name}] ${updated.subject}`, body: noteBody },
+      { recipientGroups: [permitted], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds), subject, body: noteBody },
     );
     if (others.length > 0) {
       await enqueueNotification(
         { jobRepository: new DrizzleJobRepository() },
-        { recipientGroups: [others], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds), subject: `[${project.name}] ${updated.subject}`, body: genericBody },
+        { recipientGroups: [others], excludeUserId: user.id, issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds), ...genericMail },
       );
     }
   } else {
@@ -511,8 +514,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
         recipientGroups,
         excludeUserId: user.id,
         issueEvent: issueNotifyEvent(updated, existing, notifiableWatcherUserIds),
-        subject: `[${project.name}] ${updated.subject}`,
-        body: noteBody.length > 0 ? noteBody : genericBody,
+        ...(noteBody.length > 0 ? { subject, body: noteBody } : genericMail),
       },
     );
   }

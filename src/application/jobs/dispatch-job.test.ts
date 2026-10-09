@@ -133,3 +133,38 @@ describe("dispatchJob", () => {
     await expect(dispatchJob(repositories, makeJob({}, { jobType: "unknown" }))).rejects.toThrow(UnknownJobTypeError);
   });
 });
+
+describe("dispatchJob recipient language", () => {
+  const localized = {
+    ja: { subject: "件名", body: "本文" },
+    en: { subject: "Subject (en)", body: "Body (en)" },
+  };
+
+  it("sends each recipient the text in their own language, one mail per language", async () => {
+    const repositories = makeRepositories({
+      users: [makeUser({ id: "user-1", language: "en" }), makeUser({ id: "user-2", login: "bob", mail: "bob@example.com", language: null })],
+    });
+    await dispatchJob(repositories, makeJob({ recipientIds: ["user-1", "user-2"], localized }));
+    expect(repositories.mailer.send).toHaveBeenCalledTimes(2);
+    expect(repositories.mailer.send).toHaveBeenCalledWith({ to: ["alice@example.com"], subject: "Subject (en)", body: "Body (en)" });
+    expect(repositories.mailer.send).toHaveBeenCalledWith({ to: ["bob@example.com"], subject: "件名", body: "本文" });
+  });
+
+  it("uses the default language setting for a recipient with no language", async () => {
+    const repositories = { ...makeRepositories({ users: [makeUser({ language: null })] }), defaultLocale: async () => "en" as const };
+    await dispatchJob(repositories, makeJob({ localized }));
+    expect(repositories.mailer.send).toHaveBeenCalledWith({ to: ["alice@example.com"], subject: "Subject (en)", body: "Body (en)" });
+  });
+
+  it("sends literal addresses in the given address language", async () => {
+    const repositories = makeRepositories();
+    await dispatchJob(repositories, makeJob({ recipientIds: [], recipientAddresses: ["x@example.com"], addressLanguage: "en", localized }));
+    expect(repositories.mailer.send).toHaveBeenCalledWith({ to: ["x@example.com"], subject: "Subject (en)", body: "Body (en)" });
+  });
+
+  it("falls back to subject and body for a job queued without localized text", async () => {
+    const repositories = makeRepositories({ users: [makeUser({ language: "en" })] });
+    await dispatchJob(repositories, makeJob());
+    expect(repositories.mailer.send).toHaveBeenCalledWith({ to: ["alice@example.com"], subject: "Subject", body: "Body" });
+  });
+});

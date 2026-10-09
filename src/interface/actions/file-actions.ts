@@ -19,6 +19,8 @@ import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store"
 import { resolveAttachmentAccess } from "@/interface/http/attachment-access";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { interpolate, translate } from "@/domain/i18n/messages";
 
 export type FileActionState = {
   error: string | null;
@@ -101,8 +103,10 @@ export async function addProjectFileAction(_prevState: FileActionState, formData
     {
       recipientGroups: [await notifiableMemberIds(project.id)],
       excludeUserId: user.id,
-      subject: `[${project.name}] 新しいファイル: ${created.filename}`,
-      body: `${project.name} にファイル ${created.filename} が追加されました。\n/projects/${project.identifier}/files`,
+      ...localizedMail((locale) => ({
+        subject: interpolate(translate(locale, "mail.fileAdded.subject"), { project: project.name, filename: created.filename }),
+        body: `${interpolate(translate(locale, "mail.fileAdded.body"), { project: project.name, filename: created.filename })}\n/projects/${project.identifier}/files`,
+      })),
     },
   );
 

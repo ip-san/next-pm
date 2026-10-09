@@ -16,6 +16,8 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { interpolate, translate } from "@/domain/i18n/messages";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -148,8 +150,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ide
       {
         recipientGroups: [memberUserIds(filterMembersWithPermission(members, rolesById, "view_files"))],
         excludeUserId: user.id,
-        subject: `[${project.name}] 新しいファイル: ${attachment.filename}`,
-        body: `${project.name} にファイル ${attachment.filename} が追加されました。\n/projects/${project.identifier}/files`,
+        ...localizedMail((locale) => ({
+          subject: interpolate(translate(locale, "mail.fileAdded.subject"), { project: project.name, filename: attachment.filename }),
+          body: `${interpolate(translate(locale, "mail.fileAdded.body"), { project: project.name, filename: attachment.filename })}\n/projects/${project.identifier}/files`,
+        })),
       },
     );
 

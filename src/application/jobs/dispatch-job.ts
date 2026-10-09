@@ -14,6 +14,8 @@ import { sendReminders, REMINDERS_JOB_TYPE, type RemindersJobPayload } from "@/a
 import type { RemindersRepositories } from "@/application/jobs/send-reminders";
 import type { IssueNotifyEvent } from "@/domain/notification/issue-tier";
 import { notifyAboutIssue } from "@/domain/notification/issue-tier";
+import { DEFAULT_LOCALE, localeFor, type Locale } from "@/domain/i18n/locales";
+import type { LocalizedMailText } from "@/domain/i18n/mail-text";
 
 export class UnknownJobTypeError extends Error {}
 
@@ -27,6 +29,10 @@ export interface NotifyJobPayload {
   actorUserId?: string | null;
   subject: string;
   body: string;
+  /** The text in every language; each recipient gets the one for their language. Absent on older jobs. */
+  localized?: LocalizedMailText;
+  /** The language of whoever reads `recipientAddresses`, when that is one known user. */
+  addressLanguage?: string | null;
 }
 
 export interface DispatchJobRepositories extends Partial<RemindersRepositories> {
@@ -37,6 +43,8 @@ export interface DispatchJobRepositories extends Partial<RemindersRepositories> 
   /** Only the worker wires these; a caller that never enqueues webhooks can leave them out. */
   webhookRepository?: WebhookRepository;
   webhookSender?: WebhookSender;
+  /** The default_language setting, for recipients with no language of their own. Japanese when not wired. */
+  defaultLocale?: () => Promise<Locale>;
 }
 
 /** Dispatches a claimed job to its handler. */
@@ -80,19 +88,36 @@ export async function dispatchJob(repositories: DispatchJobRepositories, job: Jo
         wanted = kept;
       }
 
+      // Redmine's Mailer renders each mail in the recipient's language, falling back to Setting.default_language,
+      // so recipients are grouped by language and each group gets one mail in its language.
+      const defaultLocale = (await repositories.defaultLocale?.()) ?? DEFAULT_LOCALE;
+      const emailsByLocale = new Map<Locale, Set<string>>();
+      const addTo = (locale: Locale, address: string) => {
+        const emails = emailsByLocale.get(locale) ?? new Set<string>();
+        emails.add(address);
+        emailsByLocale.set(locale, emails);
+      };
+      for (const address of payload.recipientAddresses ?? []) {
+        addTo(localeFor(payload.addressLanguage) ?? defaultLocale, address);
+      }
       const additional = await repositories.emailAddressRepository.listForUsers(wanted.map((user) => user.id));
-      const emails = new Set<string>(payload.recipientAddresses ?? []);
       for (const user of wanted) {
         for (const address of notifiedAddresses(
           user.mail,
           additional.filter((entry) => entry.userId === user.id),
         )) {
-          emails.add(address);
+          addTo(localeFor(user.language) ?? defaultLocale, address);
         }
       }
 
-      if (emails.size > 0) {
-        await repositories.mailer.send({ to: [...emails], subject: payload.subject, body: payload.body });
+      // An address reached both as a literal address and through a user gets one copy, in the first language seen.
+      const sent = new Set<string>();
+      for (const [locale, emails] of emailsByLocale) {
+        const to = [...emails].filter((address) => !sent.has(address));
+        to.forEach((address) => sent.add(address));
+        if (to.length === 0) continue;
+        const text = payload.localized?.[locale] ?? { subject: payload.subject, body: payload.body };
+        await repositories.mailer.send({ to, subject: text.subject, body: text.body });
       }
       return;
     }
@@ -115,7 +140,7 @@ export async function dispatchJob(repositories: DispatchJobRepositories, job: Jo
       if (!reminders) {
         throw new UnknownJobTypeError("reminder delivery is not configured in this process");
       }
-      await sendReminders(reminders, job.payload as RemindersJobPayload);
+      await sendReminders(reminders, job.payload as RemindersJobPayload, new Date(), (await repositories.defaultLocale?.()) ?? DEFAULT_LOCALE);
       return;
     }
     default:

@@ -6,6 +6,8 @@ import type { PasswordResetTokenRepository } from "@/domain/password-reset/repos
 import type { EmailAddressRepository } from "@/domain/email-address/repository";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import type { JobRepository } from "@/domain/job/repository";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { translate } from "@/domain/i18n/messages";
 
 export class LdapPasswordResetNotAllowedError extends Error {}
 
@@ -68,7 +70,10 @@ export async function requestPasswordReset(
     recipientGroups: [],
     recipientAddresses: [matchedAddress?.address ?? user.mail],
     excludeUserId: null,
-    subject: "パスワード再設定",
-    body: `パスワードを再設定するには、以下のリンクをクリックしてください:\n\n${resetUrl}\n\nこのリンクの有効期限は24時間です。心当たりがない場合は、このメールを無視してください。`,
+    addressLanguage: user.language,
+    ...localizedMail((locale) => ({
+      subject: translate(locale, "mail.passwordReset.subject"),
+      body: `${translate(locale, "mail.passwordReset.body")}\n\n${resetUrl}\n\n${translate(locale, "mail.passwordReset.footer")}`,
+    })),
   });
 }

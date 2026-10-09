@@ -4,6 +4,9 @@ import type { EmailAddressRepository } from "@/domain/email-address/repository";
 import type { JobRepository } from "@/domain/job/repository";
 import type { PasswordResetTokenRepository } from "@/domain/password-reset/repository";
 import type { UserRepository } from "@/domain/user/repository";
+import { localizedMail } from "@/domain/i18n/mail-text";
+import { interpolate, translate } from "@/domain/i18n/messages";
+import type { Locale } from "@/domain/i18n/locales";
 
 export class EmailAddressError extends Error {}
 
@@ -30,14 +33,15 @@ export interface EmailAddressRepositories {
 async function notifySecurityChange(
   repositories: Pick<EmailAddressRepositories, "jobRepository">,
   addresses: string[],
-  body: string,
+  language: string | null,
+  body: (locale: Locale) => string,
 ): Promise<void> {
   await enqueueNotification(repositories, {
     recipientGroups: [],
     recipientAddresses: addresses,
     excludeUserId: null,
-    subject: "アカウントのセキュリティ通知",
-    body,
+    addressLanguage: language,
+    ...localizedMail((locale) => ({ subject: translate(locale, "mail.security.subject"), body: body(locale) })),
   });
 }
 
@@ -74,7 +78,8 @@ export async function addEmailAddress(
   await notifySecurityChange(
     repositories,
     [user.mail],
-    `アカウント(${user.login})にメールアドレス ${address} が追加されました。心当たりがない場合は管理者に連絡してください。`,
+    user.language,
+    (locale) => interpolate(translate(locale, "mail.security.addressAdded"), { login: user.login, address }),
   );
 }
 
@@ -96,7 +101,8 @@ export async function removeEmailAddress(
   await notifySecurityChange(
     repositories,
     [address.address],
-    `このメールアドレス(${address.address})はアカウントから削除されました。心当たりがない場合は管理者に連絡してください。`,
+    (await repositories.userRepository.findById(userId))?.language ?? null,
+    (locale) => interpolate(translate(locale, "mail.security.addressRemoved"), { address: address.address }),
   );
 }
 
@@ -116,9 +122,11 @@ export async function setEmailAddressNotify(
   await notifySecurityChange(
     repositories,
     [address.address],
-    notify
-      ? `このメールアドレス(${address.address})宛の通知が有効になりました。`
-      : `このメールアドレス(${address.address})宛の通知が無効になりました。`,
+    (await repositories.userRepository.findById(userId))?.language ?? null,
+    (locale) =>
+      interpolate(translate(locale, notify ? "mail.security.notifyEnabled" : "mail.security.notifyDisabled"), {
+        address: address.address,
+      }),
   );
 }
 
@@ -159,6 +167,7 @@ export async function changeDefaultEmailAddress(
   await notifySecurityChange(
     repositories,
     [user.mail],
-    `アカウント(${user.login})のメールアドレスが ${address} に変更されました。心当たりがない場合は管理者に連絡してください。`,
+    user.language,
+    (locale) => interpolate(translate(locale, "mail.security.addressChanged"), { login: user.login, address }),
   );
 }

@@ -17,6 +17,8 @@ import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/
 import { ConsoleMailer } from "@/infrastructure/mail/console-mailer";
 import { NodemailerMailer } from "@/infrastructure/mail/nodemailer-mailer";
 import { startHealthServer } from "./health-server";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -46,6 +48,7 @@ const handlers = {
   groupRepository: new DrizzleGroupRepository(),
   userPreferencesRepository: new DrizzleUserPreferencesRepository(),
   emailAddressRepository: new DrizzleEmailAddressRepository(),
+  defaultLocale: async () => (await loadGeneralSettings(new DrizzleSettingsRepository())).defaultLanguage,
 };
 
 /** Drains the queue until it's empty — the outer loop's sleep only kicks in once there's nothing left to claim. */
