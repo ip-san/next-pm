@@ -4,6 +4,8 @@ import { isBuiltinRole } from "@/domain/role/entity";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
 import { deleteRoleAction, reorderRoleAction } from "@/interface/actions/admin-role-actions";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { AdminRowControls } from "../admin-row-controls";
 import { CopyRoleForm } from "./copy-role-form";
 import { RoleForm } from "./role-form";
@@ -12,6 +14,7 @@ import { RoleForm } from "./role-form";
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -22,9 +25,9 @@ export default async function RolesPage() {
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">ロール</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "admin.roles.title")}</h1>
         <Link href="/admin/roles/permissions" className="text-sm underline">
-          権限マトリクスを編集
+          {translate(locale, "admin.roles.editMatrix")}
         </Link>
       </div>
       <ul className="flex flex-col gap-2 text-sm">
@@ -33,24 +36,24 @@ export default async function RolesPage() {
             <div>
               <p className="font-medium">
                 {role.name}
-                {isBuiltinRole(role) ? <span className="text-xs text-gray-500"> (組み込み)</span> : null}
+                {isBuiltinRole(role) ? <span className="text-xs text-gray-500">{translate(locale, "admin.roles.builtin")}</span> : null}
               </p>
-              <p className="text-xs text-gray-500">権限: {role.permissions.length}件</p>
+              <p className="text-xs text-gray-500">{interpolate(translate(locale, "admin.roles.permissionCount"), { count: role.permissions.length })}</p>
             </div>
             {/* A builtin role can be edited but never reordered or deleted (Role#check_deletable). */}
-            <AdminRowControls
+            <AdminRowControls locale={locale}
               id={role.id}
               idField="roleId"
               editHref={`/admin/roles/${role.id}`}
               reorderAction={isBuiltinRole(role) ? undefined : reorderRoleAction}
               deleteAction={isBuiltinRole(role) ? undefined : deleteRoleAction}
-              deleteConfirm={`ロール「${role.name}」を削除しますか?`}
+              deleteConfirm={interpolate(translate(locale, "admin.roles.deleteConfirm"), { name: role.name })}
             />
           </li>
         ))}
       </ul>
-      <CopyRoleForm roles={roles} />
-      <RoleForm roles={roles} />
+      <CopyRoleForm locale={locale} roles={roles} />
+      <RoleForm locale={locale} roles={roles} />
     </main>
   );
 }

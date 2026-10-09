@@ -1,10 +1,12 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { createRoleAction, updateRoleAction } from "@/interface/actions/admin-role-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
 import { isBuiltinRole, setablePermissions, ROLE_BUILTIN_MEMBER, type Role } from "@/domain/role/entity";
-import { MODULE_LABEL, PERMISSIONS_BY_MODULE } from "./permission-labels";
+import { MODULE_LABEL_KEY, PERMISSION_LABEL_KEY, PERMISSIONS_BY_MODULE } from "./permission-labels";
 
 const initialState: AdminActionState = { error: null };
 
@@ -15,7 +17,8 @@ const initialState: AdminActionState = { error: null };
  * Redmine recreates those rows by builtin value and never gives them to a project member — and
  * only shows the permissions Role#setable_permissions allows it to hold.
  */
-export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) {
+export function RoleForm({ locale = "ja", role, roles = [] }: { role?: Role; roles?: Role[]; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(role ? updateRoleAction : createRoleAction, initialState);
   const builtin = role ? isBuiltinRole(role) : false;
   const setable = new Set(setablePermissions(role?.builtin ?? ROLE_BUILTIN_MEMBER));
@@ -26,7 +29,7 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
       {role ? <input type="hidden" name="roleId" value={role.id} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm font-medium">
-          名称
+          {t("admin.roles.name")}
         </label>
         <input
           id="name"
@@ -41,7 +44,7 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
 
       <div className="flex flex-col gap-1">
         <label htmlFor="issuesVisibility" className="text-sm font-medium">
-          チケットの参照
+          {t("admin.roles.issuesVisibility")}
         </label>
         <select
           id="issuesVisibility"
@@ -49,15 +52,15 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
           defaultValue={role?.issuesVisibility ?? "default"}
           className="border rounded px-3 py-2"
         >
-          <option value="all">すべてのチケット</option>
-          <option value="default">担当のチケットとウォッチしているチケット</option>
-          <option value="own">自分が登録したチケットのみ</option>
+          <option value="all">{t("admin.roles.visAllIssues")}</option>
+          <option value="default">{t("admin.roles.visDefault")}</option>
+          <option value="own">{t("admin.roles.visOwn")}</option>
         </select>
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="timeEntriesVisibility" className="text-sm font-medium">
-          作業時間の参照
+          {t("admin.roles.timeEntriesVisibility")}
         </label>
         <select
           id="timeEntriesVisibility"
@@ -65,14 +68,14 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
           defaultValue={role?.timeEntriesVisibility ?? "all"}
           className="border rounded px-3 py-2"
         >
-          <option value="all">すべての作業時間</option>
-          <option value="own">自分が記録した作業時間のみ</option>
+          <option value="all">{t("admin.roles.timeAll")}</option>
+          <option value="own">{t("admin.roles.timeOwn")}</option>
         </select>
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="usersVisibility" className="text-sm font-medium">
-          ユーザーの参照
+          {t("admin.roles.usersVisibility")}
         </label>
         <select
           id="usersVisibility"
@@ -80,30 +83,30 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
           defaultValue={role?.usersVisibility ?? "all"}
           className="border rounded px-3 py-2"
         >
-          <option value="all">すべてのアクティブなユーザー</option>
-          <option value="members_of_visible_projects">参照可能なプロジェクトのメンバー</option>
+          <option value="all">{t("admin.roles.usersAll")}</option>
+          <option value="members_of_visible_projects">{t("admin.roles.usersMembers")}</option>
         </select>
       </div>
 
       {builtin ? null : (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="assignable" defaultChecked={role?.assignable ?? true} />
-          チケットをこのロールのユーザーに割り当て可能にする
+          {t("admin.roles.assignable")}
         </label>
       )}
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-medium">権限</legend>
+        <legend className="text-sm font-medium">{t("admin.roles.permissions")}</legend>
         {Object.entries(PERMISSIONS_BY_MODULE).map(([moduleKey, keys]) => {
           const visible = keys.filter((key) => setable.has(key));
           if (visible.length === 0) return null;
           return (
             <div key={moduleKey} className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-gray-600">{MODULE_LABEL[moduleKey] ?? moduleKey}</p>
+              <p className="text-xs font-medium text-gray-600">{translate(locale, MODULE_LABEL_KEY[moduleKey])}</p>
               {visible.map((key) => (
                 <label key={key} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" name="permissions" value={key} defaultChecked={checked.has(key)} />
-                  {key}
+                  {translate(locale, PERMISSION_LABEL_KEY[key])}
                 </label>
               ))}
             </div>
@@ -114,10 +117,10 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
       {role || roles.length === 0 ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="copyWorkflowFrom" className="text-sm font-medium">
-            ワークフローのコピー元
+            {t("admin.roles.copyWorkflowFrom")}
           </label>
           <select id="copyWorkflowFrom" name="copyWorkflowFrom" defaultValue="" className="border rounded px-3 py-2">
-            <option value="">コピーしない</option>
+            <option value="">{t("admin.roles.copyNone")}</option>
             {roles.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
                 {candidate.name}
@@ -133,7 +136,7 @@ export function RoleForm({ role, roles = [] }: { role?: Role; roles?: Role[] }) 
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "保存中…" : role ? "変更を保存" : "ロールを追加"}
+        {pending ? t("issue.saving") : role ? t("admin.users.saveChanges") : t("admin.roles.add")}
       </button>
     </form>
   );

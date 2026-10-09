@@ -36,6 +36,9 @@ const KEYS: MessageKey[] = [
   "admin.mail.apiKeyHelp",
   "admin.users.deleteConfirm",
   "admin.groups.title",
+  "admin.roles.permissionCount",
+  "permission.view_issues",
+  "permission.module.core",
 ];
 
 describe("translate", () => {
