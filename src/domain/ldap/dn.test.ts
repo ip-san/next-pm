@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { escapeLdapDnValue, escapeLdapFilterValue, substituteLoginInAccount } from "./dn";
+import { escapeLdapDnValue, escapeLdapFilterValue, loginSearchFilter, substituteLoginInAccount } from "./dn";
 
 describe("escapeLdapDnValue", () => {
   it("passes through a plain login unchanged", () => {
@@ -56,5 +56,19 @@ describe("escapeLdapFilterValue", () => {
 
   it("neutralizes an attempt to widen the filter with a wildcard", () => {
     expect(escapeLdapFilterValue("*")).toBe("\\2a");
+  });
+});
+
+describe("loginSearchFilter", () => {
+  it("matches the login attribute on its own without an extra filter", () => {
+    expect(loginSearchFilter("uid", "ada", null)).toBe("(uid=ada)");
+  });
+
+  it("ANDs the source's filter onto the login match", () => {
+    expect(loginSearchFilter("uid", "ada", "(objectClass=person)")).toBe("(&(uid=ada)(objectClass=person))");
+  });
+
+  it("escapes the login so it can't add a filter clause", () => {
+    expect(loginSearchFilter("uid", "a)(uid=*", null)).not.toBe("(uid=a)(uid=*)");
   });
 });

@@ -2,6 +2,8 @@ export interface LdapUserAttributes {
   firstname: string;
   lastname: string;
   mail: string;
+  /** Whether the source that authenticated the user allows creating an account on first sign-in. */
+  onthefly: boolean;
 }
 
 /** Infrastructure implements this against a real directory; application/interface code only ever sees the port. */

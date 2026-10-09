@@ -1,0 +1,20 @@
+CREATE TABLE "ldap_auth_sources" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"host" text NOT NULL,
+	"port" integer DEFAULT 389 NOT NULL,
+	"account" text,
+	"account_password_encrypted" text,
+	"base_dn" text DEFAULT '' NOT NULL,
+	"attr_login" text DEFAULT 'uid' NOT NULL,
+	"attr_firstname" text DEFAULT 'givenName' NOT NULL,
+	"attr_lastname" text DEFAULT 'sn' NOT NULL,
+	"attr_mail" text DEFAULT 'mail' NOT NULL,
+	"tls" boolean DEFAULT false NOT NULL,
+	"verify_peer" boolean DEFAULT true NOT NULL,
+	"onthefly" boolean DEFAULT false NOT NULL,
+	"filter" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ldap_auth_sources_name_unique" UNIQUE("name")
+);

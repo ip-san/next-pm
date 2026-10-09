@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { loadLdapConfigFromEnv } from "@/domain/ldap/config";
 import { evaluateLoginGate, INACTIVE_ACCOUNT_MESSAGE } from "@/domain/user/login-gate";
 import { changePassword, CurrentPasswordMismatchError, InvalidPasswordError, LdapPasswordChangeNotAllowedError } from "@/application/auth/change-password";
 import { login } from "@/application/auth/login";
@@ -20,7 +19,7 @@ import { DrizzleEmailAddressRepository } from "@/infrastructure/db/repositories/
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { TWOFA_MAX_ATTEMPTS, verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
-import { LdaptsAuthenticator } from "@/infrastructure/ldap/ldapts-authenticator";
+import { ldapAuthenticatorFromConfiguration } from "@/interface/http/ldap-authenticator";
 import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { destroyCurrentSession, establishSession, revokeAllSessions } from "@/interface/http/session";
@@ -50,9 +49,8 @@ export async function loginAction(
   }
 
   const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
-  const ldapConfig = loadLdapConfigFromEnv(process.env);
   const result = await login(
-    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: ldapConfig ? new LdaptsAuthenticator(ldapConfig) : null },
+    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: await ldapAuthenticatorFromConfiguration(process.env) },
     parsed.data.login,
     parsed.data.password,
     twofa,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { loadLdapConfigFromEnv } from "./config";
+import { ldapConfigFromAuthSource, loadLdapConfigFromEnv } from "./config";
 
 describe("loadLdapConfigFromEnv", () => {
   it("returns null when LDAP_HOST is unset — LDAP is disabled by default", () => {
@@ -46,3 +46,34 @@ describe("loadLdapConfigFromEnv", () => {
     expect(config?.accountPassword).toBeNull();
   });
 });
+
+describe("ldapConfigFromAuthSource", () => {
+  const source = {
+    host: "ldap.example.com",
+    port: 636,
+    account: "cn=svc,dc=example,dc=com",
+    baseDn: "dc=example,dc=com",
+    attrLogin: "uid",
+    attrFirstname: "givenName",
+    attrLastname: "sn",
+    attrMail: "mail",
+    tls: true,
+    verifyPeer: false,
+    onthefly: true,
+    filter: "(objectClass=person)",
+  };
+
+  it("uses ldaps when the source asks for TLS, and carries the password it was given", () => {
+    const config = ldapConfigFromAuthSource(source, "bind-secret");
+    expect(config.url).toBe("ldaps://ldap.example.com:636");
+    expect(config.accountPassword).toBe("bind-secret");
+    expect(config.verifyPeer).toBe(false);
+    expect(config.filter).toBe("(objectClass=person)");
+    expect(config.onthefly).toBe(true);
+  });
+
+  it("uses plain ldap without TLS", () => {
+    expect(ldapConfigFromAuthSource({ ...source, tls: false }, null).url).toBe("ldap://ldap.example.com:636");
+  });
+});
+

@@ -51,7 +51,8 @@ export async function login(
     return { ok: false, reason: "invalid_credentials" };
   }
   const attrs = await repositories.ldapAuthenticator.authenticate(loginName, clearPassword);
-  if (!attrs) {
+  // A source that doesn't allow on-the-fly registration signs an existing account in, but never creates one.
+  if (!attrs || !attrs.onthefly) {
     return { ok: false, reason: "invalid_credentials" };
   }
   if (!attrs.mail) {

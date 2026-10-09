@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 const ADMIN_SECTIONS = [
   { href: "/admin/users", label: "ユーザー" },
   { href: "/admin/groups", label: "グループ" },
+  { href: "/admin/ldap-auth-sources", label: "LDAP認証" },
   { href: "/admin/roles", label: "ロールと権限" },
   { href: "/admin/trackers", label: "トラッカー" },
   { href: "/admin/issue-statuses", label: "チケットのステータス" },

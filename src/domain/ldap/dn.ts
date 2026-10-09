@@ -26,3 +26,12 @@ export function substituteLoginInAccount(account: string, login: string): string
 export function escapeLdapFilterValue(value: string): string {
   return value.replace(/[\\*()\0]/g, (char) => `\\${char.charCodeAt(0).toString(16).padStart(2, "0")}`);
 }
+
+/**
+ * The directory search for a login: the login's attribute matches the escaped login, ANDed with the source's own filter
+ * when it has one (Redmine's AuthSourceLdap#filter).
+ */
+export function loginSearchFilter(attrLogin: string, login: string, extraFilter: string | null): string {
+  const match = `(${attrLogin}=${escapeLdapFilterValue(login)})`;
+  return extraFilter ? `(&${match}${extraFilter})` : match;
+}

@@ -1,7 +1,7 @@
 import { Client } from "ldapts";
 import type { LdapConfig } from "@/domain/ldap/config";
 import type { LdapAuthenticator, LdapUserAttributes } from "@/domain/ldap/authenticator";
-import { escapeLdapFilterValue, substituteLoginInAccount } from "@/domain/ldap/dn";
+import { loginSearchFilter, substituteLoginInAccount } from "@/domain/ldap/dn";
 
 function firstAttributeValue(value: string | string[] | Buffer | Buffer[] | undefined): string {
   const first = Array.isArray(value) ? value[0] : value;
@@ -40,7 +40,7 @@ export class LdaptsAuthenticator implements LdapAuthenticator {
 
       const { searchEntries } = await searchClient.search(this.config.baseDn, {
         scope: "sub",
-        filter: `(${this.config.attrLogin}=${escapeLdapFilterValue(login)})`,
+        filter: loginSearchFilter(this.config.attrLogin, login, this.config.filter),
         attributes: [this.config.attrFirstname, this.config.attrLastname, this.config.attrMail],
       });
       const entry = searchEntries[0];
@@ -51,6 +51,7 @@ export class LdaptsAuthenticator implements LdapAuthenticator {
         firstname: firstAttributeValue(entry[this.config.attrFirstname]),
         lastname: firstAttributeValue(entry[this.config.attrLastname]),
         mail: firstAttributeValue(entry[this.config.attrMail]),
+        onthefly: this.config.onthefly,
       };
     } catch {
       return null;

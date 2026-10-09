@@ -7,14 +7,13 @@ import { z } from "zod";
 import { confirmTotpPairing, deactivateTwofa, startTotpPairing, TotpEncryptionKeyMissingError } from "@/application/twofa/pairing";
 import { verifyCurrentPassword } from "@/application/auth/verify-current-password";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
-import { loadLdapConfigFromEnv } from "@/domain/ldap/config";
 import { isTwofaActive } from "@/domain/user/entity";
 import { evaluateLoginGate, mustActivateTwofa } from "@/domain/user/login-gate";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
 import { DrizzleTwofaBackupCodeRepository } from "@/infrastructure/db/repositories/twofa-backup-code-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
-import { LdaptsAuthenticator } from "@/infrastructure/ldap/ldapts-authenticator";
+import { ldapAuthenticatorFromConfiguration } from "@/interface/http/ldap-authenticator";
 import { verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-token";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { establishSession } from "@/interface/http/session";
@@ -129,9 +128,8 @@ export async function deactivateTwofaAction(
     return { error: "このアカウントでは二段階認証が必須のため、無効にできません。", ok: false };
   }
 
-  const ldapConfig = loadLdapConfigFromEnv(process.env);
   const passwordOk = await verifyCurrentPassword(
-    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: ldapConfig ? new LdaptsAuthenticator(ldapConfig) : null },
+    { userRepository: new DrizzleUserRepository(), ldapAuthenticator: await ldapAuthenticatorFromConfiguration(process.env) },
     user.id,
     parsed.data.password,
   );

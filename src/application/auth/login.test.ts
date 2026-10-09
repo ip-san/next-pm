@@ -105,7 +105,7 @@ describe("login use case", () => {
     it("delegates the password check to LDAP, ignoring the (empty) local hash", async () => {
       const user = makeUser({ authSource: "ldap", passwordHash: "", passwordSalt: "" });
       const ldapAuthenticator = fakeLdap({
-        authenticate: mock(async () => ({ firstname: "Alice", lastname: "Doe", mail: "alice@example.com" })),
+        authenticate: mock(async () => ({ firstname: "Alice", lastname: "Doe", mail: "alice@example.com", onthefly: true })),
       });
       const result = await login({ userRepository: repoWith(user), ldapAuthenticator }, "alice", "directory-password", "1");
       expect(result).toEqual({ ok: true, user, outcome: { kind: "allowed" } });
@@ -129,7 +129,7 @@ describe("login use case", () => {
     it("creates a local user from the directory's attributes on a successful bind", async () => {
       const userRepository = repoWith(null);
       const ldapAuthenticator = fakeLdap({
-        authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "bob@example.com" })),
+        authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "bob@example.com", onthefly: true })),
       });
       const result = await login({ userRepository, ldapAuthenticator }, "bob", "directory-password", "1");
       expect(result.ok).toBe(true);
@@ -147,10 +147,20 @@ describe("login use case", () => {
 
     it("does not create a user when LDAP returns no mail address", async () => {
       const userRepository = repoWith(null);
-      const ldapAuthenticator = fakeLdap({ authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "" })) });
+      const ldapAuthenticator = fakeLdap({ authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "", onthefly: true })) });
       const result = await login({ userRepository, ldapAuthenticator }, "bob", "directory-password", "1");
       expect(result).toEqual({ ok: false, reason: "invalid_credentials" });
       expect(userRepository.create).not.toHaveBeenCalled();
     });
+  });
+
+  it("doesn't create an account on first sign-in when the source doesn't allow on-the-fly registration", async () => {
+    const userRepository = repoWith(null);
+    const ldapAuthenticator = fakeLdap({
+      authenticate: mock(async () => ({ firstname: "Bob", lastname: "Newuser", mail: "bob@example.com", onthefly: false })),
+    });
+    const result = await login({ userRepository, ldapAuthenticator }, "bob", "ldap-pass", "1");
+    expect(result.ok).toBe(false);
+    expect(userRepository.create).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,10 @@ export interface LdapConfig {
   attrMail: string;
   /** Verify the server's TLS certificate (only meaningful when the url is ldaps://). */
   verifyPeer: boolean;
+  /** An extra LDAP filter every match must also satisfy, or null. */
+  filter: string | null;
+  /** Whether this source may create an account on a first successful sign-in. */
+  onthefly: boolean;
 }
 
 /**
@@ -37,5 +41,41 @@ export function loadLdapConfigFromEnv(env: Record<string, string | undefined>): 
     attrLastname: env.LDAP_ATTR_LASTNAME?.trim() || "sn",
     attrMail: env.LDAP_ATTR_MAIL?.trim() || "mail",
     verifyPeer: env.LDAP_TLS_VERIFY !== "0",
+    filter: null,
+    // The environment-configured source is the one that always provisioned accounts on first sign-in.
+    onthefly: true,
+  };
+}
+
+/** The connection settings for an admin-managed LDAP source, with its bind password already decrypted (or null). */
+export function ldapConfigFromAuthSource(
+  source: {
+    host: string;
+    port: number;
+    account: string | null;
+    baseDn: string;
+    attrLogin: string;
+    attrFirstname: string;
+    attrLastname: string;
+    attrMail: string;
+    tls: boolean;
+    verifyPeer: boolean;
+    onthefly: boolean;
+    filter: string | null;
+  },
+  accountPassword: string | null,
+): LdapConfig {
+  return {
+    url: `${source.tls ? "ldaps" : "ldap"}://${source.host}:${source.port}`,
+    account: source.account,
+    accountPassword,
+    baseDn: source.baseDn,
+    attrLogin: source.attrLogin,
+    attrFirstname: source.attrFirstname,
+    attrLastname: source.attrLastname,
+    attrMail: source.attrMail,
+    verifyPeer: source.verifyPeer,
+    filter: source.filter,
+    onthefly: source.onthefly,
   };
 }
