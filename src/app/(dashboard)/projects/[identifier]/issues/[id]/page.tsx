@@ -446,7 +446,7 @@ export default async function IssueDetailPage({
           <h2 className="font-medium mb-2">{canEditThisIssue ? "チケットの編集" : "コメントの追加"}</h2>
           <IssueEditForm
             issue={issue}
-            parentIssueLabel={visibleParentIssue ? `#${visibleParentIssue.id.slice(0, 8)} ${visibleParentIssue.subject}` : null}
+            parentIssueLabel={visibleParentIssue ? `#${visibleParentIssue.number} ${visibleParentIssue.subject}` : null}
             projectIdentifier={identifier}
             trackers={trackers}
             statuses={statuses}

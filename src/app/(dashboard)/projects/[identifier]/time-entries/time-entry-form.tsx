@@ -15,6 +15,7 @@ const initialState: LogTimeActionState = { error: null };
 
 export interface TimeEntryFormIssue {
   id: string;
+  number: number;
   subject: string;
 }
 
@@ -97,7 +98,7 @@ export function TimeEntryForm({
           <option value="">(プロジェクト全体)</option>
           {issues.map((issue) => (
             <option key={issue.id} value={issue.id}>
-              #{issue.id.slice(0, 8)} {issue.subject}
+              #{issue.number} {issue.subject}
             </option>
           ))}
         </select>

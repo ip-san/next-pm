@@ -1,3 +1,4 @@
+import { findIssuesByReference } from "@/application/issues/find-issues-by-reference";
 import type { Issue } from "@/domain/issue/entity";
 import type { IssueRepository } from "@/domain/issue/repository";
 import type { Project } from "@/domain/project/entity";
@@ -51,7 +52,7 @@ export async function linkChangesetIssue(
     throw new InvalidChangesetIssueLinkError("チケットが不正です。");
   }
 
-  const candidates = await repositories.issueRepository.findByIdPrefix(issueRef);
+  const candidates = await findIssuesByReference(repositories.issueRepository, issueRef);
   // An ambiguous prefix is rejected rather than resolved arbitrarily: the shorthand is a
   // display convenience, and picking one of several matches would link the wrong issue.
   if (candidates.length !== 1) {

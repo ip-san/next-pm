@@ -236,7 +236,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
     {
       recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers)],
       excludeUserId: user.id,
-      subject: issueMailSubject(project.name, issue.id, issue.subject),
+      subject: issueMailSubject(project.name, issue.number, issue.subject),
       body: issue.description,
       issueEvent: issueNotifyEvent(issue, null),
     },

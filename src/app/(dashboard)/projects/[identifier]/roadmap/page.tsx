@@ -67,7 +67,7 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
               {versionIssues.map((issue) => (
                 <li key={issue.id}>
                   <Link href={`/projects/${identifier}/issues/${issue.id}`} className="underline">
-                    #{issue.id.slice(0, 8)} {issue.subject}
+                    #{issue.number} {issue.subject}
                   </Link>
                   <span className="text-gray-500 text-xs"> — {statusById.get(issue.statusId)?.name ?? "?"}</span>
                 </li>

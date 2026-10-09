@@ -5,6 +5,7 @@ import type { Issue } from "@/domain/issue/entity";
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "issue-1",
+    number: 1,
     projectId: "proj-1",
     trackerId: "tracker-1",
     statusId: "new",

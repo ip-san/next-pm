@@ -152,7 +152,7 @@ export default async function ProjectGanttPage({
                   className="underline"
                   title={row.issue.subject}
                 >
-                  {trackerById.get(row.issue.trackerId)?.name ?? "?"} #{row.issue.id.slice(0, 8)} {row.issue.subject}
+                  {trackerById.get(row.issue.trackerId)?.name ?? "?"} #{row.issue.number} {row.issue.subject}
                 </Link>
               </div>
               <div className="relative h-9 shrink-0" style={{ width: `${timelineWidth}px` }}>

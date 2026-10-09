@@ -118,7 +118,7 @@ export async function sendReminders(
 
     issues.sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? "") || a.id.localeCompare(b.id));
     const lines = issues.map(
-      (issue) => `- ${issue.dueDate} [${projectNames.get(issue.projectId) ?? ""} #${issue.id.slice(0, 8)}] ${issue.subject}`,
+      (issue) => `- ${issue.dueDate} [${projectNames.get(issue.projectId) ?? ""} #${issue.number}] ${issue.subject}`,
     );
     await repositories.mailer.send({
       to: [user.mail],

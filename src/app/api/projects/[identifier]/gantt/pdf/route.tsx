@@ -54,7 +54,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   const trackerById = new Map(trackers.map((t) => [t.id, t]));
 
   const rows = ganttRows.map((row) => ({
-    label: `${trackerById.get(row.issue.trackerId)?.name ?? "?"} #${row.issue.id.slice(0, 8)} ${row.issue.subject}`,
+    label: `${trackerById.get(row.issue.trackerId)?.name ?? "?"} #${row.issue.number} ${row.issue.subject}`,
     depth: row.depth,
     leftPercent: row.leftPercent,
     widthPercent: row.widthPercent,

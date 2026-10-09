@@ -102,7 +102,7 @@ export default async function EditTimeEntryPage({
       </div>
       <TimeEntryForm
         projectIdentifier={identifier}
-        issues={issues.map((issue) => ({ id: issue.id, subject: issue.subject }))}
+        issues={issues.map((issue) => ({ id: issue.id, number: issue.number, subject: issue.subject }))}
         activities={activities}
         customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
         assignableUsers={assignableUsers}

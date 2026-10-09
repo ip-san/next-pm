@@ -271,7 +271,7 @@ async function RelatedIssues({
           {linkedIssues.map((issue) => (
             <li key={issue.id} className="flex items-center gap-2">
               <Link href={`/projects/${projectIdentifier}/issues/${issue.id}`} className="underline">
-                #{issue.id.slice(0, 8)} {issue.subject}
+                #{issue.number} {issue.subject}
               </Link>
               {canManage ? (
                 <UnlinkRelatedIssueForm

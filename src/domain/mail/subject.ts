@@ -13,9 +13,9 @@ export function idToken(id: string): string {
   return id.slice(0, 8);
 }
 
-/** `[Project #eb0b2d1a] Subject` — replied to by MailHandler's issue path. */
-export function issueMailSubject(projectName: string, issueId: string, subject: string): string {
-  return `[${projectName} #${idToken(issueId)}] ${subject}`;
+/** `[Project #123] Subject` — replied to by MailHandler's issue path. */
+export function issueMailSubject(projectName: string, issueNumber: number, subject: string): string {
+  return `[${projectName} #${issueNumber}] ${subject}`;
 }
 
 /** `[Project - msg1a2b3c4d] Subject` — replied to by MailHandler's forum path. */

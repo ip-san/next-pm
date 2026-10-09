@@ -45,7 +45,7 @@ export default async function DeleteIssuePage({ params }: { params: Promise<{ id
   const isVisibleToActor = visibleIssueFilter(user?.id ?? null, actor, userGroupIds);
   const reassignCandidates = projectIssues
     .filter((candidate) => !doomedIds.includes(candidate.id) && isVisibleToActor(candidate))
-    .map((candidate) => ({ id: candidate.id, subject: candidate.subject }));
+    .map((candidate) => ({ id: candidate.id, number: candidate.number, subject: candidate.subject }));
 
   return (
     <main className="p-8 flex flex-col gap-6">

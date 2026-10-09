@@ -1,4 +1,5 @@
-import { boolean, doublePrecision, integer, pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, doublePrecision, integer, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { enumerations } from "./enumerations";
 import { issueCategories } from "./issue-categories";
 import { issueStatuses } from "./issue-statuses";
@@ -41,4 +42,9 @@ export const issues = pgTable("issues", {
   lockVersion: integer("lock_version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+  /**
+   * Redmine's issue id as users see it (`#123`): one global sequence across all projects, the way Redmine's
+   * integer primary key works. The uuid `id` stays the key in URLs and the REST API.
+   */
+  number: integer("number").notNull().default(sql`nextval('issues_number_seq')`),
+}, (table) => [uniqueIndex("issues_number_key").on(table.number)]);

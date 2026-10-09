@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
-  extractIssueReplyIdPrefix,
+  extractIssueReplyRef,
   extractMessageReplyIdPrefix,
   isAutoSubmitted,
   parseEmail,
@@ -77,21 +77,21 @@ describe("isAutoSubmitted", () => {
   });
 });
 
-describe("extractIssueReplyIdPrefix", () => {
+describe("extractIssueReplyRef", () => {
   it("extracts the 8-hex-char prefix from a reply-style subject", () => {
-    expect(extractIssueReplyIdPrefix("Re: [MyProject - Bug #eb0b2d1a] Something broke")).toBe("eb0b2d1a");
+    expect(extractIssueReplyRef("Re: [MyProject - Bug #eb0b2d1a] Something broke")).toBe("eb0b2d1a");
   });
 
   it("lowercases the extracted prefix", () => {
-    expect(extractIssueReplyIdPrefix("[Proj #EB0B2D1A] Subject")).toBe("eb0b2d1a");
+    expect(extractIssueReplyRef("[Proj #EB0B2D1A] Subject")).toBe("eb0b2d1a");
   });
 
   it("returns null for a subject that isn't a reply", () => {
-    expect(extractIssueReplyIdPrefix("Something broke")).toBeNull();
+    expect(extractIssueReplyRef("Something broke")).toBeNull();
   });
 
   it("returns null for a bracketed subject with no # prefix", () => {
-    expect(extractIssueReplyIdPrefix("[MyProject] Something broke")).toBeNull();
+    expect(extractIssueReplyRef("[MyProject] Something broke")).toBeNull();
   });
 });
 

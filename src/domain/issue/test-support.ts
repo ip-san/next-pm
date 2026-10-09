@@ -5,6 +5,7 @@ import type { IssueRepository } from "./repository";
 export function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "issue-1",
+    number: 1,
     projectId: "proj-1",
     trackerId: "tracker-1",
     statusId: "status-1",
@@ -34,6 +35,7 @@ export function makeIssueRepositoryMock(overrides: Partial<IssueRepository> = {}
   return {
     findById: mock(async () => null),
     findByIdPrefix: mock(async () => []),
+    findByNumber: mock(async () => null),
     listByProject: mock(async () => []),
     findByAssignee: mock(async () => []),
     findByAuthor: mock(async () => []),

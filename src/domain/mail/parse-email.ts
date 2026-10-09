@@ -30,16 +30,15 @@ export function isAutoSubmitted(email: ParsedEmail): boolean {
   return (email.headers.get("x-autoreply") ?? "").toLowerCase() === "yes";
 }
 
-// Mirrors Redmine's ISSUE_REPLY_SUBJECT_RE ("[... #123]"), adapted to an 8-hex-char prefix
-// instead of a sequential number — next-pm issues are identified by uuid, not an integer id,
-// and "#eb0b2d1a" (issue.id.slice(0, 8)) is already the shorthand the rest of the app displays.
-const ISSUE_REPLY_SUBJECT_RE = /\[(?:[^\]]*\s+)?#([0-9a-fA-F]{8})\]/;
+// Mirrors Redmine's ISSUE_REPLY_SUBJECT_RE ("[... #123]"): the issue number users see. Subjects sent before
+// numbers existed carry an 8-hex id prefix ("#eb0b2d1a"), which still routes a reply.
+const ISSUE_REPLY_SUBJECT_RE = /\[(?:[^\]]*\s+)?#(\d+|[0-9a-fA-F]{8})\]/;
 
 // Redmine's MESSAGE_REPLY_SUBJECT_RE ("[... msg123]"), same uuid-prefix adaptation.
 const MESSAGE_REPLY_SUBJECT_RE = /\[[^\]]*msg([0-9a-fA-F]{8})\]/;
 
-/** Returns the 8-hex-char issue id prefix a reply subject targets, or null if it's not a reply. */
-export function extractIssueReplyIdPrefix(subject: string): string | null {
+/** Returns the issue reference (a number, or an 8-hex id prefix) a reply subject targets, or null if it's not a reply. */
+export function extractIssueReplyRef(subject: string): string | null {
   const match = ISSUE_REPLY_SUBJECT_RE.exec(subject);
   return match ? match[1].toLowerCase() : null;
 }

@@ -44,22 +44,22 @@ const DEFAULT_OPTIONS = { refKeywords: ["refs", "references"], fixKeywords: ["fi
 describe("scanCommitMessage", () => {
   it("links a reference introduced by a configured ref keyword", () => {
     expect(scanCommitMessage("refs #eb0b2d1a", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "ref", hours: null },
+      { issueRef: "eb0b2d1a", action: "ref", hours: null },
     ]);
   });
 
   it("is case-insensitive on both the keyword and the hex prefix", () => {
     expect(scanCommitMessage("Refs #EB0B2D1A", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "ref", hours: null },
+      { issueRef: "eb0b2d1a", action: "ref", hours: null },
     ]);
   });
 
   it("marks a fix-keyword reference as a fix action", () => {
     expect(scanCommitMessage("fixes #eb0b2d1a", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "fix", hours: null },
+      { issueRef: "eb0b2d1a", action: "fix", hours: null },
     ]);
     expect(scanCommitMessage("Closes #eb0b2d1a", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "fix", hours: null },
+      { issueRef: "eb0b2d1a", action: "fix", hours: null },
     ]);
   });
 
@@ -74,27 +74,27 @@ describe("scanCommitMessage", () => {
 
   it("links a bare reference when refKeywords includes the '*' wildcard", () => {
     expect(scanCommitMessage("see #eb0b2d1a for details", { refKeywords: ["*"], fixKeywords: [] })).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "ref", hours: null },
+      { issueRef: "eb0b2d1a", action: "ref", hours: null },
     ]);
   });
 
   it("still requires a fix keyword for a fix action even with the wildcard set", () => {
     const result = scanCommitMessage("fixes #eb0b2d1a", { refKeywords: ["*"], fixKeywords: ["fixes"] });
-    expect(result).toEqual([{ issueIdPrefix: "eb0b2d1a", action: "fix", hours: null }]);
+    expect(result).toEqual([{ issueRef: "eb0b2d1a", action: "fix", hours: null }]);
   });
 
   it("extracts an hours annotation on a single reference", () => {
     expect(scanCommitMessage("fixes #eb0b2d1a @2h", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "fix", hours: 2 },
+      { issueRef: "eb0b2d1a", action: "fix", hours: 2 },
     ]);
   });
 
   it("handles multiple comma/semicolon/ampersand-separated references sharing one keyword", () => {
     expect(scanCommitMessage("refs #eb0b2d1a, #a1b2c3d4; #11223344 & #55667788", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "ref", hours: null },
-      { issueIdPrefix: "a1b2c3d4", action: "ref", hours: null },
-      { issueIdPrefix: "11223344", action: "ref", hours: null },
-      { issueIdPrefix: "55667788", action: "ref", hours: null },
+      { issueRef: "eb0b2d1a", action: "ref", hours: null },
+      { issueRef: "a1b2c3d4", action: "ref", hours: null },
+      { issueRef: "11223344", action: "ref", hours: null },
+      { issueRef: "55667788", action: "ref", hours: null },
     ]);
   });
 
@@ -102,29 +102,29 @@ describe("scanCommitMessage", () => {
     // Mirrors Redmine's own separator regex ([\s,;&]+): "and" is not among the accepted
     // separators, so a keyword-less "#11223344" after it is not linked (same as "see #...").
     expect(scanCommitMessage("refs #eb0b2d1a and #11223344", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "ref", hours: null },
+      { issueRef: "eb0b2d1a", action: "ref", hours: null },
     ]);
   });
 
   it("applies distinct hours per reference within the same group", () => {
     expect(scanCommitMessage("refs #eb0b2d1a @1h, #a1b2c3d4 @30m", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "ref", hours: 1 },
-      { issueIdPrefix: "a1b2c3d4", action: "ref", hours: 0.5 },
+      { issueRef: "eb0b2d1a", action: "ref", hours: 1 },
+      { issueRef: "a1b2c3d4", action: "ref", hours: 0.5 },
     ]);
   });
 
   it("finds multiple independent keyword groups in one message", () => {
     expect(scanCommitMessage("fixes #eb0b2d1a. also refs #a1b2c3d4.", DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "fix", hours: null },
-      { issueIdPrefix: "a1b2c3d4", action: "ref", hours: null },
+      { issueRef: "eb0b2d1a", action: "fix", hours: null },
+      { issueRef: "a1b2c3d4", action: "ref", hours: null },
     ]);
   });
 
   it("scans across multiple lines (full commit body, not just the subject)", () => {
     const message = "Add login form\n\nThis fixes #eb0b2d1a and closes #a1b2c3d4.";
     expect(scanCommitMessage(message, DEFAULT_OPTIONS)).toEqual([
-      { issueIdPrefix: "eb0b2d1a", action: "fix", hours: null },
-      { issueIdPrefix: "a1b2c3d4", action: "fix", hours: null },
+      { issueRef: "eb0b2d1a", action: "fix", hours: null },
+      { issueRef: "a1b2c3d4", action: "fix", hours: null },
     ]);
   });
 
@@ -139,5 +139,17 @@ describe("scanCommitMessage", () => {
   it("does not match a 7- or 9-character hex run as a prefix", () => {
     expect(scanCommitMessage("refs #eb0b2d1", DEFAULT_OPTIONS)).toEqual([]);
     expect(scanCommitMessage("refs #eb0b2d1aa", DEFAULT_OPTIONS)).toEqual([]);
+  });
+});
+
+describe("scanCommitMessage issue numbers", () => {
+  const options = { refKeywords: ["refs"], fixKeywords: ["fixes"] };
+
+  it("reads a numbered reference the way Redmine writes it", () => {
+    expect(scanCommitMessage("fixes #42", options)).toEqual([{ issueRef: "42", action: "fix", hours: null }]);
+  });
+
+  it("still reads the 8-hex prefix", () => {
+    expect(scanCommitMessage("refs #eb0b2d1a", options)).toEqual([{ issueRef: "eb0b2d1a", action: "ref", hours: null }]);
   });
 });

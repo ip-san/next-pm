@@ -11,7 +11,7 @@ import {
   isPrivateIssueVisible,
 } from "@/domain/issue/visibility";
 import {
-  extractIssueReplyIdPrefix,
+  extractIssueReplyRef,
   extractMessageReplyIdPrefix,
   isAutoSubmitted,
   parseEmail,
@@ -37,6 +37,7 @@ import type { Issue } from "@/domain/issue/entity";
 import type { IssueUpdate } from "@/domain/issue/repository";
 import type { User } from "@/domain/user/entity";
 import { createIssue } from "@/application/issues/create-issue";
+import { findIssuesByReference } from "@/application/issues/find-issues-by-reference";
 import { IssueAttributeNotAssignableError } from "@/application/issues/validate-issue-attributes";
 import { updateIssue, WorkflowRequiredFieldError, WorkflowTransitionDeniedError } from "@/application/issues/update-issue";
 import { postMessage, InvalidMessageError, LockedTopicError } from "@/application/messages/post-message";
@@ -213,8 +214,8 @@ export async function receiveEmail(raw: string, options: MailHandlerOptions): Pr
   const allowOverride = resolveAllowOverride(options);
   const attachments = email.attachments.filter((attachment) => !isExcludedAttachmentFilename(attachment.filename, settings));
 
-  const issueReplyPrefix = extractIssueReplyIdPrefix(email.subject);
-  const messageReplyPrefix = issueReplyPrefix ? null : extractMessageReplyIdPrefix(email.subject);
+  const issueReplyRef = extractIssueReplyRef(email.subject);
+  const messageReplyPrefix = issueReplyRef ? null : extractMessageReplyIdPrefix(email.subject);
 
   // Custom field keywords are only meaningful on the issue paths; their names depend on the
   // tracker, which isn't known until the target issue/project is resolved, so the body is
@@ -228,8 +229,8 @@ export async function receiveEmail(raw: string, options: MailHandlerOptions): Pr
     allowOverride,
   };
 
-  if (issueReplyPrefix) {
-    return handleIssueReply(base, cleanedBody, issueReplyPrefix);
+  if (issueReplyRef) {
+    return handleIssueReply(base, cleanedBody, issueReplyRef);
   }
   if (messageReplyPrefix) {
     return handleMessageReply(base, cleanedBody, messageReplyPrefix);
@@ -495,7 +496,7 @@ async function notifyIssueRecipients(project: Project, issue: Issue, actingUserI
     {
       recipientGroups: [[issue.authorId, ...assigneeUserIds], memberUserIds(notifiableMembers), notifiableWatcherUserIds],
       excludeUserId: actingUserId,
-      subject: issueMailSubject(project.name, issue.id, issue.subject),
+      subject: issueMailSubject(project.name, issue.number, issue.subject),
       body,
     },
   );
@@ -624,9 +625,9 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
   return { status: 201, body: { result: "issue_created", issue, attachments: savedAttachments } };
 }
 
-async function handleIssueReply(base: BaseContext, cleanedBody: string, idPrefix: string): Promise<MailHandlerResult> {
+async function handleIssueReply(base: BaseContext, cleanedBody: string, issueRef: string): Promise<MailHandlerResult> {
   const issueRepository = new DrizzleIssueRepository();
-  const candidates = await issueRepository.findByIdPrefix(idPrefix);
+  const candidates = await findIssuesByReference(issueRepository, issueRef);
   if (candidates.length !== 1) {
     return ignored("no_matching_issue");
   }

@@ -24,6 +24,7 @@ const styles = StyleSheet.create({
 
 export interface IssuesPdfRow {
   id: string;
+  number: number;
   trackerName: string;
   subject: string;
   statusName: string;
@@ -49,7 +50,7 @@ export function IssuesPdfDocument({ projectName, rows }: { projectName: string; 
         ) : (
           rows.map((row) => (
             <View key={row.id} style={styles.row}>
-              <Text style={styles.colId}>{row.id.slice(0, 8)}</Text>
+              <Text style={styles.colId}>{row.number}</Text>
               <Text style={styles.colTracker}>{row.trackerName}</Text>
               <Text style={styles.colSubject}>{row.subject}</Text>
               <Text style={styles.colStatus}>{row.statusName}</Text>

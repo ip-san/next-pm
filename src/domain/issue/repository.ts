@@ -28,6 +28,8 @@ export interface IssueRepository {
    * detection uses this against the app's own "#eb0b2d1a" display shorthand, since issues here
    * have no sequential number the way Redmine's do.
    */
+  /** The issue with this number (`#123`), or null. */
+  findByNumber(number: number): Promise<Issue | null>;
   findByIdPrefix(prefix: string): Promise<Issue[]>;
   listByProject(projectId: string, predicates?: CompiledPredicate[]): Promise<Issue[]>;
   /**
@@ -47,7 +49,7 @@ export interface IssueRepository {
    * about to hide, so this deliberately does not take a project scope.
    */
   listByFixedVersionIds(versionIds: string[]): Promise<Issue[]>;
-  create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue>;
+  create(issue: Omit<Issue, "id" | "number" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue>;
   /**
    * Applies `changes` only if `expectedLockVersion` still matches the stored row
    * (`UPDATE ... WHERE id = ? AND lock_version = ?`), mirroring Redmine's optimistic

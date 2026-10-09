@@ -11,7 +11,8 @@ export interface KeywordScanOptions {
 }
 
 export interface KeywordMatch {
-  issueIdPrefix: string;
+  /** An issue number ("123") or an 8-hex id prefix ("eb0b2d1a"); see findIssuesByReference. */
+  issueRef: string;
   action: "fix" | "ref";
   /** Hours parsed from a trailing "@2h"/"@90m"/"@1:30"/"@2" token, or null if none was present. */
   hours: number | null;
@@ -54,12 +55,13 @@ export function parseTimelog(raw: string): number | null {
 
 // The lookahead keeps a longer hex run (e.g. a full 40-char SHA pasted into a commit message)
 // from being misread as an 8-char issue prefix followed by stray hex characters.
-const HEX8 = "[0-9a-f]{8}(?![0-9a-f])";
+// A reference is an issue number (#123) or the 8-hex id prefix; a number never runs into a hex letter.
+const ISSUE_REF = "(?:\\d+(?![0-9a-f])|[0-9a-f]{8}(?![0-9a-f]))";
 // Deliberately precise (mirrors TIMELOG_RE's own alternatives) rather than a loose greedy class
 // like [\w:.,]+ — a loose class would swallow the comma that separates this ref from the next
 // one in something like "#eb0b2d1a @1h, #a1b2c3d4 @30m", parsing "1h," as the time value.
 const TIMELOG = "\\d+h(?:ours?)?(?:\\d+m(?:in)?)?|\\d+(?:h|hours?|m|min)|\\d+:\\d+|\\d+(?:[.,]\\d+)?h?";
-const REF_TOKEN = `#${HEX8}(?:\\s+@(?:${TIMELOG}))?`;
+const REF_TOKEN = `#${ISSUE_REF}(?:\\s+@(?:${TIMELOG}))?`;
 
 /**
  * Scans a commit message for issue references. A reference only counts if it's either preceded
@@ -80,7 +82,7 @@ export function scanCommitMessage(comment: string, options: KeywordScanOptions):
   const keywordAlternation = allKeywords.length > 0 ? allKeywords.map(escapeRegExp).join("|") : "(?!)";
 
   const groupRe = new RegExp(`(?:\\b(${keywordAlternation})[:\\s]+)?(${REF_TOKEN}(?:[\\s,;&]+${REF_TOKEN})*)`, "gi");
-  const tokenRe = new RegExp(`#(${HEX8})(?:\\s+@(${TIMELOG}))?`, "gi");
+  const tokenRe = new RegExp(`#(${ISSUE_REF})(?:\\s+@(${TIMELOG}))?`, "gi");
 
   const matches: KeywordMatch[] = [];
   for (const groupMatch of comment.matchAll(groupRe)) {
@@ -94,7 +96,7 @@ export function scanCommitMessage(comment: string, options: KeywordScanOptions):
     const action: "fix" | "ref" = isFix ? "fix" : "ref";
     for (const tokenMatch of refsBlob.matchAll(tokenRe)) {
       matches.push({
-        issueIdPrefix: tokenMatch[1].toLowerCase(),
+        issueRef: tokenMatch[1].toLowerCase(),
         action,
         hours: tokenMatch[2] ? parseTimelog(tokenMatch[2]) : null,
       });

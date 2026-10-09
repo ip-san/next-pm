@@ -21,7 +21,7 @@ export function issueFeedEntries(
       const link = `${origin}${pathFor(issue)}`;
       return {
         id: link,
-        title: `${lookups.trackers.get(issue.trackerId) ?? ""} #${issue.id.slice(0, 8)} (${lookups.statuses.get(issue.statusId) ?? ""}): ${issue.subject}`,
+        title: `${lookups.trackers.get(issue.trackerId) ?? ""} #${issue.number} (${lookups.statuses.get(issue.statusId) ?? ""}): ${issue.subject}`,
         link,
         updatedAt: issue.createdAt,
         authorName: lookups.users.get(issue.authorId) ?? null,

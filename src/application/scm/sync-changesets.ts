@@ -1,3 +1,4 @@
+import { findIssuesByReference } from "@/application/issues/find-issues-by-reference";
 import { logTime, InvalidTimeEntryError } from "@/application/time-entries/log-time";
 import { loadProjectActivities } from "@/application/time-entries/project-activities";
 import type { ProjectActivityRepository } from "@/domain/enumeration/project-activity-repository";
@@ -193,7 +194,7 @@ export async function syncChangesets(
 
     const seenIssueIds = new Set<string>();
     for (const match of matches) {
-      const candidates = await repositories.issueRepository.findByIdPrefix(match.issueIdPrefix);
+      const candidates = await findIssuesByReference(repositories.issueRepository, match.issueRef);
       // Redmine resolves `#id` to exactly one issue and then applies the cross-project rule to
       // it; next-pm's shorthand is an id *prefix*, so an ambiguous one is dropped rather than
       // resolved arbitrarily.

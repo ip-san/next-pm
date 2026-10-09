@@ -18,7 +18,7 @@
 
 | 差分 | 内容 |
 |---|---|
-| 課題の識別子 | 本家は全体で一意の連番(`#123`)。next-pm は UUID の先頭 8 桁(`#eb0b2d1a`)を表示・参照の shorthand に使う。メール件名の返信検出(`domain/mail/parse-email.ts`)やコミットメッセージ走査(`domain/scm/keyword-scan.ts`)もこの表記に合わせてある。移行するなら全機能横断の変更になる |
+| 課題の識別子 | partial | 連番 `issues.number`(全体で一意、DB のシーケンス)を追加し、既存の課題は作成順に採番した(migration 0048)。表示は `#123`、メール件名は `[プロジェクト #123]`、コミットの `refs #123` / `fixes #123` と返信メールの解決も番号で行う(`application/issues/find-issues-by-reference.ts`)。URL と REST は従来どおり UUID。以前の `#eb0b2d1a` 形式(8 桁の接頭辞)は、古いメール件名とコミットでも引き続き解決する。**未対応**: 履歴に出る親課題・関連課題の値(UUID の接頭辞のまま)、ウィキのマクロの参照、課題の CSV 出力の `#` 列(互換のため UUID のまま)
 | クエリエンジン | 解消済み。`queries` に `type` / `column_names` / `group_by` / `sort_criteria` / `totalable_names` を追加し、フィルタ・表示列・グルーピング・ソート・合計・ページングを一体で持つようにした(`domain/query/`, `application/issues/list-project-issues.ts`, `infrastructure/db/repositories/issue-search-repository.ts`)。適用先は課題一覧(プロジェクト/横断)と工数一覧(プロジェクト/横断)。`queries.type` の STI でどちらの保存済みクエリかを分け、フィルタコンパイラ・ページング・ソート・列の検証は共有し、列カタログと読み取りモデルだけが別 |
 | 課題の更新経路 | 解消済み。単票の編集フォーム・一括編集・一覧のコンテキストメニューからドメイン層の項目に到達できる。一括編集の日付のクリアのみ残る(単票で可能) |
 | 画面のスコープ | 解消済み。本家と同じく「グローバル画面 + プロジェクト画面」の二層構造になった(`/issues`, `/time_entries`, `/activity`、加えて従来からの `/search`)。グローバル側の可視範囲は常に「その権限を持つプロジェクトの集合」をプロジェクトごとに解決して合成する(`listVisibleProjectContexts`)|

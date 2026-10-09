@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface IssueMatch {
   id: string;
+  number: number;
   subject: string;
 }
 
@@ -72,12 +73,12 @@ export function IssueAutocomplete({
                 className="w-full text-left px-3 py-2 hover:bg-gray-100"
                 onClick={() => {
                   setSelectedId(match.id);
-                  setQuery(`#${match.id.slice(0, 8)} ${match.subject}`);
+                  setQuery(`#${match.number} ${match.subject}`);
                   setOpen(false);
                   onSelect(match.id);
                 }}
               >
-                #{match.id.slice(0, 8)} {match.subject}
+                #{match.number} {match.subject}
               </button>
             </li>
           ))}

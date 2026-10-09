@@ -453,6 +453,7 @@ function toDomain(row: Record<string, unknown>): Issue {
     startDate: row.start_date as string | null,
     dueDate: row.due_date as string | null,
     lockVersion: row.lock_version as number,
+    number: Number(row.number),
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
   };

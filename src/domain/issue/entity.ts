@@ -1,5 +1,7 @@
 export interface Issue {
   id: string;
+  /** The number users see and type (`#123`); unique across projects, assigned by the database. */
+  number: number;
   projectId: string;
   trackerId: string;
   statusId: string;

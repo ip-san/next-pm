@@ -49,7 +49,7 @@ export function issueColumnValue(column: QueryColumn, issue: Issue, context: Iss
 
   switch (column.key) {
     case "id":
-      return context.fullIds ? issue.id : issue.id.slice(0, 8);
+      return context.fullIds ? issue.id : String(issue.number);
     case "project":
       return context.lookups.projects?.get(issue.projectId) ?? "";
     case "tracker":

@@ -42,5 +42,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   });
   const visible = matches.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds)).slice(0, RESULT_LIMIT);
 
-  return NextResponse.json({ results: visible.map((issue) => ({ id: issue.id, subject: issue.subject })) });
+  return NextResponse.json({ results: visible.map((issue) => ({ id: issue.id, number: issue.number, subject: issue.subject })) });
 }

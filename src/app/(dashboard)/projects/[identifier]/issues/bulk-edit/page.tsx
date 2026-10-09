@@ -104,7 +104,7 @@ export default async function BulkEditPage({
       <ul className="text-sm text-gray-600 flex flex-col gap-1">
         {issues.map((issue) => (
           <li key={issue.id}>
-            #{issue.id.slice(0, 8)} {issue.subject}
+            #{issue.number} {issue.subject}
           </li>
         ))}
       </ul>

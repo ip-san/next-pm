@@ -11,6 +11,7 @@ const TODAY = new Date("2026-03-01T00:00:00.000Z");
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "11111111-aaaa-4bbb-8ccc-dddddddddddd",
+    number: 1,
     projectId: "project-1",
     trackerId: "tracker-1",
     statusId: "status-open",

@@ -42,6 +42,7 @@ function toDomain(row: typeof issues.$inferSelect): Issue {
     startDate: row.startDate,
     dueDate: row.dueDate,
     lockVersion: row.lockVersion,
+    number: row.number,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -50,6 +51,11 @@ function toDomain(row: typeof issues.$inferSelect): Issue {
 export class DrizzleIssueRepository implements IssueRepository {
   async findById(id: string): Promise<Issue | null> {
     const [row] = await db.select().from(issues).where(eq(issues.id, id)).limit(1);
+    return row ? toDomain(row) : null;
+  }
+
+  async findByNumber(number: number): Promise<Issue | null> {
+    const [row] = await db.select().from(issues).where(eq(issues.number, number)).limit(1);
     return row ? toDomain(row) : null;
   }
 
@@ -104,7 +110,7 @@ export class DrizzleIssueRepository implements IssueRepository {
     return rows.map(toDomain);
   }
 
-  async create(issue: Omit<Issue, "id" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue> {
+  async create(issue: Omit<Issue, "id" | "number" | "lockVersion" | "createdAt" | "updatedAt">): Promise<Issue> {
     const [row] = await db
       .insert(issues)
       .values({

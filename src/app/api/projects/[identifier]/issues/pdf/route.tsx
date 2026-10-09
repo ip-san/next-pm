@@ -81,6 +81,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
 
   const rows = result.search.issues.map((issue) => ({
     id: issue.id,
+    number: issue.number,
     trackerName: trackerById.get(issue.trackerId)?.name ?? "",
     subject: issue.subject,
     statusName: statusById.get(issue.statusId)?.name ?? "",

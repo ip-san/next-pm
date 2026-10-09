@@ -25,7 +25,7 @@ export function DeleteIssueForm({
   descendantCount: number;
   totalHours: number;
   /** Other issues in the same project that logged time can be moved onto. */
-  reassignCandidates: { id: string; subject: string }[];
+  reassignCandidates: { id: string; number: number; subject: string }[];
 }) {
   const router = useRouter();
   const [timeEntryMode, setTimeEntryMode] = useState<"destroy" | "nullify" | "reassign">("destroy");
@@ -84,7 +84,7 @@ export function DeleteIssueForm({
             >
               {reassignCandidates.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  #{candidate.id.slice(0, 8)} {candidate.subject}
+                  #{candidate.number} {candidate.subject}
                 </option>
               ))}
             </select>
