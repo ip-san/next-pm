@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { AddUserToGroupForm } from "./add-user-form";
+import { GroupCustomFieldsForm } from "./group-custom-fields-form";
 import { DeleteGroupButton } from "./delete-group-button";
 import { RemoveUserFromGroupButton } from "./remove-user-button";
 
@@ -22,7 +25,12 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
   }
 
   const userIds = await groupRepository.listUserIds(groupId);
-  const users = await new DrizzleUserRepository().findByIds(userIds);
+  const [users, groupFields, groupValues] = await Promise.all([
+    new DrizzleUserRepository().findByIds(userIds),
+    new DrizzleCustomFieldRepository().listForCustomizedType("Group"),
+    new DrizzleCustomValueRepository().listForCustomized("Group", groupId),
+  ]);
+  const customValueByFieldId = Object.fromEntries(groupValues.map((value) => [value.customFieldId, value.value]));
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -60,6 +68,9 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
       </table>
 
       <AddUserToGroupForm groupId={group.id} />
+      {groupFields.length > 0 ? (
+        <GroupCustomFieldsForm groupId={group.id} customFields={groupFields} customValueByFieldId={customValueByFieldId} />
+      ) : null}
     </main>
   );
 }

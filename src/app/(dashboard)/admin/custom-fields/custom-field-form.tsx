@@ -31,6 +31,7 @@ const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
   { value: "Project", label: "プロジェクト" },
   { value: "TimeEntry", label: "作業時間" },
   { value: "Version", label: "バージョン" },
+  { value: "Group", label: "グループ" },
 ];
 
 /**

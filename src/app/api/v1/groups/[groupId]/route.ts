@@ -1,3 +1,4 @@
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
@@ -22,7 +23,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ grou
   if (!group) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  return NextResponse.json({ group });
+  const customValues = await new DrizzleCustomValueRepository().listForCustomized("Group", groupId);
+  return NextResponse.json({ group, customValues });
 }
 
 const updateGroupSchema = z.object({

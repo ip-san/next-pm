@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { addUserToGroup, removeUserFromGroup } from "@/application/groups/group-membership";
+import { CustomFieldValidationError, setGroupCustomFieldValues } from "@/application/groups/set-group-custom-field-values";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
@@ -104,5 +107,45 @@ export async function removeUserFromGroupAction(_prevState: GroupActionState, fo
   await removeUserFromGroup({ groupRepository: new DrizzleGroupRepository(), memberRepository: new DrizzleMemberRepository() }, parsed.data.groupId, parsed.data.userId);
 
   revalidatePath("/admin/groups");
+  return { error: null };
+}
+
+const updateGroupCustomFieldValuesSchema = z.object({
+  groupId: z.string().uuid(),
+  customFieldIds: z.array(z.string().uuid()).default([]),
+});
+
+/** Saves the Group custom field values from the group's page. Admin only, like the rest of group management. */
+export async function updateGroupCustomFieldValuesAction(_prevState: GroupActionState, formData: FormData): Promise<GroupActionState> {
+  const authError = await requireAdmin();
+  if (authError) {
+    return { error: authError };
+  }
+
+  const parsed = updateGroupCustomFieldValuesSchema.safeParse({
+    groupId: formData.get("groupId"),
+    customFieldIds: formData.getAll("customFieldIds"),
+  });
+  if (!parsed.success) {
+    return { error: "入力内容を確認してください。" };
+  }
+
+  const rawValues = Object.fromEntries(
+    parsed.data.customFieldIds.map((fieldId) => [fieldId, (formData.get(`customField_${fieldId}`) ?? "").toString()]),
+  );
+  try {
+    await setGroupCustomFieldValues(
+      { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+      parsed.data.groupId,
+      rawValues,
+    );
+  } catch (error) {
+    if (error instanceof CustomFieldValidationError) {
+      return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+    }
+    throw error;
+  }
+
+  revalidatePath(`/admin/groups/${parsed.data.groupId}`);
   return { error: null };
 }

@@ -18,7 +18,7 @@ export interface CustomFieldEnumeration {
  * (IssueCustomField, ProjectCustomField, TimeEntryCustomField, ...) reduced to the three
  * implemented so far.
  */
-export type CustomizedType = "Issue" | "Project" | "TimeEntry" | "Version";
+export type CustomizedType = "Issue" | "Project" | "TimeEntry" | "Version" | "Group";
 
 export interface CustomField {
   id: string;
