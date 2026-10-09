@@ -1,3 +1,4 @@
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { userVisibilityFor } from "@/interface/http/user-visibility";
@@ -249,19 +250,21 @@ export default async function IssueDetailPage({
       .map(async (field) => {
         const raw = customValueByFieldId.get(field.id);
         if (!raw) return;
-        let label: string | null = null;
-        if (field.fieldFormat === "enumeration") {
-          // A choice's name is not personal data; a removed choice still shows its name.
-          label = field.enumerations?.find((choice) => choice.id === raw)?.name ?? "(不明な選択肢)";
-        } else if (field.fieldFormat === "user") {
-          const candidate = await new DrizzleUserRepository().findById(raw);
-          if (candidate && isActiveUser(candidate) && canSeeUser(candidate.id)) {
-            label = `${candidate.lastname} ${candidate.firstname}`;
-          }
-        } else {
-          label = sharedVersionById.get(raw) ?? null;
-        }
-        choiceLabelByFieldId.set(field.id, label ?? "(非公開)");
+        // A multiple-valued field holds several ids, one per line; each is resolved on its own and shown joined.
+        const labels = await Promise.all(
+          raw.split(CUSTOM_VALUE_SEPARATOR).map(async (id) => {
+            if (field.fieldFormat === "enumeration") {
+              // A choice's name is not personal data; a removed choice still shows its name.
+              return field.enumerations?.find((choice) => choice.id === id)?.name ?? "(不明な選択肢)";
+            }
+            if (field.fieldFormat === "user") {
+              const candidate = await new DrizzleUserRepository().findById(id);
+              return candidate && isActiveUser(candidate) && canSeeUser(candidate.id) ? `${candidate.lastname} ${candidate.firstname}` : "(非公開)";
+            }
+            return sharedVersionById.get(id) ?? "(非公開)";
+          }),
+        );
+        choiceLabelByFieldId.set(field.id, labels.join(", "));
       }),
   );
   const customFieldNameById = new Map(visibleCustomFields.map((field) => [field.id, field.name]));
@@ -359,7 +362,7 @@ export default async function IssueDetailPage({
                       {customValueByFieldId.get(field.id)}
                     </a>
                   ) : (
-                    (choiceLabelByFieldId.get(field.id) ?? customValueByFieldId.get(field.id) ?? "(未設定)")
+                    (choiceLabelByFieldId.get(field.id) ?? customValueByFieldId.get(field.id)?.split(CUSTOM_VALUE_SEPARATOR).join(", ") ?? "(未設定)")
                   )}
                 </dd>
               </div>

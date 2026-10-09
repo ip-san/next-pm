@@ -1,4 +1,4 @@
-import { pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { customFields } from "./custom-fields";
 
 export const customValues = pgTable(
@@ -13,5 +13,6 @@ export const customValues = pgTable(
     customizedId: uuid("customized_id").notNull(),
     value: text("value"),
   },
-  (table) => [uniqueIndex("custom_values_unique_target").on(table.customFieldId, table.customizedType, table.customizedId)],
+  // Not unique: a multiple-valued field keeps one row per value (Redmine's custom_values has no uniqueness either).
+  (table) => [index("custom_values_target").on(table.customFieldId, table.customizedType, table.customizedId)],
 );

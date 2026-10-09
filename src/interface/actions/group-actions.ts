@@ -1,5 +1,6 @@
 "use server";
 
+import { submittedCustomValue } from "@/interface/http/custom-field-form-value";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { addUserToGroup, removeUserFromGroup } from "@/application/groups/group-membership";
@@ -131,7 +132,7 @@ export async function updateGroupCustomFieldValuesAction(_prevState: GroupAction
   }
 
   const rawValues = Object.fromEntries(
-    parsed.data.customFieldIds.map((fieldId) => [fieldId, (formData.get(`customField_${fieldId}`) ?? "").toString()]),
+    parsed.data.customFieldIds.map((fieldId) => [fieldId, submittedCustomValue(formData.getAll(`customField_${fieldId}`))]),
   );
   try {
     await setGroupCustomFieldValues(

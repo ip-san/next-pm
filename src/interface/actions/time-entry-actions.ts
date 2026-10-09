@@ -1,5 +1,6 @@
 "use server";
 
+import { submittedCustomValue } from "@/interface/http/custom-field-form-value";
 import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { revalidatePath } from "next/cache";
@@ -55,13 +56,8 @@ function writeRepositories() {
 
 /** `cf_<uuid>` form inputs, same convention the issue forms use. */
 function customFieldValuesFromForm(formData: FormData): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith("cf_") && typeof value === "string") {
-      values[key.slice(3)] = value;
-    }
-  }
-  return values;
+  const names = new Set([...formData.keys()].filter((key) => key.startsWith("cf_")));
+  return Object.fromEntries([...names].map((name) => [name.slice(3), submittedCustomValue(formData.getAll(name))]));
 }
 
 function firstFieldError(error: CustomFieldValidationError): string {

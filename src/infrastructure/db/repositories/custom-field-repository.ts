@@ -78,6 +78,7 @@ async function attachTrackerIds(rows: (typeof customFields.$inferSelect)[]): Pro
       trackerIds: trackerRows.map((t) => t.trackerId),
       visible: row.visible,
       roleIds: roleRows.map((r) => r.roleId),
+      multiple: row.multiple,
     });
   }
   return result;
@@ -124,6 +125,7 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
         possibleValues: field.possibleValues,
         position: field.position,
         visible: visibility.visible,
+        multiple: field.multiple,
       })
       .returning();
 

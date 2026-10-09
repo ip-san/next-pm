@@ -1,5 +1,6 @@
 "use client";
 
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { CustomField } from "@/domain/custom-field/entity";
 
 /**
@@ -31,6 +32,21 @@ export function CustomFieldInputs({
             </label>
             {field.fieldFormat === "text" ? (
               <textarea id={name} name={name} rows={3} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2" />
+            ) : field.fieldFormat === "list" && field.multiple ? (
+              // Several choices post under one name; submittedCustomValue joins them one per line.
+              <select
+                id={name}
+                name={name}
+                multiple
+                defaultValue={current.split(CUSTOM_VALUE_SEPARATOR).filter((item) => item !== "")}
+                className="border rounded px-3 py-2"
+              >
+                {field.possibleValues.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
             ) : field.fieldFormat === "list" ? (
               <select id={name} name={name} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2">
                 <option value="">(未設定)</option>

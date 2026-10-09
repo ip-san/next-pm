@@ -1,3 +1,4 @@
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { Issue } from "@/domain/issue/entity";
 import { parseCustomFieldKey, type QueryColumn } from "@/domain/query/columns";
 
@@ -44,7 +45,8 @@ function isoDate(date: Date): string {
 export function issueColumnValue(column: QueryColumn, issue: Issue, context: IssueRowContext): string {
   const customFieldId = parseCustomFieldKey(column.key);
   if (customFieldId) {
-    return context.customValues.get(`${issue.id}:${customFieldId}`) ?? "";
+    // A multiple-valued field's values come one per line; a cell shows them comma-separated.
+    return (context.customValues.get(`${issue.id}:${customFieldId}`) ?? "").split(CUSTOM_VALUE_SEPARATOR).join(", ");
   }
 
   switch (column.key) {

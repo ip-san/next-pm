@@ -1,3 +1,4 @@
+import { restCustomFieldValuesSchema } from "@/interface/http/custom-field-rest-values";
 import { CustomFieldValidationError } from "@/application/projects/set-project-custom-field-values";
 import { setVersionCustomFieldValues, validateVersionCustomFieldValues } from "@/application/versions/set-version-custom-field-values";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -61,7 +62,7 @@ const updateVersionSchema = z.object({
   status: z.enum(["open", "locked", "closed"]).default("open"),
   sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]).default("none"),
   wiki_page_title: z.string().nullable().default(null),
-  custom_field_values: z.record(z.string(), z.string()).default({}),
+  custom_field_values: restCustomFieldValuesSchema,
 });
 
 export async function PUT(request: Request, { params }: { params: Promise<{ versionId: string }> }) {

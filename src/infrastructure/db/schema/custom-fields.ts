@@ -19,6 +19,8 @@ export const customFields = pgTable("custom_fields", {
    * (and admins). Redmine's form only offers the roles when this is off.
    */
   visible: boolean("visible").notNull().default(true),
+  /** Redmine's `multiple`: several values per record, for the list, enumeration, user and version formats. */
+  multiple: boolean("multiple").notNull().default(false),
 });
 
 /**

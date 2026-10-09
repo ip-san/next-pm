@@ -137,6 +137,11 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
         必須項目
       </label>
 
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="multiple" defaultChecked={field?.multiple} />
+        複数の値を持てる(リスト・列挙・ユーザー・バージョンの形式のみ)
+      </label>
+
       <fieldset className="flex flex-col gap-1" hidden={customizedType !== "Issue"}>
         <legend className="text-sm font-medium">対象トラッカー</legend>
         {trackers.map((tracker) => (

@@ -1,3 +1,4 @@
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { JournalDetail } from "./entity";
 
 /** Japanese labels for the issue attributes that get journalled, mirroring Redmine's field_* keys. */
@@ -83,7 +84,11 @@ export function describeJournalDetail(detail: JournalDetail, names: JournalDetai
 
 function displayValue(fieldName: string, raw: string, names: JournalDetailNames): string {
   if (fieldName === "isPrivate") return raw === "true" ? "はい" : "いいえ";
-  return names.values.get(raw) ?? (looksLikeId(raw) ? shortId(raw) : raw);
+  // A multiple-valued custom field's values come one per line; each is shown on its own, joined with commas.
+  return raw
+    .split(CUSTOM_VALUE_SEPARATOR)
+    .map((item) => names.values.get(item) ?? (looksLikeId(item) ? shortId(item) : item))
+    .join(", ");
 }
 
 function looksLikeId(raw: string): boolean {

@@ -1,3 +1,4 @@
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import type { Issue } from "@/domain/issue/entity";
@@ -580,9 +581,16 @@ async function loadCustomFieldFormats(): Promise<Map<string, string>> {
 async function loadCustomValues(issueIds: string[]): Promise<Map<string, string>> {
   if (issueIds.length === 0) return new Map();
   const result = await db.execute<{ customized_id: string; custom_field_id: string; value: string | null }>(
-    sql`select customized_id, custom_field_id, value from custom_values where customized_type = 'Issue' and customized_id in ${idList(issueIds)}`,
+    sql`select customized_id, custom_field_id, value from custom_values where customized_type = 'Issue' and customized_id in ${idList(issueIds)} order by value`,
   );
-  return new Map(result.rows.filter((row) => row.value !== null).map((row) => [`${row.customized_id}:${row.custom_field_id}`, row.value as string]));
+  // A multiple-valued field has one row per value; they read back as one entry, one value per line.
+  const grouped = new Map<string, string[]>();
+  for (const row of result.rows) {
+    if (row.value === null) continue;
+    const key = `${row.customized_id}:${row.custom_field_id}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), row.value]);
+  }
+  return new Map([...grouped].map(([key, values]) => [key, values.join(CUSTOM_VALUE_SEPARATOR)]));
 }
 
 /**

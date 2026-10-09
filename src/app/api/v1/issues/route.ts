@@ -1,3 +1,4 @@
+import { restCustomFieldValuesSchema } from "@/interface/http/custom-field-rest-values";
 import { loadCustomFieldOptionSets } from "@/application/custom-field/option-sets";
 import { customFieldOptionRepositories } from "@/interface/http/custom-field-option-repositories";
 import { NextResponse } from "next/server";
@@ -81,7 +82,7 @@ const createIssueSchema = z.object({
   estimated_hours: z.number().nullable().default(null),
   start_date: z.string().nullable().default(null),
   due_date: z.string().nullable().default(null),
-  custom_field_values: z.record(z.string(), z.string()).default({}),
+  custom_field_values: restCustomFieldValuesSchema,
   uploads: z.array(z.object({ token: z.string() })).default([]),
 });
 

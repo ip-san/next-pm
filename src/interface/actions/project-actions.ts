@@ -1,5 +1,6 @@
 "use server";
 
+import { submittedCustomValue } from "@/interface/http/custom-field-form-value";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -223,7 +224,7 @@ export async function updateProjectSettingsAction(
 
   if (parsed.data.customFieldIds.length > 0) {
     const rawValues = Object.fromEntries(
-      parsed.data.customFieldIds.map((fieldId) => [fieldId, (formData.get(`customField_${fieldId}`) ?? "").toString()]),
+      parsed.data.customFieldIds.map((fieldId) => [fieldId, submittedCustomValue(formData.getAll(`customField_${fieldId}`))]),
     );
     try {
       await setProjectCustomFieldValues(

@@ -1,4 +1,5 @@
 import type { CustomField } from "./entity";
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 
 export type CoerceResult = { ok: true; value: string | null } | { ok: false; error: string };
 
@@ -19,6 +20,29 @@ export type CustomFieldOptionSets = Record<string, ReadonlySet<string>>;
  * that text gets format-checked before being written.
  */
 export function coerceCustomFieldValue(
+  field: Pick<CustomField, "name" | "fieldFormat" | "isRequired" | "possibleValues"> & { multiple?: boolean },
+  raw: string,
+  allowedIds?: ReadonlySet<string>,
+): CoerceResult {
+  if (!field.multiple) {
+    return coerceSingleValue(field, raw, allowedIds);
+  }
+  // Several values travel one per line (see CUSTOM_VALUE_SEPARATOR). Each one is checked on its own, duplicates
+  // collapse, and an empty list is the empty value (or a required-field error).
+  const items = [...new Set(raw.split(CUSTOM_VALUE_SEPARATOR).map((item) => item.trim()).filter((item) => item !== ""))];
+  if (items.length === 0) {
+    return coerceSingleValue(field, "", allowedIds);
+  }
+  const checked: string[] = [];
+  for (const item of items) {
+    const result = coerceSingleValue(field, item, allowedIds);
+    if (!result.ok) return result;
+    if (result.value !== null) checked.push(result.value);
+  }
+  return { ok: true, value: checked.join(CUSTOM_VALUE_SEPARATOR) };
+}
+
+function coerceSingleValue(
   field: Pick<CustomField, "name" | "fieldFormat" | "isRequired" | "possibleValues">,
   raw: string,
   allowedIds?: ReadonlySet<string>,
@@ -74,7 +98,7 @@ export interface CustomFieldValidation {
   coerced: { customFieldId: string; value: string | null }[];
 }
 
-type ValidatableField = Pick<CustomField, "id" | "name" | "fieldFormat" | "isRequired" | "possibleValues">;
+type ValidatableField = Pick<CustomField, "id" | "name" | "fieldFormat" | "isRequired" | "possibleValues"> & { multiple?: boolean };
 
 /**
  * Pure validate-only counterpart to setIssueCustomFieldValues — runs the same per-field

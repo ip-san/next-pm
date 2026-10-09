@@ -1066,6 +1066,7 @@ function customField(overrides: Partial<CustomField> = {}): CustomField {
     defaultValue: null,
     visible: true,
     roleIds: [],
+    multiple: false,
     possibleValues: ["Low", "High"],
     position: 1,
     trackerIds: ["tracker-1"],

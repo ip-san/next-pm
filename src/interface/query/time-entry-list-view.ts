@@ -1,3 +1,4 @@
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import { parseCustomFieldKey, type QueryColumn } from "@/domain/query/columns";
 import type { TimeEntry } from "@/domain/time-entry/entity";
 
@@ -20,7 +21,8 @@ export interface TimeEntryRowContext {
 export function timeEntryColumnValue(column: QueryColumn, entry: TimeEntry, context: TimeEntryRowContext): string {
   const customFieldId = parseCustomFieldKey(column.key);
   if (customFieldId) {
-    return context.customValues.get(`${entry.id}:${customFieldId}`) ?? "";
+    // A multiple-valued field's values come one per line; a cell shows them comma-separated.
+    return (context.customValues.get(`${entry.id}:${customFieldId}`) ?? "").split(CUSTOM_VALUE_SEPARATOR).join(", ");
   }
 
   switch (column.key) {

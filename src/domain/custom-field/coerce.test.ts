@@ -101,3 +101,28 @@ describe("coerceCustomFieldValue for enumeration fields", () => {
     expect(coerceCustomFieldValue(field({ fieldFormat: "enumeration" }), "Low", new Set([choice])).ok).toBe(false);
   });
 });
+
+describe("coerceCustomFieldValue with multiple values", () => {
+  const colours = { name: "Colours", fieldFormat: "list" as const, isRequired: false, possibleValues: ["Red", "Green", "Blue"], multiple: true };
+
+  it("checks each value and joins them one per line", () => {
+    expect(coerceCustomFieldValue(colours, "Red\nBlue")).toEqual({ ok: true, value: "Red\nBlue" });
+  });
+
+  it("collapses duplicates and drops blank lines", () => {
+    expect(coerceCustomFieldValue(colours, " Red \n\nRed\n")).toEqual({ ok: true, value: "Red" });
+  });
+
+  it("refuses the whole value when one entry isn't a choice", () => {
+    expect(coerceCustomFieldValue(colours, "Red\nPurple").ok).toBe(false);
+  });
+
+  it("treats no entries as the empty value, or as an error when required", () => {
+    expect(coerceCustomFieldValue(colours, " \n ")).toEqual({ ok: true, value: null });
+    expect(coerceCustomFieldValue({ ...colours, isRequired: true }, "").ok).toBe(false);
+  });
+
+  it("leaves a single-valued field alone", () => {
+    expect(coerceCustomFieldValue({ ...colours, multiple: false }, "Red\nBlue").ok).toBe(false);
+  });
+});

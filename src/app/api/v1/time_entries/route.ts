@@ -1,3 +1,4 @@
+import { restCustomFieldValuesSchema } from "@/interface/http/custom-field-rest-values";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -108,7 +109,7 @@ const createTimeEntrySchema = z.object({
   hours: z.number(),
   comments: z.string().default(""),
   spent_on: z.string(),
-  custom_field_values: z.record(z.string(), z.string()).default({}),
+  custom_field_values: restCustomFieldValuesSchema,
 });
 
 export async function POST(request: Request) {

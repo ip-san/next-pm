@@ -13,6 +13,7 @@ function field(overrides: Partial<CustomField> = {}): CustomField {
     defaultValue: null,
     visible: true,
     roleIds: [],
+    multiple: false,
     possibleValues: ["yes", "no"],
     position: 0,
     trackerIds: [],

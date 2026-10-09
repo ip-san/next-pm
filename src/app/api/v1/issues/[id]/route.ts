@@ -1,3 +1,4 @@
+import { restCustomFieldValuesSchema } from "@/interface/http/custom-field-rest-values";
 import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
@@ -127,7 +128,7 @@ const updateIssueSchema = z.object({
   estimated_hours: z.number().nullable().optional(),
   start_date: z.string().nullable().optional(),
   due_date: z.string().nullable().optional(),
-  custom_field_values: z.record(z.string(), z.string()).default({}),
+  custom_field_values: restCustomFieldValuesSchema,
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -1,3 +1,4 @@
+import { restCustomFieldValuesSchema } from "@/interface/http/custom-field-rest-values";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -120,7 +121,7 @@ const updateTimeEntrySchema = z.object({
   hours: z.number().optional(),
   comments: z.string().optional(),
   spent_on: z.string().optional(),
-  custom_field_values: z.record(z.string(), z.string()).default({}),
+  custom_field_values: restCustomFieldValuesSchema,
 });
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

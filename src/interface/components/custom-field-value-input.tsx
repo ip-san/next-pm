@@ -1,6 +1,7 @@
 "use client";
 
 import type { CustomField } from "@/domain/custom-field/entity";
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 
 /** One custom field value input, by its format: shared by the project and version forms (names `customField_<id>`). */
 export function CustomFieldValueInput({ field, defaultValue }: { field: CustomField; defaultValue: string | null }) {
@@ -25,6 +26,18 @@ export function CustomFieldValueInput({ field, defaultValue }: { field: CustomFi
         </select>
       );
     case "list":
+      if (field.multiple) {
+        // Several choices post under one name; submittedCustomValue joins them one per line.
+        return (
+          <select id={id} name={name} multiple defaultValue={(defaultValue ?? "").split(CUSTOM_VALUE_SEPARATOR).filter((item) => item !== "")} className="border rounded px-3 py-2">
+            {field.possibleValues.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        );
+      }
       return (
         <select id={id} name={name} defaultValue={defaultValue ?? ""} className="border rounded px-3 py-2">
           <option value="">(未設定)</option>

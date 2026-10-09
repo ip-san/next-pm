@@ -1,5 +1,6 @@
 "use client";
 
+import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { ChoiceOption } from "@/domain/custom-field/choices";
 
@@ -61,6 +62,26 @@ function renderInput(
   choices: ChoiceOption[],
 ) {
   const className = "border rounded px-3 py-2";
+  // A multiple-valued choice field is a multi-select; its value is the chosen options one per line.
+  if (field.multiple && (field.fieldFormat === "list" || field.fieldFormat === "user" || field.fieldFormat === "version" || field.fieldFormat === "enumeration")) {
+    const options = field.fieldFormat === "list" ? field.possibleValues.map((item) => ({ value: item, label: item })) : choices;
+    const selected = value.split(CUSTOM_VALUE_SEPARATOR).filter((item) => item !== "");
+    return (
+      <select
+        id={inputId}
+        multiple
+        value={selected}
+        onChange={(event) => onChange(field.id, Array.from(event.target.selectedOptions, (option) => option.value).join(CUSTOM_VALUE_SEPARATOR))}
+        className={className}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
   const common = {
     id: inputId,
     value,

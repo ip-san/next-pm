@@ -1,5 +1,6 @@
 "use server";
 
+import { submittedCustomValue } from "@/interface/http/custom-field-form-value";
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
@@ -32,7 +33,7 @@ const createVersionSchema = z.object({
 
 /** The Version custom field values the form submitted, keyed by field id. A field the viewer can't see is dropped in the write. */
 function versionCustomFieldValuesFrom(formData: FormData, customFieldIds: string[]): Record<string, string> {
-  return Object.fromEntries(customFieldIds.map((fieldId) => [fieldId, (formData.get(`customField_${fieldId}`) ?? "").toString()]));
+  return Object.fromEntries(customFieldIds.map((fieldId) => [fieldId, submittedCustomValue(formData.getAll(`customField_${fieldId}`))]));
 }
 
 export async function createVersionAction(_prevState: VersionActionState, formData: FormData): Promise<VersionActionState> {

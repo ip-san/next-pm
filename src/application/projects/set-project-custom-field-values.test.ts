@@ -14,6 +14,7 @@ function makeField(overrides: Partial<CustomField> = {}): CustomField {
     defaultValue: null,
     visible: true,
     roleIds: [],
+    multiple: false,
     possibleValues: [],
     position: 1,
     trackerIds: [],

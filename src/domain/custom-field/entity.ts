@@ -38,4 +38,6 @@ export interface CustomField {
   visible: boolean;
   /** Only meaningful when `visible` is false: the roles that see the field. */
   roleIds: string[];
+  /** Several values per record (Redmine's `multiple`); only the list, enumeration, user and version formats allow it. */
+  multiple: boolean;
 }

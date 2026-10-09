@@ -20,6 +20,7 @@ const editableAttributesSchema = z.object({
   possibleValues: z.string().default(""),
   defaultValue: z.string().default(""),
   isRequired: z.coerce.boolean().default(false),
+  multiple: z.coerce.boolean().default(false),
   trackerIds: z.array(z.string().uuid()).default([]),
   visible: z.coerce.boolean().default(true),
   roleIds: z.array(z.string().uuid()).default([]),
@@ -31,6 +32,7 @@ function editableAttributesFrom(formData: FormData) {
     possibleValues: formData.get("possibleValues") ?? "",
     defaultValue: formData.get("defaultValue") ?? "",
     isRequired: formData.get("isRequired") === "on",
+    multiple: formData.get("multiple") === "on",
     trackerIds: formData.getAll("trackerIds"),
     // Redmine's radio: "1" public, "0" restricted to the checked roles. Anything else is public.
     visible: formData.get("visible") !== "0",
@@ -39,6 +41,7 @@ function editableAttributesFrom(formData: FormData) {
 }
 
 type ResolvedAttributes = {
+  multiple: boolean;
   name: string;
   isRequired: boolean;
   defaultValue: string | null;
@@ -83,6 +86,13 @@ async function resolveAttributes(
 
   // Visibility by role only exists for Issue, Project and TimeEntry fields (Redmine shows the selector for
   // exactly these), and a restricted field names roles an admin can give. Anything else is public.
+  // Redmine's multiple_supported: the list, enumeration, user and version formats only.
+  const multipleOffered = fieldFormat === "list" || fieldFormat === "enumeration" || fieldFormat === "user" || fieldFormat === "version";
+  if (attributes.multiple && !multipleOffered) {
+    return { ok: false, error: "複数の値は、リスト・列挙・ユーザー・バージョンの形式だけに指定できます。" };
+  }
+  const multiple = multipleOffered && attributes.multiple;
+
   const roleVisibilityOffered = customizedType === "Issue" || customizedType === "Project" || customizedType === "TimeEntry" || customizedType === "Version";
   const visibility = roleVisibilityOffered
     ? normalizeFieldVisibility({ visible: attributes.visible, roleIds: attributes.roleIds })
@@ -122,7 +132,15 @@ async function resolveAttributes(
 
   return {
     ok: true,
-    value: { name: attributes.name, isRequired: attributes.isRequired, defaultValue, possibleValues, trackerIds, ...visibility },
+    value: {
+      name: attributes.name,
+      isRequired: attributes.isRequired,
+      defaultValue,
+      possibleValues,
+      trackerIds,
+      ...visibility,
+      multiple,
+    },
   };
 }
 
