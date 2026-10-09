@@ -78,7 +78,7 @@ export function LogTimeForm({
         </label>
         <input id="comments" name="comments" className="border rounded px-3 py-2" />
       </div>
-      <CustomFieldInputs fields={customFields} />
+      <CustomFieldInputs fields={customFields} locale={locale} />
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
           {state.error}

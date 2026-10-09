@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { renameWikiPageAction, type RenameWikiPageActionState } from "@/interface/actions/wiki-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: RenameWikiPageActionState = { error: null };
 
@@ -19,6 +21,7 @@ export function WikiRenameForm({
   canReparent,
   isStartPage,
   canSetStartPage,
+  locale = "ja",
 }: {
   pageId: string;
   projectIdentifier: string;
@@ -30,7 +33,9 @@ export function WikiRenameForm({
   isStartPage: boolean;
   /** manage_wiki — what makes Redmine's is_start_page a safe attribute. */
   canSetStartPage: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(renameWikiPageAction, initialState);
 
   return (
@@ -39,17 +44,17 @@ export function WikiRenameForm({
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <div className="flex flex-col gap-1">
         <label htmlFor="newTitle" className="text-sm font-medium">
-          新しいタイトル
+          {t("wiki.newTitle")}
         </label>
         <input id="newTitle" name="newTitle" defaultValue={title} className="border rounded px-3 py-2" />
       </div>
       {canReparent ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="parentId" className="text-sm font-medium">
-            親ページ
+            {t("wiki.parent")}
           </label>
           <select id="parentId" name="parentId" defaultValue={parentId ?? ""} className="border rounded px-3 py-2">
-            <option value="">(なし)</option>
+            <option value="">{t("query.none")}</option>
             {parentCandidates.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
                 {candidate.title}
@@ -63,12 +68,12 @@ export function WikiRenameForm({
           {/* Already the start page: Redmine checks and disables the box, because the setting
               follows the rename either way. */}
           <input type="checkbox" name="isStartPage" defaultChecked={isStartPage} disabled={isStartPage} />
-          このページを Wiki の開始ページにする
+          {t("wiki.startPage")}
         </label>
       ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="keepRedirect" defaultChecked />
-        既存のリンクをリダイレクトする
+        {t("wiki.redirectLinks")}
       </label>
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
@@ -76,7 +81,7 @@ export function WikiRenameForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "変更中…" : "名前を変更"}
+        {pending ? t("wiki.renaming") : t("wiki.rename")}
       </button>
     </form>
   );

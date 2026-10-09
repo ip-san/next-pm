@@ -1,4 +1,6 @@
 import { findIssuesByReference } from "@/application/issues/find-issues-by-reference";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -37,6 +39,7 @@ export default async function WikiPageView({
 }: {
   params: Promise<{ identifier: string; title: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, title: rawTitle } = await params;
   const title = decodeURIComponent(rawTitle);
 
@@ -154,7 +157,7 @@ export default async function WikiPageView({
       {/* Redmine's wiki_page_breadcrumb: the ancestor trail, root first. */}
       <nav className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
         <Link href={`/projects/${identifier}/wiki/index`} className="underline">
-          目次
+          {translate(locale, "wiki.index")}
         </Link>
         {ancestors.map((ancestor) => (
           <span key={ancestor.id} className="flex items-center gap-1">
@@ -170,7 +173,7 @@ export default async function WikiPageView({
         <h1 className="text-xl font-semibold">{title}</h1>
         <div className="flex items-center gap-3">
           {user && wikiPage ? (
-            <WikiWatchToggleForm pageId={wikiPage.id} title={title} projectIdentifier={identifier} isWatching={isWatching} />
+            <WikiWatchToggleForm pageId={wikiPage.id} title={title} projectIdentifier={identifier} isWatching={isWatching} locale={locale} />
           ) : null}
           {canExport ? (
             <>
@@ -191,21 +194,22 @@ export default async function WikiPageView({
               projectIdentifier={identifier}
               title={title}
               isProtected={wikiPage.isProtected}
+              locale={locale}
             />
           ) : null}
           {canRenameOrManage && wikiPage && isWikiPageEditable(wikiPage, canProtect) ? (
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/rename`} className="text-sm underline">
-              名前を変更
+              {translate(locale, "wiki.rename")}
             </Link>
           ) : null}
           {canDelete && wikiPage && isWikiPageEditable(wikiPage, canProtect) ? (
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/destroy`} className="text-sm underline text-red-600">
-              削除
+              {translate(locale, "issue.delete")}
             </Link>
           ) : null}
           {canEdit ? (
             <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/edit`} className="bg-black text-white rounded px-3 py-2 text-sm">
-              編集
+              {translate(locale, "issue.edit")}
             </Link>
           ) : null}
         </div>
@@ -213,20 +217,20 @@ export default async function WikiPageView({
 
       {current ? (
         <>
-          <WikiContent blocks={blocks} identifier={identifier} project={{ id: project.id, identifier }} />
+          <WikiContent blocks={blocks} identifier={identifier} project={{ id: project.id, identifier }} locale={locale} />
           <p className="text-xs text-gray-500 flex items-center gap-2">
-            <span>バージョン {current.version}</span>
+            <span>{interpolate(translate(locale, "wiki.version"), { version: current.version })}</span>
             {canViewEdits ? (
               <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/history`} className="underline">
-                履歴を見る
+                {translate(locale, "wiki.history")}
               </Link>
             ) : null}
-            {wikiPage?.isProtected ? <span className="border rounded px-1 text-gray-600">保護中</span> : null}
+            {wikiPage?.isProtected ? <span className="border rounded px-1 text-gray-600">{translate(locale, "wiki.protected")}</span> : null}
           </p>
 
           {children.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h2 className="font-medium text-sm">子ページ</h2>
+              <h2 className="font-medium text-sm">{translate(locale, "wiki.childPages")}</h2>
               <ul className="flex flex-col gap-1 pl-4 list-disc text-sm">
                 {children.map((child) => (
                   <li key={child.id}>
@@ -250,37 +254,39 @@ export default async function WikiPageView({
                 .map((id) => ({ id, label: watcherLabelById.get(id) ?? id }))}
               canAdd={canAddWatchers}
               canRemove={canRemoveWatchers}
+              locale={locale}
             />
           ) : null}
 
           <section className="flex flex-col gap-2">
-            <h2 className="font-medium text-sm">添付ファイル</h2>
+            <h2 className="font-medium text-sm">{translate(locale, "issue.attachments")}</h2>
             {/* Files' shared AttachmentList, with the wiki branch's delete gate: deleting an
                 attachment needs delete_wiki_pages_attachments *and* the page to be editable,
                 so a protected page's attachments can't be removed around the protection. */}
             <AttachmentList
               attachments={attachments}
+              locale={locale}
               renderAction={
                 canDeleteAttachments && wikiPage && isWikiPageEditable(wikiPage, canProtect)
                   ? (attachment) => (
-                      <DeleteWikiAttachmentButton projectIdentifier={identifier} title={title} attachmentId={attachment.id} />
+                      <DeleteWikiAttachmentButton projectIdentifier={identifier} title={title} attachmentId={attachment.id} locale={locale} />
                     )
                   : undefined
               }
             />
             {canEdit && wikiPage ? (
-              <WikiAttachmentUploadForm pageId={wikiPage.id} projectIdentifier={identifier} title={title} />
+              <WikiAttachmentUploadForm pageId={wikiPage.id} projectIdentifier={identifier} title={title} locale={locale} />
             ) : null}
           </section>
         </>
       ) : (
         <p className="text-sm text-gray-500">
-          このページはまだ存在しません。
+          {translate(locale, "wiki.notExist")}
           {canEdit ? (
             <>
               {" "}
               <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(title)}/edit`} className="underline">
-                作成する
+                {translate(locale, "wiki.create")}
               </Link>
             </>
           ) : null}

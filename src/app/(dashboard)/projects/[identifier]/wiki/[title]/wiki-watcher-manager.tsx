@@ -6,6 +6,8 @@ import {
   removeWikiPageWatcherAction,
   type WatcherActionState,
 } from "@/interface/actions/watcher-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: WatcherActionState = { error: null };
 
@@ -19,12 +21,15 @@ function RemoveWikiWatcherButton({
   title,
   projectIdentifier,
   userId,
+  locale,
 }: {
   pageId: string;
   title: string;
   projectIdentifier: string;
   userId: string;
+  locale: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(removeWikiPageWatcherAction, initialState);
   return (
     <form action={formAction} className="inline">
@@ -33,7 +38,7 @@ function RemoveWikiWatcherButton({
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <input type="hidden" name="userId" value={userId} />
       <button type="submit" disabled={pending} className="text-xs underline text-red-600 disabled:opacity-50">
-        削除
+        {t("issue.delete")}
       </button>
       {state.error ? <span className="text-xs text-red-600 ml-1">{state.error}</span> : null}
     </form>
@@ -48,6 +53,7 @@ export function WikiWatcherManager({
   candidates,
   canAdd,
   canRemove,
+  locale = "ja",
 }: {
   pageId: string;
   title: string;
@@ -56,14 +62,16 @@ export function WikiWatcherManager({
   candidates: WikiWatcherUser[];
   canAdd: boolean;
   canRemove: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [addState, addFormAction, addPending] = useActionState(addWikiPageWatcherAction, initialState);
 
   return (
     <section className="flex flex-col gap-2 text-sm">
-      <h2 className="font-medium">ウォッチャー</h2>
+      <h2 className="font-medium">{t("issue.watchers")}</h2>
       {watchers.length === 0 ? (
-        <p className="text-gray-500 text-xs">なし</p>
+        <p className="text-gray-500 text-xs">{t("issue.noWatchers")}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {watchers.map((watcher) => (
@@ -75,6 +83,7 @@ export function WikiWatcherManager({
                   title={title}
                   projectIdentifier={projectIdentifier}
                   userId={watcher.id}
+                  locale={locale}
                 />
               ) : null}
             </li>
@@ -88,7 +97,7 @@ export function WikiWatcherManager({
           <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
           <select name="userId" defaultValue="" required className="border rounded px-2 py-1 text-xs">
             <option value="" disabled>
-              ユーザーを選択
+              {t("issue.selectUser")}
             </option>
             {candidates.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
@@ -97,7 +106,7 @@ export function WikiWatcherManager({
             ))}
           </select>
           <button type="submit" disabled={addPending} className="border rounded px-2 py-1 text-xs disabled:opacity-50">
-            追加
+            {t("issue.add")}
           </button>
         </form>
       ) : null}

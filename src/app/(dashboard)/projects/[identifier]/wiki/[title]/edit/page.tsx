@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { selfAndDescendantIds } from "@/domain/wiki/hierarchy";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
@@ -13,6 +15,7 @@ export default async function WikiEditPage({
 }: {
   params: Promise<{ identifier: string; title: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, title: rawTitle } = await params;
   const title = decodeURIComponent(rawTitle);
 
@@ -45,8 +48,8 @@ export default async function WikiEditPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{title} を編集</h1>
-      <WikiEditForm
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "wiki.editTitle"), { title })}</h1>
+      <WikiEditForm locale={locale}
         projectId={project.id}
         projectIdentifier={identifier}
         title={title}

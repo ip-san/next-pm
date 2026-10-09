@@ -176,6 +176,7 @@ export function BulkEditForm({
         values={customFieldValues}
         onChange={(customFieldId, value) => setCustomFieldValues((current) => ({ ...current, [customFieldId]: value }))}
         idPrefix="bulk"
+        locale={locale}
       />
       {customFields.map((field) =>
         customFieldValues[field.id] ? <input key={field.id} type="hidden" name={`cf_${field.id}`} value={customFieldValues[field.id]} /> : null,

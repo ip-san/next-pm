@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound, redirect } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { annotateWikiContent } from "@/domain/wiki/annotate";
@@ -24,6 +26,7 @@ export default async function WikiAnnotatePage({
   params: Promise<{ identifier: string; title: string }>;
   searchParams: Promise<{ version?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, title: rawTitle } = await params;
   const { version: rawVersion } = await searchParams;
   const title = decodeURIComponent(rawTitle);
@@ -70,14 +73,14 @@ export default async function WikiAnnotatePage({
   return (
     <main className="p-8 flex flex-col gap-4">
       <h1 className="text-xl font-semibold">
-        {resolved.page.title} — 注釈付き (バージョン {target})
+        {interpolate(translate(locale, "wiki.annotateTitle"), { title: resolved.page.title, version: target })}
       </h1>
       <p className="text-xs text-gray-500 flex gap-3">
         <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(resolved.page.title)}`} className="underline">
-          ページに戻る
+          {translate(locale, "wiki.backToPage")}
         </Link>
         <Link href={`/projects/${identifier}/wiki/${encodeURIComponent(resolved.page.title)}/history`} className="underline">
-          履歴
+          {translate(locale, "wiki.historyShort")}
         </Link>
       </p>
       <table className="text-sm font-mono border-collapse">

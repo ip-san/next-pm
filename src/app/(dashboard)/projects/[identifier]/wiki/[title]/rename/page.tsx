@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DEFAULT_WIKI_START_PAGE } from "@/domain/wiki/entity";
@@ -19,6 +21,7 @@ export default async function WikiRenamePage({
 }: {
   params: Promise<{ identifier: string; title: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, title: rawTitle } = await params;
   const title = decodeURIComponent(rawTitle);
 
@@ -62,8 +65,8 @@ export default async function WikiRenamePage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{resolved.page.title} の名前を変更</h1>
-      <WikiRenameForm
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "wiki.renameTitle"), { title: resolved.page.title })}</h1>
+      <WikiRenameForm locale={locale}
         pageId={resolved.page.id}
         projectIdentifier={identifier}
         title={resolved.page.title}

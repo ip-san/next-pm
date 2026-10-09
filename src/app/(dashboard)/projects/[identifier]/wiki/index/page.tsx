@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { buildWikiPageTree, type WikiPageTreeNode } from "@/domain/wiki/hierarchy";
@@ -34,6 +36,7 @@ function PageTree({ nodes, identifier }: { nodes: WikiPageTreeNode<IndexPage>[];
  * first — the same collision Redmine avoids by routing `wiki/index` ahead of `wiki/:id`.
  */
 export default async function WikiIndexListPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -52,13 +55,13 @@ export default async function WikiIndexListPage({ params }: { params: Promise<{ 
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — Wiki の目次</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "wiki.indexTitle"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/wiki/date_index`} className="text-sm underline">
-          日付順
+          {translate(locale, "wiki.byDate")}
         </Link>
       </div>
       {pages.length === 0 ? (
-        <p className="text-sm text-gray-500">ページがありません。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "wiki.noPages")}</p>
       ) : (
         <div className="text-sm">
           <PageTree nodes={buildWikiPageTree(pages)} identifier={identifier} />

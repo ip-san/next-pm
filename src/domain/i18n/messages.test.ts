@@ -23,6 +23,8 @@ const KEYS: MessageKey[] = [
   "news.create",
   "boards.replies",
   "documents.none",
+  "wiki.indexTitle",
+  "wiki.childrenQuestion",
   "projectDelete.warningEnd",
 ];
 

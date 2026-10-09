@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { descendantIds, selfAndDescendantIds } from "@/domain/wiki/hierarchy";
 import { isWikiPageEditable } from "@/domain/wiki/protection";
@@ -18,6 +20,7 @@ export default async function WikiDestroyPage({
 }: {
   params: Promise<{ identifier: string; title: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, title: rawTitle } = await params;
   const title = decodeURIComponent(rawTitle);
 
@@ -57,8 +60,8 @@ export default async function WikiDestroyPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{page.title} を削除</h1>
-      <WikiDestroyForm
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "wiki.destroyTitle"), { title: page.title })}</h1>
+      <WikiDestroyForm locale={locale}
         pageId={page.id}
         projectIdentifier={identifier}
         title={page.title}

@@ -1,6 +1,8 @@
 import type { TextProject } from "@/interface/http/project-text-links";
 import { FormattedText } from "@/interface/components/formatted-text";
 import Link from "next/link";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 import type { WikiBlock } from "@/domain/wiki/macro-blocks";
 
 /**
@@ -8,7 +10,17 @@ import type { WikiBlock } from "@/domain/wiki/macro-blocks";
  * as a child or attribute, so page content is never interpolated into markup — the reason the
  * macro pass returns data rather than an HTML string.
  */
-export async function WikiContent({ blocks, identifier, project }: { blocks: WikiBlock[]; identifier: string; project: TextProject }) {
+export async function WikiContent({
+  blocks,
+  identifier,
+  project,
+  locale,
+}: {
+  blocks: WikiBlock[];
+  identifier: string;
+  project: TextProject;
+  locale: Locale;
+}) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       {blocks.map((block, index) => {
@@ -65,7 +77,7 @@ export async function WikiContent({ blocks, identifier, project }: { blocks: Wik
           case "recentPages":
             return block.pages.length === 0 ? (
               <p key={index} className="text-gray-500 text-xs">
-                最近更新されたページはありません。
+                {translate(locale, "wiki.noRecent")}
               </p>
             ) : (
               <ul key={index} className="flex flex-col gap-1 pl-4 list-disc">

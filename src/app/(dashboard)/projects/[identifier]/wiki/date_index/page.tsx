@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -8,6 +10,7 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 
 /** Mirrors WikiController#date_index: the same page list, grouped by the day it last changed. */
 export default async function WikiDateIndexPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -31,13 +34,13 @@ export default async function WikiDateIndexPage({ params }: { params: Promise<{ 
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — Wiki の目次(日付順)</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "wiki.dateIndexTitle"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/wiki/index`} className="text-sm underline">
-          タイトル順
+          {translate(locale, "wiki.byTitle")}
         </Link>
       </div>
       {byDate.size === 0 ? (
-        <p className="text-sm text-gray-500">ページがありません。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "wiki.noPages")}</p>
       ) : (
         [...byDate.entries()].map(([day, pages]) => (
           <section key={day} className="flex flex-col gap-1">

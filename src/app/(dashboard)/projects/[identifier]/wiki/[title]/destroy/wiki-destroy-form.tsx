@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { deleteWikiPageAction, type WikiPageActionState } from "@/interface/actions/wiki-page-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: WikiPageActionState = { error: null };
 
@@ -17,13 +19,16 @@ export function WikiDestroyForm({
   title,
   descendantCount,
   reassignCandidates,
+  locale = "ja",
 }: {
   pageId: string;
   projectIdentifier: string;
   title: string;
   descendantCount: number;
   reassignCandidates: ReassignCandidate[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(deleteWikiPageAction, initialState);
 
   return (
@@ -34,23 +39,23 @@ export function WikiDestroyForm({
       {descendantCount > 0 ? (
         <fieldset className="border rounded p-3 flex flex-col gap-2">
           <legend className="px-1 font-medium">
-            このページには {descendantCount} 件の子ページがあります。どうしますか?
+            {interpolate(t("wiki.childrenQuestion"), { count: descendantCount })}
           </legend>
           <label className="flex items-center gap-2">
             <input type="radio" name="childrenDisposition" value="nullify" defaultChecked />
-            子ページをトップレベルに移動する
+            {t("wiki.childrenNullify")}
           </label>
           <label className="flex items-center gap-2">
             <input type="radio" name="childrenDisposition" value="destroy" />
-            子ページもすべて削除する
+            {t("wiki.childrenDestroy")}
           </label>
           {reassignCandidates.length > 0 ? (
             <label className="flex items-center gap-2">
               <input type="radio" name="childrenDisposition" value="reassign" />
-              子ページを別のページの下に移動する
+              {t("wiki.childrenReassign")}
               <select name="reassignToId" defaultValue="" className="border rounded px-2 py-1">
                 <option value="" disabled>
-                  ページを選択
+                  {t("wiki.selectPage")}
                 </option>
                 {reassignCandidates.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
@@ -67,10 +72,10 @@ export function WikiDestroyForm({
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className="bg-red-600 text-white rounded px-3 py-2 disabled:opacity-50">
-          削除する
+          {t("wiki.destroySubmit")}
         </button>
         <Link href={`/projects/${projectIdentifier}/wiki/${encodeURIComponent(title)}`} className="underline">
-          キャンセル
+          {t("issue.cancel")}
         </Link>
       </div>
       {state.error ? (
