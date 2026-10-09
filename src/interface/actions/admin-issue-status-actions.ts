@@ -7,6 +7,7 @@ import { nextPosition, resolveMove } from "@/domain/ordering/positioned";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 import { positionMoveValues, type AdminActionState } from "./admin-action-state";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -41,12 +42,12 @@ export async function createIssueStatusAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = issueStatusAttributesSchema.safeParse(attributesFrom(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const repository = new DrizzleIssueStatusRepository();
@@ -64,18 +65,18 @@ export async function updateIssueStatusAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateIssueStatusSchema.safeParse({ ...attributesFrom(formData), statusId: formData.get("statusId") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const { statusId, ...attributes } = parsed.data;
   const repository = new DrizzleIssueStatusRepository();
   if (!(await repository.findById(statusId))) {
-    return { error: "ステータスが見つかりません。" };
+    return { error: await localizeError("ステータスが見つかりません。") };
   }
   await repository.update(statusId, attributes);
 
@@ -91,19 +92,19 @@ export async function deleteIssueStatusAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = issueStatusIdSchema.safeParse({ statusId: formData.get("statusId") });
   if (!parsed.success) {
-    return { error: "ステータスが見つかりません。" };
+    return { error: await localizeError("ステータスが見つかりません。") };
   }
 
   try {
     await deleteIssueStatus({ issueStatusRepository: new DrizzleIssueStatusRepository() }, parsed.data.statusId);
   } catch (error) {
     if (error instanceof IssueStatusNotDeletableError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -120,7 +121,7 @@ export async function reorderIssueStatusAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = reorderIssueStatusSchema.safeParse({
@@ -128,7 +129,7 @@ export async function reorderIssueStatusAction(
     move: formData.get("move"),
   });
   if (!parsed.success) {
-    return { error: "並べ替えの指定が不正です。" };
+    return { error: await localizeError("並べ替えの指定が不正です。") };
   }
 
   const repository = new DrizzleIssueStatusRepository();

@@ -15,6 +15,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type UploadAttachmentActionState = {
   error: string | null;
@@ -38,25 +39,25 @@ export async function uploadIssueAttachmentAction(
     file: formData.get("file"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   if (parsed.data.file.size === 0) {
-    return { error: "ファイルを選択してください。" };
+    return { error: await localizeError("ファイルを選択してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
@@ -67,10 +68,10 @@ export async function uploadIssueAttachmentAction(
   const hasEditOwnIssues = can({ permission: "edit_own_issues", project: projectContext, actor });
   const hasAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
   if (!hasEditIssues && !(hasEditOwnIssues && issue.authorId === user.id) && !hasAddNotes) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
@@ -94,7 +95,7 @@ export async function uploadIssueAttachmentAction(
     );
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -127,33 +128,33 @@ export async function deleteIssueAttachmentAction(
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment || attachment.containerType !== "Issue" || !attachment.containerId) {
-    return { error: "添付ファイルが見つかりません。" };
+    return { error: await localizeError("添付ファイルが見つかりません。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(attachment.containerId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
   // Deletion stays edit-only: Issue#attachments_editable? is `visible? && attributes_editable?`,
   // with no notes_addable? branch — add_issue_notes lets you attach, not detach.
@@ -161,7 +162,7 @@ export async function deleteIssueAttachmentAction(
   const hasEditIssues = can({ permission: "edit_issues", project: projectContext, actor });
   const hasEditOwnIssues = can({ permission: "edit_own_issues", project: projectContext, actor });
   if (!hasEditIssues && !(hasEditOwnIssues && issue.authorId === user.id)) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await attachmentRepository.delete(attachment.id);

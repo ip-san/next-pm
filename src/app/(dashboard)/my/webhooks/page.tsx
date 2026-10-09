@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import { currentLocale } from "@/interface/http/locale";
 import { translate } from "@/domain/i18n/messages";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
-import { WEBHOOK_EVENT_LABELS } from "@/domain/webhook/events";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleWebhookRepository } from "@/infrastructure/db/repositories/webhook-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -55,7 +54,7 @@ export default async function WebhooksPage() {
                 <DeleteWebhookForm locale={locale} webhookId={webhook.id} />
               </div>
               <p className="text-xs text-gray-500">
-                {webhook.events.map((event) => WEBHOOK_EVENT_LABELS[event]).join(" / ")}
+                {webhook.events.map((event) => translate(locale, `webhooks.event.${event}`)).join(" / ")}
                 {" — "}
                 {webhook.projectIds.map((projectId) => projectName.get(projectId) ?? projectId).join(", ")}
               </p>

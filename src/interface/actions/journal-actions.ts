@@ -8,6 +8,7 @@ import { DrizzleJournalRepository } from "@/infrastructure/db/repositories/journ
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { journalViewerFor, resolveActor } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 const updateJournalSchema = z.object({
   journalId: z.string().uuid(),
@@ -28,12 +29,12 @@ export async function updateJournalAction(values: {
 }): Promise<UpdateJournalActionResult> {
   const parsed = updateJournalSchema.safeParse(values);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const journalRepository = new DrizzleJournalRepository();
@@ -41,12 +42,12 @@ export async function updateJournalAction(values: {
   // real viewer before it edits anything, the same pattern the reaction action uses.
   const located = await journalRepository.findById(parsed.data.journalId, { userId: user.id, canViewPrivateNotes: true });
   if (!located) {
-    return { ok: false, error: "コメントが見つかりません。" };
+    return { ok: false, error: await localizeError("コメントが見つかりません。") };
   }
   const issue = await new DrizzleIssueRepository().findById(located.journalizedId);
   const project = issue ? await new DrizzleProjectRepository().findById(issue.projectId) : null;
   if (!issue || !project) {
-    return { ok: false, error: "コメントが見つかりません。" };
+    return { ok: false, error: await localizeError("コメントが見つかりません。") };
   }
 
   // Visibility — project, issue and private-note alike — is decided inside updateJournal,
@@ -69,7 +70,7 @@ export async function updateJournalAction(values: {
     );
   } catch (error) {
     if (error instanceof JournalNotEditableError) {
-      return { ok: false, error: "このコメントを編集する権限がありません。" };
+      return { ok: false, error: await localizeError("このコメントを編集する権限がありません。") };
     }
     throw error;
   }

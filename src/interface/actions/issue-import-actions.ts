@@ -22,6 +22,7 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type ImportIssuesActionState = {
   error: string | null;
@@ -51,29 +52,29 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
     createVersions: formData.get("createVersions") ?? undefined,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", summary: null };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), summary: null };
   }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "CSVファイルを選択してください。", summary: null };
+    return { error: await localizeError("CSVファイルを選択してください。"), summary: null };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", summary: null };
+    return { error: await localizeError("ログインしてください。"), summary: null };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。", summary: null };
+    return { error: await localizeError("プロジェクトが見つかりません。"), summary: null };
   }
 
   const { actor, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   // Redmine's IssueImport#authorized?: both import_issues and add_issues.
   if (!can({ permission: "import_issues", project: projectContext, actor }) || !can({ permission: "add_issues", project: projectContext, actor })) {
-    return { error: "この操作を行う権限がありません。", summary: null };
+    return { error: await localizeError("この操作を行う権限がありません。"), summary: null };
   }
   // Mirrors Redmine's create_categories?/create_versions?: auto-creating a category or
   // version during import needs the same permission as managing them directly, not just
@@ -84,13 +85,13 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
 
   const rows = parseCsv(await file.text()).filter((row) => row.some((cell) => cell.trim().length > 0));
   if (rows.length === 0) {
-    return { error: "CSVにデータがありません。", summary: null };
+    return { error: await localizeError("CSVにデータがありません。"), summary: null };
   }
 
   const header = rows[0].map((cell) => cell.trim().toLowerCase());
   const missingRequired = REQUIRED_HEADERS.filter((required) => !header.includes(required));
   if (missingRequired.length > 0) {
-    return { error: `必須列が見つかりません: ${missingRequired.join(", ")}`, summary: null };
+    return { error: await localizeError(`必須列が見つかりません: ${missingRequired.join(", ")}`), summary: null };
   }
   const columnIndex = new Map(header.map((name, index) => [name, index]));
 
@@ -252,5 +253,5 @@ export async function importIssuesCsvAction(_prevState: ImportIssuesActionState,
   }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues`);
-  return { error: null, summary: { created, failed: rowErrors.length, rowErrors } };
+  return { error: null, summary: { created, failed: rowErrors.length, rowErrors: await Promise.all(rowErrors.map(localizeError)) } };
 }

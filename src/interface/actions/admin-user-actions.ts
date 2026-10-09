@@ -25,6 +25,7 @@ import { requireAdmin } from "@/interface/http/require-admin";
 import type { AdminActionState } from "./admin-action-state";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -76,19 +77,19 @@ function duplicateMailError(error: unknown): boolean {
 export async function createUserAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = userAttributesSchema
     .extend({ password: z.string().default("") })
     .safeParse({ ...attributesFrom(formData), password: formData.get("password") ?? "" });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const resolution = await resolveSubmittedAuthMode(parsed.data.authMode);
   if (!resolution.ok) {
-    return { error: resolution.error };
+    return { error: await localizeError(resolution.error) };
   }
   const { choice } = resolution;
 
@@ -96,7 +97,7 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
   // such an account keeps the empty hash/salt the schema documents and authenticates via LDAP.
   const isLdap = choice.authSource === "ldap";
   if (isLdap && parsed.data.password.length > 0) {
-    return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
+    return { error: await localizeError("LDAP認証のユーザーにはパスワードを設定できません。") };
   }
   if (!isLdap) {
     // The configured policy, not a literal: Redmine applies password_min_length and
@@ -114,19 +115,19 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
       },
     );
     if (policyFailure) {
-      return { error: policyFailure };
+      return { error: await localizeError(policyFailure) };
     }
   }
 
   const userRepository = new DrizzleUserRepository();
   if (await userRepository.findByLogin(parsed.data.login)) {
-    return { error: "そのログインIDは既に使用されています。" };
+    return { error: await localizeError("そのログインIDは既に使用されています。") };
   }
   // users.mail's unique constraint no longer covers every address: one may be held as
   // somebody's *additional* address in email_addresses. findByMail searches both tables, so
   // this catches what the constraint (and duplicateMailError below) cannot.
   if (await userRepository.findByMail(parsed.data.mail)) {
-    return { error: "そのメールアドレスは既に使用されています。" };
+    return { error: await localizeError("そのメールアドレスは既に使用されています。") };
   }
 
   const salt = isLdap ? "" : generateSalt();
@@ -153,7 +154,7 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
     });
   } catch (error) {
     if (duplicateMailError(error)) {
-      return { error: "そのメールアドレスは既に使用されています。" };
+      return { error: await localizeError("そのメールアドレスは既に使用されています。") };
     }
     throw error;
   }
@@ -167,19 +168,19 @@ const userIdSchema = z.object({ userId: z.string().uuid() });
 export async function updateUserAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = userAttributesSchema
     .extend({ userId: z.string().uuid(), password: z.string() })
     .safeParse({ ...attributesFrom(formData), userId: formData.get("userId"), password: formData.get("password") ?? "" });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const resolution = await resolveSubmittedAuthMode(parsed.data.authMode);
   if (!resolution.ok) {
-    return { error: resolution.error };
+    return { error: await localizeError(resolution.error) };
   }
 
   const actor = await currentUserFromCookies();
@@ -201,7 +202,7 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
     );
   } catch (error) {
     if (error instanceof UserUpdateError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -220,7 +221,7 @@ export async function changeUserStatusAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = changeStatusSchema.safeParse({
@@ -228,12 +229,12 @@ export async function changeUserStatusAction(
     status: formData.get("status"),
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const actor = await currentUserFromCookies();
   if (!actor) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const userRepository = new DrizzleUserRepository();
@@ -248,7 +249,7 @@ export async function changeUserStatusAction(
     );
   } catch (error) {
     if (error instanceof UserStatusChangeError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -283,17 +284,17 @@ export async function changeUserStatusAction(
 export async function deleteUserAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = userIdSchema.safeParse({ userId: formData.get("userId") });
   if (!parsed.success) {
-    return { error: "ユーザーが見つかりません。" };
+    return { error: await localizeError("ユーザーが見つかりません。") };
   }
 
   const actor = await currentUserFromCookies();
   if (!actor) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const userRepository = new DrizzleUserRepository();
@@ -301,7 +302,7 @@ export async function deleteUserAction(_prevState: AdminActionState, formData: F
     await deleteUser({ userRepository, userAdminRepository: userRepository }, parsed.data.userId, actor.id);
   } catch (error) {
     if (error instanceof UserNotDeletableError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -322,7 +323,7 @@ export async function addUserMembershipAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = addMembershipSchema.safeParse({
@@ -331,7 +332,7 @@ export async function addUserMembershipAction(
     roleIds: formData.getAll("roleIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const [user, project, roles] = await Promise.all([
@@ -340,20 +341,20 @@ export async function addUserMembershipAction(
     new DrizzleRoleRepository().findByIds(parsed.data.roleIds),
   ]);
   if (!user || user.status === "anonymous") {
-    return { error: "ユーザーが見つかりません。" };
+    return { error: await localizeError("ユーザーが見つかりません。") };
   }
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
   // Redmine offers Role.find_all_givable, i.e. ordinary roles only — the builtin ones are
   // never handed to a project member.
   if (roles.length !== parsed.data.roleIds.length || roles.some((role) => role.builtin !== 0)) {
-    return { error: "存在しないロールが指定されました。" };
+    return { error: await localizeError("存在しないロールが指定されました。") };
   }
 
   const memberRepository = new DrizzleMemberRepository();
   if (await memberRepository.findDirectByUserAndProject(user.id, project.id)) {
-    return { error: "既にこのプロジェクトのメンバーです。" };
+    return { error: await localizeError("既にこのプロジェクトのメンバーです。") };
   }
 
   await memberRepository.create({
@@ -381,7 +382,7 @@ export async function updateUserMembershipAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = membershipSchema.safeParse({
@@ -390,24 +391,24 @@ export async function updateUserMembershipAction(
     roleIds: formData.getAll("roleIds"),
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
   if (parsed.data.roleIds.length === 0) {
-    return { error: "ロールを1つ以上選択してください。" };
+    return { error: await localizeError("ロールを1つ以上選択してください。") };
   }
 
   const memberRepository = new DrizzleMemberRepository();
   const membership = await memberRepository.findById(parsed.data.memberId);
   if (!membership || membership.userId !== parsed.data.userId) {
-    return { error: "メンバーシップが見つかりません。" };
+    return { error: await localizeError("メンバーシップが見つかりません。") };
   }
   if (!isMembershipEditable(membership)) {
-    return { error: "グループから継承したメンバーシップは編集できません。" };
+    return { error: await localizeError("グループから継承したメンバーシップは編集できません。") };
   }
 
   const roles = await new DrizzleRoleRepository().findByIds(parsed.data.roleIds);
   if (roles.length !== parsed.data.roleIds.length || roles.some((role) => role.builtin !== 0)) {
-    return { error: "存在しないロールが指定されました。" };
+    return { error: await localizeError("存在しないロールが指定されました。") };
   }
 
   await memberRepository.replaceRoles(membership.id, parsed.data.roleIds);
@@ -423,23 +424,23 @@ export async function removeUserMembershipAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = userIdSchema
     .extend({ memberId: z.string().uuid() })
     .safeParse({ userId: formData.get("userId"), memberId: formData.get("memberId") });
   if (!parsed.success) {
-    return { error: "メンバーシップが見つかりません。" };
+    return { error: await localizeError("メンバーシップが見つかりません。") };
   }
 
   const memberRepository = new DrizzleMemberRepository();
   const membership = await memberRepository.findById(parsed.data.memberId);
   if (!membership || membership.userId !== parsed.data.userId) {
-    return { error: "メンバーシップが見つかりません。" };
+    return { error: await localizeError("メンバーシップが見つかりません。") };
   }
   if (!isMembershipEditable(membership)) {
-    return { error: "グループから継承したメンバーシップは削除できません。" };
+    return { error: await localizeError("グループから継承したメンバーシップは削除できません。") };
   }
 
   await memberRepository.delete(membership.id);

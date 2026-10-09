@@ -17,6 +17,8 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -129,7 +131,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ vers
     return NextResponse.json({ version: updated });
   } catch (error) {
     if (error instanceof InvalidVersionError) {
-      return NextResponse.json({ error: error.message }, { status: 422 });
+      return NextResponse.json({ error: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }
@@ -165,7 +167,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ v
     await deleteVersion({ versionRepository, attachmentRepository: new DrizzleAttachmentRepository() }, versionId);
   } catch (error) {
     if (error instanceof VersionNotDeletableError) {
-      return NextResponse.json({ error: "not_deletable", message: error.message }, { status: 422 });
+      return NextResponse.json({ error: "not_deletable", message: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

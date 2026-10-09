@@ -70,6 +70,7 @@ import {
   type DeleteIssueFormValues,
   type UpdateIssueFormValues,
 } from "./issue-schemas";
+import { localizeError, localizeErrorMap } from "@/interface/http/localize-error";
 
 /** `{ ok: false }` carries `fieldErrors` keyed by custom field id when the custom values are what failed. */
 const ISSUE_ATTRIBUTE_MESSAGES: Record<string, string> = {
@@ -91,23 +92,23 @@ export type IssueFormActionResult =
 export async function createIssueFormAction(values: CreateIssueFormValues): Promise<IssueFormActionResult> {
   const parsed = createIssueFormSchema.safeParse(values);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(parsed.data.projectId);
   if (!project) {
-    return { ok: false, error: "プロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   if (!can({ permission: "add_issues", project: projectContext, actor })) {
-    return { ok: false, error: "この操作を行う権限がありません。" };
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   // Tracker, priority, assignee, category and version all belong to `createIssue` now
@@ -123,7 +124,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
       parentIssue.projectId !== project.id ||
       !isPrivateIssueVisible(parentIssue, user.id, userGroupIds, issuesVisibilityRoles(actor))
     ) {
-      return { ok: false, error: "親チケットが見つかりません。" };
+      return { ok: false, error: await localizeError("親チケットが見つかりません。") };
     }
   }
 
@@ -131,7 +132,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   if (parsed.data.estimatedHours.trim().length > 0) {
     const parsedHours = Number(parsed.data.estimatedHours);
     if (!Number.isFinite(parsedHours) || parsedHours < 0) {
-      return { ok: false, error: "予定工数は0以上の数値で入力してください。" };
+      return { ok: false, error: await localizeError("予定工数は0以上の数値で入力してください。") };
     }
     estimatedHours = parsedHours;
   }
@@ -140,7 +141,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
   if (parsed.data.doneRatio.trim().length > 0) {
     const parsedRatio = Number(parsed.data.doneRatio);
     if (!Number.isInteger(parsedRatio) || parsedRatio < 0 || parsedRatio > 100) {
-      return { ok: false, error: "進捗率は0〜100の整数で入力してください。" };
+      return { ok: false, error: await localizeError("進捗率は0〜100の整数で入力してください。") };
     }
     doneRatio = parsedRatio;
   }
@@ -161,7 +162,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
     optionSets,
   );
   if (Object.keys(fieldErrors).length > 0) {
-    return { ok: false, error: "カスタムフィールドの入力内容を確認してください。", fieldErrors };
+    return { ok: false, error: await localizeError("カスタムフィールドの入力内容を確認してください。"), fieldErrors: await localizeErrorMap(fieldErrors) };
   }
 
   let issue;
@@ -204,10 +205,10 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
     );
   } catch (error) {
     if (error instanceof WorkflowRequiredFieldError) {
-      return { ok: false, error: "このステータスでは必須項目が未入力です。入力内容を確認してください。" };
+      return { ok: false, error: await localizeError("このステータスでは必須項目が未入力です。入力内容を確認してください。") };
     }
     if (error instanceof IssueAttributeNotAssignableError) {
-      return { ok: false, error: issueAttributeErrorMessage(error) };
+      return { ok: false, error: await localizeError(issueAttributeErrorMessage(error)) };
     }
     throw error;
   }
@@ -263,28 +264,28 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
 export async function updateIssueFormAction(values: UpdateIssueFormValues): Promise<IssueFormActionResult> {
   const parsed = updateIssueFormSchema.safeParse(values);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const issueRepository = new DrizzleIssueRepository();
   const existing = await issueRepository.findById(parsed.data.issueId);
   if (!existing) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(existing.projectId);
   if (!project) {
-    return { ok: false, error: "プロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
   if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
   const isAuthor = existing.authorId === user.id;
   const isAssignee =
@@ -300,7 +301,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   const canAddNotes = can({ permission: "add_issue_notes", project: projectContext, actor });
   const canSetNotesPrivate = can({ permission: "set_notes_private", project: projectContext, actor });
   if (!canEditAttributes && !canAddNotes) {
-    return { ok: false, error: "この操作を行う権限がありません。" };
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const changes: IssueUpdate = {};
@@ -330,13 +331,13 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
       const projectIssues = await issueRepository.listByProject(project.id);
       const parentIssue = projectIssues.find((candidate) => candidate.id === parsed.data.parentId);
       if (!parentIssue || !isPrivateIssueVisible(parentIssue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-        return { ok: false, error: "親チケットが見つかりません。" };
+        return { ok: false, error: await localizeError("親チケットが見つかりません。") };
       }
       // Mirrors Redmine's Issue#validate_parent_issue — an issue may not be re-parented
       // under itself or one of its own descendants.
       const parentIdById = new Map(projectIssues.map((candidate) => [candidate.id, candidate.parentId]));
       if (wouldCreateParentCycle(existing.id, parsed.data.parentId, parentIdById)) {
-        return { ok: false, error: "自分自身または子孫のチケットを親に指定することはできません。" };
+        return { ok: false, error: await localizeError("自分自身または子孫のチケットを親に指定することはできません。") };
       }
     }
     changes.parentId = parsed.data.parentId || null;
@@ -348,7 +349,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     } else {
       const parsedHours = Number(parsed.data.estimatedHours);
       if (!Number.isFinite(parsedHours) || parsedHours < 0) {
-        return { ok: false, error: "予定工数は0以上の数値で入力してください。" };
+        return { ok: false, error: await localizeError("予定工数は0以上の数値で入力してください。") };
       }
       changes.estimatedHours = parsedHours;
     }
@@ -360,7 +361,7 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
   if (parsed.data.doneRatio !== undefined && parsed.data.doneRatio.trim().length > 0) {
     const parsedRatio = Number(parsed.data.doneRatio);
     if (!Number.isInteger(parsedRatio) || parsedRatio < 0 || parsedRatio > 100) {
-      return { ok: false, error: "進捗率は0〜100の整数で入力してください。" };
+      return { ok: false, error: await localizeError("進捗率は0〜100の整数で入力してください。") };
     }
     changes.doneRatio = parsedRatio;
   }
@@ -407,31 +408,31 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     );
   } catch (error) {
     if (error instanceof StaleIssueError) {
-      return { ok: false, error: "他の変更と競合しました。ページを再読み込みして再度お試しください。" };
+      return { ok: false, error: await localizeError("他の変更と競合しました。ページを再読み込みして再度お試しください。") };
     }
     if (error instanceof WorkflowTransitionDeniedError) {
-      return { ok: false, error: "そのステータスには変更できません。" };
+      return { ok: false, error: await localizeError("そのステータスには変更できません。") };
     }
     if (error instanceof WorkflowRequiredFieldError) {
-      return { ok: false, error: "このステータスでは必須項目が未入力のため変更できません。" };
+      return { ok: false, error: await localizeError("このステータスでは必須項目が未入力のため変更できません。") };
     }
     if (error instanceof BlockedIssueCloseError) {
-      return { ok: false, error: "このチケットは未完了の「ブロック」関連があるためクローズできません。" };
+      return { ok: false, error: await localizeError("このチケットは未完了の「ブロック」関連があるためクローズできません。") };
     }
     if (error instanceof IssueAttributeNotAssignableError) {
-      return { ok: false, error: issueAttributeErrorMessage(error) };
+      return { ok: false, error: await localizeError(issueAttributeErrorMessage(error)) };
     }
     if (error instanceof InvalidParentIssueError) {
       return {
         ok: false,
         error:
-          error.reason === "cycle"
+          await localizeError(error.reason === "cycle"
             ? "自分自身または子孫のチケットを親に指定することはできません。"
-            : "親チケットが見つかりません。",
+            : "親チケットが見つかりません。"),
       };
     }
     if (error instanceof CustomFieldValidationError) {
-      return { ok: false, error: "カスタムフィールドの入力内容を確認してください。", fieldErrors: error.fieldErrors };
+      return { ok: false, error: await localizeError("カスタムフィールドの入力内容を確認してください。"), fieldErrors: await localizeErrorMap(error.fieldErrors) };
     }
     throw error;
   }
@@ -536,46 +537,46 @@ export async function moveIssueAction(values: {
 }): Promise<{ ok: true; projectIdentifier: string } | { ok: false; error: string }> {
   const parsed = moveIssueFormSchema.safeParse(values);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const issueRepository = new DrizzleIssueRepository();
   const existing = await issueRepository.findById(parsed.data.issueId);
   if (!existing) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
 
   const projectRepository = new DrizzleProjectRepository();
   const sourceProject = await projectRepository.findById(existing.projectId);
   if (!sourceProject) {
-    return { ok: false, error: "プロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const source = await resolveActor(user, sourceProject.id);
   if (!isPrivateIssueVisible(existing, user.id, source.userGroupIds, issuesVisibilityRoles(source.actor))) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
   const sourceContext = toAuthorizationProject(sourceProject);
   const canEditAny = can({ permission: "edit_issues", project: sourceContext, actor: source.actor });
   const canEditOwn = existing.authorId === user.id && can({ permission: "edit_own_issues", project: sourceContext, actor: source.actor });
   if (!canEditAny && !canEditOwn) {
-    return { ok: false, error: "この操作を行う権限がありません。" };
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const targetProject = await projectRepository.findById(parsed.data.targetProjectId);
   if (!targetProject) {
-    return { ok: false, error: "移動先のプロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("移動先のプロジェクトが見つかりません。") };
   }
   const target = await resolveActor(user, targetProject.id);
   // Same "don't confirm it exists" posture the rest of this file takes: a project the actor
   // can't add issues to is reported as not found, not as forbidden.
   if (!can({ permission: "add_issues", project: toAuthorizationProject(targetProject), actor: target.actor })) {
-    return { ok: false, error: "移動先のプロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("移動先のプロジェクトが見つかりません。") };
   }
 
   try {
@@ -603,17 +604,17 @@ export async function moveIssueAction(values: {
     );
   } catch (error) {
     if (error instanceof StaleIssueError) {
-      return { ok: false, error: "他の変更と競合しました。ページを再読み込みして再度お試しください。" };
+      return { ok: false, error: await localizeError("他の変更と競合しました。ページを再読み込みして再度お試しください。") };
     }
     if (error instanceof ProjectHasNoTrackerError) {
-      return { ok: false, error: "移動先のプロジェクトにトラッカーが割り当てられていません。" };
+      return { ok: false, error: await localizeError("移動先のプロジェクトにトラッカーが割り当てられていません。") };
     }
     // The checks above should have caught these; reaching here means the use case's own
     // re-derivation disagreed, so report it the same way rather than leaking the detail.
     if (error instanceof MoveIssueNotPermittedError) {
       return {
         ok: false,
-        error: error.side === "source" ? "この操作を行う権限がありません。" : "移動先のプロジェクトが見つかりません。",
+        error: await localizeError(error.side === "source" ? "この操作を行う権限がありません。" : "移動先のプロジェクトが見つかりません。"),
       };
     }
     throw error;
@@ -633,34 +634,34 @@ export async function deleteIssueAction(
 ): Promise<{ ok: true; projectIdentifier: string } | { ok: false; error: string }> {
   const parsed = deleteIssueFormSchema.safeParse(values);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const issueRepository = new DrizzleIssueRepository();
   const existing = await issueRepository.findById(parsed.data.issueId);
   if (!existing) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
   const project = await new DrizzleProjectRepository().findById(existing.projectId);
   if (!project) {
-    return { ok: false, error: "プロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!isPrivateIssueVisible(existing, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
   if (!can({ permission: "delete_issues", project: toAuthorizationProject(project), actor })) {
-    return { ok: false, error: "この操作を行う権限がありません。" };
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   if (parsed.data.timeEntryMode === "reassign" && !parsed.data.reassignToIssueId) {
-    return { ok: false, error: "工数の付け替え先チケットを選択してください。" };
+    return { ok: false, error: await localizeError("工数の付け替え先チケットを選択してください。") };
   }
 
   try {
@@ -688,15 +689,15 @@ export async function deleteIssueAction(
     );
   } catch (error) {
     if (error instanceof DeleteIssueNotPermittedError) {
-      return { ok: false, error: "この操作を行う権限がありません。" };
+      return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
     }
     if (error instanceof InvalidTimeEntryTargetError) {
       return {
         ok: false,
         error:
-          error.reason === "being_deleted"
+          await localizeError(error.reason === "being_deleted"
             ? "削除対象のチケットに工数を付け替えることはできません。"
-            : "付け替え先のチケットが見つかりません。",
+            : "付け替え先のチケットが見つかりません。"),
       };
     }
     throw error;
@@ -712,41 +713,41 @@ export async function copyIssueAction(
 ): Promise<{ ok: true; issueId: string; projectIdentifier: string } | { ok: false; error: string }> {
   const parsed = copyIssueFormSchema.safeParse(values);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const issueRepository = new DrizzleIssueRepository();
   const existing = await issueRepository.findById(parsed.data.sourceIssueId);
   if (!existing) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
   const projectRepository = new DrizzleProjectRepository();
   const sourceProject = await projectRepository.findById(existing.projectId);
   if (!sourceProject) {
-    return { ok: false, error: "プロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const source = await resolveActor(user, sourceProject.id);
   if (!isPrivateIssueVisible(existing, user.id, source.userGroupIds, issuesVisibilityRoles(source.actor))) {
-    return { ok: false, error: "チケットが見つかりません。" };
+    return { ok: false, error: await localizeError("チケットが見つかりません。") };
   }
   if (!can({ permission: "copy_issues", project: toAuthorizationProject(sourceProject), actor: source.actor })) {
-    return { ok: false, error: "この操作を行う権限がありません。" };
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const targetProject = await projectRepository.findById(parsed.data.targetProjectId);
   if (!targetProject) {
-    return { ok: false, error: "コピー先のプロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("コピー先のプロジェクトが見つかりません。") };
   }
   const target = await resolveActor(user, targetProject.id);
   const targetContext = toAuthorizationProject(targetProject);
   if (!can({ permission: "add_issues", project: targetContext, actor: target.actor })) {
-    return { ok: false, error: "コピー先のプロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("コピー先のプロジェクトが見つかりません。") };
   }
 
   let result;
@@ -795,14 +796,14 @@ export async function copyIssueAction(
     if (error instanceof CopyIssueNotPermittedError) {
       return {
         ok: false,
-        error: error.side === "source" ? "この操作を行う権限がありません。" : "コピー先のプロジェクトが見つかりません。",
+        error: await localizeError(error.side === "source" ? "この操作を行う権限がありません。" : "コピー先のプロジェクトが見つかりません。"),
       };
     }
     if (error instanceof IssueAttributeNotAssignableError) {
-      return { ok: false, error: issueAttributeErrorMessage(error) };
+      return { ok: false, error: await localizeError(issueAttributeErrorMessage(error)) };
     }
     if (error instanceof WorkflowRequiredFieldError) {
-      return { ok: false, error: "コピー先のワークフローで必須の項目が未入力のためコピーできません。" };
+      return { ok: false, error: await localizeError("コピー先のワークフローで必須の項目が未入力のためコピーできません。") };
     }
     throw error;
   }

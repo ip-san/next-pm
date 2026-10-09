@@ -20,6 +20,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { accountRepositories } from "@/interface/http/my-account-repositories";
 import { destroyCurrentSession } from "@/interface/http/session";
+import { localizeError } from "@/interface/http/localize-error";
 
 const ACCOUNT_PATH = "/my/account";
 
@@ -47,7 +48,7 @@ export async function updateMyAccountAction(
 ): Promise<MyAccountActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", ok: false };
+    return { error: await localizeError("ログインしてください。"), ok: false };
   }
 
   const parsed = updateAccountSchema.safeParse({
@@ -62,7 +63,7 @@ export async function updateMyAccountAction(
     noSelfNotified: formData.get("noSelfNotified") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", ok: false };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), ok: false };
   }
 
   try {
@@ -74,7 +75,7 @@ export async function updateMyAccountAction(
     });
   } catch (error) {
     if (error instanceof EmailAddressError) {
-      return { error: error.message, ok: false };
+      return { error: await localizeError(error.message), ok: false };
     }
     throw error;
   }
@@ -96,12 +97,12 @@ export async function addEmailAddressAction(
 ): Promise<EmailAddressActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const parsed = addAddressSchema.safeParse({ address: formData.get("address") });
   if (!parsed.success) {
-    return { error: "メールアドレスを入力してください。" };
+    return { error: await localizeError("メールアドレスを入力してください。") };
   }
 
   const { maxAdditionalEmails } = await loadAuthSettings(new DrizzleSettingsRepository());
@@ -109,7 +110,7 @@ export async function addEmailAddressAction(
     await addEmailAddress(accountRepositories(), user.id, parsed.data.address, maxAdditionalEmails);
   } catch (error) {
     if (error instanceof EmailAddressError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -127,19 +128,19 @@ export async function removeEmailAddressAction(
 ): Promise<EmailAddressActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const parsed = addressIdSchema.safeParse({ addressId: formData.get("addressId") });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   try {
     await removeEmailAddress(accountRepositories(), user.id, parsed.data.addressId);
   } catch (error) {
     if (error instanceof EmailAddressError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -157,7 +158,7 @@ export async function setEmailAddressNotifyAction(
 ): Promise<EmailAddressActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const parsed = notifySchema.safeParse({
@@ -165,14 +166,14 @@ export async function setEmailAddressNotifyAction(
     notify: formData.get("notify") === "1",
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   try {
     await setEmailAddressNotify(accountRepositories(), user.id, parsed.data.addressId, parsed.data.notify);
   } catch (error) {
     if (error instanceof EmailAddressError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -191,7 +192,7 @@ export type AccessKeyActionState = {
 export async function showApiKeyAction(_prevState: AccessKeyActionState, _formData: FormData): Promise<AccessKeyActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", apiKey: null };
+    return { error: await localizeError("ログインしてください。"), apiKey: null };
   }
   return { error: null, apiKey: await showOrCreateApiKey(new DrizzleUserRepository(), user.id) };
 }
@@ -200,7 +201,7 @@ export async function showApiKeyAction(_prevState: AccessKeyActionState, _formDa
 export async function resetApiKeyAction(_prevState: AccessKeyActionState, _formData: FormData): Promise<AccessKeyActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", apiKey: null };
+    return { error: await localizeError("ログインしてください。"), apiKey: null };
   }
   const apiKey = await resetApiKey(new DrizzleUserRepository(), user.id);
   revalidatePath(ACCOUNT_PATH);
@@ -211,7 +212,7 @@ export async function resetApiKeyAction(_prevState: AccessKeyActionState, _formD
 export async function resetAtomKeyAction(_prevState: EmailAddressActionState, _formData: FormData): Promise<EmailAddressActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
   await resetAtomKey(new DrizzleUserRepository(), user.id);
   revalidatePath(ACCOUNT_PATH);
@@ -231,12 +232,12 @@ export async function deleteOwnAccountAction(
 ): Promise<MyAccountActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", ok: false };
+    return { error: await localizeError("ログインしてください。"), ok: false };
   }
 
   const parsed = deleteAccountSchema.safeParse({ confirm: formData.get("confirm") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", ok: false };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), ok: false };
   }
 
   const { unsubscribeEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
@@ -245,7 +246,7 @@ export async function deleteOwnAccountAction(
     await deleteOwnAccount({ userRepository, userAdminRepository: userRepository }, user.id, unsubscribeEnabled);
   } catch (error) {
     if (error instanceof AccountNotDeletableError) {
-      return { error: error.message, ok: false };
+      return { error: await localizeError(error.message), ok: false };
     }
     throw error;
   }

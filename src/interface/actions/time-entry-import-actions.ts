@@ -27,6 +27,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { canAttachIssueToTimeEntry, canAttributeTimeEntryTo } from "@/interface/http/time-entry-access";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type ImportTimeEntriesActionState = {
   error: string | null;
@@ -54,22 +55,22 @@ export async function importTimeEntriesCsvAction(
 ): Promise<ImportTimeEntriesActionState> {
   const parsed = importTimeEntriesSchema.safeParse({ projectIdentifier: formData.get("projectIdentifier") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", summary: null };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), summary: null };
   }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "CSVファイルを選択してください。", summary: null };
+    return { error: await localizeError("CSVファイルを選択してください。"), summary: null };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", summary: null };
+    return { error: await localizeError("ログインしてください。"), summary: null };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。", summary: null };
+    return { error: await localizeError("プロジェクトが見つかりません。"), summary: null };
   }
 
   const projectContext = toAuthorizationProject(project);
@@ -78,19 +79,19 @@ export async function importTimeEntriesCsvAction(
     !can({ permission: "import_time_entries", project: projectContext, actor }) ||
     !can({ permission: "log_time", project: projectContext, actor })
   ) {
-    return { error: "この操作を行う権限がありません。", summary: null };
+    return { error: await localizeError("この操作を行う権限がありません。"), summary: null };
   }
   const canLogForOthers = can({ permission: "log_time_for_other_users", project: projectContext, actor });
 
   const rows = parseCsv(await file.text()).filter((row) => row.some((cell) => cell.trim().length > 0));
   if (rows.length === 0) {
-    return { error: "CSVにデータがありません。", summary: null };
+    return { error: await localizeError("CSVにデータがありません。"), summary: null };
   }
 
   const header = rows[0].map((cell) => cell.trim().toLowerCase());
   const missingRequired = REQUIRED_HEADERS.filter((required) => !header.includes(required));
   if (missingRequired.length > 0) {
-    return { error: `必須列が見つかりません: ${missingRequired.join(", ")}`, summary: null };
+    return { error: await localizeError(`必須列が見つかりません: ${missingRequired.join(", ")}`), summary: null };
   }
   const columnIndex = new Map(header.map((name, index) => [name, index]));
 
@@ -239,5 +240,5 @@ export async function importTimeEntriesCsvAction(
   }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/time-entries`);
-  return { error: null, summary: { created, failed: rowErrors.length, rowErrors } };
+  return { error: null, summary: { created, failed: rowErrors.length, rowErrors: await Promise.all(rowErrors.map(localizeError)) } };
 }

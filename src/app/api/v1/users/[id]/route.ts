@@ -10,6 +10,8 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -110,7 +112,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     );
   } catch (error) {
     if (error instanceof UserUpdateError) {
-      return NextResponse.json({ error: "invalid_request", message: error.message }, { status: 422 });
+      return NextResponse.json({ error: "invalid_request", message: localizeMessage(await localeForViewer(auth.admin), error.message) }, { status: 422 });
     }
     throw error;
   }
@@ -140,7 +142,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }
   } catch (error) {
     if (error instanceof UserNotDeletableError || error instanceof UserStatusChangeError) {
-      return NextResponse.json({ error: "unprocessable", message: error.message }, { status: 422 });
+      return NextResponse.json({ error: "unprocessable", message: localizeMessage(await localeForViewer(auth.admin), error.message) }, { status: 422 });
     }
     throw error;
   }

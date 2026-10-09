@@ -26,6 +26,8 @@ import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/i
 import { canAttachIssueToTimeEntry, canAttributeTimeEntryTo, filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { paginate, parsePagination } from "@/interface/http/pagination";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -235,7 +237,7 @@ customFieldViewerFor(user, roleIds),
     return NextResponse.json({ time_entry: entry }, { status: 201 });
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
-      return NextResponse.json({ error: error.message }, { status: 422 });
+      return NextResponse.json({ error: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

@@ -24,6 +24,7 @@ import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { destroyCurrentSession, establishSession, revokeAllSessions } from "@/interface/http/session";
 import { startPendingTwofaSetup, TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
+import { localizeError } from "@/interface/http/localize-error";
 
 const loginSchema = z.object({
   login: z.string().min(1),
@@ -45,7 +46,7 @@ export async function loginAction(
     rememberMe: formData.get("rememberMe") === "on",
   });
   if (!parsed.success) {
-    return { error: "ログインIDとパスワードを入力してください。" };
+    return { error: await localizeError("ログインIDとパスワードを入力してください。") };
   }
 
   const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
@@ -56,12 +57,12 @@ export async function loginAction(
     twofa,
   );
   if (!result.ok) {
-    return { error: "ログインIDまたはパスワードが正しくありません。" };
+    return { error: await localizeError("ログインIDまたはパスワードが正しくありません。") };
   }
 
   switch (result.outcome.kind) {
     case "inactive":
-      return { error: INACTIVE_ACCOUNT_MESSAGE[result.outcome.status] ?? "このアカウントではログインできません。" };
+      return { error: await localizeError(INACTIVE_ACCOUNT_MESSAGE[result.outcome.status] ?? "このアカウントではログインできません。") };
     case "twofa_required":
       await startPendingTwofaSetup(result.user.id, parsed.data.rememberMe);
       redirect("/login/twofa");
@@ -99,7 +100,7 @@ export async function verifyTwofaAction(
 ): Promise<VerifyTwofaActionState> {
   const parsed = twofaCodeSchema.safeParse({ code: formData.get("code") });
   if (!parsed.success) {
-    return { error: "確認コードを入力してください。" };
+    return { error: await localizeError("確認コードを入力してください。") };
   }
 
   const cookieStore = await cookies();
@@ -140,7 +141,7 @@ export async function verifyTwofaAction(
   }
 
   await startPendingTwofaSetup(pending.userId, pending.rememberMe, attempts);
-  return { error: "確認コードが正しくありません。" };
+  return { error: await localizeError("確認コードが正しくありません。") };
 }
 
 export async function logoutAction(): Promise<void> {
@@ -167,12 +168,12 @@ export async function changePasswordAction(
     newPassword: formData.get("newPassword"),
   });
   if (!parsed.success) {
-    return { error: "現在のパスワードと新しいパスワードを入力してください。", ok: false };
+    return { error: await localizeError("現在のパスワードと新しいパスワードを入力してください。"), ok: false };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", ok: false };
+    return { error: await localizeError("ログインしてください。"), ok: false };
   }
 
   try {
@@ -188,7 +189,7 @@ export async function changePasswordAction(
     );
   } catch (error) {
     if (error instanceof LdapPasswordChangeNotAllowedError || error instanceof InvalidPasswordError || error instanceof CurrentPasswordMismatchError) {
-      return { error: error.message, ok: false };
+      return { error: await localizeError(error.message), ok: false };
     }
     throw error;
   }
@@ -219,7 +220,7 @@ export async function lostPasswordAction(
 ): Promise<LostPasswordActionState> {
   const parsed = lostPasswordSchema.safeParse({ mail: formData.get("mail") });
   if (!parsed.success) {
-    return { error: "メールアドレスを入力してください。", success: false };
+    return { error: await localizeError("メールアドレスを入力してください。"), success: false };
   }
 
   // Redmine's AccountController#lost_password bails out to the home page unless
@@ -227,7 +228,7 @@ export async function lostPasswordAction(
   // hiding the link, or the form stays reachable by URL once an admin turns it off.
   const { lostPasswordEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
   if (!lostPasswordEnabled) {
-    return { error: "パスワードの再設定は無効になっています。管理者にお問い合わせください。", success: false };
+    return { error: await localizeError("パスワードの再設定は無効になっています。管理者にお問い合わせください。"), success: false };
   }
 
   try {
@@ -243,7 +244,7 @@ export async function lostPasswordAction(
     );
   } catch (error) {
     if (error instanceof LdapPasswordResetNotAllowedError) {
-      return { error: error.message, success: false };
+      return { error: await localizeError(error.message), success: false };
     }
     throw error;
   }
@@ -272,7 +273,7 @@ export async function resetPasswordAction(
     newPassword: formData.get("newPassword"),
   });
   if (!parsed.success) {
-    return { error: "新しいパスワードを入力してください。", success: false };
+    return { error: await localizeError("新しいパスワードを入力してください。"), success: false };
   }
 
   try {
@@ -289,7 +290,7 @@ export async function resetPasswordAction(
     await revokeAllSessions(userId);
   } catch (error) {
     if (error instanceof InvalidResetTokenError || error instanceof InvalidPasswordError) {
-      return { error: error.message, success: false };
+      return { error: await localizeError(error.message), success: false };
     }
     throw error;
   }

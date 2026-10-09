@@ -24,6 +24,7 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type PostMessageActionState = {
   error: string | null;
@@ -46,27 +47,27 @@ export async function postMessageAction(_prevState: PostMessageActionState, form
     content: formData.get("content"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const board = await new DrizzleBoardRepository().findById(parsed.data.boardId);
   if (!board || board.projectId !== project.id) {
-    return { error: "フォーラムが見つかりません。" };
+    return { error: await localizeError("フォーラムが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "add_messages", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let message;
@@ -80,7 +81,7 @@ export async function postMessageAction(_prevState: PostMessageActionState, form
     });
   } catch (error) {
     if (error instanceof InvalidMessageError || error instanceof LockedTopicError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -129,29 +130,29 @@ export async function editMessageAction(_prevState: MessageMutationActionState, 
     targetBoardId: formData.get("targetBoardId") || null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const messageRepository = new DrizzleMessageRepository();
   const message = await messageRepository.findById(parsed.data.messageId);
   if (!message || message.boardId !== parsed.data.boardId) {
-    return { error: "投稿が見つかりません。" };
+    return { error: await localizeError("投稿が見つかりません。") };
   }
 
   const boardRepository = new DrizzleBoardRepository();
   const board = await boardRepository.findById(message.boardId);
   if (!board || board.projectId !== project.id) {
-    return { error: "投稿が見つかりません。" };
+    return { error: await localizeError("投稿が見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
@@ -159,7 +160,7 @@ export async function editMessageAction(_prevState: MessageMutationActionState, 
   const hasEditMessages = can({ permission: "edit_messages", project: projectContext, actor });
   const hasEditOwnMessages = can({ permission: "edit_own_messages", project: projectContext, actor });
   if (!canEditMessage(message, user.id, hasEditMessages, hasEditOwnMessages)) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let updated;
@@ -178,7 +179,7 @@ export async function editMessageAction(_prevState: MessageMutationActionState, 
     );
   } catch (error) {
     if (error instanceof InvalidMessageError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -206,28 +207,28 @@ export async function deleteMessageAction(_prevState: MessageMutationActionState
     messageId: formData.get("messageId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const messageRepository = new DrizzleMessageRepository();
   const message = await messageRepository.findById(parsed.data.messageId);
   if (!message || message.boardId !== parsed.data.boardId) {
-    return { error: "投稿が見つかりません。" };
+    return { error: await localizeError("投稿が見つかりません。") };
   }
 
   const board = await new DrizzleBoardRepository().findById(message.boardId);
   if (!board || board.projectId !== project.id) {
-    return { error: "投稿が見つかりません。" };
+    return { error: await localizeError("投稿が見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
@@ -235,7 +236,7 @@ export async function deleteMessageAction(_prevState: MessageMutationActionState
   const hasDeleteMessages = can({ permission: "delete_messages", project: projectContext, actor });
   const hasDeleteOwnMessages = can({ permission: "delete_own_messages", project: projectContext, actor });
   if (!canDeleteMessage(message, user.id, hasDeleteMessages, hasDeleteOwnMessages)) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await deleteMessage(
@@ -285,30 +286,30 @@ export async function uploadMessageAttachmentAction(
     file: formData.get("file"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   if (parsed.data.file.size === 0) {
-    return { error: "ファイルを選択してください。" };
+    return { error: await localizeError("ファイルを選択してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const message = await new DrizzleMessageRepository().findById(parsed.data.messageId);
   if (!message || message.boardId !== parsed.data.boardId) {
-    return { error: "投稿が見つかりません。" };
+    return { error: await localizeError("投稿が見つかりません。") };
   }
 
   const board = await new DrizzleBoardRepository().findById(message.boardId);
   if (!board) {
-    return { error: "フォーラムが見つかりません。" };
+    return { error: await localizeError("フォーラムが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(board.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
@@ -320,7 +321,7 @@ export async function uploadMessageAttachmentAction(
     can({ permission: "edit_own_messages", project: projectContext, actor }),
   );
   if (!editable) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
@@ -343,7 +344,7 @@ export async function uploadMessageAttachmentAction(
     );
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -368,38 +369,38 @@ export async function deleteMessageAttachmentAction(
     attachmentId: formData.get("attachmentId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment || attachment.containerType !== "Message" || !attachment.containerId) {
-    return { error: "添付ファイルが見つかりません。" };
+    return { error: await localizeError("添付ファイルが見つかりません。") };
   }
 
   const message = await new DrizzleMessageRepository().findById(attachment.containerId);
   if (!message || message.boardId !== parsed.data.boardId) {
-    return { error: "投稿が見つかりません。" };
+    return { error: await localizeError("投稿が見つかりません。") };
   }
 
   const board = await new DrizzleBoardRepository().findById(message.boardId);
   if (!board) {
-    return { error: "フォーラムが見つかりません。" };
+    return { error: await localizeError("フォーラムが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(board.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "edit_messages", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await attachmentRepository.delete(attachment.id);

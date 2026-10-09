@@ -18,6 +18,7 @@ import { updateMailHandlerSettings } from "@/application/settings/mail-handler-s
 import { PREFERRED_BODY_PART_VALUES } from "@/domain/settings/mail-handler-settings";
 import { REMINDERS_JOB_TYPE, type RemindersJobPayload } from "@/application/jobs/send-reminders";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type SettingsActionState = {
   error: string | null;
@@ -36,7 +37,7 @@ export async function updateCommitKeywordSettingsAction(
 ): Promise<SettingsActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateCommitKeywordSettingsSchema.safeParse({
@@ -46,7 +47,7 @@ export async function updateCommitKeywordSettingsAction(
     crossProjectRef: formData.get("crossProjectRef") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await updateCommitKeywordSettings(new DrizzleSettingsRepository(), {
@@ -87,7 +88,7 @@ export async function updateGeneralSettingsAction(
 ): Promise<SettingsActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateGeneralSettingsSchema.safeParse({
@@ -111,7 +112,7 @@ export async function updateGeneralSettingsAction(
     parentIssueDoneRatio: formData.get("parentIssueDoneRatio"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await updateGeneralSettings(new DrizzleSettingsRepository(), {
@@ -153,7 +154,7 @@ export async function updateProjectDefaultsAction(
 ): Promise<SettingsActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const roleIdRaw = formData.get("newProjectUserRoleId");
@@ -165,7 +166,7 @@ export async function updateProjectDefaultsAction(
     newProjectUserRoleId: roleIdRaw ? roleIdRaw : null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   // Every tracker checked is stored as "unset", so the setting keeps following the tracker
@@ -208,7 +209,7 @@ export async function updateAuthSettingsAction(
 ): Promise<SettingsActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateAuthSettingsSchema.safeParse({
@@ -226,7 +227,7 @@ export async function updateAuthSettingsAction(
     maxAdditionalEmails: formData.get("maxAdditionalEmails"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await updateAuthSettings(new DrizzleSettingsRepository(), parsed.data);
@@ -251,7 +252,7 @@ export async function updateMailHandlerSettingsAction(
 ): Promise<SettingsActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateMailHandlerSettingsSchema.safeParse({
@@ -264,7 +265,7 @@ export async function updateMailHandlerSettingsAction(
     preferredBodyPart: formData.get("preferredBodyPart"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await updateMailHandlerSettings(new DrizzleSettingsRepository(), parsed.data);
@@ -292,12 +293,12 @@ export async function enqueueRemindersAction(
 ): Promise<RemindersActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError, queued: false };
+    return { error: await localizeError(authError), queued: false };
   }
 
   const parsed = enqueueRemindersSchema.safeParse({ days: formData.get("days") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", queued: false };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), queued: false };
   }
 
   const payload: RemindersJobPayload = { days: parsed.data.days };

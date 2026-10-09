@@ -33,6 +33,7 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, resolveGlobalRoles } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 
 function createProjectRepositories() {
@@ -67,7 +68,7 @@ export async function createProjectAction(
 ): Promise<CreateProjectActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const parentIdRaw = formData.get("parentId");
@@ -82,7 +83,7 @@ export async function createProjectAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   let identifier: string;
@@ -97,9 +98,9 @@ export async function createProjectAction(
     identifier = project.identifier;
   } catch (error) {
     if (error instanceof CreateProjectNotPermittedError) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
-    return { error: error instanceof Error ? error.message : "プロジェクトを作成できませんでした。" };
+    return { error: await localizeError(error instanceof Error ? error.message : "プロジェクトを作成できませんでした。") };
   }
 
   redirect(`/projects/${identifier}`);
@@ -133,7 +134,7 @@ export async function copyProjectAction(
 ): Promise<CopyProjectActionState> {
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const parentIdRaw = formData.get("parentId");
@@ -148,7 +149,7 @@ export async function copyProjectAction(
     trackerIds: formData.getAll("trackerIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   let identifier: string;
@@ -156,7 +157,7 @@ export async function copyProjectAction(
     const project = await copyProject(new DrizzleProjectRepository(), parsed.data);
     identifier = project.identifier;
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "プロジェクトをコピーできませんでした。" };
+    return { error: await localizeError(error instanceof Error ? error.message : "プロジェクトをコピーできませんでした。") };
   }
 
   redirect(`/projects/${identifier}`);
@@ -190,13 +191,13 @@ export async function updateProjectSettingsAction(
     customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const projectRepository = new DrizzleProjectRepository();
   const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const user = await currentUserFromCookies();
@@ -217,7 +218,7 @@ export async function updateProjectSettingsAction(
     );
   } catch (error) {
     if (error instanceof UpdateProjectNotPermittedError) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
     throw error;
   }
@@ -235,7 +236,7 @@ export async function updateProjectSettingsAction(
       );
     } catch (error) {
       if (error instanceof CustomFieldValidationError) {
-        return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+        return { error: await localizeError(Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。") };
       }
       throw error;
     }
@@ -265,18 +266,18 @@ async function changeProjectStatus(
 ): Promise<ProjectStatusActionState> {
   const parsed = projectStatusSchema.safeParse({ projectIdentifier: formData.get("projectIdentifier") });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const projectRepository = new DrizzleProjectRepository();
   const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   try {
@@ -294,10 +295,10 @@ async function changeProjectStatus(
     }
   } catch (error) {
     if (error instanceof ProjectStatusChangeNotPermittedError) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
     if (error instanceof ProjectArchiveBlockedError) {
-      return { error: "このプロジェクトのバージョンを使用しているチケットが配下以外のプロジェクトにあるため、アーカイブできません。" };
+      return { error: await localizeError("このプロジェクトのバージョンを使用しているチケットが配下以外のプロジェクトにあるため、アーカイブできません。") };
     }
     throw error;
   }
@@ -343,18 +344,18 @@ export async function deleteProjectAction(
     confirmIdentifier: formData.get("confirmIdentifier") ?? "",
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const projectRepository = new DrizzleProjectRepository();
   const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
   const { actor } = await resolveActor(user, project.id);
 
@@ -365,10 +366,10 @@ export async function deleteProjectAction(
     );
   } catch (error) {
     if (error instanceof DeleteProjectNotPermittedError) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
     if (error instanceof ProjectDeleteConfirmationMismatchError) {
-      return { error: "識別子が一致しません。削除するには識別子を正確に入力してください。" };
+      return { error: await localizeError("識別子が一致しません。削除するには識別子を正確に入力してください。") };
     }
     throw error;
   }
@@ -398,13 +399,13 @@ export async function updateProjectActivitiesAction(
     activeActivityIds: formData.getAll("activeActivityIds"),
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const projectRepository = new DrizzleProjectRepository();
   const project = await projectRepository.findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const user = await currentUserFromCookies();
@@ -426,7 +427,7 @@ export async function updateProjectActivitiesAction(
     );
   } catch (error) {
     if (error instanceof UpdateProjectActivitiesNotPermittedError) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
     throw error;
   }

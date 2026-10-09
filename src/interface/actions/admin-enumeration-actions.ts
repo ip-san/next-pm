@@ -13,6 +13,7 @@ import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/e
 import { requireAdmin } from "@/interface/http/require-admin";
 import { positionMoveValues, type AdminActionState } from "./admin-action-state";
 import type { Enumeration } from "@/domain/enumeration/entity";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -33,7 +34,7 @@ export async function createEnumerationAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = createEnumerationSchema.safeParse({
@@ -42,7 +43,7 @@ export async function createEnumerationAction(
     isDefault: formData.get("isDefault") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const enumerationRepository = new DrizzleEnumerationRepository();
@@ -80,7 +81,7 @@ export async function updateEnumerationAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateEnumerationSchema.safeParse({
@@ -90,13 +91,13 @@ export async function updateEnumerationAction(
     active: formData.get("active") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const repository = new DrizzleEnumerationRepository();
   const existing = await repository.findById(parsed.data.enumerationId);
   if (!existing || !isSystemRow(existing)) {
-    return { error: "項目が見つかりません。" };
+    return { error: await localizeError("項目が見つかりません。") };
   }
 
   // Enumeration#check_default clears the flag on every other row of the type before setting it.
@@ -125,7 +126,7 @@ export async function deleteEnumerationAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = deleteEnumerationSchema.safeParse({
@@ -133,7 +134,7 @@ export async function deleteEnumerationAction(
     reassignToId: formData.get("reassignToId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   try {
@@ -144,7 +145,7 @@ export async function deleteEnumerationAction(
     );
   } catch (error) {
     if (error instanceof EnumerationReassignmentRequiredError || error instanceof EnumerationNotDeletableError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -161,7 +162,7 @@ export async function reorderEnumerationAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = reorderEnumerationSchema.safeParse({
@@ -169,13 +170,13 @@ export async function reorderEnumerationAction(
     move: formData.get("move"),
   });
   if (!parsed.success) {
-    return { error: "並べ替えの指定が不正です。" };
+    return { error: await localizeError("並べ替えの指定が不正です。") };
   }
 
   const repository = new DrizzleEnumerationRepository();
   const target = await repository.findById(parsed.data.enumerationId);
   if (!target || !isSystemRow(target)) {
-    return { error: "項目が見つかりません。" };
+    return { error: await localizeError("項目が見つかりません。") };
   }
 
   const siblings = (await repository.listByType(target.type)).filter(isSystemRow);

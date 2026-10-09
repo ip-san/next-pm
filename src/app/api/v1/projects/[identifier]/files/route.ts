@@ -18,6 +18,8 @@ import { verifyCsrf } from "@/interface/http/csrf";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -160,7 +162,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ide
     return NextResponse.json({ file: serialize(attachment, version) }, { status: 201 });
   } catch (error) {
     if (error instanceof InvalidUploadTokenError) {
-      return NextResponse.json({ error: "invalid_token", message: error.message }, { status: 422 });
+      return NextResponse.json({ error: "invalid_token", message: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

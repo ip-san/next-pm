@@ -18,6 +18,7 @@ import { verifyTwofaPendingToken } from "@/infrastructure/auth/twofa-pending-tok
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { establishSession } from "@/interface/http/session";
 import { TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
+import { localizeError } from "@/interface/http/localize-error";
 
 const ACCOUNT_PATH = "/my/account";
 const ISSUER = "next-pm";
@@ -32,14 +33,14 @@ export type StartTwofaPairingState = {
 export async function startTwofaPairingAction(_prevState: StartTwofaPairingState, _formData: FormData): Promise<StartTwofaPairingState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", pairing: null };
+    return { error: await localizeError("ログインしてください。"), pairing: null };
   }
   // Re-pairing silently replaces the active secret, so a stolen session would be enough to
   // swap the second factor for the attacker's own. Redmine guards this with sudo mode (a
   // password re-prompt); next-pm has no sudo mode, so the route is simply closed — turning
   // 2FA off first already demands the current password (deactivateTwofaAction).
   if (isTwofaActive(user)) {
-    return { error: "二段階認証は既に有効です。設定し直すには一度無効にしてください。", pairing: null };
+    return { error: await localizeError("二段階認証は既に有効です。設定し直すには一度無効にしてください。"), pairing: null };
   }
 
   const encryptionKey = loadTotpEncryptionKeyFromEnv(process.env);
@@ -54,7 +55,7 @@ export async function startTwofaPairingAction(_prevState: StartTwofaPairingState
     return { error: null, pairing: { secretBase32, provisioningUri, qrDataUrl } };
   } catch (error) {
     if (error instanceof TotpEncryptionKeyMissingError) {
-      return { error: "サーバーにTOTP_ENCRYPTION_KEYが設定されていないため、二段階認証を設定できません。管理者に連絡してください。", pairing: null };
+      return { error: await localizeError("サーバーにTOTP_ENCRYPTION_KEYが設定されていないため、二段階認証を設定できません。管理者に連絡してください。"), pairing: null };
     }
     throw error;
   }
@@ -73,12 +74,12 @@ export async function confirmTwofaPairingAction(
 ): Promise<ConfirmTwofaPairingState> {
   const parsed = confirmSchema.safeParse({ code: formData.get("code") });
   if (!parsed.success) {
-    return { error: "確認コードを入力してください。", backupCodes: null };
+    return { error: await localizeError("確認コードを入力してください。"), backupCodes: null };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", backupCodes: null };
+    return { error: await localizeError("ログインしてください。"), backupCodes: null };
   }
 
   const encryptionKey = loadTotpEncryptionKeyFromEnv(process.env);
@@ -92,7 +93,7 @@ export async function confirmTwofaPairingAction(
 
   if (!result.ok) {
     const message = result.reason === "invalid_code" ? "確認コードが正しくありません。" : "設定がリセットされました。最初からやり直してください。";
-    return { error: message, backupCodes: null };
+    return { error: await localizeError(message), backupCodes: null };
   }
 
   revalidatePath(ACCOUNT_PATH);
@@ -112,12 +113,12 @@ export async function deactivateTwofaAction(
 ): Promise<DeactivateTwofaState> {
   const parsed = deactivateSchema.safeParse({ password: formData.get("password") });
   if (!parsed.success) {
-    return { error: "現在のパスワードを入力してください。", ok: false };
+    return { error: await localizeError("現在のパスワードを入力してください。"), ok: false };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", ok: false };
+    return { error: await localizeError("ログインしてください。"), ok: false };
   }
 
   // Redmine's Setting.twofa_required? / twofa_required_for_administrators? make the factor
@@ -125,7 +126,7 @@ export async function deactivateTwofaAction(
   // "must activate" on the next login, and in the meantime leave it password-only.
   const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
   if (mustActivateTwofa({ isAdmin: user.isAdmin, twofaScheme: null }, twofa)) {
-    return { error: "このアカウントでは二段階認証が必須のため、無効にできません。", ok: false };
+    return { error: await localizeError("このアカウントでは二段階認証が必須のため、無効にできません。"), ok: false };
   }
 
   const passwordOk = await verifyCurrentPassword(
@@ -134,7 +135,7 @@ export async function deactivateTwofaAction(
     parsed.data.password,
   );
   if (!passwordOk) {
-    return { error: "パスワードが正しくありません。", ok: false };
+    return { error: await localizeError("パスワードが正しくありません。"), ok: false };
   }
 
   await deactivateTwofa(
@@ -181,7 +182,7 @@ async function pendingSetupUserId(): Promise<string | null> {
 export async function startForcedTwofaPairingAction(_prevState: StartTwofaPairingState, _formData: FormData): Promise<StartTwofaPairingState> {
   const userId = await pendingSetupUserId();
   if (!userId) {
-    return { error: "ログインからやり直してください。", pairing: null };
+    return { error: await localizeError("ログインからやり直してください。"), pairing: null };
   }
 
   const encryptionKey = loadTotpEncryptionKeyFromEnv(process.env);
@@ -196,7 +197,7 @@ export async function startForcedTwofaPairingAction(_prevState: StartTwofaPairin
     return { error: null, pairing: { secretBase32, provisioningUri, qrDataUrl } };
   } catch (error) {
     if (error instanceof TotpEncryptionKeyMissingError) {
-      return { error: "サーバーにTOTP_ENCRYPTION_KEYが設定されていないため、二段階認証を設定できません。管理者に連絡してください。", pairing: null };
+      return { error: await localizeError("サーバーにTOTP_ENCRYPTION_KEYが設定されていないため、二段階認証を設定できません。管理者に連絡してください。"), pairing: null };
     }
     throw error;
   }
@@ -208,20 +209,20 @@ export async function confirmForcedTwofaPairingAction(
 ): Promise<ConfirmTwofaPairingState> {
   const parsed = confirmSchema.safeParse({ code: formData.get("code") });
   if (!parsed.success) {
-    return { error: "確認コードを入力してください。", backupCodes: null };
+    return { error: await localizeError("確認コードを入力してください。"), backupCodes: null };
   }
 
   // Same ownership + "is this login actually owed a first pairing" check as the start action,
   // re-run here because the two are separate requests.
   const setupUserId = await pendingSetupUserId();
   if (!setupUserId) {
-    return { error: "ログインからやり直してください。", backupCodes: null };
+    return { error: await localizeError("ログインからやり直してください。"), backupCodes: null };
   }
   const cookieStore = await cookies();
   const pendingToken = cookieStore.get(TWOFA_PENDING_COOKIE_NAME)?.value;
   const pending = pendingToken ? await verifyTwofaPendingToken(pendingToken) : null;
   if (!pending) {
-    return { error: "ログインからやり直してください。", backupCodes: null };
+    return { error: await localizeError("ログインからやり直してください。"), backupCodes: null };
   }
 
   const encryptionKey = loadTotpEncryptionKeyFromEnv(process.env);
@@ -235,7 +236,7 @@ export async function confirmForcedTwofaPairingAction(
 
   if (!result.ok) {
     const message = result.reason === "invalid_code" ? "確認コードが正しくありません。" : "設定がリセットされました。最初からやり直してください。";
-    return { error: message, backupCodes: null };
+    return { error: await localizeError(message), backupCodes: null };
   }
 
   // The pairing *is* the second factor for this login, so no separate code entry follows.

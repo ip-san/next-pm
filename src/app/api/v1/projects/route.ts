@@ -11,6 +11,8 @@ import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/in
 import { paginate, parsePagination } from "@/interface/http/pagination";
 import { resolveActor, resolveGlobalRoles, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -99,6 +101,6 @@ export async function POST(request: Request) {
     if (error instanceof CreateProjectNotPermittedError) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid_request" }, { status: 422 });
+    return NextResponse.json({ error: error instanceof Error ? localizeMessage(await localeForViewer(user), error.message) : "invalid_request" }, { status: 422 });
   }
 }

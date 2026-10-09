@@ -17,6 +17,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type CreateDocumentActionState = {
   error: string | null;
@@ -37,22 +38,22 @@ export async function createDocumentAction(_prevState: CreateDocumentActionState
     description: formData.get("description") ?? "",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "add_documents", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let created;
@@ -63,7 +64,7 @@ export async function createDocumentAction(_prevState: CreateDocumentActionState
     );
   } catch (error) {
     if (error instanceof InvalidDocumentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -94,28 +95,28 @@ export async function updateDocumentAction(_prevState: UpdateDocumentActionState
     description: formData.get("description") ?? "",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const documentRepository = new DrizzleDocumentRepository();
   const document = await documentRepository.findById(parsed.data.documentId);
   if (!document || document.projectId !== project.id) {
-    return { error: "ドキュメントが見つかりません。" };
+    return { error: await localizeError("ドキュメントが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "edit_documents", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   try {
@@ -125,7 +126,7 @@ export async function updateDocumentAction(_prevState: UpdateDocumentActionState
     );
   } catch (error) {
     if (error instanceof InvalidDocumentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -150,28 +151,28 @@ export async function deleteDocumentAction(_prevState: DeleteDocumentActionState
     documentId: formData.get("documentId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const documentRepository = new DrizzleDocumentRepository();
   const document = await documentRepository.findById(parsed.data.documentId);
   if (!document || document.projectId !== project.id) {
-    return { error: "ドキュメントが見つかりません。" };
+    return { error: await localizeError("ドキュメントが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "delete_documents", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await deleteDocument(
@@ -204,25 +205,25 @@ export async function uploadDocumentAttachmentAction(
     file: formData.get("file"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   if (parsed.data.file.size === 0) {
-    return { error: "ファイルを選択してください。" };
+    return { error: await localizeError("ファイルを選択してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const document = await new DrizzleDocumentRepository().findById(parsed.data.documentId);
   if (!document) {
-    return { error: "ドキュメントが見つかりません。" };
+    return { error: await localizeError("ドキュメントが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(document.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
@@ -233,7 +234,7 @@ export async function uploadDocumentAttachmentAction(
     can({ permission: "edit_documents", project: projectContext, actor }) ||
     can({ permission: "add_documents", project: projectContext, actor });
   if (!canAttach) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
@@ -256,7 +257,7 @@ export async function uploadDocumentAttachmentAction(
     );
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -283,33 +284,33 @@ export async function deleteDocumentAttachmentAction(
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment || attachment.containerType !== "Document" || !attachment.containerId) {
-    return { error: "添付ファイルが見つかりません。" };
+    return { error: await localizeError("添付ファイルが見つかりません。") };
   }
 
   const document = await new DrizzleDocumentRepository().findById(attachment.containerId);
   if (!document) {
-    return { error: "ドキュメントが見つかりません。" };
+    return { error: await localizeError("ドキュメントが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(document.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "delete_documents", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await attachmentRepository.delete(attachment.id);

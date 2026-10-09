@@ -13,6 +13,8 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -67,7 +69,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
     if (error instanceof MemberRolesEmptyError || error instanceof MemberRolesInvalidError) {
-      return NextResponse.json({ error: "invalid_request", detail: error.message }, { status: 422 });
+      return NextResponse.json({ error: "invalid_request", detail: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

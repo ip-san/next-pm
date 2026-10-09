@@ -12,6 +12,7 @@ import { DrizzleReactionRepository } from "@/infrastructure/db/repositories/reac
 import { isJournalVisible } from "@/domain/journal/visibility";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, journalViewerFor, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type ToggleReactionActionState = {
   error: string | null;
@@ -33,12 +34,12 @@ export async function toggleJournalReactionAction(
     journalId: formData.get("journalId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   // Locating the journal has to come before the project is known, and the project is what
@@ -48,29 +49,29 @@ export async function toggleJournalReactionAction(
   const journalRepository = new DrizzleJournalRepository();
   const journal = await journalRepository.findById(parsed.data.journalId, { userId: user.id, canViewPrivateNotes: true });
   if (!journal) {
-    return { error: "コメントが見つかりません。" };
+    return { error: await localizeError("コメントが見つかりません。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(journal.journalizedId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   // Without this, reacting would be an oracle for whether a private note exists.
   if (!isJournalVisible(journal, journalViewerFor(user.id, actor, project))) {
-    return { error: "コメントが見つかりません。" };
+    return { error: await localizeError("コメントが見つかりません。") };
   }
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   await toggleReaction({ reactionRepository: new DrizzleReactionRepository() }, "Journal", journal.id, user.id);

@@ -12,6 +12,7 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { requireAdmin } from "@/interface/http/require-admin";
 import { positionMoveValues, type AdminActionState } from "./admin-action-state";
 import type { CustomFieldFormat, CustomizedType } from "@/domain/custom-field/entity";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -65,7 +66,7 @@ async function resolveAttributes(
   // apply to every project / every entry (mirrors Redmine's ProjectCustomField and
   // TimeEntryCustomField, neither of which has a custom_fields_trackers row).
   if (customizedType === "Issue" && attributes.trackerIds.length === 0) {
-    return { ok: false, error: "対象トラッカーを1つ以上選択してください。" };
+    return { ok: false, error: await localizeError("対象トラッカーを1つ以上選択してください。") };
   }
   const trackerIds = customizedType === "Issue" ? attributes.trackerIds : [];
 
@@ -73,15 +74,15 @@ async function resolveAttributes(
   // has (see application/custom-field/option-sets.ts); a project or time entry has no such list.
   const pickedFromProject = fieldFormat === "user" || fieldFormat === "version" || fieldFormat === "enumeration";
   if (pickedFromProject && customizedType !== "Issue") {
-    return { ok: false, error: "ユーザー・バージョン・列挙の形式はチケットのカスタムフィールドだけに指定できます。" };
+    return { ok: false, error: await localizeError("ユーザー・バージョン・列挙の形式はチケットのカスタムフィールドだけに指定できます。") };
   }
   if (pickedFromProject && attributes.defaultValue.trim().length > 0) {
-    return { ok: false, error: "ユーザー・バージョン・列挙の形式には既定値を指定できません。" };
+    return { ok: false, error: await localizeError("ユーザー・バージョン・列挙の形式には既定値を指定できません。") };
   }
 
   const trackers = await new DrizzleTrackerRepository().findByIds(trackerIds);
   if (trackers.length !== trackerIds.length) {
-    return { ok: false, error: "存在しないトラッカーが指定されました。" };
+    return { ok: false, error: await localizeError("存在しないトラッカーが指定されました。") };
   }
 
   // Visibility by role only exists for Issue, Project and TimeEntry fields (Redmine shows the selector for
@@ -89,7 +90,7 @@ async function resolveAttributes(
   // Redmine's multiple_supported: the list, enumeration, user and version formats only.
   const multipleOffered = fieldFormat === "list" || fieldFormat === "enumeration" || fieldFormat === "user" || fieldFormat === "version";
   if (attributes.multiple && !multipleOffered) {
-    return { ok: false, error: "複数の値は、リスト・列挙・ユーザー・バージョンの形式だけに指定できます。" };
+    return { ok: false, error: await localizeError("複数の値は、リスト・列挙・ユーザー・バージョンの形式だけに指定できます。") };
   }
   const multiple = multipleOffered && attributes.multiple;
 
@@ -100,7 +101,7 @@ async function resolveAttributes(
   if (!visibility.visible) {
     const givable = new Set((await new DrizzleRoleRepository().listGivable()).map((role) => role.id));
     if (visibility.roleIds.some((id) => !givable.has(id))) {
-      return { ok: false, error: "存在しないロールが指定されました。" };
+      return { ok: false, error: await localizeError("存在しないロールが指定されました。") };
     }
   }
 
@@ -112,10 +113,10 @@ async function resolveAttributes(
           .filter((v) => v.length > 0)
       : [];
   if ((fieldFormat === "list" || fieldFormat === "enumeration") && possibleValues.length === 0) {
-    return { ok: false, error: "リスト・列挙の形式には選択肢を1つ以上指定してください。" };
+    return { ok: false, error: await localizeError("リスト・列挙の形式には選択肢を1つ以上指定してください。") };
   }
   if (fieldFormat === "enumeration" && new Set(possibleValues).size !== possibleValues.length) {
-    return { ok: false, error: "同じ選択肢を2つ以上指定できません。" };
+    return { ok: false, error: await localizeError("同じ選択肢を2つ以上指定できません。") };
   }
 
   let defaultValue: string | null = null;
@@ -125,7 +126,7 @@ async function resolveAttributes(
       attributes.defaultValue,
     );
     if (!result.ok) {
-      return { ok: false, error: result.error };
+      return { ok: false, error: await localizeError(result.error) };
     }
     defaultValue = result.value;
   }
@@ -155,7 +156,7 @@ export async function createCustomFieldAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = createCustomFieldSchema.safeParse({
@@ -164,12 +165,12 @@ export async function createCustomFieldAction(
     fieldFormat: formData.get("fieldFormat"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const resolved = await resolveAttributes(parsed.data, parsed.data.customizedType, parsed.data.fieldFormat);
   if (!resolved.ok) {
-    return { error: resolved.error };
+    return { error: await localizeError(resolved.error) };
   }
 
   const repository = new DrizzleCustomFieldRepository();
@@ -192,25 +193,25 @@ export async function updateCustomFieldAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = editableAttributesSchema
     .extend({ customFieldId: z.string().uuid() })
     .safeParse({ ...editableAttributesFrom(formData), customFieldId: formData.get("customFieldId") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const repository = new DrizzleCustomFieldRepository();
   const existing = await repository.findById(parsed.data.customFieldId);
   if (!existing) {
-    return { error: "カスタムフィールドが見つかりません。" };
+    return { error: await localizeError("カスタムフィールドが見つかりません。") };
   }
 
   const resolved = await resolveAttributes(parsed.data, existing.customizedType, existing.fieldFormat);
   if (!resolved.ok) {
-    return { error: resolved.error };
+    return { error: await localizeError(resolved.error) };
   }
   await repository.update(existing.id, resolved.value);
 
@@ -224,12 +225,12 @@ export async function deleteCustomFieldAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = customFieldIdSchema.safeParse({ customFieldId: formData.get("customFieldId") });
   if (!parsed.success) {
-    return { error: "カスタムフィールドが見つかりません。" };
+    return { error: await localizeError("カスタムフィールドが見つかりません。") };
   }
 
   // Redmine's CustomFieldsController#destroy has no in-use guard: the field's custom_values are
@@ -248,7 +249,7 @@ export async function reorderCustomFieldAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = reorderCustomFieldSchema.safeParse({
@@ -256,7 +257,7 @@ export async function reorderCustomFieldAction(
     move: formData.get("move"),
   });
   if (!parsed.success) {
-    return { error: "並べ替えの指定が不正です。" };
+    return { error: await localizeError("並べ替えの指定が不正です。") };
   }
 
   // Redmine declares a bare `acts_as_positioned` on CustomField, so the position runs across

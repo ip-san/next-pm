@@ -37,6 +37,7 @@ import {
   canAttributeTimeEntryTo,
   type TimeEntryAccessContext,
 } from "@/interface/http/time-entry-access";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type LogTimeActionState = {
   error: string | null;
@@ -126,7 +127,7 @@ async function resolveTargetUserId(input: {
     canLogTimeForOtherUsers: input.canLogForOthers,
   });
   if (!allowed) {
-    return { ok: false, error: "指定したユーザー名義で工数を記録する権限がありません。" };
+    return { ok: false, error: await localizeError("指定したユーザー名義で工数を記録する権限がありません。") };
   }
   return { ok: true, userId: requested };
 }
@@ -142,7 +143,7 @@ async function resolveIssueId(
   }
   const issue = await new DrizzleIssueRepository().findById(issueId);
   if (!canAttachIssueToTimeEntry(issue, projectId, context)) {
-    return { ok: false, error: ISSUE_NOT_FOUND };
+    return { ok: false, error: await localizeError(ISSUE_NOT_FOUND) };
   }
   return { ok: true, issueId };
 }
@@ -171,29 +172,29 @@ export async function logTimeAction(
     userId: formData.get("userId") || null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
   if (!issue) {
-    return { error: ISSUE_NOT_FOUND };
+    return { error: await localizeError(ISSUE_NOT_FOUND) };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   // canAttachIssueToTimeEntry carries the log_time check as well as the visibility one.
   if (!canAttachIssueToTimeEntry(issue, project.id, { userId: user.id, actor, userGroupIds, projectContext })) {
-    return { error: ISSUE_NOT_FOUND };
+    return { error: await localizeError(ISSUE_NOT_FOUND) };
   }
 
   const target = await resolveTargetUserId({
@@ -205,12 +206,12 @@ export async function logTimeAction(
     canLogForOthers: can({ permission: "log_time_for_other_users", project: projectContext, actor }),
   });
   if (!target.ok) {
-    return { error: target.error };
+    return { error: await localizeError(target.error) };
   }
 
   const customFieldError = await customFieldErrorIn(formData, { full: true }, customFieldViewerFor(user, roleIds));
   if (customFieldError) {
-    return { error: customFieldError };
+    return { error: await localizeError(customFieldError) };
   }
 
   try {
@@ -227,10 +228,10 @@ export async function logTimeAction(
     await saveCustomFieldValues(entry.id, formData, customFieldViewerFor(user, roleIds));
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     if (error instanceof CustomFieldValidationError) {
-      return { error: firstFieldError(error) };
+      return { error: await localizeError(firstFieldError(error)) };
     }
     throw error;
   }
@@ -268,28 +269,28 @@ export async function createTimeEntryAction(
     userId: formData.get("userId") || null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const projectContext = toAuthorizationProject(project);
   const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "log_time", project: projectContext, actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const issue = await resolveIssueId(parsed.data.issueId, project.id, { userId: user.id, actor, userGroupIds, projectContext });
   if (!issue.ok) {
-    return { error: issue.error };
+    return { error: await localizeError(issue.error) };
   }
 
   const target = await resolveTargetUserId({
@@ -301,12 +302,12 @@ export async function createTimeEntryAction(
     canLogForOthers: can({ permission: "log_time_for_other_users", project: projectContext, actor }),
   });
   if (!target.ok) {
-    return { error: target.error };
+    return { error: await localizeError(target.error) };
   }
 
   const customFieldError = await customFieldErrorIn(formData, { full: true }, customFieldViewerFor(user, roleIds));
   if (customFieldError) {
-    return { error: customFieldError };
+    return { error: await localizeError(customFieldError) };
   }
 
   try {
@@ -323,10 +324,10 @@ export async function createTimeEntryAction(
     await saveCustomFieldValues(entry.id, formData, customFieldViewerFor(user, roleIds));
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     if (error instanceof CustomFieldValidationError) {
-      return { error: firstFieldError(error) };
+      return { error: await localizeError(firstFieldError(error)) };
     }
     throw error;
   }
@@ -345,12 +346,12 @@ export async function createTimeEntryAction(
 async function loadEditableEntry(projectIdentifier: string, entryId: string) {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false as const, error: "ログインしてください。" };
+    return { ok: false as const, error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
   if (!project) {
-    return { ok: false as const, error: "プロジェクトが見つかりません。" };
+    return { ok: false as const, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const timeEntryRepository = new DrizzleTimeEntryRepository();
@@ -358,7 +359,7 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
   // The project comes from the entry, never from the form: a form naming a project the
   // actor has rights in can't be used to reach an entry that lives somewhere else.
   if (!entry || entry.projectId !== project.id) {
-    return { ok: false as const, error: NOT_FOUND };
+    return { ok: false as const, error: await localizeError(NOT_FOUND) };
   }
 
   const projectContext = toAuthorizationProject(project);
@@ -372,7 +373,7 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
     issueById: new Map(issue ? [[issue.id, issue]] : []),
   };
   if (!canAccessTimeEntry(entry, context)) {
-    return { ok: false as const, error: NOT_FOUND };
+    return { ok: false as const, error: await localizeError(NOT_FOUND) };
   }
   if (
     !canEditTimeEntry({
@@ -383,7 +384,7 @@ async function loadEditableEntry(projectIdentifier: string, entryId: string) {
       canEditOwnTimeEntries: can({ permission: "edit_own_time_entries", project: projectContext, actor }),
     })
   ) {
-    return { ok: false as const, error: "この操作を行う権限がありません。" };
+    return { ok: false as const, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   return { ok: true as const, user, project, projectContext, actor, userGroupIds, roleIds, entry, timeEntryRepository };
@@ -415,12 +416,12 @@ export async function updateTimeEntryAction(
     userId: formData.get("userId") || null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const loaded = await loadEditableEntry(parsed.data.projectIdentifier, parsed.data.entryId);
   if (!loaded.ok) {
-    return { error: loaded.error };
+    return { error: await localizeError(loaded.error) };
   }
   const accessContext = {
     userId: loaded.user.id,
@@ -436,7 +437,7 @@ export async function updateTimeEntryAction(
       ? { ok: true as const, issueId: loaded.entry.issueId }
       : await resolveIssueId(parsed.data.issueId, loaded.entry.projectId, accessContext);
   if (!issue.ok) {
-    return { error: issue.error };
+    return { error: await localizeError(issue.error) };
   }
 
   const target = await resolveTargetUserId({
@@ -448,12 +449,12 @@ export async function updateTimeEntryAction(
     canLogForOthers: can({ permission: "log_time_for_other_users", project: loaded.projectContext, actor: loaded.actor }),
   });
   if (!target.ok) {
-    return { error: target.error };
+    return { error: await localizeError(target.error) };
   }
 
   const customFieldError = await customFieldErrorIn(formData, { full: false }, customFieldViewerFor(loaded.user, loaded.roleIds));
   if (customFieldError) {
-    return { error: customFieldError };
+    return { error: await localizeError(customFieldError) };
   }
 
   try {
@@ -472,10 +473,10 @@ export async function updateTimeEntryAction(
     await saveCustomFieldValues(loaded.entry.id, formData, customFieldViewerFor(loaded.user, loaded.roleIds));
   } catch (error) {
     if (error instanceof InvalidTimeEntryError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     if (error instanceof CustomFieldValidationError) {
-      return { error: firstFieldError(error) };
+      return { error: await localizeError(firstFieldError(error)) };
     }
     throw error;
   }
@@ -505,14 +506,14 @@ export async function deleteTimeEntryAction(
     entryId: formData.get("entryId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   // Redmine routes destroy through the same editable_by? check as edit — there is no
   // separate delete_time_entries permission.
   const loaded = await loadEditableEntry(parsed.data.projectIdentifier, parsed.data.entryId);
   if (!loaded.ok) {
-    return { error: loaded.error };
+    return { error: await localizeError(loaded.error) };
   }
 
   await deleteTimeEntry(
@@ -563,11 +564,11 @@ export async function bulkUpdateTimeEntriesAction(
     comments: typeof formData.get("comments") === "string" ? (formData.get("comments") as string) : null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", message: null };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), message: null };
   }
   const { activityId, hours, spentOn, comments } = parsed.data;
   if (activityId === null && hours === null && spentOn === null && (comments === null || comments.trim().length === 0)) {
-    return { error: "変更する項目を1つ以上入力してください。", message: null };
+    return { error: await localizeError("変更する項目を1つ以上入力してください。"), message: null };
   }
 
   let saved = 0;
@@ -601,5 +602,5 @@ export async function bulkUpdateTimeEntriesAction(
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/time-entries`);
   const message = skipped > 0 ? `${saved}件を更新しました。${skipped}件は更新できませんでした。` : `${saved}件を更新しました。`;
-  return { error: saved === 0 ? "更新できる工数がありませんでした。" : null, message };
+  return { error: await localizeError(saved === 0 ? "更新できる工数がありませんでした。" : null), message: await localizeError(message) };
 }

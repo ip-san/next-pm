@@ -1168,6 +1168,15 @@ const JA = {
   "export.users.statusLocked": "ロック中",
   "export.yes": "はい",
   "export.no": "いいえ",
+  "my.mailNotification.all": "参加しているプロジェクトのすべての通知",
+  "my.mailNotification.only_my_events": "ウォッチ中または関係しているものだけ",
+  "my.mailNotification.only_assigned": "担当しているものだけ",
+  "my.mailNotification.only_owner": "自分が作成したものだけ",
+  "my.mailNotification.none": "通知しない",
+  "webhooks.event.issue.created": "チケットの作成",
+  "webhooks.event.issue.updated": "チケットの更新",
+  "webhooks.event.news.created": "ニュースの作成",
+  "webhooks.event.wiki_page.updated": "Wikiページの更新",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2335,6 +2344,15 @@ const EN: Record<MessageKey, string> = {
   "export.users.statusLocked": "Locked",
   "export.yes": "Yes",
   "export.no": "No",
+  "my.mailNotification.all": "For any event on all my projects",
+  "my.mailNotification.only_my_events": "Only for things I watch or I'm involved in",
+  "my.mailNotification.only_assigned": "Only for things I am assigned to",
+  "my.mailNotification.only_owner": "Only for things I am the owner of",
+  "my.mailNotification.none": "No events",
+  "webhooks.event.issue.created": "Issue created",
+  "webhooks.event.issue.updated": "Issue updated",
+  "webhooks.event.news.created": "News created",
+  "webhooks.event.wiki_page.updated": "Wiki page updated",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

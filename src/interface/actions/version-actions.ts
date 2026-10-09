@@ -17,6 +17,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type VersionActionState = {
   error: string | null;
@@ -46,22 +47,22 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
     customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const customFieldValues = versionCustomFieldValuesFrom(formData, parsed.data.customFieldIds);
@@ -70,7 +71,7 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
     await validateVersionCustomFieldValues(new DrizzleCustomFieldRepository(), customFieldValues, viewer);
   } catch (error) {
     if (error instanceof CustomFieldValidationError) {
-      return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+      return { error: await localizeError(Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。") };
     }
     throw error;
   }
@@ -91,7 +92,7 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
     createdId = created.id;
   } catch (error) {
     if (error instanceof InvalidVersionError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -106,7 +107,7 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
       );
     } catch (error) {
       if (error instanceof CustomFieldValidationError) {
-        return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+        return { error: await localizeError(Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。") };
       }
       throw error;
     }
@@ -139,28 +140,28 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
     customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const versionRepository = new DrizzleVersionRepository();
   const version = await versionRepository.findById(parsed.data.versionId);
   if (!version || version.projectId !== project.id) {
-    return { error: "バージョンが見つかりません。" };
+    return { error: await localizeError("バージョンが見つかりません。") };
   }
 
   const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const customFieldValues = versionCustomFieldValuesFrom(formData, parsed.data.customFieldIds);
@@ -169,7 +170,7 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
     await validateVersionCustomFieldValues(new DrizzleCustomFieldRepository(), customFieldValues, viewer);
   } catch (error) {
     if (error instanceof CustomFieldValidationError) {
-      return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+      return { error: await localizeError(Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。") };
     }
     throw error;
   }
@@ -189,7 +190,7 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
     );
   } catch (error) {
     if (error instanceof InvalidVersionError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -204,7 +205,7 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
       );
     } catch (error) {
       if (error instanceof CustomFieldValidationError) {
-        return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+        return { error: await localizeError(Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。") };
       }
       throw error;
     }
@@ -225,35 +226,35 @@ export async function deleteVersionAction(_prevState: VersionActionState, formDa
     versionId: formData.get("versionId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const versionRepository = new DrizzleVersionRepository();
   const version = await versionRepository.findById(parsed.data.versionId);
   if (!version || version.projectId !== project.id) {
-    return { error: "バージョンが見つかりません。" };
+    return { error: await localizeError("バージョンが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   try {
     await deleteVersion({ versionRepository, attachmentRepository: new DrizzleAttachmentRepository() }, parsed.data.versionId);
   } catch (error) {
     if (error instanceof VersionNotDeletableError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }

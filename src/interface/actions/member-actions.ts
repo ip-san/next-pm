@@ -19,6 +19,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { userVisibilityFor } from "@/interface/http/user-visibility";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type MemberActionState = {
   error: string | null;
@@ -29,15 +30,15 @@ type ManageMembersGuard = { error: string; project?: undefined } | { error?: und
 async function requireManageMembers(projectIdentifier: string): Promise<ManageMembersGuard> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_members", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   return { project };
 }
@@ -55,16 +56,16 @@ export async function addMemberAction(_prevState: MemberActionState, formData: F
     roleIds: formData.getAll("roleIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const guard = await requireManageMembers(parsed.data.projectIdentifier);
   if (!guard.project) {
-    return { error: guard.error };
+    return { error: await localizeError(guard.error) };
   }
 
   if (parsed.data.roleIds.length === 0) {
-    return { error: "ロールを1つ以上選択してください。" };
+    return { error: await localizeError("ロールを1つ以上選択してください。") };
   }
 
   const [targetUser, roles] = await Promise.all([
@@ -79,17 +80,17 @@ export async function addMemberAction(_prevState: MemberActionState, formData: F
   const actor = await currentUserFromCookies();
   const canSeeTarget = targetUser ? (await userVisibilityFor(actor))(targetUser.id) : false;
   if (!targetUser || !canSeeTarget) {
-    return { error: "指定されたログインIDのユーザーが見つかりません。" };
+    return { error: await localizeError("指定されたログインIDのユーザーが見つかりません。") };
   }
   const givableIds = new Set(roles.map((role) => role.id));
   if (parsed.data.roleIds.some((roleId) => !givableIds.has(roleId))) {
-    return { error: "存在しないロールが指定されました。" };
+    return { error: await localizeError("存在しないロールが指定されました。") };
   }
 
   const memberRepository = new DrizzleMemberRepository();
   const alreadyMember = await memberRepository.findDirectByUserAndProject(targetUser.id, guard.project.id);
   if (alreadyMember) {
-    return { error: "既にこのプロジェクトのメンバーです。" };
+    return { error: await localizeError("既にこのプロジェクトのメンバーです。") };
   }
 
   await memberRepository.create({
@@ -117,16 +118,16 @@ export async function addGroupMemberAction(_prevState: MemberActionState, formDa
     roleIds: formData.getAll("roleIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const guard = await requireManageMembers(parsed.data.projectIdentifier);
   if (!guard.project) {
-    return { error: guard.error };
+    return { error: await localizeError(guard.error) };
   }
 
   if (parsed.data.roleIds.length === 0) {
-    return { error: "ロールを1つ以上選択してください。" };
+    return { error: await localizeError("ロールを1つ以上選択してください。") };
   }
 
   const groupRepository = new DrizzleGroupRepository();
@@ -139,14 +140,14 @@ export async function addGroupMemberAction(_prevState: MemberActionState, formDa
     memberRepository.listByGroup(parsed.data.groupId),
   ]);
   if (!group) {
-    return { error: "指定されたグループが見つかりません。" };
+    return { error: await localizeError("指定されたグループが見つかりません。") };
   }
   const givableIds = new Set(roles.map((role) => role.id));
   if (parsed.data.roleIds.some((roleId) => !givableIds.has(roleId))) {
-    return { error: "存在しないロールが指定されました。" };
+    return { error: await localizeError("存在しないロールが指定されました。") };
   }
   if (existingGroupMemberships.some((m) => m.projectId === guard.project.id)) {
-    return { error: "このグループは既にこのプロジェクトのメンバーです。" };
+    return { error: await localizeError("このグループは既にこのプロジェクトのメンバーです。") };
   }
 
   await addGroupToProject({ groupRepository, memberRepository }, { groupId: group.id, projectId: guard.project.id, roleIds: parsed.data.roleIds });
@@ -168,18 +169,18 @@ export async function updateMemberRolesAction(_prevState: MemberActionState, for
     roleIds: formData.getAll("roleIds"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
   // The membership's own project decides the actor's roles, not the identifier in the form.
   const memberRepository = new DrizzleMemberRepository();
   const member = await memberRepository.findById(parsed.data.memberId);
   if (!member) {
-    return { error: "メンバーが見つかりません。" };
+    return { error: await localizeError("メンバーが見つかりません。") };
   }
   const { actor } = await resolveActor(user, member.projectId);
 
@@ -195,13 +196,13 @@ export async function updateMemberRolesAction(_prevState: MemberActionState, for
     );
   } catch (error) {
     if (error instanceof UpdateMemberRolesNotPermittedError) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
     if (error instanceof MemberRolesEmptyError) {
-      return { error: "ロールを1つ以上選択してください。" };
+      return { error: await localizeError("ロールを1つ以上選択してください。") };
     }
     if (error instanceof MemberRolesInvalidError) {
-      return { error: "存在しないロールが指定されました。" };
+      return { error: await localizeError("存在しないロールが指定されました。") };
     }
     throw error;
   }
@@ -221,19 +222,19 @@ export async function removeMemberAction(_prevState: MemberActionState, formData
     memberId: formData.get("memberId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const guard = await requireManageMembers(parsed.data.projectIdentifier);
   if (!guard.project) {
-    return { error: guard.error };
+    return { error: await localizeError(guard.error) };
   }
 
   const memberRepository = new DrizzleMemberRepository();
   const members = await memberRepository.listByProject(guard.project.id);
   const target = members.find((m) => m.id === parsed.data.memberId);
   if (!target) {
-    return { error: "メンバーが見つかりません。" };
+    return { error: await localizeError("メンバーが見つかりません。") };
   }
 
   await memberRepository.delete(target.id);

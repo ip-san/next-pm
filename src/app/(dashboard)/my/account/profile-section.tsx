@@ -4,7 +4,7 @@ import type { Locale } from "@/domain/i18n/locales";
 import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateMyAccountAction, type MyAccountActionState } from "@/interface/actions/my-account-actions";
-import { MAIL_NOTIFICATION_LABELS, MAIL_NOTIFICATION_OPTIONS, type MailNotificationOption } from "@/domain/notification/mail-notification";
+import { MAIL_NOTIFICATION_OPTIONS, type MailNotificationOption } from "@/domain/notification/mail-notification";
 import type { CommentsSorting } from "@/domain/user-preferences/entity";
 
 const initialState: MyAccountActionState = { error: null, ok: false };
@@ -82,7 +82,7 @@ export function ProfileSection({ locale = "ja", values }: { values: ProfileValue
           <select name="mailNotification" defaultValue={values.mailNotification} className="border rounded px-2 py-1">
             {MAIL_NOTIFICATION_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {MAIL_NOTIFICATION_LABELS[option]}
+                {t(`my.mailNotification.${option}`)}
               </option>
             ))}
           </select>

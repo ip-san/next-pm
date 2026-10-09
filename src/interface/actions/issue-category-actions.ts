@@ -9,6 +9,7 @@ import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type IssueCategoryActionState = {
   error: string | null;
@@ -38,27 +39,27 @@ export async function createIssueCategoryAction(_prevState: IssueCategoryActionS
     assignedToId: assignedToRaw ? assignedToRaw : null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const assigneeError = await assertAssignableOrNull(project.id, parsed.data.assignedToId);
   if (assigneeError) {
-    return { error: assigneeError };
+    return { error: await localizeError(assigneeError) };
   }
 
   await new DrizzleIssueCategoryRepository().create({ projectId: project.id, name: parsed.data.name, assignedToId: parsed.data.assignedToId });
@@ -83,33 +84,33 @@ export async function updateIssueCategoryAction(_prevState: IssueCategoryActionS
     assignedToId: assignedToRaw ? assignedToRaw : null,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const categoryRepository = new DrizzleIssueCategoryRepository();
   const category = await categoryRepository.findById(parsed.data.categoryId);
   if (!category || category.projectId !== project.id) {
-    return { error: "カテゴリが見つかりません。" };
+    return { error: await localizeError("カテゴリが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const assigneeError = await assertAssignableOrNull(project.id, parsed.data.assignedToId);
   if (assigneeError) {
-    return { error: assigneeError };
+    return { error: await localizeError(assigneeError) };
   }
 
   await categoryRepository.update(parsed.data.categoryId, { name: parsed.data.name, assignedToId: parsed.data.assignedToId });
@@ -129,28 +130,28 @@ export async function deleteIssueCategoryAction(_prevState: IssueCategoryActionS
     categoryId: formData.get("categoryId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const categoryRepository = new DrizzleIssueCategoryRepository();
   const category = await categoryRepository.findById(parsed.data.categoryId);
   if (!category || category.projectId !== project.id) {
-    return { error: "カテゴリが見つかりません。" };
+    return { error: await localizeError("カテゴリが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_issue_categories", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   // Mirrors the REST route: issues assigned to this category simply lose it (no reassignment

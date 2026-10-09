@@ -19,6 +19,7 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type ToggleWatchActionState = {
   error: string | null;
@@ -35,30 +36,30 @@ export async function toggleIssueWatchAction(_prevState: ToggleWatchActionState,
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "view_issues", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   await toggleWatch({ watcherRepository: new DrizzleWatcherRepository() }, "Issue", issue.id, user.id);
@@ -86,35 +87,35 @@ export async function addIssueWatcherAction(_prevState: WatcherActionState, form
     userId: formData.get("userId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "add_issue_watchers", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const targetMember = await new DrizzleMemberRepository().findByUserAndProject(parsed.data.userId, project.id);
   if (!targetMember) {
-    return { error: "指定されたユーザーはこのプロジェクトのメンバーではありません。" };
+    return { error: await localizeError("指定されたユーザーはこのプロジェクトのメンバーではありません。") };
   }
 
   await new DrizzleWatcherRepository().watch("Issue", issue.id, parsed.data.userId);
@@ -136,30 +137,30 @@ export async function removeIssueWatcherAction(_prevState: WatcherActionState, f
     userId: formData.get("userId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const issue = await new DrizzleIssueRepository().findById(parsed.data.issueId);
   if (!issue) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(issue.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor, userGroupIds } = await resolveActor(user, project.id);
   if (!can({ permission: "delete_issue_watchers", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isPrivateIssueVisible(issue, user.id, userGroupIds, issuesVisibilityRoles(actor))) {
-    return { error: "チケットが見つかりません。" };
+    return { error: await localizeError("チケットが見つかりません。") };
   }
 
   await new DrizzleWatcherRepository().unwatch("Issue", issue.id, parsed.data.userId);
@@ -181,27 +182,27 @@ export async function toggleNewsWatchAction(_prevState: ToggleWatchActionState, 
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const item = await new DrizzleNewsRepository().findById(parsed.data.newsId);
   if (!item) {
-    return { error: "ニュースが見つかりません。" };
+    return { error: await localizeError("ニュースが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(item.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "view_news", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await toggleWatch({ watcherRepository: new DrizzleWatcherRepository() }, "News", item.id, user.id);
@@ -223,32 +224,32 @@ export async function toggleMessageWatchAction(_prevState: ToggleWatchActionStat
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const topic = await new DrizzleMessageRepository().findById(parsed.data.messageId);
   if (!topic || topic.boardId !== parsed.data.boardId) {
-    return { error: "トピックが見つかりません。" };
+    return { error: await localizeError("トピックが見つかりません。") };
   }
 
   const board = await new DrizzleBoardRepository().findById(topic.boardId);
   if (!board) {
-    return { error: "フォーラムが見つかりません。" };
+    return { error: await localizeError("フォーラムが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(board.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "view_messages", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await toggleWatch({ watcherRepository: new DrizzleWatcherRepository() }, "Message", topic.id, user.id);
@@ -270,27 +271,27 @@ export async function toggleWikiPageWatchAction(_prevState: ToggleWatchActionSta
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const page = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
   if (!page) {
-    return { error: "Wikiページが見つかりません。" };
+    return { error: await localizeError("Wikiページが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(page.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "view_wiki_pages", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await toggleWatch({ watcherRepository: new DrizzleWatcherRepository() }, "WikiPage", page.id, user.id);
@@ -327,27 +328,27 @@ async function resolveWikiPageWatcherRequest(
     userId: formData.get("userId"),
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { ok: false, error: "ログインしてください。" };
+    return { ok: false, error: await localizeError("ログインしてください。") };
   }
 
   const page = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
   if (!page) {
-    return { ok: false, error: "Wikiページが見つかりません。" };
+    return { ok: false, error: await localizeError("Wikiページが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(page.projectId);
   if (!project) {
-    return { ok: false, error: "プロジェクトが見つかりません。" };
+    return { ok: false, error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission, project: toAuthorizationProject(project), actor })) {
-    return { ok: false, error: "この操作を行う権限がありません。" };
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
   }
 
   return { ok: true, data: parsed.data, page, project };
@@ -356,7 +357,7 @@ async function resolveWikiPageWatcherRequest(
 export async function addWikiPageWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
   const resolved = await resolveWikiPageWatcherRequest(formData, "add_wiki_page_watchers");
   if (!resolved.ok) {
-    return { error: resolved.error };
+    return { error: await localizeError(resolved.error) };
   }
 
   const members = await new DrizzleMemberRepository().listByProject(resolved.project.id);
@@ -365,7 +366,7 @@ export async function addWikiPageWatcherAction(_prevState: WatcherActionState, f
   );
   const eligible = filterMembersWithPermission(members, rolesById, "view_wiki_pages");
   if (!eligible.some((member) => member.userId === resolved.data.userId)) {
-    return { error: "指定されたユーザーはこのプロジェクトの Wiki を閲覧できません。" };
+    return { error: await localizeError("指定されたユーザーはこのプロジェクトの Wiki を閲覧できません。") };
   }
 
   await new DrizzleWatcherRepository().watch("WikiPage", resolved.page.id, resolved.data.userId);
@@ -377,7 +378,7 @@ export async function addWikiPageWatcherAction(_prevState: WatcherActionState, f
 export async function removeWikiPageWatcherAction(_prevState: WatcherActionState, formData: FormData): Promise<WatcherActionState> {
   const resolved = await resolveWikiPageWatcherRequest(formData, "delete_wiki_page_watchers");
   if (!resolved.ok) {
-    return { error: resolved.error };
+    return { error: await localizeError(resolved.error) };
   }
 
   await new DrizzleWatcherRepository().unwatch("WikiPage", resolved.page.id, resolved.data.userId);
@@ -402,17 +403,17 @@ const messageWatcherSchema = z.object({
 async function loadWatchableTopic(messageId: string, boardId: string) {
   const topic = await new DrizzleMessageRepository().findById(messageId);
   if (!topic || topic.boardId !== boardId || topic.parentId !== null) {
-    return { error: "トピックが見つかりません。" as const, topic: null, project: null };
+    return { error: await localizeError("トピックが見つかりません。" as const), topic: null, project: null };
   }
 
   const board = await new DrizzleBoardRepository().findById(topic.boardId);
   if (!board) {
-    return { error: "フォーラムが見つかりません。" as const, topic: null, project: null };
+    return { error: await localizeError("フォーラムが見つかりません。" as const), topic: null, project: null };
   }
 
   const project = await new DrizzleProjectRepository().findById(board.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" as const, topic: null, project: null };
+    return { error: await localizeError("プロジェクトが見つかりません。" as const), topic: null, project: null };
   }
 
   return { error: null, topic, project };
@@ -426,27 +427,27 @@ export async function addMessageWatcherAction(_prevState: WatcherActionState, fo
     userId: formData.get("userId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const loaded = await loadWatchableTopic(parsed.data.messageId, parsed.data.boardId);
   if (loaded.topic === null) {
-    return { error: loaded.error };
+    return { error: await localizeError(loaded.error) };
   }
 
   const { actor } = await resolveActor(user, loaded.project.id);
   if (!can({ permission: "add_message_watchers", project: toAuthorizationProject(loaded.project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const targetMember = await new DrizzleMemberRepository().findByUserAndProject(parsed.data.userId, loaded.project.id);
   if (!targetMember) {
-    return { error: "指定されたユーザーはこのプロジェクトのメンバーではありません。" };
+    return { error: await localizeError("指定されたユーザーはこのプロジェクトのメンバーではありません。") };
   }
 
   await new DrizzleWatcherRepository().watch("Message", loaded.topic.id, parsed.data.userId);
@@ -463,22 +464,22 @@ export async function removeMessageWatcherAction(_prevState: WatcherActionState,
     userId: formData.get("userId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const loaded = await loadWatchableTopic(parsed.data.messageId, parsed.data.boardId);
   if (loaded.topic === null) {
-    return { error: loaded.error };
+    return { error: await localizeError(loaded.error) };
   }
 
   const { actor } = await resolveActor(user, loaded.project.id);
   if (!can({ permission: "delete_message_watchers", project: toAuthorizationProject(loaded.project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await new DrizzleWatcherRepository().unwatch("Message", loaded.topic.id, parsed.data.userId);

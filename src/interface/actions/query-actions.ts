@@ -15,6 +15,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleQueryRepository } from "@/infrastructure/db/repositories/query-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type SaveQueryActionState = {
   error: string | null;
@@ -77,12 +78,12 @@ async function resolveQueryActor(
   type: QueryType,
 ): Promise<{ error: string } | { actor: QueryActor; projectId: string | null; roleIds: string[] }> {
   const user = await currentUserFromCookies();
-  if (!user) return { error: "ログインしてください。" };
+  if (!user) return { error: await localizeError("ログインしてください。") };
 
   if (projectIdentifier === null) {
     const visible = await listVisibleProjectContexts(user, viewPermissionFor(type));
     if (visible.length === 0 && !user.isAdmin) {
-      return { error: "この操作を行う権限がありません。" };
+      return { error: await localizeError("この操作を行う権限がありません。") };
     }
     return {
       projectId: null,
@@ -97,12 +98,12 @@ async function resolveQueryActor(
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
-  if (!project) return { error: "プロジェクトが見つかりません。" };
+  if (!project) return { error: await localizeError("プロジェクトが見つかりません。") };
 
   const { actor, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   if (!can({ permission: viewPermissionFor(type), project: projectContext, actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   return {
@@ -149,11 +150,11 @@ export async function saveQueryAction(_prevState: SaveQueryActionState, formData
     visibility: formData.get("visibility") ?? "private",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const resolved = await resolveQueryActor(parsed.data.projectIdentifier, parsed.data.type);
-  if ("error" in resolved) return { error: resolved.error };
+  if ("error" in resolved) return { error: await localizeError(resolved.error) };
 
   try {
     await saveQuery(
@@ -166,7 +167,7 @@ export async function saveQueryAction(_prevState: SaveQueryActionState, formData
       },
     );
   } catch (error) {
-    return { error: toMessage(error) };
+    return { error: await localizeError(toMessage(error)) };
   }
 
   redirect(listPath(parsed.data.projectIdentifier, parsed.data.type));
@@ -181,11 +182,11 @@ export async function updateQueryAction(_prevState: SaveQueryActionState, formDa
     visibility: formData.get("visibility") ?? "private",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const resolved = await resolveQueryActor(parsed.data.projectIdentifier, parsed.data.type);
-  if ("error" in resolved) return { error: resolved.error };
+  if ("error" in resolved) return { error: await localizeError(resolved.error) };
 
   try {
     await updateQuery(
@@ -198,7 +199,7 @@ export async function updateQueryAction(_prevState: SaveQueryActionState, formDa
       },
     );
   } catch (error) {
-    return { error: toMessage(error) };
+    return { error: await localizeError(toMessage(error)) };
   }
 
   redirect(`${listPath(parsed.data.projectIdentifier, parsed.data.type)}?query_id=${parsed.data.queryId}`);
@@ -213,11 +214,11 @@ export async function deleteQueryAction(_prevState: SaveQueryActionState, formDa
       queryId: formData.get("queryId"),
     });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const resolved = await resolveQueryActor(parsed.data.projectIdentifier, parsed.data.type);
-  if ("error" in resolved) return { error: resolved.error };
+  if ("error" in resolved) return { error: await localizeError(resolved.error) };
 
   try {
     await deleteQuery(
@@ -225,7 +226,7 @@ export async function deleteQueryAction(_prevState: SaveQueryActionState, formDa
       { queryId: parsed.data.queryId, projectId: resolved.projectId, actor: resolved.actor },
     );
   } catch (error) {
-    return { error: toMessage(error) };
+    return { error: await localizeError(toMessage(error)) };
   }
 
   redirect(listPath(parsed.data.projectIdentifier, parsed.data.type));
@@ -241,11 +242,11 @@ export async function copyQueryAction(_prevState: SaveQueryActionState, formData
       name: formData.get("name"),
     });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const resolved = await resolveQueryActor(parsed.data.projectIdentifier, parsed.data.type);
-  if ("error" in resolved) return { error: resolved.error };
+  if ("error" in resolved) return { error: await localizeError(resolved.error) };
 
   try {
     await copyQuery(
@@ -259,7 +260,7 @@ export async function copyQueryAction(_prevState: SaveQueryActionState, formData
       },
     );
   } catch (error) {
-    return { error: toMessage(error) };
+    return { error: await localizeError(toMessage(error)) };
   }
 
   redirect(listPath(parsed.data.projectIdentifier, parsed.data.type));

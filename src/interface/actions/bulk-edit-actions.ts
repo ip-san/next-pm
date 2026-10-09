@@ -25,6 +25,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type BulkEditActionState = {
   error: string | null;
@@ -73,17 +74,17 @@ export async function bulkUpdateIssuesAction(
     notes: formData.get("notes") ?? "",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", message: null };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), message: null };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", message: null };
+    return { error: await localizeError("ログインしてください。"), message: null };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。", message: null };
+    return { error: await localizeError("プロジェクトが見つかりません。"), message: null };
   }
 
   const { actor, roleIds, userGroupIds } = await resolveActor(user, project.id);
@@ -91,7 +92,7 @@ export async function bulkUpdateIssuesAction(
   const canEditAny = can({ permission: "edit_issues", project: projectContext, actor });
   const canEditOwn = can({ permission: "edit_own_issues", project: projectContext, actor });
   if (!canEditAny && !canEditOwn) {
-    return { error: "この操作を行う権限がありません。", message: null };
+    return { error: await localizeError("この操作を行う権限がありません。"), message: null };
   }
 
   const changes: IssueUpdate = {};
@@ -115,7 +116,7 @@ export async function bulkUpdateIssuesAction(
   if (parsed.data.doneRatio.trim().length > 0) {
     const doneRatio = Number(parsed.data.doneRatio);
     if (!Number.isFinite(doneRatio) || doneRatio < 0 || doneRatio > 100) {
-      return { error: "進捗率は0から100の数値で入力してください。", message: null };
+      return { error: await localizeError("進捗率は0から100の数値で入力してください。"), message: null };
     }
     changes.doneRatio = doneRatio;
   }
@@ -137,7 +138,7 @@ export async function bulkUpdateIssuesAction(
     Object.keys(customFieldValues).length === 0 &&
     parsed.data.notes.trim().length === 0
   ) {
-    return { error: "変更内容またはコメントを指定してください。", message: null };
+    return { error: await localizeError("変更内容またはコメントを指定してください。"), message: null };
   }
 
   const issueRepository = new DrizzleIssueRepository();
@@ -231,6 +232,6 @@ export async function bulkUpdateIssuesAction(
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/issues`);
   return {
     error: null,
-    message: skipped > 0 ? `${updated}件更新しました（${skipped}件はスキップされました）。` : `${updated}件更新しました。`,
+    message: await localizeError(skipped > 0 ? `${updated}件更新しました（${skipped}件はスキップされました）。` : `${updated}件更新しました。`),
   };
 }

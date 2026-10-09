@@ -17,6 +17,7 @@ import { resolveAppOrigin } from "@/interface/http/app-origin";
 import { currentLocale } from "@/interface/http/locale";
 import { startPendingTwofaSetup } from "@/interface/http/twofa-pending-cookie";
 import { establishSession } from "@/interface/http/session";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type RegisterActionState = {
   error: string | null;
@@ -44,7 +45,7 @@ export async function registerAction(
     password: formData.get("password"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", outcome: null };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), outcome: null };
   }
 
   const settings = await loadAuthSettings(new DrizzleSettingsRepository());
@@ -62,7 +63,7 @@ export async function registerAction(
     );
   } catch (error) {
     if (error instanceof SelfRegistrationDisabledError || error instanceof RegistrationInputError) {
-      return { error: error.message, outcome: null };
+      return { error: await localizeError(error.message), outcome: null };
     }
     throw error;
   }

@@ -4,7 +4,7 @@ import type { Locale } from "@/domain/i18n/locales";
 import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { saveWebhookAction, type WebhookActionState } from "@/interface/actions/webhook-actions";
-import { WEBHOOK_EVENTS, WEBHOOK_EVENT_LABELS } from "@/domain/webhook/events";
+import { WEBHOOK_EVENTS } from "@/domain/webhook/events";
 import type { Webhook } from "@/domain/webhook/entity";
 
 const initialState: WebhookActionState = { error: null };
@@ -50,7 +50,7 @@ export function WebhookForm({ locale = "ja", webhook, projects }: { webhook: Web
         {WEBHOOK_EVENTS.map((event) => (
           <label key={event} className="flex items-center gap-2">
             <input type="checkbox" name="events" value={event} defaultChecked={webhook?.events.includes(event) ?? false} />
-            {WEBHOOK_EVENT_LABELS[event]}
+            {t(`webhooks.event.${event}`)}
             <code className="text-xs text-gray-500">{event}</code>
           </label>
         ))}

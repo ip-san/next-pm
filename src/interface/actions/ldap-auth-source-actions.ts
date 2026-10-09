@@ -7,6 +7,7 @@ import type { LdapAuthSourceInput } from "@/domain/ldap/auth-source";
 import { loadTotpEncryptionKeyFromEnv } from "@/domain/twofa/encryption-key";
 import { DrizzleLdapAuthSourceRepository } from "@/infrastructure/db/repositories/ldap-auth-source-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type LdapAuthSourceActionState = {
   error: string | null;
@@ -38,7 +39,7 @@ function inputFrom(formData: FormData): LdapAuthSourceInput {
 
 async function save(formData: FormData, existingId: string | null): Promise<LdapAuthSourceActionState> {
   const authError = await requireAdmin();
-  if (authError) return { error: authError };
+  if (authError) return { error: await localizeError(authError) };
   try {
     await saveLdapAuthSource(
       new DrizzleLdapAuthSourceRepository(),
@@ -47,7 +48,7 @@ async function save(formData: FormData, existingId: string | null): Promise<Ldap
       existingId,
     );
   } catch (error) {
-    if (error instanceof LdapAuthSourceError) return { error: error.message };
+    if (error instanceof LdapAuthSourceError) return { error: await localizeError(error.message) };
     throw error;
   }
   revalidatePath("/admin/ldap-auth-sources");
@@ -60,19 +61,19 @@ export async function createLdapAuthSourceAction(_prev: LdapAuthSourceActionStat
 
 export async function updateLdapAuthSourceAction(_prev: LdapAuthSourceActionState, formData: FormData): Promise<LdapAuthSourceActionState> {
   const id = idSchema.safeParse(formData.get("ldapAuthSourceId"));
-  if (!id.success) return { error: "認証元が見つかりません。" };
+  if (!id.success) return { error: await localizeError("認証元が見つかりません。") };
   return save(formData, id.data);
 }
 
 export async function deleteLdapAuthSourceAction(_prev: LdapAuthSourceActionState, formData: FormData): Promise<LdapAuthSourceActionState> {
   const authError = await requireAdmin();
-  if (authError) return { error: authError };
+  if (authError) return { error: await localizeError(authError) };
   const id = idSchema.safeParse(formData.get("ldapAuthSourceId"));
-  if (!id.success) return { error: "認証元が見つかりません。" };
+  if (!id.success) return { error: await localizeError("認証元が見つかりません。") };
   const repository = new DrizzleLdapAuthSourceRepository();
   // Accounts keep the source that created them (Redmine's auth_source_id), so a source with accounts stays.
   if ((await repository.countUsers(id.data)) > 0) {
-    return { error: "この認証元で作られたユーザーがいるため削除できません。" };
+    return { error: await localizeError("この認証元で作られたユーザーがいるため削除できません。") };
   }
   await repository.delete(id.data);
   revalidatePath("/admin/ldap-auth-sources");

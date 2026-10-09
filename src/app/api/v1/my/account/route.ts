@@ -7,6 +7,8 @@ import { COMMENTS_SORTING_VALUES, resolvePreferences } from "@/domain/user-prefe
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { accountRepositories } from "@/interface/http/my-account-repositories";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 export async function GET(request: Request) {
   const user =
@@ -88,7 +90,7 @@ export async function PUT(request: Request) {
     });
   } catch (error) {
     if (error instanceof EmailAddressError) {
-      return NextResponse.json({ error: "invalid_request", message: error.message }, { status: 422 });
+      return NextResponse.json({ error: "invalid_request", message: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

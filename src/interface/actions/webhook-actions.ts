@@ -10,6 +10,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleWebhookRepository } from "@/infrastructure/db/repositories/webhook-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { listProjectsWithPermission } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type WebhookActionState = { error: string | null };
 
@@ -53,34 +54,34 @@ export async function saveWebhookAction(
 ): Promise<WebhookActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
   const { webhooksEnabled } = await loadGeneralSettings(new DrizzleSettingsRepository());
   if (!webhooksEnabled) {
-    return { error: "Webhookは管理者によって無効化されています。" };
+    return { error: await localizeError("Webhookは管理者によって無効化されています。") };
   }
 
   const parsed = webhookSchema.safeParse(formValues(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const endpoint = parseWebhookEndpoint(parsed.data.url);
   if (!endpoint.ok) {
-    return { error: ENDPOINT_ERRORS[endpoint.reason] };
+    return { error: await localizeError(ENDPOINT_ERRORS[endpoint.reason]) };
   }
 
   const allowedProjects = await listProjectsWithPermission(user, "use_webhooks");
   if (allowedProjects.length === 0) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   const allowedIds = new Set(allowedProjects.map((project) => project.id));
   const projectIds = parsed.data.projectIds.filter((projectId) => allowedIds.has(projectId));
   if (projectIds.length === 0) {
-    return { error: "対象のプロジェクトを1つ以上選択してください。" };
+    return { error: await localizeError("対象のプロジェクトを1つ以上選択してください。") };
   }
   if (parsed.data.events.length === 0) {
-    return { error: "通知するイベントを1つ以上選択してください。" };
+    return { error: await localizeError("通知するイベントを1つ以上選択してください。") };
   }
 
   const repository = new DrizzleWebhookRepository();
@@ -95,7 +96,7 @@ export async function saveWebhookAction(
   if (parsed.data.id) {
     const existing = await repository.findById(parsed.data.id);
     if (!existing || existing.userId !== user.id) {
-      return { error: "Webhookが見つかりません。" };
+      return { error: await localizeError("Webhookが見つかりません。") };
     }
     await repository.update(existing.id, input);
   } else {
@@ -112,17 +113,17 @@ export async function deleteWebhookAction(
 ): Promise<WebhookActionState> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
   const id = formData.get("id");
   if (typeof id !== "string") {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const repository = new DrizzleWebhookRepository();
   const existing = await repository.findById(id);
   if (!existing || existing.userId !== user.id) {
-    return { error: "Webhookが見つかりません。" };
+    return { error: await localizeError("Webhookが見つかりません。") };
   }
   await repository.delete(existing.id);
 

@@ -10,6 +10,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 import type { AdminActionState } from "./admin-action-state";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -25,7 +26,7 @@ export async function updateWorkflowAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateWorkflowSchema.safeParse({
@@ -34,7 +35,7 @@ export async function updateWorkflowAction(
     transitions: formData.getAll("transitions"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const [tracker, role, statuses] = await Promise.all([
@@ -43,7 +44,7 @@ export async function updateWorkflowAction(
     new DrizzleIssueStatusRepository().listAll(),
   ]);
   if (!tracker || !role) {
-    return { error: "トラッカーまたはロールが見つかりません。" };
+    return { error: await localizeError("トラッカーまたはロールが見つかりません。") };
   }
 
   const statusIds = new Set(statuses.map((s) => s.id));
@@ -51,7 +52,7 @@ export async function updateWorkflowAction(
   for (const pair of parsed.data.transitions) {
     const [oldStatusId, newStatusId] = pair.split(":");
     if (!oldStatusId || !newStatusId || !statusIds.has(oldStatusId) || !statusIds.has(newStatusId)) {
-      return { error: "不正な遷移が指定されました。" };
+      return { error: await localizeError("不正な遷移が指定されました。") };
     }
     transitions.push({ oldStatusId, newStatusId, author: false, assignee: false });
   }
@@ -73,7 +74,7 @@ export async function updateFieldPermissionsAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateFieldPermissionsSchema.safeParse({
@@ -81,7 +82,7 @@ export async function updateFieldPermissionsAction(
     roleId: formData.get("roleId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const [tracker, role, statuses] = await Promise.all([
@@ -90,7 +91,7 @@ export async function updateFieldPermissionsAction(
     new DrizzleIssueStatusRepository().listAll(),
   ]);
   if (!tracker || !role) {
-    return { error: "トラッカーまたはロールが見つかりません。" };
+    return { error: await localizeError("トラッカーまたはロールが見つかりません。") };
   }
 
   const entries: Array<[string, string]> = [];
@@ -99,7 +100,7 @@ export async function updateFieldPermissionsAction(
   }
   const parsedPermissions = parseFieldPermissionEntries(entries, new Set(statuses.map((s) => s.id)));
   if (!parsedPermissions.ok) {
-    return { error: parsedPermissions.error };
+    return { error: await localizeError(parsedPermissions.error) };
   }
 
   await new DrizzleWorkflowFieldPermissionRepository().replaceForTrackerAndRole(

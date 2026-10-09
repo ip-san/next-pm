@@ -10,6 +10,8 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -114,7 +116,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ relation }, { status: 201 });
   } catch (error) {
     if (error instanceof InvalidRelationError) {
-      return NextResponse.json({ error: error.message }, { status: 422 });
+      return NextResponse.json({ error: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

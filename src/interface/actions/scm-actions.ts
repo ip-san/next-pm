@@ -27,6 +27,7 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { scmBrowserFor } from "@/infrastructure/scm/browser-for-vendor";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issueVisibilityCheck, listVisibleProjectContexts, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type ScmActionState = {
   error: string | null;
@@ -40,17 +41,17 @@ export type ScmActionState = {
 async function authorizeManageRepository(projectIdentifier: string): Promise<{ project: Project } | { error: string }> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_repository", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   return { project };
 }
@@ -78,7 +79,7 @@ export async function connectRepositoryAction(_prevState: ScmActionState, formDa
     isDefault: formData.get("isDefault") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageRepository(parsed.data.projectIdentifier);
@@ -99,7 +100,7 @@ export async function connectRepositoryAction(_prevState: ScmActionState, formDa
     );
   } catch (error) {
     if (error instanceof InvalidRepositoryError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -124,7 +125,7 @@ export async function updateRepositoryAction(_prevState: ScmActionState, formDat
     isDefault: formData.get("isDefault") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageRepository(parsed.data.projectIdentifier);
@@ -132,7 +133,7 @@ export async function updateRepositoryAction(_prevState: ScmActionState, formDat
     return authorized;
   }
   if (!(await findOwnRepository(authorized.project.id, parsed.data.scmRepositoryId))) {
-    return { error: "リポジトリが見つかりません。" };
+    return { error: await localizeError("リポジトリが見つかりません。") };
   }
 
   try {
@@ -142,7 +143,7 @@ export async function updateRepositoryAction(_prevState: ScmActionState, formDat
     );
   } catch (error) {
     if (error instanceof InvalidRepositoryError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -163,7 +164,7 @@ export async function deleteRepositoryAction(_prevState: ScmActionState, formDat
     scmRepositoryId: formData.get("scmRepositoryId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageRepository(parsed.data.projectIdentifier);
@@ -171,7 +172,7 @@ export async function deleteRepositoryAction(_prevState: ScmActionState, formDat
     return authorized;
   }
   if (!(await findOwnRepository(authorized.project.id, parsed.data.scmRepositoryId))) {
-    return { error: "リポジトリが見つかりません。" };
+    return { error: await localizeError("リポジトリが見つかりません。") };
   }
 
   // Redmine's destroy has no validation of its own: the changesets (and their issue links) go
@@ -206,7 +207,7 @@ export async function mapCommittersAction(_prevState: ScmActionState, formData: 
     }),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageRepository(parsed.data.projectIdentifier);
@@ -214,7 +215,7 @@ export async function mapCommittersAction(_prevState: ScmActionState, formData: 
     return authorized;
   }
   if (!(await findOwnRepository(authorized.project.id, parsed.data.scmRepositoryId))) {
-    return { error: "リポジトリが見つかりません。" };
+    return { error: await localizeError("リポジトリが見つかりません。") };
   }
 
   await mapCommitters(
@@ -240,12 +241,12 @@ async function authorizeRelatedIssues(
   const user = await currentUserFromCookies();
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_related_issues", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   const repositories = await new DrizzleScmRepositoryRepository().listByProject(project.id);
@@ -254,7 +255,7 @@ async function authorizeRelatedIssues(
       ? resolveScmRepositoryByParam(repositories, repositoryParam)
       : (repositories.find((candidate) => candidate.isDefault) ?? repositories[0] ?? null);
   if (!scmRepository) {
-    return { error: "リポジトリが見つかりません。" };
+    return { error: await localizeError("リポジトリが見つかりません。") };
   }
 
   return {
@@ -286,7 +287,7 @@ export async function linkChangesetIssueAction(_prevState: ScmActionState, formD
     issueRef: formData.get("issueRef"),
   });
   if (!parsed.success) {
-    return { error: "チケットが不正です。" };
+    return { error: await localizeError("チケットが不正です。") };
   }
 
   const authorized = await authorizeRelatedIssues(parsed.data.projectIdentifier, parsed.data.repositoryParam);
@@ -315,7 +316,7 @@ export async function linkChangesetIssueAction(_prevState: ScmActionState, formD
     );
   } catch (error) {
     if (error instanceof InvalidChangesetIssueLinkError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -334,7 +335,7 @@ export async function unlinkChangesetIssueAction(_prevState: ScmActionState, for
     issueId: formData.get("issueId"),
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const authorized = await authorizeRelatedIssues(parsed.data.projectIdentifier, parsed.data.repositoryParam);
@@ -376,7 +377,7 @@ export async function syncRepositoryAction(
     scmRepositoryId: formData.get("scmRepositoryId"),
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。", summary: null };
+    return { error: await localizeError("入力内容を確認してください。"), summary: null };
   }
 
   const authorized = await authorizeManageRepository(parsed.data.projectIdentifier);
@@ -386,7 +387,7 @@ export async function syncRepositoryAction(
 
   const scmRepository = await findOwnRepository(authorized.project.id, parsed.data.scmRepositoryId);
   if (!scmRepository) {
-    return { error: "リポジトリが見つかりません。", summary: null };
+    return { error: await localizeError("リポジトリが見つかりません。"), summary: null };
   }
 
   const { keywordScanOptions, logtimeEnabled, crossProjectRef } = await loadCommitKeywordSettings(new DrizzleSettingsRepository());
@@ -415,6 +416,8 @@ export async function syncRepositoryAction(
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/repository`);
   return {
     error: null,
-    summary: `${result.ingested}件のコミットを取り込みました（うち、自動クローズ ${result.fixed}件、工数記録 ${result.timeLogged}件）。`,
+    summary: await localizeError(
+      `${result.ingested}件のコミットを取り込みました（うち、自動クローズ ${result.fixed}件、工数記録 ${result.timeLogged}件）。`,
+    ),
   };
 }

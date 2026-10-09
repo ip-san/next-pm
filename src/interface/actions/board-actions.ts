@@ -17,6 +17,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type BoardActionState = {
   error: string | null;
@@ -28,17 +29,17 @@ async function authorizeManageBoards(
 ): Promise<{ error: string; project: null } | { error: null; project: Project }> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", project: null };
+    return { error: await localizeError("ログインしてください。"), project: null };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。", project: null };
+    return { error: await localizeError("プロジェクトが見つかりません。"), project: null };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_boards", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。", project: null };
+    return { error: await localizeError("この操作を行う権限がありません。"), project: null };
   }
 
   return { error: null, project };
@@ -61,12 +62,12 @@ export async function createBoardAction(_prevState: CreateBoardActionState, form
     description: formData.get("description"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageBoards(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   try {
@@ -81,7 +82,7 @@ export async function createBoardAction(_prevState: CreateBoardActionState, form
     );
   } catch (error) {
     if (error instanceof InvalidBoardError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -107,12 +108,12 @@ export async function updateBoardAction(_prevState: BoardActionState, formData: 
     description: formData.get("description"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageBoards(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   try {
@@ -128,7 +129,7 @@ export async function updateBoardAction(_prevState: BoardActionState, formData: 
     );
   } catch (error) {
     if (error instanceof InvalidBoardError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -150,12 +151,12 @@ export async function reorderBoardAction(_prevState: BoardActionState, formData:
     position: formData.get("position"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageBoards(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   try {
@@ -165,7 +166,7 @@ export async function reorderBoardAction(_prevState: BoardActionState, formData:
     );
   } catch (error) {
     if (error instanceof InvalidBoardError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -185,12 +186,12 @@ export async function deleteBoardAction(_prevState: BoardActionState, formData: 
     boardId: formData.get("boardId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageBoards(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   await deleteBoard(

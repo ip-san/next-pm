@@ -14,6 +14,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 import { positionMoveValues, type AdminActionState } from "./admin-action-state";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -65,17 +66,17 @@ function resolvePermissions(
 export async function createRoleAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = roleAttributesSchema.safeParse(attributesFrom(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const permissions = resolvePermissions(parsed.data.permissions, ROLE_BUILTIN_MEMBER);
   if (!permissions.ok) {
-    return { error: permissions.error };
+    return { error: await localizeError(permissions.error) };
   }
 
   const roleRepository = new DrizzleRoleRepository();
@@ -116,25 +117,25 @@ const roleIdSchema = z.object({ roleId: z.string().uuid() });
 export async function updateRoleAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = roleAttributesSchema
     .extend({ roleId: z.string().uuid() })
     .safeParse({ ...attributesFrom(formData), roleId: formData.get("roleId") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const roleRepository = new DrizzleRoleRepository();
   const existing = await roleRepository.findById(parsed.data.roleId);
   if (!existing) {
-    return { error: "ロールが見つかりません。" };
+    return { error: await localizeError("ロールが見つかりません。") };
   }
 
   const permissions = resolvePermissions(parsed.data.permissions, existing.builtin);
   if (!permissions.ok) {
-    return { error: permissions.error };
+    return { error: await localizeError(permissions.error) };
   }
 
   await roleRepository.update(existing.id, {
@@ -156,12 +157,12 @@ export async function updateRoleAction(_prevState: AdminActionState, formData: F
 export async function deleteRoleAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = roleIdSchema.safeParse({ roleId: formData.get("roleId") });
   if (!parsed.success) {
-    return { error: "ロールが見つかりません。" };
+    return { error: await localizeError("ロールが見つかりません。") };
   }
 
   const roleRepository = new DrizzleRoleRepository();
@@ -169,7 +170,7 @@ export async function deleteRoleAction(_prevState: AdminActionState, formData: F
     await deleteRole({ roleRepository, roleAdminRepository: roleRepository }, parsed.data.roleId);
   } catch (error) {
     if (error instanceof RoleNotDeletableError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -183,18 +184,18 @@ const reorderRoleSchema = roleIdSchema.extend({ move: z.enum(positionMoveValues)
 export async function reorderRoleAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = reorderRoleSchema.safeParse({ roleId: formData.get("roleId"), move: formData.get("move") });
   if (!parsed.success) {
-    return { error: "並べ替えの指定が不正です。" };
+    return { error: await localizeError("並べ替えの指定が不正です。") };
   }
 
   const roleRepository = new DrizzleRoleRepository();
   const target = await roleRepository.findById(parsed.data.roleId);
   if (!target || isBuiltinRole(target)) {
-    return { error: "ロールが見つかりません。" };
+    return { error: await localizeError("ロールが見つかりません。") };
   }
 
   // `acts_as_positioned :scope => :builtin` — ordinary roles order among themselves.
@@ -219,7 +220,7 @@ const copyRoleSchema = z.object({
 export async function copyRoleAction(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = copyRoleSchema.safeParse({
@@ -228,13 +229,13 @@ export async function copyRoleAction(_prevState: AdminActionState, formData: For
     copyWorkflow: formData.get("copyWorkflow") === "on",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const roleRepository = new DrizzleRoleRepository();
   const source = await roleRepository.findById(parsed.data.sourceRoleId);
   if (!source) {
-    return { error: "コピー元のロールが見つかりません。" };
+    return { error: await localizeError("コピー元のロールが見つかりません。") };
   }
 
   // The copy is always an ordinary role, so a builtin source's reduced permission set simply
@@ -275,7 +276,7 @@ export async function updateRolePermissionsAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const entries: Array<[string, string]> = [];
@@ -284,21 +285,21 @@ export async function updateRolePermissionsAction(
   }
   const parsed = parseRolePermissionEntries(entries);
   if (!parsed.ok) {
-    return { error: parsed.error };
+    return { error: await localizeError(parsed.error) };
   }
 
   const roleRepository = new DrizzleRoleRepository();
   const roleIds = Array.from(parsed.permissionsByRoleId.keys());
   const roles = await roleRepository.findByIds(roleIds);
   if (roles.length !== roleIds.length) {
-    return { error: "存在しないロールが指定されました。" };
+    return { error: await localizeError("存在しないロールが指定されました。") };
   }
 
   for (const role of roles) {
     const submitted = parsed.permissionsByRoleId.get(role.id) ?? [];
     const permissions = resolvePermissions(submitted, role.builtin);
     if (!permissions.ok) {
-      return { error: permissions.error };
+      return { error: await localizeError(permissions.error) };
     }
     await roleRepository.updatePermissions(role.id, permissions.permissions);
   }

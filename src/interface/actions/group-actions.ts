@@ -11,6 +11,7 @@ import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-r
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type GroupActionState = {
   error: string | null;
@@ -23,12 +24,12 @@ const createGroupSchema = z.object({
 export async function createGroupAction(_prevState: GroupActionState, formData: FormData): Promise<GroupActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = createGroupSchema.safeParse({ name: formData.get("name") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await new DrizzleGroupRepository().create(parsed.data.name);
@@ -44,12 +45,12 @@ const deleteGroupSchema = z.object({
 export async function deleteGroupAction(_prevState: GroupActionState, formData: FormData): Promise<GroupActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = deleteGroupSchema.safeParse({ groupId: formData.get("groupId") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await new DrizzleGroupRepository().delete(parsed.data.groupId);
@@ -66,21 +67,21 @@ const addUserToGroupSchema = z.object({
 export async function addUserToGroupAction(_prevState: GroupActionState, formData: FormData): Promise<GroupActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = addUserToGroupSchema.safeParse({ groupId: formData.get("groupId"), login: formData.get("login") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const groupRepository = new DrizzleGroupRepository();
   const [group, targetUser] = await Promise.all([groupRepository.findById(parsed.data.groupId), new DrizzleUserRepository().findByLogin(parsed.data.login)]);
   if (!group) {
-    return { error: "指定されたグループが見つかりません。" };
+    return { error: await localizeError("指定されたグループが見つかりません。") };
   }
   if (!targetUser) {
-    return { error: "指定されたログインIDのユーザーが見つかりません。" };
+    return { error: await localizeError("指定されたログインIDのユーザーが見つかりません。") };
   }
 
   await addUserToGroup({ groupRepository, memberRepository: new DrizzleMemberRepository() }, group.id, targetUser.id);
@@ -97,12 +98,12 @@ const removeUserFromGroupSchema = z.object({
 export async function removeUserFromGroupAction(_prevState: GroupActionState, formData: FormData): Promise<GroupActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = removeUserFromGroupSchema.safeParse({ groupId: formData.get("groupId"), userId: formData.get("userId") });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   await removeUserFromGroup({ groupRepository: new DrizzleGroupRepository(), memberRepository: new DrizzleMemberRepository() }, parsed.data.groupId, parsed.data.userId);
@@ -120,7 +121,7 @@ const updateGroupCustomFieldValuesSchema = z.object({
 export async function updateGroupCustomFieldValuesAction(_prevState: GroupActionState, formData: FormData): Promise<GroupActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateGroupCustomFieldValuesSchema.safeParse({
@@ -128,7 +129,7 @@ export async function updateGroupCustomFieldValuesAction(_prevState: GroupAction
     customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
-    return { error: "入力内容を確認してください。" };
+    return { error: await localizeError("入力内容を確認してください。") };
   }
 
   const rawValues = Object.fromEntries(
@@ -142,7 +143,7 @@ export async function updateGroupCustomFieldValuesAction(_prevState: GroupAction
     );
   } catch (error) {
     if (error instanceof CustomFieldValidationError) {
-      return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+      return { error: await localizeError(Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。") };
     }
     throw error;
   }

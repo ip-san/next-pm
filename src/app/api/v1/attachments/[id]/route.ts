@@ -11,6 +11,8 @@ import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store"
 import { resolveAttachmentAccess } from "@/interface/http/attachment-access";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -92,7 +94,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ attachment: serialize(updated) });
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return NextResponse.json({ error: "invalid_attachment", message: error.message }, { status: 422 });
+      return NextResponse.json({ error: "invalid_attachment", message: localizeMessage(await localeForViewer(user), error.message) }, { status: 422 });
     }
     throw error;
   }

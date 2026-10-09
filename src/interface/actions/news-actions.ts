@@ -27,6 +27,7 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 async function notifiableMemberIds(projectId: string, permission: "view_news") {
   const members = await new DrizzleMemberRepository().listByProject(projectId);
@@ -55,22 +56,22 @@ export async function createNewsAction(_prevState: CreateNewsActionState, formDa
     description: formData.get("description"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_news", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let created;
@@ -84,7 +85,7 @@ export async function createNewsAction(_prevState: CreateNewsActionState, formDa
     });
   } catch (error) {
     if (error instanceof InvalidNewsError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -119,28 +120,28 @@ export async function deleteNewsAction(_prevState: DeleteNewsActionState, formDa
     newsId: formData.get("newsId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const newsRepository = new DrizzleNewsRepository();
   const item = await newsRepository.findById(parsed.data.newsId);
   if (!item || item.projectId !== project.id) {
-    return { error: "お知らせが見つかりません。" };
+    return { error: await localizeError("お知らせが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_news", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await deleteNews(
@@ -168,27 +169,27 @@ export async function addNewsCommentAction(_prevState: AddNewsCommentActionState
     content: formData.get("content"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const newsItem = await new DrizzleNewsRepository().findById(parsed.data.newsId);
   if (!newsItem || newsItem.projectId !== project.id) {
-    return { error: "お知らせが見つかりません。" };
+    return { error: await localizeError("お知らせが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "comment_news", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let comment;
@@ -200,7 +201,7 @@ export async function addNewsCommentAction(_prevState: AddNewsCommentActionState
     });
   } catch (error) {
     if (error instanceof InvalidNewsCommentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -235,17 +236,17 @@ async function authorizeManageNews(
 ): Promise<{ error: string; project: null; user: null } | { error: null; project: Project; user: User }> {
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。", project: null, user: null };
+    return { error: await localizeError("ログインしてください。"), project: null, user: null };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。", project: null, user: null };
+    return { error: await localizeError("プロジェクトが見つかりません。"), project: null, user: null };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_news", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。", project: null, user: null };
+    return { error: await localizeError("この操作を行う権限がありません。"), project: null, user: null };
   }
 
   return { error: null, project, user };
@@ -268,18 +269,18 @@ export async function updateNewsAction(_prevState: NewsMutationActionState, form
     description: formData.get("description"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageNews(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   const newsRepository = new DrizzleNewsRepository();
   const item = await newsRepository.findById(parsed.data.newsId);
   if (!item || item.projectId !== authorized.project.id) {
-    return { error: "お知らせが見つかりません。" };
+    return { error: await localizeError("お知らせが見つかりません。") };
   }
 
   try {
@@ -289,7 +290,7 @@ export async function updateNewsAction(_prevState: NewsMutationActionState, form
     );
   } catch (error) {
     if (error instanceof InvalidNewsError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -313,23 +314,23 @@ export async function deleteNewsCommentAction(_prevState: NewsMutationActionStat
     commentId: formData.get("commentId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageNews(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   const item = await new DrizzleNewsRepository().findById(parsed.data.newsId);
   if (!item || item.projectId !== authorized.project.id) {
-    return { error: "お知らせが見つかりません。" };
+    return { error: await localizeError("お知らせが見つかりません。") };
   }
 
   const commentRepository = new DrizzleNewsCommentRepository();
   const comment = await commentRepository.findById(parsed.data.commentId);
   if (!comment || comment.newsId !== item.id) {
-    return { error: "コメントが見つかりません。" };
+    return { error: await localizeError("コメントが見つかりません。") };
   }
 
   await commentRepository.delete(comment.id);
@@ -353,20 +354,20 @@ export async function uploadNewsAttachmentAction(_prevState: NewsMutationActionS
     file: formData.get("file"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   if (parsed.data.file.size === 0) {
-    return { error: "ファイルを選択してください。" };
+    return { error: await localizeError("ファイルを選択してください。") };
   }
 
   const authorized = await authorizeManageNews(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   const item = await new DrizzleNewsRepository().findById(parsed.data.newsId);
   if (!item || item.projectId !== authorized.project.id) {
-    return { error: "お知らせが見つかりません。" };
+    return { error: await localizeError("お知らせが見つかりません。") };
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
@@ -389,7 +390,7 @@ export async function uploadNewsAttachmentAction(_prevState: NewsMutationActionS
     );
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -411,23 +412,23 @@ export async function deleteNewsAttachmentAction(_prevState: NewsMutationActionS
     attachmentId: formData.get("attachmentId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const authorized = await authorizeManageNews(parsed.data.projectIdentifier);
   if (authorized.project === null) {
-    return { error: authorized.error };
+    return { error: await localizeError(authorized.error) };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment || attachment.containerType !== "News" || attachment.containerId !== parsed.data.newsId) {
-    return { error: "添付ファイルが見つかりません。" };
+    return { error: await localizeError("添付ファイルが見つかりません。") };
   }
 
   const item = await new DrizzleNewsRepository().findById(parsed.data.newsId);
   if (!item || item.projectId !== authorized.project.id) {
-    return { error: "お知らせが見つかりません。" };
+    return { error: await localizeError("お知らせが見つかりません。") };
   }
 
   await attachmentRepository.delete(attachment.id);

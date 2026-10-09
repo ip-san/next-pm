@@ -29,6 +29,7 @@ import {
 import { FsAttachmentStore } from "@/infrastructure/storage/fs-attachment-store";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type SaveWikiPageActionState = {
   error: string | null;
@@ -57,22 +58,22 @@ export async function saveWikiPageAction(
     parentId: formData.get("parentId") ?? undefined,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(parsed.data.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let page;
@@ -92,10 +93,10 @@ export async function saveWikiPageAction(
     ));
   } catch (error) {
     if (error instanceof WikiPageProtectedError) {
-      return { error: "このページは保護されています。" };
+      return { error: await localizeError("このページは保護されています。") };
     }
     if (error instanceof InvalidWikiParentError) {
-      return { error: "親ページとして指定できないページです。" };
+      return { error: await localizeError("親ページとして指定できないページです。") };
     }
     throw error;
   }
@@ -147,33 +148,33 @@ export async function uploadWikiAttachmentAction(
     file: formData.get("file"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   if (parsed.data.file.size === 0) {
-    return { error: "ファイルを選択してください。" };
+    return { error: await localizeError("ファイルを選択してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const wikiPage = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
   if (!wikiPage) {
-    return { error: "Wikiページが見つかりません。" };
+    return { error: await localizeError("Wikiページが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "edit_wiki_pages", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isWikiPageEditable(wikiPage, can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }))) {
-    return { error: "このページは保護されています。" };
+    return { error: await localizeError("このページは保護されています。") };
   }
 
   const buffer = Buffer.from(await parsed.data.file.arrayBuffer());
@@ -196,7 +197,7 @@ export async function uploadWikiAttachmentAction(
     );
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -225,28 +226,28 @@ export async function deleteWikiAttachmentAction(
     title: formData.get("title"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment || attachment.containerType !== "WikiPage" || !attachment.containerId) {
-    return { error: "添付ファイルが見つかりません。" };
+    return { error: await localizeError("添付ファイルが見つかりません。") };
   }
 
   const wikiPage = await new DrizzleWikiPageRepository().findById(attachment.containerId);
   if (!wikiPage) {
-    return { error: "Wikiページが見つかりません。" };
+    return { error: await localizeError("Wikiページが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   // Redmine's acts_as_attachable :delete_permission => :delete_wiki_pages_attachments
@@ -254,10 +255,10 @@ export async function deleteWikiAttachmentAction(
   // WikiPage#attachments_deletable?, which also demands the page be editable.
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "delete_wiki_pages_attachments", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
   if (!isWikiPageEditable(wikiPage, can({ permission: "protect_wiki_pages", project: toAuthorizationProject(project), actor }))) {
-    return { error: "このページは保護されています。" };
+    return { error: await localizeError("このページは保護されています。") };
   }
 
   await attachmentRepository.delete(attachment.id);
@@ -293,22 +294,22 @@ export async function renameWikiPageAction(
     isStartPage: formData.get("isStartPage") ?? undefined,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const wikiPage = await new DrizzleWikiPageRepository().findById(parsed.data.pageId);
   if (!wikiPage) {
-    return { error: "Wikiページが見つかりません。" };
+    return { error: await localizeError("Wikiページが見つかりません。") };
   }
 
   const project = await new DrizzleProjectRepository().findById(wikiPage.projectId);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   // Redmine maps `wiki#rename` to both rename_wiki_pages and manage_wiki
@@ -321,7 +322,7 @@ export async function renameWikiPageAction(
   const canManageWiki = can({ permission: "manage_wiki", project: projectContext, actor });
   const canRename = canReparent || canManageWiki;
   if (!canRename) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
 
@@ -345,16 +346,16 @@ export async function renameWikiPageAction(
     );
   } catch (error) {
     if (error instanceof WikiTitleConflictError) {
-      return { error: `「${parsed.data.newTitle}」という名前のページは既に存在します。` };
+      return { error: await localizeError(`「${parsed.data.newTitle}」という名前のページは既に存在します。`) };
     }
     if (error instanceof WikiPageNotFoundError) {
-      return { error: "Wikiページが見つかりません。" };
+      return { error: await localizeError("Wikiページが見つかりません。") };
     }
     if (error instanceof WikiPageProtectedError) {
-      return { error: "このページは保護されています。" };
+      return { error: await localizeError("このページは保護されています。") };
     }
     if (error instanceof InvalidWikiParentError) {
-      return { error: "親ページとして指定できないページです。" };
+      return { error: await localizeError("親ページとして指定できないページです。") };
     }
     throw error;
   }

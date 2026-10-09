@@ -21,6 +21,7 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type FileActionState = {
   error: string | null;
@@ -49,25 +50,25 @@ export async function addProjectFileAction(_prevState: FileActionState, formData
     file: formData.get("file"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   if (parsed.data.file.size === 0) {
-    return { error: "ファイルを選択してください。" };
+    return { error: await localizeError("ファイルを選択してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const project = await new DrizzleProjectRepository().findByIdentifier(parsed.data.projectIdentifier);
   if (!project) {
-    return { error: "プロジェクトが見つかりません。" };
+    return { error: await localizeError("プロジェクトが見つかりません。") };
   }
 
   const { actor } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_files", project: toAuthorizationProject(project), actor })) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   let created;
@@ -91,7 +92,7 @@ export async function addProjectFileAction(_prevState: FileActionState, formData
     );
   } catch (error) {
     if (error instanceof InvalidProjectFileError || error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -125,26 +126,26 @@ export async function deleteProjectFileAction(_prevState: FileActionState, formD
     projectIdentifier: formData.get("projectIdentifier"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment || (attachment.containerType !== "Project" && attachment.containerType !== "Version")) {
-    return { error: "ファイルが見つかりません。" };
+    return { error: await localizeError("ファイルが見つかりません。") };
   }
 
   const access = await resolveAttachmentAccess(attachment, user);
   if (!access) {
-    return { error: "ファイルが見つかりません。" };
+    return { error: await localizeError("ファイルが見つかりません。") };
   }
   if (!access.allows("delete")) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   await attachmentRepository.delete(attachment.id);
@@ -166,33 +167,33 @@ export async function updateAttachmentDescriptionAction(_prevState: FileActionSt
     description: formData.get("description") ?? "",
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const user = await currentUserFromCookies();
   if (!user) {
-    return { error: "ログインしてください。" };
+    return { error: await localizeError("ログインしてください。") };
   }
 
   const attachmentRepository = new DrizzleAttachmentRepository();
   const attachment = await attachmentRepository.findById(parsed.data.attachmentId);
   if (!attachment) {
-    return { error: "ファイルが見つかりません。" };
+    return { error: await localizeError("ファイルが見つかりません。") };
   }
 
   const access = await resolveAttachmentAccess(attachment, user);
   if (!access) {
-    return { error: "ファイルが見つかりません。" };
+    return { error: await localizeError("ファイルが見つかりません。") };
   }
   if (!access.allows("edit")) {
-    return { error: "この操作を行う権限がありません。" };
+    return { error: await localizeError("この操作を行う権限がありません。") };
   }
 
   try {
     await updateAttachmentMetadata({ attachmentRepository }, { attachmentId: attachment.id, description: parsed.data.description });
   } catch (error) {
     if (error instanceof InvalidAttachmentError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }

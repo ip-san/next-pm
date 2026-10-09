@@ -12,6 +12,7 @@ import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/re
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { requireAdmin } from "@/interface/http/require-admin";
 import { positionMoveValues, type AdminActionState } from "./admin-action-state";
+import { localizeError } from "@/interface/http/localize-error";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -51,16 +52,16 @@ export async function createTrackerAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = trackerAttributesSchema.safeParse(attributesFrom(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
   const statusError = await assertStatusExists(parsed.data.defaultStatusId);
   if (statusError) {
-    return { error: statusError };
+    return { error: await localizeError(statusError) };
   }
 
   const { enabledCoreFields, ...attributes } = parsed.data;
@@ -98,7 +99,7 @@ export async function updateTrackerAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = updateTrackerSchema.safeParse({
@@ -106,17 +107,17 @@ export async function updateTrackerAction(
     trackerId: formData.get("trackerId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const { trackerId, enabledCoreFields, ...attributes } = parsed.data;
   const repository = new DrizzleTrackerRepository();
   if (!(await repository.findById(trackerId))) {
-    return { error: "トラッカーが見つかりません。" };
+    return { error: await localizeError("トラッカーが見つかりません。") };
   }
   const statusError = await assertStatusExists(attributes.defaultStatusId);
   if (statusError) {
-    return { error: statusError };
+    return { error: await localizeError(statusError) };
   }
   await repository.update(trackerId, {
     ...attributes,
@@ -135,19 +136,19 @@ export async function deleteTrackerAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = trackerIdSchema.safeParse({ trackerId: formData.get("trackerId") });
   if (!parsed.success) {
-    return { error: "トラッカーが見つかりません。" };
+    return { error: await localizeError("トラッカーが見つかりません。") };
   }
 
   try {
     await deleteTracker({ trackerAdminRepository: new DrizzleTrackerRepository() }, parsed.data.trackerId);
   } catch (error) {
     if (error instanceof TrackerNotDeletableError) {
-      return { error: error.message };
+      return { error: await localizeError(error.message) };
     }
     throw error;
   }
@@ -164,7 +165,7 @@ export async function reorderTrackerAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = reorderTrackerSchema.safeParse({
@@ -172,7 +173,7 @@ export async function reorderTrackerAction(
     move: formData.get("move"),
   });
   if (!parsed.success) {
-    return { error: "並べ替えの指定が不正です。" };
+    return { error: await localizeError("並べ替えの指定が不正です。") };
   }
 
   const repository = new DrizzleTrackerRepository();
@@ -194,7 +195,7 @@ export async function copyTrackerWorkflowAction(
 ): Promise<AdminActionState> {
   const authError = await requireAdmin();
   if (authError) {
-    return { error: authError };
+    return { error: await localizeError(authError) };
   }
 
   const parsed = copyWorkflowSchema.safeParse({
@@ -202,13 +203,13 @@ export async function copyTrackerWorkflowAction(
     sourceTrackerId: formData.get("sourceTrackerId"),
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
+    return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
   }
 
   const repository = new DrizzleTrackerRepository();
   const found = await repository.findByIds([parsed.data.trackerId, parsed.data.sourceTrackerId]);
   if (found.length !== new Set([parsed.data.trackerId, parsed.data.sourceTrackerId]).size) {
-    return { error: "トラッカーが見つかりません。" };
+    return { error: await localizeError("トラッカーが見つかりません。") };
   }
 
   await copyTrackerWorkflow(
