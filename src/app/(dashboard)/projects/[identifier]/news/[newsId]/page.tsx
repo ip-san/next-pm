@@ -1,9 +1,12 @@
 import { FormattedText } from "@/interface/components/formatted-text";
+import { UserAvatar } from "@/interface/components/user-avatar";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleAttachmentRepository } from "@/infrastructure/db/repositories/attachment-repository";
 import { DrizzleNewsCommentRepository, DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -54,6 +57,8 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
 
   const authors = await new DrizzleUserRepository().findByIds([...new Set([item.authorId, ...comments.map((c) => c.authorId)])]);
   const authorLabelById = new Map(authors.map((u) => [u.id, `${u.lastname} ${u.firstname}`]));
+  const authorMailById = new Map(authors.map((u) => [u.id, u.mail]));
+  const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -63,7 +68,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
           {user ? <NewsWatchToggleForm newsId={item.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
         </div>
         <p className="text-xs text-gray-500">
-          {authorLabelById.get(item.authorId) ?? ""} · {item.createdAt.toISOString()}
+          <UserAvatar mail={authorMailById.get(item.authorId) ?? null} gravatarEnabled={gravatarEnabled} /> {authorLabelById.get(item.authorId) ?? ""} · {item.createdAt.toISOString()}
         </p>
         {item.summary ? <p className="text-sm text-gray-600 mt-1">{item.summary}</p> : null}
         <FormattedText project={project} text={item.description} className="mt-2" />
@@ -100,6 +105,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
           {comments.map((comment) => (
             <li key={comment.id} className="border rounded p-2">
               <p className="text-xs text-gray-500">
+                <UserAvatar mail={authorMailById.get(comment.authorId) ?? null} gravatarEnabled={gravatarEnabled} />{" "}
                 {authorLabelById.get(comment.authorId) ?? ""} · {comment.createdAt.toISOString()}
               </p>
               <FormattedText project={project} text={comment.content} />

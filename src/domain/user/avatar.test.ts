@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { gravatarUrl, userInitials } from "./avatar";
+import { avatarUrlFor, gravatarUrl, userInitials } from "./avatar";
 
 describe("gravatarUrl", () => {
   // The canonical example from Gravatar's own documentation.
@@ -14,6 +14,16 @@ describe("gravatarUrl", () => {
   it("asks for the requested size and an identicon fallback", () => {
     expect(gravatarUrl("alice@example.com", 64)).toContain("s=64");
     expect(gravatarUrl("alice@example.com", 64)).toContain("d=identicon");
+  });
+});
+
+describe("avatarUrlFor", () => {
+  it("gives the API a Gravatar URL with no size while the setting is on", () => {
+    expect(avatarUrlFor("alice@example.com", true)).toBe("https://www.gravatar.com/avatar/c160f8cc69a4f0bf2b0362752353d060?d=identicon");
+  });
+
+  it("gives nothing while the setting is off, so the key is left out of the JSON", () => {
+    expect(avatarUrlFor("alice@example.com", false)).toBeUndefined();
   });
 });
 

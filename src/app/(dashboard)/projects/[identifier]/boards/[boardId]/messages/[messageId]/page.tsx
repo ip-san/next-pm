@@ -1,4 +1,6 @@
 import { FormattedText } from "@/interface/components/formatted-text";
+import { UserAvatar } from "@/interface/components/user-avatar";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -11,6 +13,7 @@ import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-r
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watcher-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -87,6 +90,8 @@ export default async function MessageThreadPage({
     ...new Set([...watcherUserIds, ...projectMemberUserIds, ...authorIds]),
   ]);
   const userLabelById = new Map(relevantUsers.map((u) => [u.id, `${u.lastname} ${u.firstname}`]));
+  const userMailById = new Map(relevantUsers.map((u) => [u.id, u.mail]));
+  const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
   const watcherList = watcherUserIds.map((id) => ({ id, label: userLabelById.get(id) ?? id }));
   const watcherCandidates = projectMemberUserIds
     .filter((userId) => !watcherUserIds.includes(userId))
@@ -162,7 +167,7 @@ export default async function MessageThreadPage({
           {user ? <MessageWatchToggleForm messageId={topic.id} boardId={board.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
         </div>
         <p className="text-xs text-gray-500">
-          {userLabelById.get(topic.authorId) ?? ""} · {topic.createdAt.toISOString()}
+          <UserAvatar mail={userMailById.get(topic.authorId) ?? null} gravatarEnabled={gravatarEnabled} /> {userLabelById.get(topic.authorId) ?? ""} · {topic.createdAt.toISOString()}
         </p>
         <FormattedText project={project} text={topic.content} className="mt-2" />
         {messageAttachments(topic)}
@@ -186,6 +191,7 @@ export default async function MessageThreadPage({
         {replies.map((reply) => (
           <li key={reply.id} id={`message-${reply.id}`} className="border rounded p-3 ml-6">
             <p className="text-xs text-gray-500">
+              <UserAvatar mail={userMailById.get(reply.authorId) ?? null} gravatarEnabled={gravatarEnabled} />{" "}
               {userLabelById.get(reply.authorId) ?? ""} · {reply.createdAt.toISOString()}
             </p>
             <FormattedText project={project} text={reply.content} className="mt-1" />

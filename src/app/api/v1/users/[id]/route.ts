@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { changeUserStatus, UserStatusChangeError } from "@/application/users/change-user-status";
 import { deleteUser, UserNotDeletableError } from "@/application/users/delete-user";
 import { updateUser, UserUpdateError } from "@/application/users/update-user";
+import { avatarUrlFor } from "@/domain/user/avatar";
 import type { User } from "@/domain/user/entity";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -31,6 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
   return NextResponse.json({
     user: {
       id: target.id,
@@ -40,6 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       lastname: target.lastname,
       admin: target.isAdmin,
       status: target.status,
+      avatar_url: avatarUrlFor(target.mail, gravatarEnabled),
     },
   });
 }

@@ -11,9 +11,19 @@ import { createHash } from "node:crypto";
  * Note this does disclose a hash of the address to gravatar.com on every render, which is why
  * the whole thing is behind Setting.gravatar_enabled and that setting defaults to off.
  */
-export function gravatarUrl(mail: string, size: number): string {
+export function gravatarUrl(mail: string, size?: number): string {
   const hash = createHash("md5").update(mail.trim().toLowerCase()).digest("hex");
-  return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=identicon`;
+  const sizeParam = size === undefined ? "" : `s=${size}&`;
+  return `https://www.gravatar.com/avatar/${hash}?${sizeParam}d=identicon`;
+}
+
+/**
+ * The `avatar_url` of Redmine's user JSON (users/show.api.rsb, users/index.api.rsb): the Gravatar URL
+ * with no size, present only while the Gravatar setting is on. `undefined` leaves the key out of
+ * the JSON, which is how the API omits it.
+ */
+export function avatarUrlFor(mail: string, gravatarEnabled: boolean): string | undefined {
+  return gravatarEnabled ? gravatarUrl(mail) : undefined;
 }
 
 /** Redmine's `initials` helper, used as the local fallback when Gravatar is switched off. */

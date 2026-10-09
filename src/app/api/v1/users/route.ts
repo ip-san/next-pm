@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { avatarUrlFor } from "@/domain/user/avatar";
 import { generateSalt, hashPassword } from "@/domain/user/password";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
@@ -13,7 +16,10 @@ async function resolveUser(request: Request) {
   return { user: viaCookie, viaCookie: true };
 }
 
-function toJson(user: { id: string; login: string; mail: string; firstname: string; lastname: string; isAdmin: boolean; status: string }) {
+function toJson(
+  user: { id: string; login: string; mail: string; firstname: string; lastname: string; isAdmin: boolean; status: string },
+  gravatarEnabled: boolean,
+) {
   return {
     id: user.id,
     login: user.login,
@@ -22,6 +28,7 @@ function toJson(user: { id: string; login: string; mail: string; firstname: stri
     lastname: user.lastname,
     admin: user.isAdmin,
     status: user.status,
+    avatar_url: avatarUrlFor(user.mail, gravatarEnabled),
   };
 }
 
@@ -35,8 +42,9 @@ export async function GET(request: Request) {
   }
 
   const allUsers = await new DrizzleUserRepository().listAll();
+  const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
   const { items: users, total_count, offset, limit } = paginate(allUsers, parsePagination(new URL(request.url)));
-  return NextResponse.json({ users: users.map(toJson), total_count, offset, limit });
+  return NextResponse.json({ users: users.map((user) => toJson(user, gravatarEnabled)), total_count, offset, limit });
 }
 
 const createUserSchema = z.object({
@@ -95,7 +103,8 @@ export async function POST(request: Request) {
       twofaTotpKey: null,
       twofaTotpLastUsedStep: null,
     });
-    return NextResponse.json({ user: toJson(created) }, { status: 201 });
+    const { gravatarEnabled } = await loadAuthSettings(new DrizzleSettingsRepository());
+    return NextResponse.json({ user: toJson(created, gravatarEnabled) }, { status: 201 });
   } catch (error) {
     const pgError = error instanceof Error && error.cause instanceof Error ? error.cause : error;
     if (pgError instanceof Error && "code" in pgError && pgError.code === "23505") {
