@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { listGlobalActivity, type GlobalActivityEvent } from "@/application/activity/list-global-activity";
 import { getOrCreateAtomKey } from "@/application/auth/get-or-create-atom-key";
 import { ACTIVITY_EVENT_GROUPS, activityEventPath, type ActivityEvent, type ActivityEventGroup } from "@/domain/activity/entity";
@@ -12,25 +14,25 @@ import { userVisibilityFor } from "@/interface/http/user-visibility";
 
 export const dynamic = "force-dynamic";
 
-const GROUP_LABEL: Record<ActivityEventGroup, string> = {
-  issue: "チケット",
-  news: "ニュース",
-  message: "フォーラム",
-  wiki_edit: "Wiki",
-  document: "ドキュメント",
-  time_entry: "工数",
-  changeset: "リポジトリ",
+const GROUP_LABEL: Record<ActivityEventGroup, MessageKey> = {
+  issue: "projectMenu.issues",
+  news: "projectMenu.news",
+  message: "projectMenu.boards",
+  wiki_edit: "projectMenu.wiki",
+  document: "projectMenu.documents",
+  time_entry: "projectMenu.timeEntries",
+  changeset: "projectMenu.repository",
 };
 
-const TYPE_LABEL: Record<ActivityEvent["type"], string> = {
-  issue_created: "チケット作成",
-  issue_updated: "チケット更新",
-  news: "ニュース",
-  message: "フォーラム",
-  wiki_edit: "Wiki編集",
-  document: "ドキュメント",
-  time_entry: "工数",
-  changeset: "コミット",
+const TYPE_LABEL: Record<ActivityEvent["type"], MessageKey> = {
+  issue_created: "activity.issueCreated",
+  issue_updated: "activity.issueUpdated",
+  news: "projectMenu.news",
+  message: "projectMenu.boards",
+  wiki_edit: "activity.wikiEdit",
+  document: "projectMenu.documents",
+  time_entry: "projectMenu.timeEntries",
+  changeset: "activity.changeset",
 };
 
 function formatDate(date: Date): string {
@@ -54,6 +56,7 @@ export default async function GlobalActivityPage({
 }: {
   searchParams: Promise<{ from?: string; user_id?: string } & Partial<Record<`show_${ActivityEventGroup}`, string>>>;
 }) {
+  const locale = await currentLocale();
   const rawSearchParams = await searchParams;
   const { from: fromParam, user_id: userIdParam } = rawSearchParams;
 
@@ -122,7 +125,7 @@ export default async function GlobalActivityPage({
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">
-          アクティビティ{authorFilter ? `（${authorFilter.lastname} ${authorFilter.firstname}）` : "（全プロジェクト）"}
+          {authorFilter ? interpolate(translate(locale, "activity.userTitle"), { name: `${authorFilter.lastname} ${authorFilter.firstname}` }) : translate(locale, "activity.allTitle")}
         </h1>
         <a href={`/api/activity/atom?${feedQuery.toString()}`} className="text-sm underline">
           Atom
@@ -133,13 +136,13 @@ export default async function GlobalActivityPage({
         {ACTIVITY_EVENT_GROUPS.map((group) => (
           <label key={group} className="flex items-center gap-1">
             <input type="checkbox" name={`show_${group}`} value="1" defaultChecked={!selectedGroups || selectedGroups.includes(group)} />
-            {GROUP_LABEL[group]}
+            {translate(locale, GROUP_LABEL[group])}
           </label>
         ))}
         {authorFilter ? <input type="hidden" name="user_id" value={authorFilter.id} /> : null}
         <input type="hidden" name="from" value={fromParam ?? ""} />
         <button type="submit" className="bg-black text-white rounded px-3 py-1">
-          適用
+          {translate(locale, "query.apply")}
         </button>
       </form>
 
@@ -147,13 +150,13 @@ export default async function GlobalActivityPage({
         {formatDate(from)} 〜 {formatDate(dateTo)}
         {" ・ "}
         <Link href={`?from=${formatDate(prevFrom)}${carried}`} className="underline">
-          « 前の{DAYS}日間
+          {interpolate(translate(locale, "activity.prevDays"), { days: DAYS })}
         </Link>
         {to <= today ? (
           <>
             {" | "}
             <Link href={`?from=${formatDate(nextFrom)}${carried}`} className="underline">
-              次の{DAYS}日間 »
+              {interpolate(translate(locale, "activity.nextDays"), { days: DAYS })}
             </Link>
           </>
         ) : null}
@@ -161,14 +164,14 @@ export default async function GlobalActivityPage({
           <>
             {" ・ "}
             <Link href={`?from=${fromParam ?? ""}`} className="underline">
-              すべての利用者
+              {translate(locale, "activity.allUsers")}
             </Link>
           </>
         ) : null}
       </p>
 
       {events.length === 0 ? (
-        <p className="text-gray-500 text-sm">この期間に該当するアクティビティはありません。</p>
+        <p className="text-gray-500 text-sm">{translate(locale, "activity.none")}</p>
       ) : (
         <div className="flex flex-col gap-6">
           {[...eventsByDay.entries()].map(([day, dayEvents]) => (
@@ -179,7 +182,7 @@ export default async function GlobalActivityPage({
                   <li key={`${event.projectIdentifier}-${event.type}-${event.id}-${event.occurredAt.toISOString()}`} className="border rounded p-3">
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span>{event.projectName}</span>
-                      <span>{TYPE_LABEL[event.type]}</span>
+                      <span>{translate(locale, TYPE_LABEL[event.type])}</span>
                       <span>{event.occurredAt.toISOString()}</span>
                       {event.authorId ? <span>{authorById.get(event.authorId) ?? "?"}</span> : null}
                     </div>

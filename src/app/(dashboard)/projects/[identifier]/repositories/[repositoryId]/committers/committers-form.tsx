@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { mapCommittersAction, type ScmActionState } from "@/interface/actions/scm-actions";
 
@@ -26,12 +28,15 @@ export function CommittersForm({
   scmRepositoryId,
   committers,
   users,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   scmRepositoryId: string;
   committers: CommitterRow[];
   users: AssignableUser[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(mapCommittersAction, initialState);
 
   return (
@@ -41,9 +46,9 @@ export function CommittersForm({
       <table className="text-sm w-full max-w-3xl">
         <thead>
           <tr className="text-left border-b">
-            <th className="pb-2">コミッタ</th>
-            <th className="pb-2">コミット数</th>
-            <th className="pb-2">ユーザー</th>
+            <th className="pb-2">{translate(locale, "repository.committer")}</th>
+            <th className="pb-2">{translate(locale, "repository.commitCount")}</th>
+            <th className="pb-2">{translate(locale, "issue.user")}</th>
           </tr>
         </thead>
         <tbody>
@@ -58,7 +63,7 @@ export function CommittersForm({
                 <td className="py-2">{committer.changesetCount}</td>
                 <td className="py-2">
                   <label className="sr-only" htmlFor={selectId}>
-                    {committer.committerIdentity} に対応するユーザー
+                    {interpolate(t("repository.committerUser"), { identity: committer.committerIdentity })}
                   </label>
                   <select
                     id={selectId}
@@ -66,7 +71,7 @@ export function CommittersForm({
                     defaultValue={committer.userId ?? ""}
                     className="border rounded px-2 py-1 text-sm"
                   >
-                    <option value="">（紐付けない）</option>
+                    <option value="">{translate(locale, "repository.unmapped")}</option>
                     {users.map((user) => (
                       <option key={user.id} value={user.id}>
                         {user.label}
@@ -85,7 +90,7 @@ export function CommittersForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm disabled:opacity-50">
-        保存
+        {translate(locale, "issue.save")}
       </button>
     </form>
   );

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { selectRoadmapVersions } from "@/domain/version/roadmap";
@@ -21,6 +23,7 @@ export const dynamic = "force-dynamic";
  * display_subprojects_issues is on), each with its visible fixed issues, sorted open-first by due date.
  */
 export default async function RoadmapPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -68,9 +71,9 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
   return (
     <main className="p-8 flex flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">ロードマップ</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "projectMenu.roadmap")}</h1>
         <Link href={`/projects/${identifier}/versions`} className="text-sm underline">
-          バージョン管理
+          {translate(locale, "roadmap.subtitle")}
         </Link>
       </div>
 
@@ -83,7 +86,7 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
             <div>
               <h2 className="font-medium">{version.name}</h2>
               <p className="text-xs text-gray-500">
-                期日: {version.effectiveDate ?? "未定"} · 未完了 {progress.openCount}件 · 完了 {progress.closedCount}件
+                {interpolate(translate(locale, "roadmap.progress"), { date: version.effectiveDate ?? translate(locale, "roadmap.unset"), open: progress.openCount, closed: progress.closedCount })}
               </p>
               <div className="w-full max-w-sm h-2 rounded bg-gray-200 mt-1">
                 <div className="h-2 rounded bg-black" style={{ width: `${Math.round(progress.completedPercent)}%` }} />
@@ -102,12 +105,12 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
                   </li>
                 );
               })}
-              {issues.length === 0 ? <li className="text-gray-400 text-xs">チケットはありません。</li> : null}
+              {issues.length === 0 ? <li className="text-gray-400 text-xs">{translate(locale, "roadmap.noIssues")}</li> : null}
             </ul>
           </section>
         );
       })}
-      {openEntries.length === 0 ? <p className="text-sm text-gray-500">進行中のバージョンはありません。</p> : null}
+      {openEntries.length === 0 ? <p className="text-sm text-gray-500">{translate(locale, "roadmap.noOpen")}</p> : null}
     </main>
   );
 }

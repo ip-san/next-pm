@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import {
@@ -30,6 +32,7 @@ export default async function ProjectGanttPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ year?: string; month?: string; zoom?: string; months?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { year: yearParam, month: monthParam, zoom: zoomParam, months: monthsParam } = await searchParams;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -86,27 +89,27 @@ export default async function ProjectGanttPage({
     <main className="p-8 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">
-          {project.name} — ガントチャート {window.start} 〜 {window.end}
+          {interpolate(translate(locale, "gantt.title"), { project: project.name, start: window.start, end: window.end })}
         </h1>
         <div className="flex items-center gap-3 text-sm">
           <Link href={`/projects/${identifier}/gantt?${linkQuery(prev)}`} className="underline">
-            « 前
+            {translate(locale, "gantt.prev")}
           </Link>
           <Link href={`/projects/${identifier}/gantt?${linkQuery(next)}`} className="underline">
-            次 »
+            {translate(locale, "gantt.next")}
           </Link>
           {zoom > 1 ? (
             <Link href={`/projects/${identifier}/gantt?${linkQuery({ year, month }, zoom - 1)}`} className="underline">
-              縮小
+              {translate(locale, "gantt.zoomOut")}
             </Link>
           ) : null}
           {zoom < GANTT_ZOOM_MAX ? (
             <Link href={`/projects/${identifier}/gantt?${linkQuery({ year, month }, zoom + 1)}`} className="underline">
-              拡大
+              {translate(locale, "gantt.zoomIn")}
             </Link>
           ) : null}
           <Link href={`/projects/${identifier}/issues`} className="underline">
-            チケット一覧
+            {translate(locale, "gantt.issueList")}
           </Link>
           <a href={`/api/projects/${identifier}/gantt/pdf?year=${year}&month=${month}`} className="underline">
             PDF
@@ -116,7 +119,7 @@ export default async function ProjectGanttPage({
 
       <div className="border rounded overflow-x-auto text-sm">
         <div className="flex border-b bg-gray-50">
-          <div className="w-64 shrink-0 px-2 py-1 font-medium border-r">チケット</div>
+          <div className="w-64 shrink-0 px-2 py-1 font-medium border-r">{translate(locale, "gantt.issue")}</div>
           <div className="relative h-7 shrink-0" style={{ width: `${timelineWidth}px` }}>
             {monthTicks.map((tick) => (
               <div
@@ -136,13 +139,13 @@ export default async function ProjectGanttPage({
               <div
                 className="absolute top-1.5 h-6 bg-gray-400 rounded"
                 style={{ left: `${row.leftPercent}%`, width: `${row.widthPercent}%` }}
-                title={`バージョン ${row.version.name}（期日 ${row.version.effectiveDate}）`}
+                title={interpolate(translate(locale, "gantt.versionTitle"), { name: row.version.name, date: row.version.effectiveDate })}
               />
             </div>
           </div>
         ))}
         {rows.length === 0 && versionRows.length === 0 ? (
-          <div className="px-2 py-4 text-gray-500">この期間に開始日・期日が設定されたチケットはありません。</div>
+          <div className="px-2 py-4 text-gray-500">{translate(locale, "gantt.none")}</div>
         ) : (
           rows.map((row) => (
             <div key={row.issue.id} className="flex border-b last:border-b-0">

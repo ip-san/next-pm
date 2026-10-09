@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { linkChangesetIssueAction, unlinkChangesetIssueAction, type ScmActionState } from "@/interface/actions/scm-actions";
 
@@ -10,10 +12,12 @@ export function LinkRelatedIssueForm({
   projectIdentifier,
   repositoryParam,
   revision,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   repositoryParam: string;
   revision: string;
+  locale?: Locale;
 }) {
   const [state, formAction, pending] = useActionState(linkChangesetIssueAction, initialState);
 
@@ -23,11 +27,11 @@ export function LinkRelatedIssueForm({
       <input type="hidden" name="repositoryParam" value={repositoryParam} />
       <input type="hidden" name="revision" value={revision} />
       <label htmlFor="issueRef" className="text-sm">
-        チケットを関連付ける
+        {translate(locale, "repository.relateIssue")}
       </label>
       <input id="issueRef" name="issueRef" required placeholder="#eb0b2d1a" className="border rounded px-2 py-1 text-sm font-mono" />
       <button type="submit" disabled={pending} className="border rounded px-2 py-1 text-sm disabled:opacity-50">
-        追加
+        {translate(locale, "issue.add")}
       </button>
       {state.error ? (
         <span role="alert" className="text-xs text-red-600">
@@ -43,11 +47,13 @@ export function UnlinkRelatedIssueForm({
   repositoryParam,
   revision,
   issueId,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   repositoryParam: string;
   revision: string;
   issueId: string;
+  locale?: Locale;
 }) {
   const [state, formAction, pending] = useActionState(unlinkChangesetIssueAction, initialState);
 
@@ -58,7 +64,7 @@ export function UnlinkRelatedIssueForm({
       <input type="hidden" name="revision" value={revision} />
       <input type="hidden" name="issueId" value={issueId} />
       <button type="submit" disabled={pending} className="text-xs underline text-red-700 disabled:opacity-50">
-        関連を解除
+        {translate(locale, "repository.unrelate")}
       </button>
       {state.error ? (
         <span role="alert" className="text-xs text-red-600">

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { buildMonthGrid, nextMonth, parseYearMonth, previousMonth } from "@/domain/calendar/month-grid";
@@ -14,7 +16,7 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { subtreeVisibleIssues } from "@/interface/http/project-issue-scope";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
-const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
+const WEEKDAY_KEYS: MessageKey[] = ["calendar.mon", "calendar.tue", "calendar.wed", "calendar.thu", "calendar.fri", "calendar.sat", "calendar.sun"];
 
 export default async function ProjectCalendarPage({
   params,
@@ -23,6 +25,7 @@ export default async function ProjectCalendarPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ year?: string; month?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { year: yearParam, month: monthParam } = await searchParams;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -91,17 +94,17 @@ export default async function ProjectCalendarPage({
     <main className="p-8 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">
-          {project.name} — カレンダー {year}年{month}月
+          {interpolate(translate(locale, "calendar.title"), { project: project.name, year, month })}
         </h1>
         <div className="flex items-center gap-3 text-sm">
           <Link href={`/projects/${identifier}/calendar?year=${prev.year}&month=${prev.month}`} className="underline">
-            « 前月
+            {translate(locale, "calendar.prevMonth")}
           </Link>
           <Link href={`/projects/${identifier}/issues`} className="underline">
-            チケット一覧
+            {translate(locale, "calendar.issueList")}
           </Link>
           <Link href={`/projects/${identifier}/calendar?year=${next.year}&month=${next.month}`} className="underline">
-            次月 »
+            {translate(locale, "calendar.nextMonth")}
           </Link>
         </div>
       </div>
@@ -109,9 +112,9 @@ export default async function ProjectCalendarPage({
       <table className="border-collapse text-xs w-full">
         <thead>
           <tr>
-            {WEEKDAY_LABELS.map((label) => (
-              <th key={label} className="border px-2 py-1 w-[14.28%] text-left">
-                {label}
+            {WEEKDAY_KEYS.map((key) => (
+              <th key={key} className="border px-2 py-1 w-[14.28%] text-left">
+                {translate(locale, key)}
               </th>
             ))}
           </tr>

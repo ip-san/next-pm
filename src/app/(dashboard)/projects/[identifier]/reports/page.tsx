@@ -1,4 +1,7 @@
 import Link from "next/link";
+import type { Locale } from "@/domain/i18n/locales";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
@@ -15,7 +18,6 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 
-const NONE_LABEL = "(なし)";
 
 interface ReportRow {
   key: string | null;
@@ -24,20 +26,20 @@ interface ReportRow {
   href?: string;
 }
 
-function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]; totals: ReportCounts }) {
+function ReportTable({ title, rows, totals, locale }: { title: string; rows: ReportRow[]; totals: ReportCounts; locale: Locale }) {
   return (
     <div className="flex flex-col gap-1">
       <h2 className="font-semibold text-sm">{title}</h2>
       {rows.length === 0 ? (
-        <p className="text-sm text-gray-500">データがありません。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "reports.none")}</p>
       ) : (
         <table className="text-sm border-collapse w-full">
           <thead>
             <tr className="border-b text-left">
               <th scope="col" className="pr-4 py-0.5" />
-              <th scope="col" className="pr-4 py-0.5 text-right">未対応</th>
-              <th scope="col" className="pr-4 py-0.5 text-right">完了</th>
-              <th scope="col" className="pr-4 py-0.5 text-right">合計</th>
+              <th scope="col" className="pr-4 py-0.5 text-right">{translate(locale, "project.statusOpen")}</th>
+              <th scope="col" className="pr-4 py-0.5 text-right">{translate(locale, "project.statusClosed")}</th>
+              <th scope="col" className="pr-4 py-0.5 text-right">{translate(locale, "query.totals")}</th>
             </tr>
           </thead>
           <tbody>
@@ -52,7 +54,7 @@ function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]
               </tr>
             ))}
             <tr className="font-medium">
-              <th scope="row" className="pr-4 py-0.5 text-left">合計</th>
+              <th scope="row" className="pr-4 py-0.5 text-left">{translate(locale, "query.totals")}</th>
               <td className="pr-4 py-0.5 text-right">{totals.open}</td>
               <td className="pr-4 py-0.5 text-right">{totals.closed}</td>
               <td className="pr-4 py-0.5 text-right">{totals.total}</td>
@@ -65,6 +67,7 @@ function ReportTable({ title, rows, totals }: { title: string; rows: ReportRow[]
 }
 
 export default async function ProjectReportsPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -129,7 +132,7 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
       .map((d) => ({ key: d.id, label: d.label, counts: counts.get(d.id) ?? { open: 0, closed: 0, total: 0 } }))
       .filter((row) => row.counts.total > 0);
     if (includeNone && counts.has(null)) {
-      rows.push({ key: null, label: NONE_LABEL, counts: counts.get(null)! });
+      rows.push({ key: null, label: translate(locale, "query.none"), counts: counts.get(null)! });
     }
     return { rows, totals: totalCounts(counts) };
   }
@@ -137,22 +140,22 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
   const overallTotals = totalCounts(aggregateIssueCounts(issues, closedStatusIds, () => null));
 
   const breakdowns = [
-    { title: "トラッカー別", keyOf: (i: (typeof issues)[number]) => i.trackerId, dimension: trackers.map((t) => ({ id: t.id, label: t.name })), includeNone: false },
-    { title: "優先度別", keyOf: (i: (typeof issues)[number]) => i.priorityId, dimension: priorities.map((p) => ({ id: p.id, label: p.name })), includeNone: false },
+    { title: translate(locale, "reports.byTracker"), keyOf: (i: (typeof issues)[number]) => i.trackerId, dimension: trackers.map((t) => ({ id: t.id, label: t.name })), includeNone: false },
+    { title: translate(locale, "reports.byPriority"), keyOf: (i: (typeof issues)[number]) => i.priorityId, dimension: priorities.map((p) => ({ id: p.id, label: p.name })), includeNone: false },
     {
-      title: "担当者別",
+      title: translate(locale, "reports.byAssignee"),
       keyOf: (i: (typeof issues)[number]) => i.assignedToId,
       dimension: memberUsers.map((u) => ({ id: u.id, label: `${u.lastname} ${u.firstname}` })),
       includeNone: true,
     },
     {
-      title: "作成者別",
+      title: translate(locale, "reports.byAuthor"),
       keyOf: (i: (typeof issues)[number]) => i.authorId,
       dimension: relevantUsers.map((u) => ({ id: u.id, label: `${u.lastname} ${u.firstname}` })),
       includeNone: false,
     },
-    { title: "バージョン別", keyOf: (i: (typeof issues)[number]) => i.fixedVersionId, dimension: versions.map((v) => ({ id: v.id, label: v.name })), includeNone: true },
-    { title: "カテゴリ別", keyOf: (i: (typeof issues)[number]) => i.categoryId, dimension: categories.map((c) => ({ id: c.id, label: c.name })), includeNone: true },
+    { title: translate(locale, "reports.byVersion"), keyOf: (i: (typeof issues)[number]) => i.fixedVersionId, dimension: versions.map((v) => ({ id: v.id, label: v.name })), includeNone: true },
+    { title: translate(locale, "reports.byCategory"), keyOf: (i: (typeof issues)[number]) => i.categoryId, dimension: categories.map((c) => ({ id: c.id, label: c.name })), includeNone: true },
   ];
 
   const allBreakdowns = breakdowns.map((breakdown) => ({ title: breakdown.title, ...buildRows(breakdown.keyOf, breakdown.dimension, breakdown.includeNone) }));
@@ -166,23 +169,23 @@ export default async function ProjectReportsPage({ params }: { params: Promise<{
         href: `/projects/${sub.identifier}/reports`,
       }))
       .filter((row) => row.counts.total > 0);
-    allBreakdowns.push({ title: "サブプロジェクト別", rows, totals: totalCounts(subprojectCounts) });
+    allBreakdowns.push({ title: translate(locale, "reports.bySubproject"), rows, totals: totalCounts(subprojectCounts) });
   }
 
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — レポート</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "reports.title"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/issues`} className="underline text-sm">
-          チケット一覧
+          {translate(locale, "reports.issueList")}
         </Link>
       </div>
       <p className="text-sm text-gray-500">
-        全チケット {overallTotals.total} 件（未対応 {overallTotals.open} / 完了 {overallTotals.closed}）
+        {interpolate(translate(locale, "reports.summary"), { total: overallTotals.total, open: overallTotals.open, closed: overallTotals.closed })}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {allBreakdowns.map((breakdown) => (
-          <ReportTable key={breakdown.title} title={breakdown.title} rows={breakdown.rows} totals={breakdown.totals} />
+          <ReportTable key={breakdown.title} title={breakdown.title} rows={breakdown.rows} totals={breakdown.totals} locale={locale} />
         ))}
       </div>
     </main>

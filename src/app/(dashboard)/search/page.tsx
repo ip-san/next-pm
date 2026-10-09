@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import type { SearchResultType } from "@/domain/search/entity";
 import { SearchOptionsForm, SEARCH_TYPE_LABEL } from "@/interface/components/search/search-options-form";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -29,6 +31,7 @@ export default async function GlobalSearchPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const locale = await currentLocale();
   const raw = await searchParams;
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(raw)) {
@@ -51,17 +54,17 @@ export default async function GlobalSearchPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">検索（全プロジェクト）</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "search.allTitle")}</h1>
 
       <SearchOptionsForm request={request} scopes={["all", "my_projects"]} counts={run.countsByType} />
 
       {request.question.length > 0 && request.criteria.tokens.length === 0 ? (
-        <p className="text-sm text-gray-500">検索語は2文字以上で入力してください。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "search.minLength")}</p>
       ) : null}
 
       {request.criteria.tokens.length > 0 ? (
         <>
-          <p className="text-sm text-gray-600">{run.totalCount}件</p>
+          <p className="text-sm text-gray-600">{interpolate(translate(locale, "search.count"), { count: run.totalCount })}</p>
           <ul className="flex flex-col gap-2 text-sm">
             {run.hits.map((hit) => (
               <li key={`${hit.project.identifier}-${hit.result.type}-${hit.result.id}`} className="border rounded p-3">
@@ -74,11 +77,11 @@ export default async function GlobalSearchPage({
                 <p className="text-gray-600 line-clamp-2">{hit.result.excerpt}</p>
               </li>
             ))}
-            {run.hits.length === 0 ? <p className="text-gray-500">該当する結果が見つかりませんでした。</p> : null}
+            {run.hits.length === 0 ? <p className="text-gray-500">{translate(locale, "search.noResults")}</p> : null}
           </ul>
 
           {run.pageCount > 1 ? (
-            <nav className="flex items-center gap-3 text-sm" aria-label="ページ送り">
+            <nav className="flex items-center gap-3 text-sm" aria-label={translate(locale, "query.pagination")}>
               {Array.from({ length: run.pageCount }, (_, index) => index + 1).map((page) => (
                 <Link key={page} href={pageHref(page)} className={page === request.page ? "font-semibold" : "underline"}>
                   {page}

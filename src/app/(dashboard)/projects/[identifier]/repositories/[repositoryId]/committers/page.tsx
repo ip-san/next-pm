@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
@@ -19,6 +21,7 @@ export const dynamic = "force-dynamic";
  * repository's changesets, so it is empty until the repository has been synced at least once.
  */
 export default async function CommittersPage({ params }: { params: Promise<{ identifier: string; repositoryId: string }> }) {
+  const locale = await currentLocale();
   const { identifier, repositoryId } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -67,19 +70,19 @@ export default async function CommittersPage({ params }: { params: Promise<{ ide
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">
-          {project.name} — {repositoryLabel(scmRepository)} のコミッタ
+          {interpolate(translate(locale, "repository.committersTitle"), { project: project.name, repository: repositoryLabel(scmRepository, locale) })}
         </h1>
         <Link href={`/projects/${identifier}/repositories`} className="underline text-sm">
-          リポジトリ設定
+          {translate(locale, "repository.settingsLink")}
         </Link>
       </div>
       <p className="text-sm text-gray-500">
-        コミットの作者名をnext-pmのユーザーに紐付けます。保存するとこのリポジトリの既存のコミットにも遡って反映され、以降の同期でも同じ紐付けが使われます。既に記録済みの作業時間やチケットの履歴は本家Redmineと同じく書き換えません。
+        {translate(locale, "repository.committersHelp")}
       </p>
       {committers.length === 0 ? (
-        <p className="text-sm text-gray-500">このリポジトリにはまだコミットが取り込まれていません。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "repository.noCommits")}</p>
       ) : (
-        <CommittersForm projectIdentifier={identifier} scmRepositoryId={scmRepository.id} committers={committers} users={users} />
+        <CommittersForm locale={locale} projectIdentifier={identifier} scmRepositoryId={scmRepository.id} committers={committers} users={users} />
       )}
     </main>
   );

@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import type { ScmRepository } from "@/domain/scm/entity";
@@ -14,9 +17,9 @@ import { loadRepositoryContext, repositoryPath } from "./repository-context";
 import { SyncRepositoryButton } from "./sync-repository-button";
 
 /** Redmine's `Repository#name`: the identifier, or a "main repository" label for the unnamed default. */
-export function repositoryLabel(repository: ScmRepository): string {
+export function repositoryLabel(repository: ScmRepository, locale: Locale = "ja"): string {
   if (repository.identifier.length > 0) return repository.identifier;
-  return repository.isDefault ? "メインリポジトリ" : repository.vendor;
+  return repository.isDefault ? translate(locale, "repository.mainRepository") : repository.vendor;
 }
 
 /** Redmine's repository navigation strip — only rendered once a project actually has a second repository. */
@@ -24,10 +27,12 @@ function RepositorySwitcher({
   projectIdentifier,
   repositories,
   current,
+  locale,
 }: {
   projectIdentifier: string;
   repositories: ScmRepository[];
   current: ScmRepository;
+  locale: Locale;
 }) {
   if (repositories.length < 2) return null;
   return (
@@ -35,11 +40,11 @@ function RepositorySwitcher({
       {repositories.map((repository) =>
         repository.id === current.id ? (
           <span key={repository.id} className="font-semibold">
-            {repositoryLabel(repository)}
+            {repositoryLabel(repository, locale)}
           </span>
         ) : (
           <Link key={repository.id} href={repositoryPath(projectIdentifier, repository)} className="underline">
-            {repositoryLabel(repository)}
+            {repositoryLabel(repository, locale)}
           </Link>
         ),
       )}
@@ -59,6 +64,7 @@ export async function RepositoryBrowseView({
   /** The `?ref=` query value. Named `revision` here because React reserves the prop name `ref`. */
   revision?: string;
 }) {
+  const locale = await currentLocale();
   const currentPath = path ?? "";
   const currentRef = revision ?? "HEAD";
   const context = await loadRepositoryContext(projectIdentifier, repositoryParam, "browse_repository");
@@ -82,7 +88,7 @@ export async function RepositoryBrowseView({
       try {
         fileContent = await browser.readFile(scmRepository.rootPath, currentRef, currentPath);
       } catch {
-        error = "パスまたはリビジョンが見つかりません。";
+        error = translate(locale, "repository.pathNotFound");
       }
     }
   }
@@ -99,8 +105,8 @@ export async function RepositoryBrowseView({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">リポジトリ — {repositoryLabel(scmRepository)}</h1>
-      <RepositorySwitcher projectIdentifier={projectIdentifier} repositories={context.repositories} current={scmRepository} />
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "repository.browseTitle"), { repository: repositoryLabel(scmRepository, locale) })}</h1>
+      <RepositorySwitcher locale={locale} projectIdentifier={projectIdentifier} repositories={context.repositories} current={scmRepository} />
       <p className="text-sm text-gray-500">
         {currentRef} — /{currentPath}
       </p>
@@ -113,7 +119,7 @@ export async function RepositoryBrowseView({
             href={`${basePath}/blame?path=${encodeURIComponent(currentPath)}&ref=${encodeURIComponent(currentRef)}`}
             className="underline text-sm self-start"
           >
-            変更履歴を見る (blame)
+            {translate(locale, "repository.blameLink")}
           </Link>
           <pre className="text-xs font-mono border rounded p-3 overflow-x-auto whitespace-pre">{fileContent}</pre>
         </>
@@ -139,8 +145,8 @@ export async function RepositoryBrowseView({
       {canViewChangesets ? (
         <section className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-medium">最近のコミット</h2>
-            {canManage ? <SyncRepositoryButton projectIdentifier={projectIdentifier} scmRepositoryId={scmRepository.id} /> : null}
+            <h2 className="font-medium">{translate(locale, "repository.recentCommits")}</h2>
+            {canManage ? <SyncRepositoryButton locale={locale} projectIdentifier={projectIdentifier} scmRepositoryId={scmRepository.id} /> : null}
           </div>
           <ul className="flex flex-col gap-1 text-xs">
             {commits.map((commit) => (
@@ -170,6 +176,7 @@ export async function RepositoryBlameView({
   /** The `?ref=` query value. Named `revision` here because React reserves the prop name `ref`. */
   revision?: string;
 }) {
+  const locale = await currentLocale();
   const currentPath = path ?? "";
   const currentRef = revision ?? "HEAD";
   const context = await loadRepositoryContext(projectIdentifier, repositoryParam, "browse_repository");
@@ -185,15 +192,15 @@ export async function RepositoryBlameView({
   try {
     lines = await browser.blame(scmRepository.rootPath, currentRef, currentPath);
   } catch (blameError) {
-    error = blameError instanceof InvalidRefError || blameError instanceof InvalidRepositoryPathError ? blameError.message : "対象が見つかりません。";
+    error = blameError instanceof InvalidRefError || blameError instanceof InvalidRepositoryPathError ? blameError.message : translate(locale, "repository.targetNotFound");
   }
 
   return (
     <main className="p-8 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold font-mono">{currentPath} の変更履歴</h1>
+        <h1 className="text-xl font-semibold font-mono">{interpolate(translate(locale, "repository.blameTitle"), { path: currentPath })}</h1>
         <Link href={`${basePath}?path=${encodeURIComponent(currentPath)}&ref=${encodeURIComponent(currentRef)}`} className="underline text-sm">
-          ファイルを見る
+          {translate(locale, "repository.viewFile")}
         </Link>
       </div>
       {error ? (
@@ -249,6 +256,7 @@ async function RelatedIssues({
   context: Awaited<ReturnType<typeof loadRepositoryContext>>;
   revision: string;
 }) {
+  const locale = await currentLocale();
   const canManage = can({ permission: "manage_related_issues", project: context.projectContext, actor: context.actor });
 
   const changeset = await new DrizzleChangesetRepository().findByRevision(context.scmRepository.id, revision);
@@ -263,9 +271,9 @@ async function RelatedIssues({
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="font-medium text-sm">関連するチケット</h2>
+      <h2 className="font-medium text-sm">{translate(locale, "repository.relatedIssues")}</h2>
       {linkedIssues.length === 0 ? (
-        <p className="text-sm text-gray-500">関連付けられたチケットはありません。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "repository.noRelated")}</p>
       ) : (
         <ul className="flex flex-col gap-1 text-sm">
           {linkedIssues.map((issue) => (
@@ -274,7 +282,7 @@ async function RelatedIssues({
                 #{issue.number} {issue.subject}
               </Link>
               {canManage ? (
-                <UnlinkRelatedIssueForm
+                <UnlinkRelatedIssueForm locale={locale}
                   projectIdentifier={projectIdentifier}
                   repositoryParam={repositoryParam}
                   revision={revision}
@@ -285,7 +293,7 @@ async function RelatedIssues({
           ))}
         </ul>
       )}
-      {canManage ? <LinkRelatedIssueForm projectIdentifier={projectIdentifier} repositoryParam={repositoryParam} revision={revision} /> : null}
+      {canManage ? <LinkRelatedIssueForm locale={locale} projectIdentifier={projectIdentifier} repositoryParam={repositoryParam} revision={revision} /> : null}
     </section>
   );
 }
@@ -299,6 +307,7 @@ export async function RepositoryRevisionView({
   repositoryParam?: string;
   hash: string;
 }) {
+  const locale = await currentLocale();
   const context = await loadRepositoryContext(projectIdentifier, repositoryParam, "view_changesets");
   const { scmRepository, basePath } = context;
 
@@ -307,15 +316,15 @@ export async function RepositoryRevisionView({
   try {
     diff = await scmBrowserFor(scmRepository.vendor).diff(scmRepository.rootPath, hash);
   } catch (diffError) {
-    error = diffError instanceof InvalidRefError ? diffError.message : "リビジョンが見つかりません。";
+    error = diffError instanceof InvalidRefError ? diffError.message : translate(locale, "repository.revisionNotFound");
   }
 
   return (
     <main className="p-8 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold font-mono">リビジョン {hash.slice(0, 8)}</h1>
+        <h1 className="text-xl font-semibold font-mono">{interpolate(translate(locale, "repository.revisionTitle"), { hash: hash.slice(0, 8) })}</h1>
         <Link href={basePath} className="underline text-sm">
-          リポジトリ
+          {translate(locale, "repository.back")}
         </Link>
       </div>
       {error ? null : (

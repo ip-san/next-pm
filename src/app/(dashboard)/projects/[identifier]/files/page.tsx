@@ -1,4 +1,6 @@
 import { Fragment } from "react";
+import { currentLocale } from "@/interface/http/locale";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Attachment } from "@/domain/attachment/entity";
@@ -16,11 +18,11 @@ import { FileUploadForm } from "./file-upload-form";
 
 export const dynamic = "force-dynamic";
 
-const COLUMN_LABEL: Record<FileSortColumn, string> = {
-  filename: "ファイル",
-  created_on: "日付",
-  size: "サイズ",
-  downloads: "DL数",
+const COLUMN_LABEL: Record<FileSortColumn, MessageKey> = {
+  filename: "issue.file",
+  created_on: "issue.spentOn",
+  size: "files.size",
+  downloads: "files.downloads",
 };
 
 function formatSize(bytes: number): string {
@@ -36,6 +38,7 @@ export default async function ProjectFilesPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ sort?: string; order?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { sort: sortParam, order: orderParam } = await searchParams;
   const sort = parseFileSort(sortParam, orderParam);
@@ -82,10 +85,10 @@ export default async function ProjectFilesPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ファイル</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "projectMenu.files")}</h1>
 
       {containers.length === 0 ? (
-        <p className="text-gray-400 text-xs">ファイルはありません。</p>
+        <p className="text-gray-400 text-xs">{translate(locale, "files.none")}</p>
       ) : (
         <table className="text-sm border-collapse">
           <thead>
@@ -93,12 +96,12 @@ export default async function ProjectFilesPage({
               {FILE_SORT_COLUMNS.map((column) => (
                 <th key={column} className="py-1 pr-4 font-medium">
                   <Link href={sortHref(column)} className={column === sort.column ? "underline font-semibold" : "underline text-gray-500"}>
-                    {COLUMN_LABEL[column]}
+                    {translate(locale, COLUMN_LABEL[column])}
                     {column === sort.column ? (sort.order === "asc" ? " ↑" : " ↓") : ""}
                   </Link>
                 </th>
               ))}
-              <th className="py-1 pr-4 font-medium">ダイジェスト</th>
+              <th className="py-1 pr-4 font-medium">{translate(locale, "files.digest")}</th>
               <th className="py-1 font-medium"></th>
             </tr>
           </thead>
@@ -124,7 +127,7 @@ export default async function ProjectFilesPage({
                       </a>
                       {file.description ? <span className="text-gray-500 text-xs block">{file.description}</span> : null}
                       {canManageFiles ? (
-                        <FileDescriptionForm attachmentId={file.id} projectIdentifier={identifier} description={file.description} />
+                        <FileDescriptionForm locale={locale} attachmentId={file.id} projectIdentifier={identifier} description={file.description} />
                       ) : null}
                     </td>
                     <td className="py-1 pr-4 text-gray-600">{file.createdAt.toISOString().slice(0, 10)}</td>
@@ -132,7 +135,7 @@ export default async function ProjectFilesPage({
                     <td className="py-1 pr-4 text-gray-600">{file.downloads}</td>
                     <td className="py-1 pr-4 text-gray-500 text-xs break-all">SHA256: {file.digest}</td>
                     <td className="py-1">
-                      {canManageFiles ? <DeleteFileButton attachmentId={file.id} projectIdentifier={identifier} /> : null}
+                      {canManageFiles ? <DeleteFileButton locale={locale} attachmentId={file.id} projectIdentifier={identifier} /> : null}
                     </td>
                   </tr>
                 ))}
@@ -142,7 +145,7 @@ export default async function ProjectFilesPage({
         </table>
       )}
 
-      {canManageFiles ? <FileUploadForm projectIdentifier={identifier} versions={versions.map((v) => ({ id: v.id, name: v.name }))} /> : null}
+      {canManageFiles ? <FileUploadForm locale={locale} projectIdentifier={identifier} versions={versions.map((v) => ({ id: v.id, name: v.name }))} /> : null}
     </main>
   );
 }

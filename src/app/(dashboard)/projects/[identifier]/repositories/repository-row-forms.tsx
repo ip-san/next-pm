@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { deleteRepositoryAction, updateRepositoryAction, type ScmActionState } from "@/interface/actions/scm-actions";
 
@@ -15,12 +17,15 @@ export function UpdateRepositoryForm({
   scmRepositoryId,
   identifier,
   isDefault,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   scmRepositoryId: string;
   identifier: string;
   isDefault: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateRepositoryAction, initialState);
   const identifierFrozen = identifier.length > 0;
 
@@ -29,7 +34,7 @@ export function UpdateRepositoryForm({
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <input type="hidden" name="scmRepositoryId" value={scmRepositoryId} />
       <label className="sr-only" htmlFor={`identifier-${scmRepositoryId}`}>
-        識別子
+        {translate(locale, "project.identifier")}
       </label>
       <input
         id={`identifier-${scmRepositoryId}`}
@@ -37,15 +42,15 @@ export function UpdateRepositoryForm({
         defaultValue={identifier}
         disabled={identifierFrozen}
         pattern="[a-z0-9\-_]*"
-        placeholder="（識別子なし）"
+        placeholder={t("repository.noIdentifier")}
         className="border rounded px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
       />
       <label className="text-sm flex items-center gap-1">
         <input type="checkbox" name="isDefault" defaultChecked={isDefault} />
-        メイン
+        {translate(locale, "repository.main")}
       </label>
       <button type="submit" disabled={pending} className="border rounded px-2 py-1 text-sm disabled:opacity-50">
-        更新
+        {translate(locale, "issueForm.update")}
       </button>
       {state.error ? (
         <span role="alert" className="text-xs text-red-600">
@@ -56,7 +61,7 @@ export function UpdateRepositoryForm({
   );
 }
 
-export function DeleteRepositoryForm({ projectIdentifier, scmRepositoryId }: { projectIdentifier: string; scmRepositoryId: string }) {
+export function DeleteRepositoryForm({ locale = "ja", projectIdentifier, scmRepositoryId }: { projectIdentifier: string; scmRepositoryId: string; locale?: Locale }) {
   const [state, formAction, pending] = useActionState(deleteRepositoryAction, initialState);
 
   return (
@@ -64,7 +69,7 @@ export function DeleteRepositoryForm({ projectIdentifier, scmRepositoryId }: { p
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <input type="hidden" name="scmRepositoryId" value={scmRepositoryId} />
       <button type="submit" disabled={pending} className="border rounded px-2 py-1 text-sm text-red-700 disabled:opacity-50">
-        削除
+        {translate(locale, "issue.delete")}
       </button>
       {state.error ? (
         <span role="alert" className="text-xs text-red-600">

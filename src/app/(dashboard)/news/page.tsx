@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
@@ -15,6 +17,7 @@ export const dynamic = "force-dynamic";
 const LIMIT = 10;
 
 export default async function GlobalNewsPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   const projects = await listProjectsWithPermission(user, "view_news");
   const projectById = new Map(projects.map((project) => [project.id, project]));
@@ -30,9 +33,9 @@ export default async function GlobalNewsPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ニュース</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "projectMenu.news")}</h1>
       {items.length === 0 ? (
-        <p className="text-gray-400 text-xs">表示できるニュースはありません。</p>
+        <p className="text-gray-400 text-xs">{translate(locale, "news.noneVisible")}</p>
       ) : (
         <ul className="flex flex-col gap-3 text-sm">
           {items.map((item) => {

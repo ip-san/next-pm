@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -37,7 +38,7 @@ export default async function ProjectRepositoriesPage({ params }: { params: Prom
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — リポジトリ</h1>
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "repository.title"), { project: project.name })}</h1>
       <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="repositories"
@@ -52,15 +53,15 @@ export default async function ProjectRepositoriesPage({ params }: { params: Prom
       />
 
       {repositories.length === 0 ? (
-        <p className="text-sm text-gray-500">このプロジェクトにはリポジトリが設定されていません。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "repository.none")}</p>
       ) : (
         <table className="text-sm w-full">
           <thead>
             <tr className="text-left border-b">
-              <th className="pb-2">リポジトリ</th>
-              <th className="pb-2">種類</th>
-              <th className="pb-2">パス / URL</th>
-              <th className="pb-2">設定</th>
+              <th className="pb-2">{translate(locale, "repository.name")}</th>
+              <th className="pb-2">{translate(locale, "repository.type")}</th>
+              <th className="pb-2">{translate(locale, "repository.pathOrUrl")}</th>
+              <th className="pb-2">{translate(locale, "repository.settings")}</th>
               <th className="pb-2" />
             </tr>
           </thead>
@@ -69,14 +70,14 @@ export default async function ProjectRepositoriesPage({ params }: { params: Prom
               <tr key={repository.id} className="border-b align-top">
                 <td className="py-2">
                   <Link href={repositoryPath(identifier, repository)} className="underline">
-                    {repositoryLabel(repository)}
+                    {repositoryLabel(repository, locale)}
                   </Link>
-                  {repository.isDefault ? <span className="ml-2 text-xs text-gray-500">メイン</span> : null}
+                  {repository.isDefault ? <span className="ml-2 text-xs text-gray-500">{translate(locale, "repository.main")}</span> : null}
                 </td>
                 <td className="py-2">{VENDOR_LABEL[repository.vendor] ?? repository.vendor}</td>
                 <td className="py-2 font-mono text-xs break-all">{repository.rootPath}</td>
                 <td className="py-2">
-                  <UpdateRepositoryForm
+                  <UpdateRepositoryForm locale={locale}
                     projectIdentifier={identifier}
                     scmRepositoryId={repository.id}
                     identifier={repository.identifier}
@@ -86,9 +87,9 @@ export default async function ProjectRepositoriesPage({ params }: { params: Prom
                 <td className="py-2">
                   <div className="flex flex-col gap-1 items-start">
                     <Link href={`/projects/${identifier}/repositories/${repository.id}/committers`} className="underline text-xs">
-                      コミッタの紐付け
+                      {translate(locale, "repository.committerMapping")}
                     </Link>
-                    <DeleteRepositoryForm projectIdentifier={identifier} scmRepositoryId={repository.id} />
+                    <DeleteRepositoryForm locale={locale} projectIdentifier={identifier} scmRepositoryId={repository.id} />
                   </div>
                 </td>
               </tr>
@@ -97,7 +98,7 @@ export default async function ProjectRepositoriesPage({ params }: { params: Prom
         </table>
       )}
 
-      <ConnectRepositoryForm projectIdentifier={identifier} isFirst={repositories.length === 0} />
+      <ConnectRepositoryForm locale={locale} projectIdentifier={identifier} isFirst={repositories.length === 0} />
     </main>
   );
 }

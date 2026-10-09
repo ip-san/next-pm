@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -25,6 +27,7 @@ export default async function RepositoryPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ path?: string; ref?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { path, ref } = await searchParams;
 
@@ -44,11 +47,11 @@ export default async function RepositoryPage({
     const canManage = can({ permission: "manage_repository", project: projectContext, actor });
     return (
       <main className="p-8 flex flex-col gap-6">
-        <h1 className="text-xl font-semibold">リポジトリ</h1>
-        <p className="text-sm text-gray-500">このプロジェクトにはリポジトリが設定されていません。</p>
+        <h1 className="text-xl font-semibold">{translate(locale, "repository.name")}</h1>
+        <p className="text-sm text-gray-500">{translate(locale, "repository.none")}</p>
         {canManage ? (
           <Link href={`/projects/${identifier}/repositories`} className="underline text-sm self-start">
-            リポジトリを追加する
+            {translate(locale, "repository.addLink")}
           </Link>
         ) : null}
       </main>
