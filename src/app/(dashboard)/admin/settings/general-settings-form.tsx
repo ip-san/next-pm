@@ -1,18 +1,21 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateGeneralSettingsAction, type SettingsActionState } from "@/interface/actions/settings-actions";
 import type { GeneralSettings } from "@/domain/settings/general-settings";
 
 const initialState: SettingsActionState = { error: null };
 
-export function GeneralSettingsForm({ settings }: { settings: GeneralSettings }) {
+export function GeneralSettingsForm({ locale = "ja", settings }: { settings: GeneralSettings; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateGeneralSettingsAction, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-4 max-w-md">
       <label className="flex flex-col gap-1 text-sm">
-        添付ファイルの最大サイズ（MB）
+        {t("admin.general.attachmentMaxSize")}
         <input
           type="number"
           name="attachmentMaxSizeMb"
@@ -24,10 +27,10 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="restApiEnabled" defaultChecked={settings.restApiEnabled} />
-        REST APIを有効にする
+        {t("admin.general.restApi")}
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Atomフィードの最大件数
+        {t("admin.general.feedsLimit")}
         <input
           type="number"
           name="feedsLimit"
@@ -38,7 +41,7 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        アクティビティのデフォルト表示日数
+        {t("admin.general.activityDays")}
         <input
           type="number"
           name="activityDaysDefault"
@@ -50,10 +53,10 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="timelogAccept0Hours" defaultChecked={settings.timelogAccept0Hours} />
-        作業時間の記録で0時間を許可する
+        {t("admin.general.timelogAccept0")}
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        リポジトリのコミット履歴表示件数
+        {t("admin.general.repositoryLogLimit")}
         <input
           type="number"
           name="repositoryLogDisplayLimit"
@@ -65,26 +68,26 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="crossProjectIssueRelations" defaultChecked={settings.crossProjectIssueRelations} />
-        異なるプロジェクトのチケット同士を関連付けられるようにする
+        {t("admin.general.crossProjectRelations")}
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        進捗率の算出方法
+        {t("admin.general.doneRatio")}
         <select name="issueDoneRatio" defaultValue={settings.issueDoneRatio} className="border rounded px-2 py-1">
-          <option value="issue_field">チケットごとに入力する</option>
-          <option value="issue_status">チケットのステータスから算出する</option>
+          <option value="issue_field">{t("admin.general.doneRatioField")}</option>
+          <option value="issue_status">{t("admin.general.doneRatioStatus")}</option>
         </select>
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="webhooksEnabled" defaultChecked={settings.webhooksEnabled} />
-        Webhookを有効にする
+        {t("admin.general.webhooks")}
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="displaySubprojectsIssues" defaultChecked={settings.displaySubprojectsIssues} />
-        サブプロジェクトのチケットを親プロジェクトの画面にも表示する
+        {t("admin.general.subprojectIssues")}
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        既定の言語
+        {t("admin.general.defaultLanguage")}
         <select name="defaultLanguage" defaultValue={settings.defaultLanguage} className="border rounded px-3 py-2">
           <option value="ja">日本語</option>
           <option value="en">English</option>
@@ -92,15 +95,15 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="forceDefaultLanguageForAnonymous" defaultChecked={settings.forceDefaultLanguageForAnonymous} />
-        未ログインの利用者にも既定の言語を使う(ブラウザの言語を見ない)
+        {t("admin.general.forceLangAnonymous")}
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="forceDefaultLanguageForLoggedIn" defaultChecked={settings.forceDefaultLanguageForLoggedIn} />
-        ログイン中の利用者にも既定の言語を使う(利用者の言語設定を無視する)
+        {t("admin.general.forceLangLoggedIn")}
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        1 ページあたりの表示件数（カンマ区切り）
+        {t("admin.general.perPage")}
         <input
           name="perPageOptions"
           defaultValue={settings.perPageOptions.join(", ")}
@@ -108,7 +111,7 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        CSV/PDF エクスポートの上限件数
+        {t("admin.general.exportLimit")}
         <input
           type="number"
           min="1"
@@ -119,26 +122,26 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
       </label>
 
       <fieldset className="flex flex-col gap-2 border rounded p-3">
-        <legend className="text-sm font-medium px-1">親チケットの値を子チケットから算出する</legend>
+        <legend className="text-sm font-medium px-1">{t("admin.general.parentDerive")}</legend>
         <label className="flex flex-col gap-1 text-sm">
-          開始日・期日
+          {t("admin.general.parentDates")}
           <select name="parentIssueDates" defaultValue={settings.parentIssueDates} className="border rounded px-2 py-1">
-            <option value="independent">子チケットから算出しない</option>
-            <option value="derived">子チケットから算出する</option>
+            <option value="independent">{t("admin.derive.independent")}</option>
+            <option value="derived">{t("admin.derive.derived")}</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          優先度
+          {t("admin.general.parentPriority")}
           <select name="parentIssuePriority" defaultValue={settings.parentIssuePriority} className="border rounded px-2 py-1">
-            <option value="independent">子チケットから算出しない</option>
-            <option value="derived">子チケットから算出する</option>
+            <option value="independent">{t("admin.derive.independent")}</option>
+            <option value="derived">{t("admin.derive.derived")}</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          進捗率
+          {t("admin.general.parentDoneRatio")}
           <select name="parentIssueDoneRatio" defaultValue={settings.parentIssueDoneRatio} className="border rounded px-2 py-1">
-            <option value="independent">子チケットから算出しない</option>
-            <option value="derived">子チケットから算出する</option>
+            <option value="independent">{t("admin.derive.independent")}</option>
+            <option value="derived">{t("admin.derive.derived")}</option>
           </select>
         </label>
       </fieldset>
@@ -153,7 +156,7 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
         disabled={pending}
         className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start"
       >
-        {pending ? "保存中…" : "保存"}
+        {pending ? t("issue.saving") : t("issue.save")}
       </button>
     </form>
   );

@@ -30,6 +30,10 @@ const KEYS: MessageKey[] = [
   "versions.sharingTree",
   "projectNew.copyHelp",
   "projectDelete.warningEnd",
+  "admin.title",
+  "admin.settings.general",
+  "admin.duration.unlimited",
+  "admin.mail.apiKeyHelp",
 ];
 
 describe("translate", () => {

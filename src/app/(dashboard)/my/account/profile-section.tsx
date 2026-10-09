@@ -11,7 +11,6 @@ const initialState: MyAccountActionState = { error: null, ok: false };
 
 /** Redmine ships ~50 locales; next-pm has no i18n framework, so this is the stored-only shortlist. */
 const LANGUAGES: { value: string; label: string }[] = [
-  { value: "", label: "(既定)" },
   { value: "ja", label: "日本語" },
   { value: "en", label: "English" },
 ];

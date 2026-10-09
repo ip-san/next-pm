@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/domain/i18n/messages";
+
 /**
  * What Redmine's Administration > Information page reports (AdminController#info): a checklist of
  * things an operator must have right, then the environment. The facts are gathered by the caller,
@@ -13,16 +15,17 @@ export interface InstallationFacts {
 }
 
 export interface InstallationChecklistItem {
-  label: string;
+  /** A catalog key; the admin information page renders it in the viewer's locale. */
+  labelKey: MessageKey;
   ok: boolean;
 }
 
 /** Each check mirrors one entry of AdminController#info, with the same wording where next-pm has an equivalent. */
 export function buildInstallationChecklist(facts: InstallationFacts): InstallationChecklistItem[] {
   return [
-    { label: "デフォルトの管理者アカウントのパスワードを変更済み", ok: !facts.defaultAdminPasswordInUse },
-    { label: "添付ファイルの保存先に書き込みできる", ok: facts.storageWritable },
-    { label: "すべてのマイグレーションが実行済み", ok: facts.pendingMigrations === 0 },
+    { labelKey: "admin.check.defaultAdminPassword", ok: !facts.defaultAdminPasswordInUse },
+    { labelKey: "admin.check.storageWritable", ok: facts.storageWritable },
+    { labelKey: "admin.check.migrations", ok: facts.pendingMigrations === 0 },
   ];
 }
 

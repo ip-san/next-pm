@@ -8,6 +8,8 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { AuthSettingsForm } from "./auth-settings-form";
 import { CommitKeywordSettingsForm } from "./commit-keyword-settings-form";
 import { GeneralSettingsForm } from "./general-settings-form";
@@ -19,6 +21,7 @@ import { ProjectDefaultsForm } from "./project-defaults-form";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -37,38 +40,38 @@ export default async function SettingsPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">設定</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "admin.settings")}</h1>
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">全般</h2>
-        <GeneralSettingsForm settings={generalSettings} />
+        <h2 className="font-medium">{translate(locale, "admin.settings.general")}</h2>
+        <GeneralSettingsForm locale={locale} settings={generalSettings} />
       </section>
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">受信メール</h2>
+        <h2 className="font-medium">{translate(locale, "admin.settings.mailHandler")}</h2>
         <p className="text-sm text-gray-500">
-          メールからチケットを登録・更新するための設定です（POST /api/mail_handler）。
+          {translate(locale, "admin.settings.mailHandlerIntro")}
         </p>
-        <MailHandlerSettingsForm settings={mailHandlerSettings} />
+        <MailHandlerSettingsForm locale={locale} settings={mailHandlerSettings} />
       </section>
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">リマインダーメール</h2>
+        <h2 className="font-medium">{translate(locale, "admin.settings.reminders")}</h2>
         <p className="text-sm text-gray-500">
-          本家の <code>rake redmine:send_reminders</code> 相当。next-pm には定時起動の仕組みが無いため、ここから手動で（または外部のスケジューラからこの操作を呼び出して）実行します。
+          {translate(locale, "admin.settings.remindersIntro1")}<code>rake redmine:send_reminders</code>{translate(locale, "admin.settings.remindersIntro2")}
         </p>
-        <RemindersForm />
+        <RemindersForm locale={locale} />
       </section>
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">認証</h2>
-        <AuthSettingsForm settings={authSettings} />
+        <h2 className="font-medium">{translate(locale, "admin.settings.auth")}</h2>
+        <AuthSettingsForm locale={locale} settings={authSettings} />
       </section>
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">プロジェクト</h2>
-        <p className="text-sm text-gray-500">新しいプロジェクトの既定値です。</p>
-        <ProjectDefaultsForm settings={projectDefaults} trackers={trackers} roles={roles} />
+        <h2 className="font-medium">{translate(locale, "admin.settings.projects")}</h2>
+        <p className="text-sm text-gray-500">{translate(locale, "admin.settings.projectsIntro")}</p>
+        <ProjectDefaultsForm locale={locale} settings={projectDefaults} trackers={trackers} roles={roles} />
       </section>
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">リポジトリ</h2>
-        <p className="text-sm text-gray-500">コミットメッセージからチケットを更新するためのキーワードです。</p>
-        <CommitKeywordSettingsForm settings={commitKeywordSettings} />
+        <h2 className="font-medium">{translate(locale, "admin.settings.repositories")}</h2>
+        <p className="text-sm text-gray-500">{translate(locale, "admin.settings.repositoriesIntro")}</p>
+        <CommitKeywordSettingsForm locale={locale} settings={commitKeywordSettings} />
       </section>
     </main>
   );

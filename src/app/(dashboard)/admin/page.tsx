@@ -5,28 +5,29 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { DeleteProjectForm } from "../projects/delete-project-form";
 import { ProjectStatusButton } from "../projects/project-status-button";
 import { currentLocale } from "@/interface/http/locale";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
 
 const ADMIN_SECTIONS = [
-  { href: "/admin/users", label: "ユーザー" },
-  { href: "/admin/groups", label: "グループ" },
-  { href: "/admin/ldap-auth-sources", label: "LDAP認証" },
-  { href: "/admin/roles", label: "ロールと権限" },
-  { href: "/admin/trackers", label: "トラッカー" },
-  { href: "/admin/issue-statuses", label: "チケットのステータス" },
-  { href: "/admin/workflows", label: "ワークフロー" },
-  { href: "/admin/custom-fields", label: "カスタムフィールド" },
-  { href: "/admin/enumerations", label: "その他の値" },
-  { href: "/admin/settings", label: "設定" },
-  { href: "/admin/info", label: "情報" },
+  { href: "/admin/users", labelKey: "admin.users" },
+  { href: "/admin/groups", labelKey: "admin.groups" },
+  { href: "/admin/ldap-auth-sources", labelKey: "admin.ldapAuth" },
+  { href: "/admin/roles", labelKey: "admin.roles" },
+  { href: "/admin/trackers", labelKey: "admin.trackers" },
+  { href: "/admin/issue-statuses", labelKey: "admin.issueStatuses" },
+  { href: "/admin/workflows", labelKey: "admin.workflows" },
+  { href: "/admin/custom-fields", labelKey: "admin.customFields" },
+  { href: "/admin/enumerations", labelKey: "admin.enumerations" },
+  { href: "/admin/settings", labelKey: "admin.settings" },
+  { href: "/admin/info", labelKey: "admin.info" },
 ] as const;
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "有効",
-  closed: "終了",
-  archived: "アーカイブ済み",
+const STATUS_LABEL: Record<string, MessageKey> = {
+  active: "admin.statusActive",
+  closed: "admin.statusClosed",
+  archived: "admin.statusArchived",
 };
 
 export default async function AdminIndexPage() {
@@ -41,14 +42,14 @@ export default async function AdminIndexPage() {
 
   return (
     <main className="p-8 flex flex-col gap-8">
-      <h1 className="text-xl font-semibold">管理</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "admin.title")}</h1>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">設定項目</h2>
+        <h2 className="font-medium">{translate(locale, "admin.configuration")}</h2>
         <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
           {ADMIN_SECTIONS.map((section) => (
             <Link key={section.href} href={section.href} className="hover:underline">
-              {section.label}
+              {translate(locale, section.labelKey)}
             </Link>
           ))}
         </nav>
@@ -56,19 +57,19 @@ export default async function AdminIndexPage() {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-medium">プロジェクト</h2>
+          <h2 className="font-medium">{translate(locale, "admin.projects")}</h2>
           <Link href="/projects/new" className="underline text-sm">
-            新しいプロジェクト
+            {translate(locale, "admin.newProject")}
           </Link>
         </div>
         <table className="text-sm border-collapse">
           <thead>
             <tr className="text-left border-b">
-              <th className="pr-4 py-1">名前</th>
-              <th className="pr-4 py-1">識別子</th>
-              <th className="pr-4 py-1">親プロジェクト</th>
-              <th className="pr-4 py-1">状態</th>
-              <th className="pr-4 py-1">公開</th>
+              <th className="pr-4 py-1">{translate(locale, "issueCategories.name")}</th>
+              <th className="pr-4 py-1">{translate(locale, "project.identifier")}</th>
+              <th className="pr-4 py-1">{translate(locale, "admin.colParent")}</th>
+              <th className="pr-4 py-1">{translate(locale, "admin.colStatus")}</th>
+              <th className="pr-4 py-1">{translate(locale, "admin.colPublic")}</th>
               <th className="pr-4 py-1" />
             </tr>
           </thead>
@@ -82,8 +83,8 @@ export default async function AdminIndexPage() {
                 </td>
                 <td className="pr-4 py-1">{project.identifier}</td>
                 <td className="pr-4 py-1">{project.parentId ? (projectsById.get(project.parentId)?.name ?? "-") : "-"}</td>
-                <td className="pr-4 py-1">{STATUS_LABEL[project.status] ?? project.status}</td>
-                <td className="pr-4 py-1">{project.isPublic ? "公開" : "非公開"}</td>
+                <td className="pr-4 py-1">{STATUS_LABEL[project.status] ? translate(locale, STATUS_LABEL[project.status]) : project.status}</td>
+                <td className="pr-4 py-1">{project.isPublic ? translate(locale, "project.isPublic") : translate(locale, "admin.private")}</td>
                 <td className="pr-4 py-1">
                   <span className="flex gap-3">
                     {/* Redmine's Admin::ProjectsController offers archive/unarchive here and
