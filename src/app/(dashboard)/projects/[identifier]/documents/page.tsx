@@ -9,15 +9,17 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { currentLocale } from "@/interface/http/locale";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { DocumentCreateForm } from "./document-create-form";
 
 export const dynamic = "force-dynamic";
 
-const SORT_LABEL: Record<DocumentSortBy, string> = {
-  category: "カテゴリ",
-  date: "日付",
-  title: "タイトル",
-  author: "投稿者",
+const SORT_LABEL: Record<DocumentSortBy, MessageKey> = {
+  category: "query.column.category",
+  date: "documents.sortDate",
+  title: "documents.sortTitle",
+  author: "documents.sortAuthor",
 };
 
 function parseSortBy(value: string | undefined): DocumentSortBy {
@@ -31,6 +33,7 @@ export default async function DocumentsPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ sort_by?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { sort_by: sortByParam } = await searchParams;
   const sortBy = parseSortBy(sortByParam);
@@ -79,23 +82,23 @@ export default async function DocumentsPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ドキュメント</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "documents.title")}</h1>
 
       <div className="flex items-center gap-3 text-sm">
-        <span className="text-gray-500">並び替え:</span>
+        <span className="text-gray-500">{translate(locale, "documents.sortBy")}</span>
         {DOCUMENT_SORT_OPTIONS.map((option) => (
           <Link
             key={option}
             href={`?sort_by=${option}`}
             className={option === sortBy ? "font-semibold underline" : "underline text-gray-500"}
           >
-            {SORT_LABEL[option]}
+            {translate(locale, SORT_LABEL[option])}
           </Link>
         ))}
       </div>
 
       {groups.length === 0 ? (
-        <p className="text-gray-400 text-xs">ドキュメントはありません。</p>
+        <p className="text-gray-400 text-xs">{translate(locale, "documents.none")}</p>
       ) : (
         <div className="flex flex-col gap-6">
           {groups.map((group) => (
@@ -119,7 +122,7 @@ export default async function DocumentsPage({
         </div>
       )}
 
-      {canAddDocuments ? <DocumentCreateForm projectIdentifier={identifier} categories={categories} /> : null}
+      {canAddDocuments ? <DocumentCreateForm projectIdentifier={identifier} categories={categories} locale={locale} /> : null}
     </main>
   );
 }

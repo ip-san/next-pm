@@ -7,11 +7,14 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { BoardAdminControls } from "./board-admin-controls";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { BoardCreateForm } from "./board-create-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function BoardsPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -33,7 +36,7 @@ export default async function BoardsPage({ params }: { params: Promise<{ identif
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">フォーラム</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "boards.title")}</h1>
       <ul className="flex flex-col gap-2 text-sm">
         {tree.map(({ board, level }) => (
           <li key={board.id} className="border rounded p-3" style={{ marginLeft: level * 16 }}>
@@ -49,6 +52,7 @@ export default async function BoardsPage({ params }: { params: Promise<{ identif
                   parentOptions={validParents(boards, board.id).map((candidate) => ({ id: candidate.id, label: candidate.name }))}
                   canMoveUp={board.position > 1}
                   canMoveDown={board.position < siblingCount(board.parentId)}
+                  locale={locale}
                 />
               </div>
             ) : null}
@@ -56,7 +60,11 @@ export default async function BoardsPage({ params }: { params: Promise<{ identif
         ))}
       </ul>
       {canManageBoards ? (
-        <BoardCreateForm projectIdentifier={identifier} parentOptions={boards.map((board) => ({ id: board.id, label: board.name }))} />
+        <BoardCreateForm
+          projectIdentifier={identifier}
+          parentOptions={boards.map((board) => ({ id: board.id, label: board.name }))}
+          locale={locale}
+        />
       ) : null}
     </main>
   );

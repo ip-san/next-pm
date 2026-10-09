@@ -21,10 +21,13 @@ import {
   NewsEditForm,
 } from "./news-manage-forms";
 import { NewsWatchToggleForm } from "./news-watch-toggle-form";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewsDetailPage({ params }: { params: Promise<{ identifier: string; newsId: string }> }) {
+  const locale = await currentLocale();
   const { identifier, newsId } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -65,7 +68,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
       <article>
         <div className="flex items-start justify-between">
           <h1 className="text-xl font-semibold">{item.title}</h1>
-          {user ? <NewsWatchToggleForm newsId={item.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
+          {user ? <NewsWatchToggleForm newsId={item.id} projectIdentifier={identifier} isWatching={isWatching} locale={locale} /> : null}
         </div>
         <p className="text-xs text-gray-500">
           <UserAvatar mail={authorMailById.get(item.authorId) ?? null} gravatarEnabled={gravatarEnabled} /> {authorLabelById.get(item.authorId) ?? ""} · {item.createdAt.toISOString()}
@@ -80,27 +83,29 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
               title={item.title}
               summary={item.summary}
               description={item.description}
+              locale={locale}
             />
-            <DeleteNewsButton projectIdentifier={identifier} newsId={item.id} />
+            <DeleteNewsButton projectIdentifier={identifier} newsId={item.id} locale={locale} />
           </div>
         ) : null}
       </article>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium text-sm">添付ファイル</h2>
+        <h2 className="font-medium text-sm">{translate(locale, "issue.attachments")}</h2>
         <AttachmentList
           attachments={attachments}
+          locale={locale}
           renderAction={
             canManageNews
-              ? (attachment) => <DeleteNewsAttachmentButton projectIdentifier={identifier} newsId={item.id} attachmentId={attachment.id} />
+              ? (attachment) => <DeleteNewsAttachmentButton projectIdentifier={identifier} newsId={item.id} attachmentId={attachment.id} locale={locale} />
               : undefined
           }
         />
-        {canManageNews ? <NewsAttachmentUploadForm projectIdentifier={identifier} newsId={item.id} /> : null}
+        {canManageNews ? <NewsAttachmentUploadForm projectIdentifier={identifier} newsId={item.id} locale={locale} /> : null}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">コメント</h2>
+        <h2 className="font-medium">{translate(locale, "news.comments")}</h2>
         <ul className="flex flex-col gap-2 text-sm">
           {comments.map((comment) => (
             <li key={comment.id} className="border rounded p-2">
@@ -110,12 +115,12 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ ide
               </p>
               <FormattedText project={project} text={comment.content} />
               {canManageNews ? (
-                <DeleteNewsCommentButton projectIdentifier={identifier} newsId={item.id} commentId={comment.id} />
+                <DeleteNewsCommentButton projectIdentifier={identifier} newsId={item.id} commentId={comment.id} locale={locale} />
               ) : null}
             </li>
           ))}
         </ul>
-        {canComment ? <NewsCommentForm projectIdentifier={identifier} newsId={item.id} /> : null}
+        {canComment ? <NewsCommentForm projectIdentifier={identifier} newsId={item.id} locale={locale} /> : null}
       </section>
     </main>
   );

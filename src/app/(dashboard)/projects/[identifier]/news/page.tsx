@@ -5,11 +5,14 @@ import { DrizzleNewsRepository } from "@/infrastructure/db/repositories/news-rep
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { NewsCreateForm } from "./news-create-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewsListPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -28,7 +31,7 @@ export default async function NewsListPage({ params }: { params: Promise<{ ident
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ニュース</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "news.title")}</h1>
       <ul className="flex flex-col gap-3 text-sm">
         {items.map((item) => (
           <li key={item.id} className="border rounded p-3">
@@ -40,7 +43,7 @@ export default async function NewsListPage({ params }: { params: Promise<{ ident
           </li>
         ))}
       </ul>
-      {canManageNews ? <NewsCreateForm projectIdentifier={identifier} /> : null}
+      {canManageNews ? <NewsCreateForm projectIdentifier={identifier} locale={locale} /> : null}
     </main>
   );
 }

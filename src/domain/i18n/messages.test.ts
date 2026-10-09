@@ -20,6 +20,9 @@ const KEYS: MessageKey[] = [
   "bulkEdit.submit",
   "issueDelete.timeLegend",
   "projectStatus.confirmArchive",
+  "news.create",
+  "boards.replies",
+  "documents.none",
   "projectDelete.warningEnd",
 ];
 

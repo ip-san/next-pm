@@ -8,6 +8,8 @@ import {
   type BoardActionState,
 } from "@/interface/actions/board-actions";
 import type { BoardOption } from "./board-create-form";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: BoardActionState = { error: null };
 
@@ -36,14 +38,14 @@ function MoveButton({
   );
 }
 
-function DeleteButton({ projectIdentifier, boardId }: { projectIdentifier: string; boardId: string }) {
+function DeleteButton({ projectIdentifier, boardId, locale }: { projectIdentifier: string; boardId: string; locale: Locale }) {
   const [state, formAction, pending] = useActionState(deleteBoardAction, initialState);
   return (
     <form action={formAction} className="inline">
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <input type="hidden" name="boardId" value={boardId} />
       <button type="submit" disabled={pending} className="text-xs underline text-red-600 disabled:opacity-50">
-        削除
+        {translate(locale, "issue.delete")}
       </button>
       {state.error ? <span className="text-xs text-red-600 ml-1">{state.error}</span> : null}
     </form>
@@ -61,13 +63,16 @@ export function BoardAdminControls({
   parentOptions,
   canMoveUp,
   canMoveDown,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   board: { id: string; name: string; description: string; parentId: string | null; position: number };
   parentOptions: BoardOption[];
   canMoveUp: boolean;
   canMoveDown: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(updateBoardAction, initialState);
 
@@ -81,9 +86,9 @@ export function BoardAdminControls({
           <MoveButton projectIdentifier={projectIdentifier} boardId={board.id} position={board.position + 1} label="↓" />
         ) : null}
         <button type="button" onClick={() => setOpen((value) => !value)} className="text-xs underline">
-          編集
+          {t("issue.edit")}
         </button>
-        <DeleteButton projectIdentifier={projectIdentifier} boardId={board.id} />
+        <DeleteButton projectIdentifier={projectIdentifier} boardId={board.id} locale={locale} />
       </div>
 
       {open ? (
@@ -93,7 +98,7 @@ export function BoardAdminControls({
           <input name="name" defaultValue={board.name} maxLength={30} required className="border rounded px-3 py-2 text-sm" />
           <textarea name="description" defaultValue={board.description} maxLength={255} required className="border rounded px-3 py-2 text-sm" />
           <select name="parentId" defaultValue={board.parentId ?? ""} className="border rounded px-3 py-2 text-sm">
-            <option value="">(親フォーラムなし)</option>
+            <option value="">{t("boards.noParent")}</option>
             {parentOptions.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.label}
@@ -102,7 +107,7 @@ export function BoardAdminControls({
           </select>
           {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
           <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-1 text-sm self-start disabled:opacity-50">
-            保存
+            {t("issue.save")}
           </button>
         </form>
       ) : null}

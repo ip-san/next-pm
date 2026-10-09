@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { updateDocumentAction, type UpdateDocumentActionState } from "@/interface/actions/document-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: UpdateDocumentActionState = { error: null };
 
@@ -12,6 +14,7 @@ export function DocumentEditForm({
   title,
   description,
   categories,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   documentId: string;
@@ -19,14 +22,17 @@ export function DocumentEditForm({
   title: string;
   description: string;
   categories: { id: string; name: string }[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
+
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(updateDocumentAction, initialState);
 
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="text-xs underline">
-        編集
+        {t("issue.edit")}
       </button>
     );
   }
@@ -46,7 +52,7 @@ export function DocumentEditForm({
       <textarea name="description" defaultValue={description} rows={5} className="border rounded px-3 py-2 text-sm" />
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-1 text-sm self-start disabled:opacity-50">
-        保存
+        {t("issue.save")}
       </button>
     </form>
   );

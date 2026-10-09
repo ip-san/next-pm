@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { postMessageAction, type PostMessageActionState } from "@/interface/actions/message-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: PostMessageActionState = { error: null };
 
@@ -11,6 +13,7 @@ export function MessageForm({
   parentId,
   replySubject,
   defaultContent,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   boardId: string;
@@ -19,7 +22,10 @@ export function MessageForm({
   replySubject?: string;
   /** Prefilled body when replying via 引用 (quote). */
   defaultContent?: string;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
+
   const [state, formAction, pending] = useActionState(postMessageAction, initialState);
 
   return (
@@ -30,7 +36,7 @@ export function MessageForm({
       {parentId ? (
         <input type="hidden" name="subject" value={replySubject ?? ""} />
       ) : (
-        <input name="subject" placeholder="件名" maxLength={255} required className="border rounded px-3 py-2 text-sm" />
+        <input name="subject" placeholder={t("boards.subject")} maxLength={255} required className="border rounded px-3 py-2 text-sm" />
       )}
       <textarea
         name="content"
@@ -38,14 +44,14 @@ export function MessageForm({
         // form stays mounted while the ?quote= search param navigates.
         key={defaultContent ?? ""}
         defaultValue={defaultContent ?? ""}
-        placeholder={parentId ? "返信" : "本文"}
+        placeholder={parentId ? t("boards.replyPlaceholder") : t("boards.content")}
         required
         rows={5}
         className="border rounded px-3 py-2 text-sm"
       />
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
-        {pending ? "送信中…" : parentId ? "返信する" : "投稿する"}
+        {pending ? t("boards.sending") : parentId ? t("boards.replySubmit") : t("boards.postSubmit")}
       </button>
     </form>
   );

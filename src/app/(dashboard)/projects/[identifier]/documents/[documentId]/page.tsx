@@ -9,6 +9,8 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { AttachmentList } from "../../../attachment-list";
 import { DeleteDocumentAttachmentButton } from "./delete-document-attachment-button";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { DeleteDocumentButton } from "./delete-document-button";
 import { DocumentEditForm } from "./document-edit-form";
 import { DocumentAttachmentUploadForm } from "./document-attachment-upload-form";
@@ -16,6 +18,7 @@ import { DocumentAttachmentUploadForm } from "./document-attachment-upload-form"
 export const dynamic = "force-dynamic";
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ identifier: string; documentId: string }> }) {
+  const locale = await currentLocale();
   const { identifier, documentId } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -54,16 +57,17 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       <FormattedText project={project} text={document.description} />
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium text-sm">添付ファイル</h2>
+        <h2 className="font-medium text-sm">{translate(locale, "issue.attachments")}</h2>
         <AttachmentList
           attachments={attachments}
+          locale={locale}
           renderAction={
             canDeleteDocuments
-              ? (attachment) => <DeleteDocumentAttachmentButton projectIdentifier={identifier} attachmentId={attachment.id} />
+              ? (attachment) => <DeleteDocumentAttachmentButton projectIdentifier={identifier} attachmentId={attachment.id} locale={locale} />
               : undefined
           }
         />
-        {canAttach ? <DocumentAttachmentUploadForm documentId={document.id} projectIdentifier={identifier} /> : null}
+        {canAttach ? <DocumentAttachmentUploadForm documentId={document.id} projectIdentifier={identifier} locale={locale} /> : null}
       </section>
 
       {canEditDocuments || canDeleteDocuments ? (
@@ -76,9 +80,10 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               title={document.title}
               description={document.description}
               categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+              locale={locale}
             />
           ) : null}
-          {canDeleteDocuments ? <DeleteDocumentButton projectIdentifier={identifier} documentId={document.id} /> : null}
+          {canDeleteDocuments ? <DeleteDocumentButton projectIdentifier={identifier} documentId={document.id} locale={locale} /> : null}
         </div>
       ) : null}
     </main>

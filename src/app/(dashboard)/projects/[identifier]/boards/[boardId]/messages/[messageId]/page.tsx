@@ -21,6 +21,8 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 import { AttachmentList } from "../../../../../attachment-list";
 import { MessageForm } from "../../message-form";
 import { DeleteMessageButton } from "./delete-message-button";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { EditMessageForm } from "./edit-message-form";
 import { DeleteMessageAttachmentButton, MessageAttachmentUploadForm } from "./message-attachment-forms";
 import { MessageWatcherManager } from "./message-watcher-manager";
@@ -35,6 +37,7 @@ export default async function MessageThreadPage({
   params: Promise<{ identifier: string; boardId: string; messageId: string }>;
   searchParams: Promise<{ quote?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, boardId, messageId } = await params;
   const { quote: quotedMessageId } = await searchParams;
 
@@ -108,7 +111,7 @@ export default async function MessageThreadPage({
       <div className="flex gap-3 mt-2 items-start">
         {canPost && !topic.locked ? (
           <Link href={`?quote=${message.id}#reply`} className="text-xs underline">
-            引用
+            {translate(locale, "boards.quote")}
           </Link>
         ) : null}
         {user && canEditMessage(message, user.id, hasEditMessages, hasEditOwnMessages) ? (
@@ -121,12 +124,13 @@ export default async function MessageThreadPage({
             isTopic={message.parentId === null}
             locked={message.locked}
             sticky={message.sticky}
+            locale={locale}
             canEditAllMessages={hasEditMessages}
             moveTargets={projectBoards.map((candidate) => ({ id: candidate.id, name: candidate.name }))}
           />
         ) : null}
         {user && canDeleteMessage(message, user.id, hasDeleteMessages, hasDeleteOwnMessages) ? (
-          <DeleteMessageButton projectIdentifier={identifier} boardId={board.id} messageId={message.id} />
+          <DeleteMessageButton projectIdentifier={identifier} boardId={board.id} messageId={message.id} locale={locale} />
         ) : null}
       </div>
   );
@@ -142,15 +146,16 @@ export default async function MessageThreadPage({
         <AttachmentList
           attachments={own}
           emptyLabel=""
+          locale={locale}
           renderAction={
             hasEditMessages
               ? (attachment) => (
-                  <DeleteMessageAttachmentButton projectIdentifier={identifier} boardId={board.id} attachmentId={attachment.id} />
+                  <DeleteMessageAttachmentButton projectIdentifier={identifier} boardId={board.id} attachmentId={attachment.id} locale={locale} />
                 )
               : undefined
           }
         />
-        {editable ? <MessageAttachmentUploadForm projectIdentifier={identifier} boardId={board.id} messageId={message.id} /> : null}
+        {editable ? <MessageAttachmentUploadForm projectIdentifier={identifier} boardId={board.id} messageId={message.id} locale={locale} /> : null}
       </section>
     );
   };
@@ -162,9 +167,9 @@ export default async function MessageThreadPage({
           <h1 className="text-xl font-semibold">
             {topic.sticky ? "📌 " : ""}
             {topic.subject}
-            {topic.locked ? <span className="text-xs text-gray-500 ml-2">(ロック中)</span> : null}
+            {topic.locked ? <span className="text-xs text-gray-500 ml-2">{translate(locale, "boards.locked")}</span> : null}
           </h1>
-          {user ? <MessageWatchToggleForm messageId={topic.id} boardId={board.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
+          {user ? <MessageWatchToggleForm messageId={topic.id} boardId={board.id} projectIdentifier={identifier} isWatching={isWatching} locale={locale} /> : null}
         </div>
         <p className="text-xs text-gray-500">
           <UserAvatar mail={userMailById.get(topic.authorId) ?? null} gravatarEnabled={gravatarEnabled} /> {userLabelById.get(topic.authorId) ?? ""} · {topic.createdAt.toISOString()}
@@ -184,6 +189,7 @@ export default async function MessageThreadPage({
           canView={canViewWatchers}
           canAdd={canAddWatchers}
           canRemove={canRemoveWatchers}
+          locale={locale}
         />
       ) : null}
 
@@ -209,6 +215,7 @@ export default async function MessageThreadPage({
             parentId={topic.id}
             replySubject={replySubject}
             defaultContent={replyBody}
+            locale={locale}
           />
         </section>
       ) : null}

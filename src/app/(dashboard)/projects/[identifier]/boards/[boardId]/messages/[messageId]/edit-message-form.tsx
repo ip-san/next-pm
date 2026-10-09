@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { editMessageAction, type MessageMutationActionState } from "@/interface/actions/message-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: MessageMutationActionState = { error: null };
 
@@ -22,6 +24,7 @@ export function EditMessageForm({
   /** Non-empty only for a topic edited by someone holding edit_messages — Redmine's conditional safe attributes. */
   moveTargets,
   canEditAllMessages,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   boardId: string;
@@ -33,14 +36,17 @@ export function EditMessageForm({
   sticky: boolean;
   moveTargets: MoveTargetBoard[];
   canEditAllMessages: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
+
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(editMessageAction, initialState);
 
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="text-xs underline">
-        編集
+        {t("issue.edit")}
       </button>
     );
   }
@@ -56,15 +62,15 @@ export function EditMessageForm({
         <>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" name="sticky" defaultChecked={sticky} />
-            常に先頭に表示
+            {t("boards.sticky")}
           </label>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" name="locked" defaultChecked={locked} />
-            ロック
+            {t("boards.lock")}
           </label>
           {moveTargets.length > 0 ? (
             <label className="flex items-center gap-2 text-xs">
-              フォーラム
+              {t("boards.forum")}
               <select name="targetBoardId" defaultValue={boardId} className="border rounded px-2 py-1 text-xs">
                 {moveTargets.map((board) => (
                   <option key={board.id} value={board.id}>
@@ -78,7 +84,7 @@ export function EditMessageForm({
       ) : null}
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-1 text-sm self-start disabled:opacity-50">
-        保存
+        {t("issue.save")}
       </button>
     </form>
   );

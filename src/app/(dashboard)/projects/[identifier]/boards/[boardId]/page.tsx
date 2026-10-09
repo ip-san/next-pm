@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleBoardRepository } from "@/infrastructure/db/repositories/board-repository";
 import { DrizzleMessageRepository } from "@/infrastructure/db/repositories/message-repository";
@@ -11,6 +13,7 @@ import { MessageForm } from "./message-form";
 export const dynamic = "force-dynamic";
 
 export default async function BoardDetailPage({ params }: { params: Promise<{ identifier: string; boardId: string }> }) {
+  const locale = await currentLocale();
   const { identifier, boardId } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -47,8 +50,8 @@ export default async function BoardDetailPage({ params }: { params: Promise<{ id
               {topic.subject}
             </Link>
             <p className="text-gray-500 text-xs">
-              返信 {topic.repliesCount}件 · {topic.createdAt.toISOString()}
-              {topic.locked ? " · ロック中" : ""}
+              {interpolate(translate(locale, "boards.replies"), { count: topic.repliesCount })} · {topic.createdAt.toISOString()}
+              {topic.locked ? translate(locale, "boards.lockedSuffix") : ""}
             </p>
           </li>
         ))}
@@ -56,8 +59,8 @@ export default async function BoardDetailPage({ params }: { params: Promise<{ id
 
       {canPost ? (
         <section className="border-t pt-4">
-          <h2 className="font-medium text-sm mb-2">新しいトピック</h2>
-          <MessageForm projectIdentifier={identifier} boardId={board.id} parentId={null} />
+          <h2 className="font-medium text-sm mb-2">{translate(locale, "boards.newTopic")}</h2>
+          <MessageForm projectIdentifier={identifier} boardId={board.id} parentId={null} locale={locale} />
         </section>
       ) : null}
     </main>
