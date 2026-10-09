@@ -21,7 +21,7 @@ export interface CustomFieldRepository {
 export interface CustomFieldAdminRepository {
   update(
     id: string,
-    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds" | "visible" | "roleIds">,
+    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds" | "visible" | "roleIds" | "multiple">,
   ): Promise<CustomField>;
   /** Takes the field's custom_values with it, like Redmine's `has_many :custom_values, dependent: :delete_all`. */
   delete(id: string): Promise<void>;

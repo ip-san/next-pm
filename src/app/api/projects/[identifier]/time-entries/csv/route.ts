@@ -92,7 +92,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
       activityById.get(entry.activityId)?.name ?? "",
       String(entry.hours),
       entry.comments,
-      ...customFields.map((field) => valuesByEntry.get(entry.id)?.get(field.id) ?? ""),
+      ...customFields.map((field) => (valuesByEntry.get(entry.id)?.get(field.id) ?? "").split("\n").join(", ")),
     ]),
   ];
 

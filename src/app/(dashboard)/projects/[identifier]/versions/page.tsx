@@ -109,7 +109,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
                   {versionFields.map((field) =>
                     versionValues.get(version.id)?.get(field.id) ? (
                       <div key={field.id} className="text-xs text-gray-500">
-                        {field.name}: {versionValues.get(version.id)?.get(field.id)}
+                        {field.name}: {versionValues.get(version.id)?.get(field.id)?.split("\n").join(", ")}
                       </div>
                     ) : null,
                   )}

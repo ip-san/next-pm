@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { customFieldEnumerations, customFields, customFieldsRoles, customFieldsTrackers } from "@/infrastructure/db/schema/custom-fields";
 import type { CustomField, CustomFieldEnumeration, CustomizedType } from "@/domain/custom-field/entity";
@@ -148,9 +148,10 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
 
   async update(
     id: string,
-    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds" | "visible" | "roleIds">,
+    changes: Pick<CustomField, "name" | "isRequired" | "defaultValue" | "possibleValues" | "trackerIds" | "visible" | "roleIds" | "multiple">,
   ): Promise<CustomField> {
     const visibility = normalizeFieldVisibility(changes);
+    const [before] = await db.select({ multiple: customFields.multiple }).from(customFields).where(eq(customFields.id, id)).limit(1);
     const [row] = await db
       .update(customFields)
       .set({
@@ -159,9 +160,18 @@ export class DrizzleCustomFieldRepository implements CustomFieldRepository, Cust
         defaultValue: changes.defaultValue,
         possibleValues: changes.possibleValues,
         visible: visibility.visible,
+        multiple: changes.multiple,
       })
       .where(eq(customFields.id, id))
       .returning();
+
+    // Turning a multiple-valued field into a single-valued one keeps one value per record (the first by name), so a
+    // record never reads back with several values under a single-valued field.
+    if (before?.multiple && !changes.multiple) {
+      await db.execute(
+        sql`delete from custom_values where id in (select id from (select id, row_number() over (partition by customized_type, customized_id order by value) as rn from custom_values where custom_field_id = ${id}) ranked where ranked.rn > 1)`,
+      );
+    }
 
     await db.delete(customFieldsRoles).where(eq(customFieldsRoles.customFieldId, id));
     if (visibility.roleIds.length > 0) {

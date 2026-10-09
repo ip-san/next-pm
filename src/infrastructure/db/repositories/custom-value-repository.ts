@@ -4,7 +4,8 @@ import { customValues } from "@/infrastructure/db/schema/custom-values";
 import type { CustomizedType } from "@/domain/custom-field/entity";
 import type { CustomValue } from "@/domain/custom-value/entity";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
-import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
+import { storedRowsFor, valueFromStoredRows } from "@/domain/custom-value/storage";
+import { customFields } from "@/infrastructure/db/schema/custom-fields";
 
 function toDomain(row: typeof customValues.$inferSelect): CustomValue {
   return {
@@ -27,7 +28,7 @@ function aggregate(rows: (typeof customValues.$inferSelect)[]): CustomValue[] {
   }
   return [...byField.values()].map((group) => {
     const values = group.map((row) => row.value).filter((value): value is string => value !== null && value.length > 0);
-    return { ...toDomain(group[0]), value: values.length > 0 ? values.join(CUSTOM_VALUE_SEPARATOR) : null };
+    return { ...toDomain(group[0]), value: valueFromStoredRows(values) };
   });
 }
 
@@ -42,8 +43,8 @@ export class DrizzleCustomValueRepository implements CustomValueRepository {
   }
 
   /**
-   * Replaces the field's values on the record. `value` may hold several values, one per line; an empty or null value
-   * clears the field.
+   * Replaces the field's stored value on the record. A multiple-valued field's value is split into one row per value
+   * (one value per line); any other field's value is stored whole. An empty value clears the field.
    */
   async set(
     customFieldId: string,
@@ -51,7 +52,8 @@ export class DrizzleCustomValueRepository implements CustomValueRepository {
     customizedId: string,
     value: string | null,
   ): Promise<CustomValue> {
-    const values = (value ?? "").split(CUSTOM_VALUE_SEPARATOR).filter((item) => item.length > 0);
+    const [field] = await db.select({ multiple: customFields.multiple }).from(customFields).where(eq(customFields.id, customFieldId)).limit(1);
+    const rows = storedRowsFor(field?.multiple ?? false, value);
     await db.transaction(async (tx) => {
       await tx
         .delete(customValues)
@@ -62,17 +64,11 @@ export class DrizzleCustomValueRepository implements CustomValueRepository {
             eq(customValues.customizedId, customizedId),
           ),
         );
-      if (values.length > 0) {
-        await tx.insert(customValues).values(values.map((item) => ({ customFieldId, customizedType, customizedId, value: item })));
+      if (rows.length > 0) {
+        await tx.insert(customValues).values(rows.map((item) => ({ customFieldId, customizedType, customizedId, value: item })));
       }
     });
-    return {
-      id: "",
-      customFieldId,
-      customizedType,
-      customizedId,
-      value: values.length > 0 ? values.join(CUSTOM_VALUE_SEPARATOR) : null,
-    };
+    return { id: "", customFieldId, customizedType, customizedId, value: valueFromStoredRows(rows) };
   }
 
   async deleteForCustomized(customizedType: CustomizedType, customizedId: string): Promise<void> {

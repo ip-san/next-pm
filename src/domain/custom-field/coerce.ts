@@ -39,7 +39,8 @@ export function coerceCustomFieldValue(
     if (!result.ok) return result;
     if (result.value !== null) checked.push(result.value);
   }
-  return { ok: true, value: checked.join(CUSTOM_VALUE_SEPARATOR) };
+  // Stored in one fixed order, so the same selection always reads and compares the same way.
+  return { ok: true, value: checked.sort().join(CUSTOM_VALUE_SEPARATOR) };
 }
 
 function coerceSingleValue(

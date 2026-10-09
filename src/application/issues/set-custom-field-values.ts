@@ -1,3 +1,4 @@
+import { sameCustomValue } from "@/domain/custom-value/storage";
 import { validateCustomFieldValues } from "@/domain/custom-field/coerce";
 import { visibleCustomFieldsFor, type CustomFieldViewer } from "@/domain/custom-field/visibility";
 import { loadCustomFieldOptionSets, type CustomFieldOptionRepositories } from "@/application/custom-field/option-sets";
@@ -75,7 +76,7 @@ export async function applyIssueCustomFieldValues(
 ): Promise<JournalDetail[]> {
   const details: JournalDetail[] = [];
   for (const { customFieldId, oldValue, newValue } of prepared.entries) {
-    if (oldValue === newValue) continue;
+    if (sameCustomValue(oldValue, newValue)) continue;
     await repositories.customValueRepository.set(customFieldId, "Issue", issueId, newValue);
     details.push({ property: "cf", fieldName: customFieldId, oldValue, newValue });
   }

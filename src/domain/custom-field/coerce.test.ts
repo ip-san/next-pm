@@ -105,8 +105,9 @@ describe("coerceCustomFieldValue for enumeration fields", () => {
 describe("coerceCustomFieldValue with multiple values", () => {
   const colours = { name: "Colours", fieldFormat: "list" as const, isRequired: false, possibleValues: ["Red", "Green", "Blue"], multiple: true };
 
-  it("checks each value and joins them one per line", () => {
-    expect(coerceCustomFieldValue(colours, "Red\nBlue")).toEqual({ ok: true, value: "Red\nBlue" });
+  it("checks each value and stores them one per line, in a fixed order", () => {
+    expect(coerceCustomFieldValue(colours, "Red\nBlue")).toEqual({ ok: true, value: "Blue\nRed" });
+    expect(coerceCustomFieldValue(colours, "Blue\nRed")).toEqual({ ok: true, value: "Blue\nRed" });
   });
 
   it("collapses duplicates and drops blank lines", () => {
