@@ -1,17 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
+import { selectRoadmapVersions } from "@/domain/version/roadmap";
 import { computeVersionProgress } from "@/domain/version/progress";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
 import { DrizzleIssueRepository } from "@/infrastructure/db/repositories/issue-repository";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
+import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { subtreeVisibleIssues } from "@/interface/http/project-issue-scope";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 
 export const dynamic = "force-dynamic";
 
-/** Mirrors VersionsController#index: shared/rolled-up versions grouped with their fixed issues, sorted open-first by due date. */
+/**
+ * Mirrors VersionsController#index: shared versions (plus the rolled-up versions of the subtree when
+ * display_subprojects_issues is on), each with its visible fixed issues, sorted open-first by due date.
+ */
 export default async function RoadmapPage({ params }: { params: Promise<{ identifier: string }> }) {
   const { identifier } = await params;
 
@@ -26,17 +34,36 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
     notFound();
   }
 
-  const [versions, allIssues, statuses] = await Promise.all([
+  const { displaySubprojectsIssues } = await loadGeneralSettings(new DrizzleSettingsRepository());
+  const subtree = displaySubprojectsIssues ? await subtreeVisibleIssues(user, project) : null;
+  const scopeProjectIds = subtree ? [...subtree.identifierByProjectId.keys()] : [project.id];
+
+  const [sharedVersions, rolledUpVersions, ownIssues, allProjects, trackers, statuses] = await Promise.all([
     new DrizzleVersionRepository().listSharedWith(project.id),
-    new DrizzleIssueRepository().listByProject(project.id),
+    subtree ? new DrizzleVersionRepository().listByProjects(scopeProjectIds) : Promise.resolve([]),
+    subtree ? Promise.resolve([]) : new DrizzleIssueRepository().listByProject(project.id),
+    new DrizzleProjectRepository().listAll(),
+    new DrizzleTrackerRepository().findByIds(project.trackerIds),
     new DrizzleIssueStatusRepository().listAll(),
   ]);
-  const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds));
+  const visibleIssues = subtree ? subtree.issues : ownIssues.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds));
+  const projectById = new Map(allProjects.map((entry) => [entry.id, entry]));
   const statusById = new Map(statuses.map((status) => [status.id, status]));
+  const trackerPosition = new Map(trackers.map((tracker) => [tracker.id, tracker.position]));
 
-  const openVersions = versions
-    .filter((version) => version.status === "open")
-    .sort((a, b) => (a.effectiveDate ?? "9999-99-99").localeCompare(b.effectiveDate ?? "9999-99-99"));
+  const entries = selectRoadmapVersions({
+    sharedVersions,
+    rolledUpVersions,
+    scopeProjectIds: new Set(scopeProjectIds),
+    visibleIssues: visibleIssues.map((issue) => ({
+      ...issue,
+      projectLft: projectById.get(issue.projectId)?.lft ?? 0,
+      trackerPosition: trackerPosition.get(issue.trackerId) ?? 0,
+    })),
+    roadmapTrackerIds: new Set(trackers.filter((tracker) => tracker.isInRoadmap).map((tracker) => tracker.id)),
+  });
+
+  const openEntries = entries.filter((entry) => entry.version.status === "open");
 
   return (
     <main className="p-8 flex flex-col gap-8">
@@ -47,10 +74,9 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
         </Link>
       </div>
 
-      {openVersions.map((version) => {
-        const versionIssues = issues.filter((issue) => issue.fixedVersionId === version.id);
+      {openEntries.map(({ version, issues, progressIssues }) => {
         const progress = computeVersionProgress(
-          versionIssues.map((issue) => ({ isClosed: statusById.get(issue.statusId)?.isClosed ?? false, doneRatio: issue.doneRatio })),
+          progressIssues.map((issue) => ({ isClosed: statusById.get(issue.statusId)?.isClosed ?? false, doneRatio: issue.doneRatio })),
         );
         return (
           <section key={version.id} className="flex flex-col gap-3">
@@ -64,20 +90,24 @@ export default async function RoadmapPage({ params }: { params: Promise<{ identi
               </div>
             </div>
             <ul className="flex flex-col gap-1 text-sm">
-              {versionIssues.map((issue) => (
-                <li key={issue.id}>
-                  <Link href={`/projects/${identifier}/issues/${issue.id}`} className="underline">
-                    #{issue.number} {issue.subject}
-                  </Link>
-                  <span className="text-gray-500 text-xs"> — {statusById.get(issue.statusId)?.name ?? "?"}</span>
-                </li>
-              ))}
-              {versionIssues.length === 0 ? <li className="text-gray-400 text-xs">チケットはありません。</li> : null}
+              {issues.map((issue) => {
+                const issueProject = projectById.get(issue.projectId);
+                const isOtherProject = issue.projectId !== project.id;
+                return (
+                  <li key={issue.id}>
+                    <Link href={`/projects/${issueProject?.identifier ?? identifier}/issues/${issue.id}`} className="underline">
+                      {isOtherProject ? `${issueProject?.name ?? ""} - ` : null}#{issue.number} {issue.subject}
+                    </Link>
+                    <span className="text-gray-500 text-xs"> — {statusById.get(issue.statusId)?.name ?? "?"}</span>
+                  </li>
+                );
+              })}
+              {issues.length === 0 ? <li className="text-gray-400 text-xs">チケットはありません。</li> : null}
             </ul>
           </section>
         );
       })}
-      {openVersions.length === 0 ? <p className="text-sm text-gray-500">進行中のバージョンはありません。</p> : null}
+      {openEntries.length === 0 ? <p className="text-sm text-gray-500">進行中のバージョンはありません。</p> : null}
     </main>
   );
 }
