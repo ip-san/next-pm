@@ -14,6 +14,8 @@ export interface UpdateUserInput {
   isAdmin: boolean;
   /** null: internal authentication; "ldap": delegated to a directory. */
   authSource: "ldap" | null;
+  /** The admin-managed LDAP source the account belongs to, or null for internal and the environment source. */
+  ldapAuthSourceId: string | null;
   /** Empty leaves the password alone (UsersController#update only sets one when it was submitted). */
   password: string;
 }
@@ -56,6 +58,11 @@ export async function updateUser(
   // themselves and lock the instance out of its own admin area.
   const isAdmin = actingUserId !== null && actingUserId === existing.id ? existing.isAdmin : input.isAdmin;
 
+  // A directory account keeps no local password, so switching a local account to LDAP drops the
+  // hash it had — otherwise the old password would survive as a dormant credential. Redmine keeps
+  // its hashed_password across the switch, but the only thing that ever checks it is internal auth.
+  const clearLocalPassword = input.authSource === "ldap" ? { passwordHash: "", passwordSalt: "" } : {};
+
   try {
     await userAdminRepository.update(existing.id, {
       login: input.login,
@@ -64,6 +71,8 @@ export async function updateUser(
       lastname: input.lastname,
       isAdmin,
       authSource: input.authSource,
+      ldapAuthSourceId: input.ldapAuthSourceId,
+      ...clearLocalPassword,
     });
   } catch (error) {
     if (duplicateMailError(error)) {

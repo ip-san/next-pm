@@ -47,6 +47,7 @@ const base: UpdateUserInput = {
   lastname: "Dev",
   isAdmin: false,
   authSource: null,
+  ldapAuthSourceId: null,
   password: "",
 };
 
@@ -83,6 +84,32 @@ describe("updateUser", () => {
   it("refuses to switch a directory account to internal authentication without a password", async () => {
     const repository = repositoryWith(user({ authSource: "ldap" }));
     await expect(updateUser(repository, base, "admin-1")).rejects.toThrow("内部認証");
+  });
+
+  it("switches a local account to an admin-managed source and drops its local password", async () => {
+    const repository = repositoryWith(user({ passwordHash: "old-hash", passwordSalt: "old-salt" }));
+    await updateUser(repository, { ...base, authSource: "ldap", ldapAuthSourceId: "source-1" }, "admin-1");
+    expect(repository.update).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ authSource: "ldap", ldapAuthSourceId: "source-1", passwordHash: "", passwordSalt: "" }),
+    );
+    expect(repository.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it("leaves the local password columns untouched when staying internal", async () => {
+    const repository = repositoryWith(user({}));
+    await updateUser(repository, base, "admin-1");
+    const [, changes] = (repository.update as ReturnType<typeof mock>).mock.calls[0] as unknown as [string, object];
+    expect(changes).not.toHaveProperty("passwordHash");
+    expect(changes).not.toHaveProperty("passwordSalt");
+  });
+
+  it("refuses a password for an account moving to a directory source", async () => {
+    const repository = repositoryWith(user({}));
+    await expect(
+      updateUser(repository, { ...base, authSource: "ldap", ldapAuthSourceId: "source-1", password: "longenough1" }, "admin-1"),
+    ).rejects.toThrow("LDAP認証");
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it("never changes the acting user's own admin flag", async () => {

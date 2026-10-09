@@ -231,7 +231,8 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
 
   async update(
     id: string,
-    changes: Pick<User, "login" | "mail" | "firstname" | "lastname" | "isAdmin" | "authSource">,
+    changes: Pick<User, "login" | "mail" | "firstname" | "lastname" | "isAdmin" | "authSource" | "ldapAuthSourceId"> &
+      Partial<Pick<User, "passwordHash" | "passwordSalt">>,
   ): Promise<User> {
     const [row] = await db
       .update(users)

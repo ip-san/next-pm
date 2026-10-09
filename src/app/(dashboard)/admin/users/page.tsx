@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { loadAuthModeOptions } from "@/application/users/load-auth-mode-options";
+import { DrizzleLdapAuthSourceRepository } from "@/infrastructure/db/repositories/ldap-auth-source-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { UserForm } from "./user-form";
@@ -17,6 +19,7 @@ export default async function UsersPage() {
   }
 
   const users = await new DrizzleUserRepository().listAll();
+  const authModeOptions = await loadAuthModeOptions(new DrizzleLdapAuthSourceRepository(), process.env);
 
   return (
     <main className="p-8 flex flex-col gap-6">
@@ -59,7 +62,7 @@ export default async function UsersPage() {
           ))}
         </tbody>
       </table>
-      <UserForm />
+      <UserForm authModeOptions={authModeOptions} />
     </main>
   );
 }

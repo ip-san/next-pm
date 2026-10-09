@@ -103,6 +103,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         lastname: body.data.lastname ?? target.lastname,
         isAdmin: body.data.admin ?? target.isAdmin,
         authSource: target.authSource,
+        ldapAuthSourceId: target.ldapAuthSourceId,
         password: body.data.password ?? "",
       },
       auth.admin.id,

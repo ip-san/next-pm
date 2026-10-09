@@ -4,6 +4,20 @@ import { useActionState, useState } from "react";
 import { createUserAction, updateUserAction } from "@/interface/actions/admin-user-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
 import type { User } from "@/domain/user/entity";
+import { ENV_LDAP_AUTH_MODE, INTERNAL_AUTH_MODE } from "@/domain/user/auth-mode";
+
+export interface AuthModeOptionsView {
+  envLdapConfigured: boolean;
+  ldapSources: { id: string; name: string }[];
+}
+
+/** The select shows what the account is bound to now, so a stored env-bound account is never silently reset to internal. */
+function initialAuthMode(user: User | undefined): string {
+  if (!user || user.authSource !== "ldap") {
+    return INTERNAL_AUTH_MODE;
+  }
+  return user.ldapAuthSourceId ?? ENV_LDAP_AUTH_MODE;
+}
 
 const initialState: AdminActionState = { error: null };
 
@@ -11,15 +25,29 @@ const initialState: AdminActionState = { error: null };
  * Doubles as the create and the edit form.
  *
  * On edit the password field is optional — Redmine's UsersController#update only sets a
- * password when one was actually submitted — and the admin checkbox disappears for the acting
+ * password when one was actually submitted — except when a directory account is moved back to
+ * internal authentication, which needs one. The admin checkbox disappears for the acting
  * admin's own row, so they cannot demote themselves out of the admin area.
  */
-export function UserForm({ user, isSelf = false }: { user?: User; isSelf?: boolean }) {
+export function UserForm({
+  user,
+  isSelf = false,
+  authModeOptions,
+}: {
+  user?: User;
+  isSelf?: boolean;
+  authModeOptions: AuthModeOptionsView;
+}) {
   const [state, formAction, pending] = useActionState(user ? updateUserAction : createUserAction, initialState);
-  const [authSource, setAuthSource] = useState(user?.authSource ?? "");
+  const [authMode, setAuthMode] = useState(initialAuthMode(user));
+  const isInternal = authMode === INTERNAL_AUTH_MODE;
   // An LDAP-backed account has no local password at all, so the field stops being mandatory
-  // the moment a directory is chosen — Redmine's create form skips it the same way.
-  const passwordRequired = !user && authSource !== "ldap";
+  // the moment a directory is chosen — Redmine's create form skips it the same way. Going the
+  // other way (a directory account becoming internal) it is required, as the action enforces.
+  const passwordRequired = isInternal && (!user || user.authSource === "ldap");
+  // The environment source is listed only when it is configured, or when this account already uses it,
+  // so the select can show the stored value (the action then refuses it, prompting a deliberate change).
+  const showEnvOption = authModeOptions.envLdapConfigured || authMode === ENV_LDAP_AUTH_MODE;
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-sm border-t pt-4">
@@ -77,30 +105,36 @@ export function UserForm({ user, isSelf = false }: { user?: User; isSelf?: boole
         </div>
       </div>
       <div className="flex flex-col gap-1">
-        <label htmlFor="authSource" className="text-sm font-medium">
+        <label htmlFor="authMode" className="text-sm font-medium">
           認証方式
         </label>
         <select
-          id="authSource"
-          name="authSource"
-          value={authSource}
-          onChange={(event) => setAuthSource(event.target.value as "" | "ldap")}
+          id="authMode"
+          name="authMode"
+          value={authMode}
+          onChange={(event) => setAuthMode(event.target.value)}
           className="border rounded px-3 py-2"
         >
-          <option value="">内部(パスワード)</option>
-          <option value="ldap">LDAP</option>
+          <option value={INTERNAL_AUTH_MODE}>内部(パスワード)</option>
+          {showEnvOption ? <option value={ENV_LDAP_AUTH_MODE}>LDAP(環境変数の設定)</option> : null}
+          {authModeOptions.ldapSources.map((source) => (
+            <option key={source.id} value={source.id}>
+              LDAP: {source.name}
+            </option>
+          ))}
         </select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="password" className="text-sm font-medium">
-          パスワード{user ? "(変更する場合のみ)" : authSource === "ldap" ? "(LDAP認証では不要)" : ""}
+          パスワード
+          {!isInternal ? "(LDAP認証では不要)" : user?.authSource === "ldap" ? "(内部認証への切り替えには必須)" : user ? "(変更する場合のみ)" : ""}
         </label>
         <input
           id="password"
           name="password"
           type="password"
           required={passwordRequired}
-          disabled={authSource === "ldap"}
+          disabled={!isInternal}
           minLength={8}
           autoComplete="new-password"
           className="border rounded px-3 py-2 disabled:bg-gray-100"

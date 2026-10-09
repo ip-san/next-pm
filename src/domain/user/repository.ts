@@ -39,9 +39,11 @@ export interface UserRepository {
 
 /** Admin-screen writes — see IssueStatusAdminRepository for why these sit apart. */
 export interface UserAdminRepository {
+  /** The local password columns are only written when given — a switch to LDAP clears them, nothing else touches them. */
   update(
     id: string,
-    changes: Pick<User, "login" | "mail" | "firstname" | "lastname" | "isAdmin" | "authSource">,
+    changes: Pick<User, "login" | "mail" | "firstname" | "lastname" | "isAdmin" | "authSource" | "ldapAuthSourceId"> &
+      Partial<Pick<User, "passwordHash" | "passwordSalt">>,
   ): Promise<User>;
   /** Mirrors User#activate! / #lock! / #register! — a plain status write with no other side effect. */
   updateStatus(id: string, status: UserStatus): Promise<void>;

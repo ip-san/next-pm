@@ -7,11 +7,14 @@ import { deleteUser, UserNotDeletableError } from "@/application/users/delete-us
 import { updateUser, UserUpdateError } from "@/application/users/update-user";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
+import { loadAuthModeOptions } from "@/application/users/load-auth-mode-options";
 import { isMembershipEditable } from "@/domain/member/repository";
+import { resolveAuthModeChoice } from "@/domain/user/auth-mode";
 import { generateSalt, hashPassword } from "@/domain/user/password";
 import { describePasswordPolicyFailure } from "@/domain/user/password-policy";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
+import { DrizzleLdapAuthSourceRepository } from "@/infrastructure/db/repositories/ldap-auth-source-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -29,9 +32,24 @@ const userAttributesSchema = z.object({
   firstname: z.string().min(1),
   lastname: z.string().min(1),
   isAdmin: z.coerce.boolean().default(false),
-  /** Redmine's auth_source_id select: empty means a locally authenticated account. */
-  authSource: z.enum(["", "ldap"]).transform((value) => (value === "" ? null : value)),
+  /** Redmine's auth_source_id select: resolved against the sources that exist, see resolveAuthModeChoice. */
+  authMode: z.string(),
 });
+
+/**
+ * Resolves the submitted authentication mode into the two columns it writes. The sources are read
+ * here rather than trusted from the form, so a forged id or an unconfigured environment source is refused.
+ */
+async function resolveSubmittedAuthMode(submitted: string) {
+  const { envLdapConfigured, ldapSources } = await loadAuthModeOptions(
+    new DrizzleLdapAuthSourceRepository(),
+    process.env,
+  );
+  return resolveAuthModeChoice(submitted, {
+    envLdapConfigured,
+    ldapSourceIds: ldapSources.map((source) => source.id),
+  });
+}
 
 function attributesFrom(formData: FormData) {
   return {
@@ -40,7 +58,7 @@ function attributesFrom(formData: FormData) {
     firstname: formData.get("firstname"),
     lastname: formData.get("lastname"),
     isAdmin: formData.get("isAdmin") === "on",
-    authSource: formData.get("authSource") ?? "",
+    authMode: formData.get("authMode") ?? "",
   };
 }
 
@@ -66,9 +84,15 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
   }
 
+  const resolution = await resolveSubmittedAuthMode(parsed.data.authMode);
+  if (!resolution.ok) {
+    return { error: resolution.error };
+  }
+  const { choice } = resolution;
+
   // Redmine's UsersController#create skips the password entirely when an auth source is chosen;
   // such an account keeps the empty hash/salt the schema documents and authenticates via LDAP.
-  const isLdap = parsed.data.authSource === "ldap";
+  const isLdap = choice.authSource === "ldap";
   if (isLdap && parsed.data.password.length > 0) {
     return { error: "LDAP認証のユーザーにはパスワードを設定できません。" };
   }
@@ -119,9 +143,8 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
       mustChangePassword: !isLdap,
       apiKey: null,
       atomKey: null,
-      authSource: parsed.data.authSource,
-      // The admin form offers the environment source only, so the account is linked to no admin-managed source.
-      ldapAuthSourceId: null,
+      authSource: choice.authSource,
+      ldapAuthSourceId: choice.ldapAuthSourceId,
       twofaScheme: null,
       twofaTotpKey: null,
       twofaTotpLastUsedStep: null,
@@ -152,6 +175,11 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
   }
 
+  const resolution = await resolveSubmittedAuthMode(parsed.data.authMode);
+  if (!resolution.ok) {
+    return { error: resolution.error };
+  }
+
   const actor = await currentUserFromCookies();
   try {
     await updateUser(
@@ -163,7 +191,8 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
         firstname: parsed.data.firstname,
         lastname: parsed.data.lastname,
         isAdmin: parsed.data.isAdmin,
-        authSource: parsed.data.authSource,
+        authSource: resolution.choice.authSource,
+        ldapAuthSourceId: resolution.choice.ldapAuthSourceId,
         password: parsed.data.password,
       },
       actor?.id ?? null,

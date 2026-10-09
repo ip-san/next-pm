@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { loadAuthModeOptions } from "@/application/users/load-auth-mode-options";
 import { ROLE_BUILTIN_MEMBER } from "@/domain/role/entity";
+import { DrizzleLdapAuthSourceRepository } from "@/infrastructure/db/repositories/ldap-auth-source-repository";
 import { DrizzleMemberRepository } from "@/infrastructure/db/repositories/member-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-repository";
@@ -19,11 +21,12 @@ export default async function EditUserPage({ params }: { params: Promise<{ userI
   }
 
   const memberRepository = new DrizzleMemberRepository();
-  const [user, memberships, projects, roles] = await Promise.all([
+  const [user, memberships, projects, roles, authModeOptions] = await Promise.all([
     new DrizzleUserRepository().findById(userId),
     memberRepository.listByUser(userId),
     new DrizzleProjectRepository().listAll(),
     new DrizzleRoleRepository().listAll(),
+    loadAuthModeOptions(new DrizzleLdapAuthSourceRepository(), process.env),
   ]);
   // The anonymous placeholder is not an account and has no admin screen.
   if (!user || user.status === "anonymous") {
@@ -42,7 +45,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ userI
       <h1 className="text-xl font-semibold">
         ユーザー: {user.login} ({user.lastname} {user.firstname})
       </h1>
-      <UserForm user={user} isSelf={user.id === actor.id} />
+      <UserForm user={user} isSelf={user.id === actor.id} authModeOptions={authModeOptions} />
       <UserMemberships
         userId={user.id}
         rows={rows}
