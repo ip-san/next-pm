@@ -97,4 +97,12 @@ describe("localizeMessage", () => {
     expect(localizeMessage("en", "The issue was not found.")).toBe("The issue was not found.");
     expect(localizeMessage("en", localizeMessage("en", "ログインしてください。"))).toBe("Sign in first.");
   });
+
+  it("takes linear time on long input that almost matches a template", () => {
+    const long = "1行目: " + "「".repeat(200_000) + "x";
+    const started = performance.now();
+    localizeMessage("en", long);
+    localizeMessage("en", "{0}".repeat(50_000));
+    expect(performance.now() - started).toBeLessThan(500);
+  });
 });

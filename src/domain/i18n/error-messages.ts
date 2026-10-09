@@ -282,33 +282,51 @@ export const ERROR_MESSAGES_EN: Record<string, string> = {
 };
 
 interface Template {
-  pattern: RegExp;
+  /** The fixed text around the placeholders: one more part than there are placeholders. */
+  parts: string[];
   fixedLength: number;
   english: string;
 }
 
 const PLACEHOLDER = /\{(\d+)\}/g;
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** The entries with placeholders, as anchored patterns whose groups capture the values in placeholder order. */
+/** The entries with placeholders, split into their fixed parts. */
 const TEMPLATES: Template[] = Object.entries(ERROR_MESSAGES_EN)
   .filter(([japanese]) => /\{\d+\}/.test(japanese))
   .map(([japanese, english]) => {
     const parts = japanese.split(/\{\d+\}/);
     const order = [...japanese.matchAll(PLACEHOLDER)].map((match) => Number(match[1]));
-    // The English refers to capture positions, so a template whose placeholders appear out of order still fills right.
+    // The English refers to value positions, so a template whose placeholders appear out of order still fills right.
     const remapped = english.replace(PLACEHOLDER, (_, index: string) => `{${order.indexOf(Number(index))}}`);
-    return {
-      pattern: new RegExp(`^${parts.map(escapeRegExp).join("([\\s\\S]*?)")}$`),
-      fixedLength: parts.join("").length,
-      english: remapped,
-    };
+    return { parts, fixedLength: parts.join("").length, english: remapped };
   })
   // More fixed text first, so "{0}行目: {1}" is only tried after the specific row messages.
   .sort((a, b) => b.fixedLength - a.fixedLength);
+
+/**
+ * The values of `text` if it has the template's shape, or null. The fixed parts are found with indexOf from left to
+ * right, the last one at the end, so matching takes linear time whatever the values hold (messages carry user data,
+ * such as CSV cells and page titles, which a backtracking regex could be made to choke on).
+ */
+function matchTemplate(parts: string[], text: string): string[] | null {
+  if (!text.startsWith(parts[0])) return null;
+  let position = parts[0].length;
+  const values: string[] = [];
+  for (let index = 1; index < parts.length; index++) {
+    const part = parts[index];
+    let at: number;
+    if (index === parts.length - 1) {
+      at = text.length - part.length;
+      if (at < position || !text.endsWith(part)) return null;
+    } else {
+      at = text.indexOf(part, position);
+      if (at < 0) return null;
+    }
+    values.push(text.slice(position, at));
+    position = at + part.length;
+  }
+  return values;
+}
 
 /** A value inserted into a message, such as the joined character classes of the password policy. */
 function localizeValue(value: string): string {
@@ -323,9 +341,9 @@ function localizeValue(value: string): string {
 function localizeSentence(text: string): string | null {
   if (text in ERROR_MESSAGES_EN) return ERROR_MESSAGES_EN[text];
   for (const template of TEMPLATES) {
-    const match = template.pattern.exec(text);
-    if (match) {
-      return template.english.replace(PLACEHOLDER, (_, index: string) => localizeValue(match[Number(index) + 1] ?? ""));
+    const values = matchTemplate(template.parts, text);
+    if (values) {
+      return template.english.replace(PLACEHOLDER, (_, index: string) => localizeValue(values[Number(index)] ?? ""));
     }
   }
   return null;
