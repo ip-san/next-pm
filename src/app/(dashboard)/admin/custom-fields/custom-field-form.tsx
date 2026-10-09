@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState, useState } from "react";
 import { createCustomFieldAction, updateCustomFieldAction } from "@/interface/actions/admin-custom-field-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
@@ -10,28 +12,28 @@ import type { CustomField, CustomizedType } from "@/domain/custom-field/entity";
 const initialState: AdminActionState = { error: null };
 
 const FORMAT_OPTIONS = [
-  { value: "string", label: "文字列" },
-  { value: "text", label: "テキスト" },
-  { value: "int", label: "整数" },
-  { value: "float", label: "浮動小数点" },
-  { value: "date", label: "日付" },
-  { value: "bool", label: "真偽値" },
-  { value: "list", label: "リスト" },
-  { value: "link", label: "リンク" },
-  { value: "user", label: "ユーザー" },
-  { value: "version", label: "バージョン" },
-  { value: "enumeration", label: "列挙" },
+  { value: "string", labelKey: "admin.customFields.format.string" },
+  { value: "text", labelKey: "admin.customFields.format.text" },
+  { value: "int", labelKey: "admin.customFields.format.int" },
+  { value: "float", labelKey: "admin.customFields.format.float" },
+  { value: "date", labelKey: "admin.customFields.format.date" },
+  { value: "bool", labelKey: "admin.customFields.format.bool" },
+  { value: "list", labelKey: "admin.customFields.format.list" },
+  { value: "link", labelKey: "admin.customFields.format.link" },
+  { value: "user", labelKey: "admin.customFields.format.user" },
+  { value: "version", labelKey: "admin.customFields.format.version" },
+  { value: "enumeration", labelKey: "admin.customFields.format.enumeration" },
 ] as const;
 
 /** Redmine shows the role-visibility selector for exactly these custom field types. */
 const ROLE_VISIBILITY_TYPES: CustomizedType[] = ["Issue", "Project", "TimeEntry", "Version"];
 
-const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
-  { value: "Issue", label: "チケット" },
-  { value: "Project", label: "プロジェクト" },
-  { value: "TimeEntry", label: "作業時間" },
-  { value: "Version", label: "バージョン" },
-  { value: "Group", label: "グループ" },
+const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; labelKey: MessageKey }[] = [
+  { value: "Issue", labelKey: "admin.customFields.type.Issue" },
+  { value: "Project", labelKey: "admin.customFields.type.Project" },
+  { value: "TimeEntry", labelKey: "admin.customFields.type.TimeEntry" },
+  { value: "Version", labelKey: "admin.customFields.type.Version" },
+  { value: "Group", labelKey: "admin.customFields.type.Group" },
 ];
 
 /**
@@ -39,7 +41,8 @@ const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
  * read-only: Redmine disables the format select for a persisted record and CustomField's STI
  * type never changes, so neither is submitted.
  */
-export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[]; roles: Role[]; field?: CustomField }) {
+export function CustomFieldForm({ locale = "ja", trackers, roles, field }: { trackers: Tracker[]; roles: Role[]; field?: CustomField; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(
     field ? updateCustomFieldAction : createCustomFieldAction,
     initialState,
@@ -51,7 +54,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
       {field ? <input type="hidden" name="customFieldId" value={field.id} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm font-medium">
-          名称
+          {t("admin.trackers.name")}
         </label>
         <input
           id="name"
@@ -65,7 +68,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
 
       <div className="flex flex-col gap-1">
         <label htmlFor="customizedType" className="text-sm font-medium">
-          対象
+          {t("admin.customFields.target")}
         </label>
         <select
           id="customizedType"
@@ -78,7 +81,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
         >
           {CUSTOMIZED_TYPE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {translate(locale, option.labelKey)}
             </option>
           ))}
         </select>
@@ -86,7 +89,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
 
       <div className="flex flex-col gap-1">
         <label htmlFor="fieldFormat" className="text-sm font-medium">
-          形式
+          {t("admin.customFields.format")}
         </label>
         <select
           id="fieldFormat"
@@ -98,7 +101,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
         >
           {FORMAT_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {translate(locale, option.labelKey)}
             </option>
           ))}
         </select>
@@ -106,7 +109,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
 
       <div className="flex flex-col gap-1">
         <label htmlFor="possibleValues" className="text-sm font-medium">
-          選択肢（形式が「リスト」「列挙」の場合、カンマ区切り。列挙では外した選択肢は無効になり、既存の値は残る）
+          {t("admin.customFields.possibleValues")}
         </label>
         <input
           id="possibleValues"
@@ -122,7 +125,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
 
       <div className="flex flex-col gap-1">
         <label htmlFor="defaultValue" className="text-sm font-medium">
-          既定値
+          {t("admin.customFields.defaultValue")}
         </label>
         <input
           id="defaultValue"
@@ -134,16 +137,16 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="isRequired" defaultChecked={field?.isRequired} />
-        必須項目
+        {t("admin.customFields.isRequired")}
       </label>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="multiple" defaultChecked={field?.multiple} />
-        複数の値を持てる(リスト・列挙・ユーザー・バージョンの形式のみ)
+        {t("admin.customFields.multiple")}
       </label>
 
       <fieldset className="flex flex-col gap-1" hidden={customizedType !== "Issue"}>
-        <legend className="text-sm font-medium">対象トラッカー</legend>
+        <legend className="text-sm font-medium">{t("admin.customFields.targetTrackers")}</legend>
         {trackers.map((tracker) => (
           <label key={tracker.id} className="flex items-center gap-2 text-sm">
             <input
@@ -158,14 +161,14 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
       </fieldset>
 
       <fieldset className="flex flex-col gap-1" hidden={!ROLE_VISIBILITY_TYPES.includes(customizedType)}>
-        <legend className="text-sm font-medium">表示の範囲</legend>
+        <legend className="text-sm font-medium">{t("admin.customFields.visibility")}</legend>
         <label className="flex items-center gap-2 text-sm">
           <input type="radio" name="visible" value="1" defaultChecked={field?.visible ?? true} />
-          全員に表示
+          {t("admin.customFields.visibleAll")}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="radio" name="visible" value="0" defaultChecked={field ? !field.visible : false} />
-          指定したロールだけに表示
+          {t("admin.customFields.visibleRoles")}
         </label>
         <div className="flex flex-col gap-1 pl-6">
           {roles.map((role) => (
@@ -184,7 +187,7 @@ export function CustomFieldForm({ trackers, roles, field }: { trackers: Tracker[
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "保存中…" : field ? "変更を保存" : "カスタムフィールドを追加"}
+        {pending ? t("issue.saving") : field ? t("admin.users.saveChanges") : t("admin.customFields.add")}
       </button>
     </form>
   );

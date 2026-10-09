@@ -41,6 +41,8 @@ const KEYS: MessageKey[] = [
   "permission.module.core",
   "admin.trackers.deleteConfirm",
   "admin.workflows.fieldHeader",
+  "admin.ldap.add",
+  "admin.customFields.format.enumeration",
 ];
 
 describe("translate", () => {

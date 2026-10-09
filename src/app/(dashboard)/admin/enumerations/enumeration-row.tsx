@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import {
   deleteEnumerationAction,
@@ -12,10 +14,10 @@ import type { Enumeration } from "@/domain/enumeration/entity";
 const initialState: AdminActionState = { error: null };
 
 const moveLabels = [
-  ["highest", "最上位へ", "⇈"],
-  ["higher", "上へ", "↑"],
-  ["lower", "下へ", "↓"],
-  ["lowest", "最下位へ", "⇊"],
+  ["highest", "admin.move.highest", "⇈"],
+  ["higher", "admin.move.higher", "↑"],
+  ["lower", "admin.move.lower", "↓"],
+  ["lowest", "admin.move.lowest", "⇊"],
 ] as const;
 
 /**
@@ -28,10 +30,13 @@ const moveLabels = [
 export function EnumerationRow({
   enumeration,
   reassignCandidates,
+  locale = "ja",
 }: {
   enumeration: Enumeration;
   reassignCandidates: Enumeration[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [updateState, updateFormAction, updating] = useActionState(updateEnumerationAction, initialState);
   const [reorderState, reorderFormAction, reordering] = useActionState(reorderEnumerationAction, initialState);
   const [deleteState, deleteFormAction, deleting] = useActionState(deleteEnumerationAction, initialState);
@@ -46,32 +51,32 @@ export function EnumerationRow({
           required
           maxLength={30}
           defaultValue={enumeration.name}
-          aria-label="名称"
+          aria-label={t("admin.trackers.name")}
           className="border rounded px-2 py-1"
         />
         <label className="flex items-center gap-1">
           <input type="checkbox" name="isDefault" defaultChecked={enumeration.isDefault} />
-          既定値
+          {t("admin.enumerations.isDefault")}
         </label>
         <label className="flex items-center gap-1">
           <input type="checkbox" name="active" defaultChecked={enumeration.active} />
-          有効
+          {t("admin.statusActive")}
         </label>
         <button type="submit" disabled={updating} className="border rounded px-2 py-1 disabled:opacity-50">
-          {updating ? "保存中…" : "保存"}
+          {updating ? t("issue.saving") : t("issue.save")}
         </button>
       </form>
 
       <form action={reorderFormAction} className="flex items-center gap-1">
         <input type="hidden" name="enumerationId" value={enumeration.id} />
-        {moveLabels.map(([move, label, glyph]) => (
+        {moveLabels.map(([move, labelKey, glyph]) => (
           <button
             key={move}
             type="submit"
             name="move"
             value={move}
-            title={label}
-            aria-label={label}
+            title={t(labelKey)}
+            aria-label={t(labelKey)}
             disabled={reordering}
             className="border rounded px-1 leading-none disabled:opacity-50"
           >
@@ -84,12 +89,12 @@ export function EnumerationRow({
         action={deleteFormAction}
         className="flex items-center gap-2"
         onSubmit={(event) => {
-          if (!window.confirm(`「${enumeration.name}」を削除しますか?`)) event.preventDefault();
+          if (!window.confirm(interpolate(t("admin.enumerations.deleteConfirm"), { name: enumeration.name }))) event.preventDefault();
         }}
       >
         <input type="hidden" name="enumerationId" value={enumeration.id} />
-        <select name="reassignToId" defaultValue="" aria-label="付け替え先" className="border rounded px-2 py-1">
-          <option value="">付け替え先なし</option>
+        <select name="reassignToId" defaultValue="" aria-label={t("admin.enumerations.reassignTo")} className="border rounded px-2 py-1">
+          <option value="">{t("admin.enumerations.reassignNone")}</option>
           {reassignCandidates.map((candidate) => (
             <option key={candidate.id} value={candidate.id}>
               {candidate.name}
@@ -97,7 +102,7 @@ export function EnumerationRow({
           ))}
         </select>
         <button type="submit" disabled={deleting} className="text-red-700 underline disabled:opacity-50">
-          {deleting ? "削除中…" : "削除"}
+          {deleting ? t("admin.deleting") : t("issue.delete")}
         </button>
       </form>
 
