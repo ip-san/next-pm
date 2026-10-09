@@ -1,4 +1,5 @@
 import { parsePerPageOptions, PER_PAGE_OPTIONS_DEFAULT } from "@/domain/query/pagination";
+import { DEFAULT_LOCALE, localeFor, type Locale } from "@/domain/i18n/locales";
 
 /**
  * Maps to Redmine settings.yml keys that next-pm previously hardcoded rather than exposed.
@@ -19,6 +20,9 @@ export const GENERAL_SETTING_KEYS = [
   "issue_done_ratio",
   "webhooks_enabled",
   "display_subprojects_issues",
+  "default_language",
+  "force_default_language_for_anonymous",
+  "force_default_language_for_loggedin",
   "per_page_options",
   "issues_export_limit",
   "parent_issue_dates",
@@ -62,6 +66,10 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // Redmine defaults this on (settings.yml display_subprojects_issues: 1). next-pm's issue lists have
   // never included subprojects, so off keeps existing screens as they were until an admin opts in.
   display_subprojects_issues: "0",
+  // The interface has always been Japanese, so `ja` stays the default (Redmine's settings.yml default is en).
+  default_language: "ja",
+  force_default_language_for_anonymous: "0",
+  force_default_language_for_loggedin: "0",
   // Both match Redmine's own settings.yml defaults. The issue list had no pagination at all
   // before, so there's no prior next-pm behavior to preserve here.
   per_page_options: PER_PAGE_OPTIONS_DEFAULT,
@@ -89,6 +97,12 @@ export interface GeneralSettings {
    * subprojects. Off by default here (see GENERAL_SETTING_DEFAULTS).
    */
   displaySubprojectsIssues: boolean;
+  /** Redmine's default_language: the interface language when a request has no better answer. */
+  defaultLanguage: Locale;
+  /** Redmine's force_default_language_for_anonymous: ignore the browser's language for anonymous visitors. */
+  forceDefaultLanguageForAnonymous: boolean;
+  /** Redmine's force_default_language_for_loggedin: every signed-in user sees the default language. */
+  forceDefaultLanguageForLoggedIn: boolean;
   /** Page sizes the issue/time-entry lists offer, already parsed and sorted. */
   perPageOptions: number[];
   /** Row cap on a CSV/PDF export, mirroring Redmine's `Setting.issues_export_limit`. */
@@ -126,6 +140,9 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
       : (GENERAL_SETTING_DEFAULTS.issue_done_ratio as IssueDoneRatioMode),
     webhooksEnabled: (overrides.webhooks_enabled ?? GENERAL_SETTING_DEFAULTS.webhooks_enabled) === "1",
     displaySubprojectsIssues: (overrides.display_subprojects_issues ?? GENERAL_SETTING_DEFAULTS.display_subprojects_issues) === "1",
+    defaultLanguage: localeFor(overrides.default_language) ?? DEFAULT_LOCALE,
+    forceDefaultLanguageForAnonymous: overrides.force_default_language_for_anonymous === "1",
+    forceDefaultLanguageForLoggedIn: overrides.force_default_language_for_loggedin === "1",
     perPageOptions: parsePerPageOptions(overrides.per_page_options),
     issuesExportLimit: positiveIntOr(overrides.issues_export_limit, Number(GENERAL_SETTING_DEFAULTS.issues_export_limit)),
     parentIssueDates: rollupMode(overrides.parent_issue_dates, "parent_issue_dates"),

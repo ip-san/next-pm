@@ -1,5 +1,6 @@
 "use server";
 
+import { DEFAULT_LOCALE, LOCALES } from "@/domain/i18n/locales";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { updateAuthSettings } from "@/application/settings/auth-settings";
@@ -69,6 +70,9 @@ const updateGeneralSettingsSchema = z.object({
   crossProjectIssueRelations: z.coerce.boolean().default(false),
   webhooksEnabled: z.coerce.boolean().default(false),
   displaySubprojectsIssues: z.coerce.boolean().default(false),
+  defaultLanguage: z.enum(LOCALES).default(DEFAULT_LOCALE),
+  forceDefaultLanguageForAnonymous: z.coerce.boolean().default(false),
+  forceDefaultLanguageForLoggedIn: z.coerce.boolean().default(false),
   issueDoneRatio: z.enum(ISSUE_DONE_RATIO_VALUES).default("issue_field"),
   perPageOptions: z.string().default(""),
   issuesExportLimit: z.coerce.number().int().min(1),
@@ -97,6 +101,9 @@ export async function updateGeneralSettingsAction(
     issueDoneRatio: formData.get("issueDoneRatio"),
     webhooksEnabled: formData.get("webhooksEnabled") === "on",
     displaySubprojectsIssues: formData.get("displaySubprojectsIssues") === "on",
+    defaultLanguage: formData.get("defaultLanguage") ?? DEFAULT_LOCALE,
+    forceDefaultLanguageForAnonymous: formData.get("forceDefaultLanguageForAnonymous") === "on",
+    forceDefaultLanguageForLoggedIn: formData.get("forceDefaultLanguageForLoggedIn") === "on",
     perPageOptions: formData.get("perPageOptions"),
     issuesExportLimit: formData.get("issuesExportLimit"),
     parentIssueDates: formData.get("parentIssueDates"),
@@ -118,6 +125,9 @@ export async function updateGeneralSettingsAction(
     issueDoneRatio: parsed.data.issueDoneRatio,
     webhooksEnabled: parsed.data.webhooksEnabled,
     displaySubprojectsIssues: parsed.data.displaySubprojectsIssues,
+    defaultLanguage: parsed.data.defaultLanguage,
+    forceDefaultLanguageForAnonymous: parsed.data.forceDefaultLanguageForAnonymous,
+    forceDefaultLanguageForLoggedIn: parsed.data.forceDefaultLanguageForLoggedIn,
     perPageOptions: parsed.data.perPageOptions,
     issuesExportLimit: parsed.data.issuesExportLimit,
     parentIssueDates: parsed.data.parentIssueDates,

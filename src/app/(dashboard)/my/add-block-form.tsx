@@ -5,7 +5,7 @@ import { addMyPageBlockAction, type MyPageActionState } from "@/interface/action
 
 const initialState: MyPageActionState = { error: null };
 
-export function AddBlockForm({ options }: { options: { value: string; label: string }[] }) {
+export function AddBlockForm({ options, buttonLabel }: { options: { value: string; label: string }[]; buttonLabel: string }) {
   const [state, formAction, pending] = useActionState(addMyPageBlockAction, initialState);
 
   if (options.length === 0) {
@@ -22,7 +22,7 @@ export function AddBlockForm({ options }: { options: { value: string; label: str
         ))}
       </select>
       <button type="submit" disabled={pending} className="border rounded px-3 py-1 disabled:opacity-50">
-        ブロックを追加
+        {buttonLabel}
       </button>
       {state.error ? <span className="text-red-600 text-xs">{state.error}</span> : null}
     </form>

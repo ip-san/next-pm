@@ -84,6 +84,22 @@ export function GeneralSettingsForm({ settings }: { settings: GeneralSettings })
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
+        既定の言語
+        <select name="defaultLanguage" defaultValue={settings.defaultLanguage} className="border rounded px-3 py-2">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="forceDefaultLanguageForAnonymous" defaultChecked={settings.forceDefaultLanguageForAnonymous} />
+        未ログインの利用者にも既定の言語を使う(ブラウザの言語を見ない)
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="forceDefaultLanguageForLoggedIn" defaultChecked={settings.forceDefaultLanguageForLoggedIn} />
+        ログイン中の利用者にも既定の言語を使う(利用者の言語設定を無視する)
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
         1 ページあたりの表示件数（カンマ区切り）
         <input
           name="perPageOptions"

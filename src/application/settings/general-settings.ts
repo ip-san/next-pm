@@ -1,3 +1,4 @@
+import type { Locale } from "@/domain/i18n/locales";
 import {
   resolveGeneralSettings,
   type GeneralSettings,
@@ -22,6 +23,9 @@ export interface UpdateGeneralSettingsInput {
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   displaySubprojectsIssues: boolean;
+  defaultLanguage: Locale;
+  forceDefaultLanguageForAnonymous: boolean;
+  forceDefaultLanguageForLoggedIn: boolean;
   /** Comma-separated, as the admin form submits it; normalised by parsePerPageOptions on read. */
   perPageOptions: string;
   issuesExportLimit: number;
@@ -45,6 +49,9 @@ export async function updateGeneralSettings(
     issue_done_ratio: input.issueDoneRatio,
     webhooks_enabled: input.webhooksEnabled ? "1" : "0",
     display_subprojects_issues: input.displaySubprojectsIssues ? "1" : "0",
+    default_language: input.defaultLanguage,
+    force_default_language_for_anonymous: input.forceDefaultLanguageForAnonymous ? "1" : "0",
+    force_default_language_for_loggedin: input.forceDefaultLanguageForLoggedIn ? "1" : "0",
     per_page_options: input.perPageOptions,
     issues_export_limit: String(Math.round(input.issuesExportLimit)),
     parent_issue_dates: input.parentIssueDates,

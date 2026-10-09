@@ -3,11 +3,15 @@ import { redirect } from "next/navigation";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { logoutAction } from "@/interface/actions/auth-actions";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
 import { listProjectsWithPermission } from "@/interface/http/resolve-actor";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUserFromCookies();
+  const locale = await currentLocale();
+  const t = (key: MessageKey) => translate(locale, key);
 
   // Redmine's check_if_login_required: with Setting.login_required on, an anonymous visitor
   // never reaches a page at all. resolve-actor.ts enforces the same rule for the data paths
@@ -36,31 +40,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
             next-pm
           </Link>
           <Link href="/projects" className="hover:underline">
-            プロジェクト
+            {t("nav.projects")}
           </Link>
           {/* `view_project` is public in Redmine, so the activity entry has no `:if` guard. */}
           <Link href="/activity" className="hover:underline">
-            活動
+            {t("nav.activity")}
           </Link>
           {issueProjects.length > 0 ? (
             <Link href="/issues" className="hover:underline">
-              チケット
+              {t("nav.issues")}
             </Link>
           ) : null}
           {timeProjects.length > 0 ? (
             <Link href="/time_entries" className="hover:underline">
-              作業時間
+              {t("nav.timeEntries")}
             </Link>
           ) : null}
           <Link href="/news" className="hover:underline">
-            ニュース
+            {t("nav.news")}
           </Link>
           <Link href="/search" className="hover:underline">
-            検索
+            {t("nav.search")}
           </Link>
           {user?.isAdmin ? (
             <Link href="/admin" className="hover:underline">
-              管理
+              {t("nav.admin")}
             </Link>
           ) : null}
         </nav>
@@ -71,13 +75,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
             <form action={logoutAction}>
               <button type="submit" className="hover:underline">
-                ログアウト
+                {t("nav.logout")}
               </button>
             </form>
           </div>
         ) : (
           <Link href="/login" className="hover:underline">
-            ログイン
+            {t("nav.login")}
           </Link>
         )}
       </header>

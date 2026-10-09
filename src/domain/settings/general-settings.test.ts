@@ -79,3 +79,23 @@ describe("display_subprojects_issues", () => {
     expect(resolveGeneralSettings({ display_subprojects_issues: "0" }).displaySubprojectsIssues).toBe(false);
   });
 });
+
+describe("language settings", () => {
+  it("defaults to Japanese with no forcing", () => {
+    const resolved = resolveGeneralSettings({});
+    expect(resolved.defaultLanguage).toBe("ja");
+    expect(resolved.forceDefaultLanguageForAnonymous).toBe(false);
+    expect(resolved.forceDefaultLanguageForLoggedIn).toBe(false);
+  });
+
+  it("reads a supported default language and the two force flags", () => {
+    const resolved = resolveGeneralSettings({ default_language: "en", force_default_language_for_anonymous: "1", force_default_language_for_loggedin: "1" });
+    expect(resolved.defaultLanguage).toBe("en");
+    expect(resolved.forceDefaultLanguageForAnonymous).toBe(true);
+    expect(resolved.forceDefaultLanguageForLoggedIn).toBe(true);
+  });
+
+  it("falls back to Japanese for a language the interface doesn't have", () => {
+    expect(resolveGeneralSettings({ default_language: "fr" }).defaultLanguage).toBe("ja");
+  });
+});

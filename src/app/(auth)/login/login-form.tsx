@@ -10,10 +10,13 @@ export function LoginForm({
   autologinEnabled,
   lostPasswordEnabled,
   selfRegistrationEnabled,
+  labels,
 }: {
   autologinEnabled: boolean;
   lostPasswordEnabled: boolean;
   selfRegistrationEnabled: boolean;
+  /** The sign-in form's text, translated by the page for the request's language. */
+  labels: { loginId: string; password: string; rememberMe: string; submit: string; submitting: string; lostPassword: string };
 }) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
@@ -21,7 +24,7 @@ export function LoginForm({
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
       <div className="flex flex-col gap-1">
         <label htmlFor="login" className="text-sm font-medium">
-          ログインID
+          {labels.loginId}
         </label>
         <input
           id="login"
@@ -33,7 +36,7 @@ export function LoginForm({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="password" className="text-sm font-medium">
-          パスワード
+          {labels.password}
         </label>
         <input
           id="password"
@@ -47,7 +50,7 @@ export function LoginForm({
       {autologinEnabled ? (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="rememberMe" />
-          次回から自動的にログインする
+          {labels.rememberMe}
         </label>
       ) : null}
       {state.error ? (
@@ -60,11 +63,11 @@ export function LoginForm({
         disabled={pending}
         className="bg-black text-white rounded px-3 py-2 disabled:opacity-50"
       >
-        {pending ? "ログイン中…" : "ログイン"}
+        {pending ? labels.submitting : labels.submit}
       </button>
       {lostPasswordEnabled ? (
         <Link href="/account/lost_password" className="text-sm underline self-start">
-          パスワードをお忘れですか？
+          {labels.lostPassword}
         </Link>
       ) : null}
       {selfRegistrationEnabled ? (

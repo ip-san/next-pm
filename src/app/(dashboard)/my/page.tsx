@@ -1,3 +1,5 @@
+import { translate } from "@/domain/i18n/messages";
+import { currentLocale } from "@/interface/http/locale";
 import { IssueQueryBlockForm } from "./issue-query-block-form";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { loadGeneralSettings } from "@/application/settings/general-settings";
@@ -174,6 +176,7 @@ function TimelogBlockList({ items, days }: { items: TimelogBlockItem[]; days: nu
 }
 
 export default async function MyPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user) {
     redirect("/login");
@@ -258,11 +261,11 @@ export default async function MyPage() {
   return (
     <main className="p-8 flex flex-col gap-8 max-w-5xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">マイページ</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "my.title")}</h1>
         <div className="flex items-center gap-4">
-          <AddBlockForm options={availableBlockOptions} />
+          <AddBlockForm options={availableBlockOptions} buttonLabel={translate(locale, "my.addBlock")} />
           <Link href="/my/account" className="text-sm underline">
-            アカウント設定
+            {translate(locale, "my.accountSettings")}
           </Link>
         </div>
       </div>

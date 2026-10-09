@@ -1,3 +1,5 @@
+import { translate } from "@/domain/i18n/messages";
+import { currentLocale } from "@/interface/http/locale";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { isSelfRegistrationEnabled } from "@/domain/settings/auth-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
@@ -11,6 +13,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; activated?: string }>;
 }) {
+  const locale = await currentLocale();
   const { error, activated } = await searchParams;
   const settings = await loadAuthSettings(new DrizzleSettingsRepository());
 
@@ -33,6 +36,14 @@ export default async function LoginPage({
           autologinEnabled={settings.autologinDays > 0}
           lostPasswordEnabled={settings.lostPasswordEnabled}
           selfRegistrationEnabled={isSelfRegistrationEnabled(settings)}
+          labels={{
+            loginId: translate(locale, "login.loginId"),
+            password: translate(locale, "login.password"),
+            rememberMe: translate(locale, "login.rememberMe"),
+            submit: translate(locale, "login.submit"),
+            submitting: translate(locale, "login.submitting"),
+            lostPassword: translate(locale, "login.lostPassword"),
+          }}
         />
       </div>
     </main>
