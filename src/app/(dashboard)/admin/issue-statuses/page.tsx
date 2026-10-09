@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/issue-status-repository";
 import { deleteIssueStatusAction, reorderIssueStatusAction } from "@/interface/actions/admin-issue-status-actions";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { AdminRowControls } from "../admin-row-controls";
 import { IssueStatusForm } from "./issue-status-form";
 
@@ -10,6 +12,7 @@ import { IssueStatusForm } from "./issue-status-form";
 export const dynamic = "force-dynamic";
 
 export default async function IssueStatusesPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -19,13 +22,13 @@ export default async function IssueStatusesPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">チケットステータス</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "admin.issueStatuses.title")}</h1>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">名称</th>
-            <th className="pr-4 py-1">完了</th>
-            <th className="pr-4 py-1">既定の進捗率</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.trackers.name")}</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.issueStatuses.closed")}</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.issueStatuses.defaultDoneRatio")}</th>
             <th className="pr-4 py-1" />
           </tr>
         </thead>
@@ -33,23 +36,23 @@ export default async function IssueStatusesPage() {
           {statuses.map((status) => (
             <tr key={status.id} className="border-b">
               <td className="pr-4 py-1">{status.name}</td>
-              <td className="pr-4 py-1">{status.isClosed ? "はい" : "—"}</td>
+              <td className="pr-4 py-1">{status.isClosed ? translate(locale, "issue.yes") : "—"}</td>
               <td className="pr-4 py-1">{status.defaultDoneRatio === null ? "—" : `${status.defaultDoneRatio}%`}</td>
               <td className="pr-4 py-1">
-                <AdminRowControls
+                <AdminRowControls locale={locale}
                   id={status.id}
                   idField="statusId"
                   editHref={`/admin/issue-statuses/${status.id}`}
                   reorderAction={reorderIssueStatusAction}
                   deleteAction={deleteIssueStatusAction}
-                  deleteConfirm={`ステータス「${status.name}」を削除しますか?`}
+                  deleteConfirm={interpolate(translate(locale, "admin.issueStatuses.deleteConfirm"), { name: status.name })}
                 />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <IssueStatusForm />
+      <IssueStatusForm locale={locale} />
     </main>
   );
 }

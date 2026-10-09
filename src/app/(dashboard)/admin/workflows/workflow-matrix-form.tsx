@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateWorkflowAction, type AdminActionState } from "@/interface/actions/admin-actions";
 import type { IssueStatus } from "@/domain/issue-status/entity";
@@ -16,12 +18,15 @@ export function WorkflowMatrixForm({
   roleId,
   statuses,
   allowedPairs,
+  locale = "ja",
 }: {
   trackerId: string;
   roleId: string;
   statuses: IssueStatus[];
   allowedPairs: string[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateWorkflowAction, initialState);
   const allowed = new Set(allowedPairs);
 
@@ -34,7 +39,7 @@ export function WorkflowMatrixForm({
         <table className="text-sm border-collapse">
           <thead>
             <tr>
-              <th className="border px-2 py-1 bg-gray-50">現在 \ 遷移先</th>
+              <th className="border px-2 py-1 bg-gray-50">{t("admin.workflows.matrixHeader")}</th>
               {statuses.map((newStatus) => (
                 <th key={newStatus.id} className="border px-2 py-1 bg-gray-50 whitespace-nowrap">
                   {newStatus.name}
@@ -75,7 +80,7 @@ export function WorkflowMatrixForm({
         disabled={pending}
         className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start"
       >
-        {pending ? "保存中…" : "保存"}
+        {pending ? t("issue.saving") : t("issue.save")}
       </button>
     </form>
   );

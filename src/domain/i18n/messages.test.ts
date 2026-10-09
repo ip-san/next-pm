@@ -39,6 +39,8 @@ const KEYS: MessageKey[] = [
   "admin.roles.permissionCount",
   "permission.view_issues",
   "permission.module.core",
+  "admin.trackers.deleteConfirm",
+  "admin.workflows.fieldHeader",
 ];
 
 describe("translate", () => {

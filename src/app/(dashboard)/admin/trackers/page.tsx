@@ -3,6 +3,8 @@ import { DrizzleIssueStatusRepository } from "@/infrastructure/db/repositories/i
 import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/tracker-repository";
 import { deleteTrackerAction, reorderTrackerAction } from "@/interface/actions/admin-tracker-actions";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { AdminRowControls } from "../admin-row-controls";
 import { TrackerForm } from "./tracker-form";
 
@@ -10,6 +12,7 @@ import { TrackerForm } from "./tracker-form";
 export const dynamic = "force-dynamic";
 
 export default async function TrackersPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -23,13 +26,13 @@ export default async function TrackersPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">トラッカー</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "admin.trackers")}</h1>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">名称</th>
-            <th className="pr-4 py-1">既定のステータス</th>
-            <th className="pr-4 py-1">ロードマップ</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.trackers.name")}</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.trackers.defaultStatus")}</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.trackers.roadmap")}</th>
             <th className="pr-4 py-1" />
           </tr>
         </thead>
@@ -38,22 +41,22 @@ export default async function TrackersPage() {
             <tr key={tracker.id} className="border-b">
               <td className="pr-4 py-1">{tracker.name}</td>
               <td className="pr-4 py-1">{statusById.get(tracker.defaultStatusId)?.name ?? "?"}</td>
-              <td className="pr-4 py-1">{tracker.isInRoadmap ? "表示" : "—"}</td>
+              <td className="pr-4 py-1">{tracker.isInRoadmap ? translate(locale, "admin.trackers.inRoadmap") : "—"}</td>
               <td className="pr-4 py-1">
-                <AdminRowControls
+                <AdminRowControls locale={locale}
                   id={tracker.id}
                   idField="trackerId"
                   editHref={`/admin/trackers/${tracker.id}`}
                   reorderAction={reorderTrackerAction}
                   deleteAction={deleteTrackerAction}
-                  deleteConfirm={`トラッカー「${tracker.name}」を削除しますか?`}
+                  deleteConfirm={interpolate(translate(locale, "admin.trackers.deleteConfirm"), { name: tracker.name })}
                 />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <TrackerForm statuses={statuses} trackers={trackers} />
+      <TrackerForm locale={locale} statuses={statuses} trackers={trackers} />
     </main>
   );
 }

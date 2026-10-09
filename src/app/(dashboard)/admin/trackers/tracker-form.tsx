@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { createTrackerAction, updateTrackerAction } from "@/interface/actions/admin-tracker-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
@@ -9,17 +11,17 @@ import type { Tracker } from "@/domain/tracker/entity";
 
 const initialState: AdminActionState = { error: null };
 
-const CORE_FIELD_LABEL: Record<TrackerCoreField, string> = {
-  assignedToId: "担当者",
-  categoryId: "カテゴリ",
-  fixedVersionId: "対象バージョン",
-  parentId: "親チケット",
-  startDate: "開始日",
-  dueDate: "期日",
-  estimatedHours: "予定工数",
-  doneRatio: "進捗率",
-  description: "説明",
-  priorityId: "優先度",
+const CORE_FIELD_LABEL_KEY: Record<TrackerCoreField, MessageKey> = {
+  assignedToId: "issue.attr.assignedToId",
+  categoryId: "issue.attr.categoryId",
+  fixedVersionId: "issue.attr.fixedVersionId",
+  parentId: "issue.attr.parentId",
+  startDate: "issue.attr.startDate",
+  dueDate: "issue.attr.dueDate",
+  estimatedHours: "issue.attr.estimatedHours",
+  doneRatio: "issue.attr.doneRatio",
+  description: "issue.attr.description",
+  priorityId: "issue.attr.priorityId",
 };
 
 /**
@@ -30,11 +32,14 @@ export function TrackerForm({
   statuses,
   trackers,
   tracker,
+  locale = "ja",
 }: {
   statuses: IssueStatus[];
   trackers: Tracker[];
   tracker?: Tracker;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(
     tracker ? updateTrackerAction : createTrackerAction,
     initialState,
@@ -46,7 +51,7 @@ export function TrackerForm({
       {tracker ? <input type="hidden" name="trackerId" value={tracker.id} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm font-medium">
-          名称
+          {t("admin.trackers.name")}
         </label>
         <input
           id="name"
@@ -59,7 +64,7 @@ export function TrackerForm({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="defaultStatusId" className="text-sm font-medium">
-          既定のステータス
+          {t("admin.trackers.defaultStatus")}
         </label>
         <select
           id="defaultStatusId"
@@ -68,7 +73,7 @@ export function TrackerForm({
           defaultValue={tracker?.defaultStatusId ?? ""}
           className="border rounded px-3 py-2"
         >
-          <option value="">選択してください</option>
+          <option value="">{t("admin.select")}</option>
           {statuses.map((status) => (
             <option key={status.id} value={status.id}>
               {status.name}
@@ -78,26 +83,26 @@ export function TrackerForm({
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="isInRoadmap" defaultChecked={tracker?.isInRoadmap ?? true} />
-        ロードマップに表示する
+        {t("admin.trackers.showInRoadmap")}
       </label>
 
       {/* Redmine's tracker[core_fields][]: a checked box means the field stays enabled. */}
       <fieldset className="flex flex-col gap-1">
-        <legend className="text-sm font-medium">標準フィールド</legend>
+        <legend className="text-sm font-medium">{t("admin.trackers.coreFields")}</legend>
         {TRACKER_CORE_FIELDS.map((field) => (
           <label key={field} className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="coreFields" value={field} defaultChecked={!disabled.has(field)} />
-            {CORE_FIELD_LABEL[field]}
+            {translate(locale, CORE_FIELD_LABEL_KEY[field])}
           </label>
         ))}
       </fieldset>
       {tracker ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="copyWorkflowFrom" className="text-sm font-medium">
-            ワークフローのコピー元
+            {t("admin.roles.copyWorkflowFrom")}
           </label>
           <select id="copyWorkflowFrom" name="copyWorkflowFrom" defaultValue="" className="border rounded px-3 py-2">
-            <option value="">コピーしない</option>
+            <option value="">{t("admin.roles.copyNone")}</option>
             {trackers.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
                 {candidate.name}
@@ -112,7 +117,7 @@ export function TrackerForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "保存中…" : tracker ? "変更を保存" : "トラッカーを追加"}
+        {pending ? t("issue.saving") : tracker ? t("admin.users.saveChanges") : t("admin.trackers.add")}
       </button>
     </form>
   );

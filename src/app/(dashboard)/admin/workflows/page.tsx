@@ -5,6 +5,8 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { WorkflowFieldPermissionsForm } from "./workflow-field-permissions-form";
 import { WorkflowMatrixForm } from "./workflow-matrix-form";
 
@@ -16,6 +18,7 @@ export default async function WorkflowsPage({
 }: {
   searchParams: Promise<{ trackerId?: string; roleId?: string; tab?: string }>;
 }) {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -57,14 +60,14 @@ export default async function WorkflowsPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">ワークフロー</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "admin.workflows")}</h1>
 
       <nav className="flex border-b">
         <a href={tabHref("transitions")} className={tabLinkClass(selectedTab === "transitions")}>
-          ステータス遷移
+          {translate(locale, "admin.workflows.transitions")}
         </a>
         <a href={tabHref("permissions")} className={tabLinkClass(selectedTab === "permissions")}>
-          フィールド権限
+          {translate(locale, "admin.workflows.fieldPermissions")}
         </a>
       </nav>
 
@@ -72,10 +75,10 @@ export default async function WorkflowsPage({
         <input type="hidden" name="tab" value={selectedTab} />
         <div className="flex flex-col gap-1">
           <label htmlFor="trackerId" className="font-medium">
-            トラッカー
+            {translate(locale, "admin.workflows.tracker")}
           </label>
           <select id="trackerId" name="trackerId" defaultValue={selectedTracker ?? ""} className="border rounded px-2 py-1">
-            <option value="">選択してください</option>
+            <option value="">{translate(locale, "admin.select")}</option>
             {trackers.map((tracker) => (
               <option key={tracker.id} value={tracker.id}>
                 {tracker.name}
@@ -85,10 +88,10 @@ export default async function WorkflowsPage({
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="roleId" className="font-medium">
-            ロール
+            {translate(locale, "admin.workflows.role")}
           </label>
           <select id="roleId" name="roleId" defaultValue={selectedRole ?? ""} className="border rounded px-2 py-1">
-            <option value="">選択してください</option>
+            <option value="">{translate(locale, "admin.select")}</option>
             {roles.map((role) => (
               <option key={role.id} value={role.id}>
                 {role.name}
@@ -97,21 +100,21 @@ export default async function WorkflowsPage({
           </select>
         </div>
         <button type="submit" className="border rounded px-3 py-1">
-          表示
+          {translate(locale, "admin.workflows.show")}
         </button>
       </form>
 
       {!selectedTracker || !selectedRole ? (
-        <p className="text-sm text-gray-500">トラッカーとロールを選択してください。</p>
+        <p className="text-sm text-gray-500">{translate(locale, "admin.workflows.selectFirst")}</p>
       ) : selectedTab === "transitions" ? (
-        <WorkflowMatrixForm
+        <WorkflowMatrixForm locale={locale}
           trackerId={selectedTracker}
           roleId={selectedRole}
           statuses={statuses}
           allowedPairs={Array.from(allowedPairs)}
         />
       ) : (
-        <WorkflowFieldPermissionsForm
+        <WorkflowFieldPermissionsForm locale={locale}
           trackerId={selectedTracker}
           roleId={selectedRole}
           statuses={statuses}

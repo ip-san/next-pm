@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateFieldPermissionsAction, type AdminActionState } from "@/interface/actions/admin-actions";
 import { WORKFLOW_ELIGIBLE_FIELDS, type FieldPermissionRule, type WorkflowEligibleField } from "@/domain/workflow/entity";
@@ -7,18 +9,18 @@ import type { IssueStatus } from "@/domain/issue-status/entity";
 
 const initialState: AdminActionState = { error: null };
 
-const FIELD_LABELS: Record<WorkflowEligibleField, string> = {
-  subject: "件名",
-  description: "説明",
-  assignedToId: "担当者",
-  priorityId: "優先度",
-  categoryId: "カテゴリ",
-  fixedVersionId: "対象バージョン",
-  startDate: "開始日",
-  dueDate: "期日",
-  doneRatio: "進捗率",
-  estimatedHours: "予定工数",
-  isPrivate: "プライベート",
+const FIELD_LABEL_KEYS: Record<WorkflowEligibleField, MessageKey> = {
+  subject: "issue.attr.subject",
+  description: "issue.attr.description",
+  assignedToId: "issue.attr.assignedToId",
+  priorityId: "issue.attr.priorityId",
+  categoryId: "issue.attr.categoryId",
+  fixedVersionId: "issue.attr.fixedVersionId",
+  startDate: "issue.attr.startDate",
+  dueDate: "issue.attr.dueDate",
+  doneRatio: "issue.attr.doneRatio",
+  estimatedHours: "issue.attr.estimatedHours",
+  isPrivate: "issue.attr.isPrivate",
 };
 
 /**
@@ -32,12 +34,15 @@ export function WorkflowFieldPermissionsForm({
   roleId,
   statuses,
   ruleByCell,
+  locale = "ja",
 }: {
   trackerId: string;
   roleId: string;
   statuses: IssueStatus[];
   ruleByCell: Array<[string, FieldPermissionRule]>;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateFieldPermissionsAction, initialState);
   const rules = new Map(ruleByCell);
 
@@ -50,7 +55,7 @@ export function WorkflowFieldPermissionsForm({
         <table className="text-sm border-collapse">
           <thead>
             <tr>
-              <th className="border px-2 py-1 bg-gray-50 text-left">フィールド \ ステータス</th>
+              <th className="border px-2 py-1 bg-gray-50 text-left">{t("admin.workflows.fieldHeader")}</th>
               {statuses.map((status) => (
                 <th key={status.id} className="border px-2 py-1 bg-gray-50 whitespace-nowrap">
                   {status.name}
@@ -61,7 +66,7 @@ export function WorkflowFieldPermissionsForm({
           <tbody>
             {WORKFLOW_ELIGIBLE_FIELDS.map((field) => (
               <tr key={field}>
-                <th className="border px-2 py-1 bg-gray-50 text-left whitespace-nowrap">{FIELD_LABELS[field]}</th>
+                <th className="border px-2 py-1 bg-gray-50 text-left whitespace-nowrap">{translate(locale, FIELD_LABEL_KEYS[field])}</th>
                 {statuses.map((status) => {
                   const cellKey = `${status.id}:${field}`;
                   return (
@@ -71,9 +76,9 @@ export function WorkflowFieldPermissionsForm({
                         defaultValue={rules.get(cellKey) ?? ""}
                         className="border rounded px-1 py-0.5 text-xs"
                       >
-                        <option value="">編集可</option>
-                        <option value="readonly">読み取り専用</option>
-                        <option value="required">必須</option>
+                        <option value="">{t("admin.workflows.ruleEditable")}</option>
+                        <option value="readonly">{t("admin.workflows.ruleReadonly")}</option>
+                        <option value="required">{t("admin.workflows.ruleRequired")}</option>
                       </select>
                     </td>
                   );
@@ -94,7 +99,7 @@ export function WorkflowFieldPermissionsForm({
         disabled={pending}
         className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start"
       >
-        {pending ? "保存中…" : "保存"}
+        {pending ? t("issue.saving") : t("issue.save")}
       </button>
     </form>
   );
