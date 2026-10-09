@@ -34,3 +34,24 @@ export function localizeColumns(locale: Locale, columns: QueryColumn[]): QueryCo
     return key ? { ...column, label: translate(locale, key) } : column;
   });
 }
+
+/** The time-entry list's column names: its own `user`, `activity`, `comments`, `hours` and so on, which the issue columns don't share. */
+const TIME_ENTRY_COLUMN_LABEL_KEYS: Record<string, MessageKey> = {
+  spent_on: "timeEntries.column.spent_on",
+  user: "timeEntries.column.user",
+  author: "timeEntries.column.author",
+  activity: "timeEntries.column.activity",
+  issue: "timeEntries.column.issue",
+  comments: "timeEntries.column.comments",
+  hours: "timeEntries.column.hours",
+  created_on: "timeEntries.column.created_on",
+  project: "query.column.project",
+};
+
+/** The time-entry columns with their names in `locale`. Used by the HTML screens only. */
+export function localizeTimeEntryColumns(locale: Locale, columns: QueryColumn[]): QueryColumn[] {
+  return columns.map((column) => {
+    const key = TIME_ENTRY_COLUMN_LABEL_KEYS[column.key];
+    return key ? { ...column, label: translate(locale, key) } : column;
+  });
+}

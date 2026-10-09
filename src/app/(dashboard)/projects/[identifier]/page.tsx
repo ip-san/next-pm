@@ -166,11 +166,15 @@ export default async function ProjectPage({
           </Link>
         ) : null}
         {canCloseProject ? (
-          <ProjectStatusButton projectIdentifier={identifier} transition={project.status === "closed" ? "reopen" : "close"} />
+          <ProjectStatusButton
+            projectIdentifier={identifier}
+            transition={project.status === "closed" ? "reopen" : "close"}
+            locale={locale}
+          />
         ) : null}
         {/* Project#deletable? also demands leaf? for a non-admin; the use case re-checks, so
             a subproject owner sees the form and is told why rather than silently missing it. */}
-        {canDeleteProject ? <DeleteProjectForm projectIdentifier={identifier} /> : null}
+        {canDeleteProject ? <DeleteProjectForm projectIdentifier={identifier} locale={locale} /> : null}
       </nav>
       {project.status === "closed" ? (
         <p className="text-sm text-amber-700">{translate(locale, "project.closedNotice")}</p>

@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { deleteProjectAction, type DeleteProjectActionState } from "@/interface/actions/project-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: DeleteProjectActionState = { error: null };
 
@@ -10,23 +12,25 @@ const initialState: DeleteProjectActionState = { error: null };
  * subproject with it, so it is confirmed by typing the identifier rather than by an OK
  * button. The check is re-run server side — this form is only where the value is typed.
  */
-export function DeleteProjectForm({ projectIdentifier }: { projectIdentifier: string }) {
+export function DeleteProjectForm({ projectIdentifier, locale = "ja" }: { projectIdentifier: string; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(deleteProjectAction, initialState);
 
   return (
     <details className="text-sm">
-      <summary className="cursor-pointer text-red-600">削除</summary>
+      <summary className="cursor-pointer text-red-600">{t("projectDelete.summary")}</summary>
       <form action={formAction} className="flex flex-col gap-2 mt-2 max-w-md">
         <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
         <p className="text-xs text-gray-600">
-          このプロジェクトとすべてのサブプロジェクト、チケット、Wiki、添付ファイルを完全に削除します。元に戻せません。 続けるには識別子{" "}
-          <code className="font-mono">{projectIdentifier}</code> を入力してください。
+          {t("projectDelete.warning")}
+          <code className="font-mono">{projectIdentifier}</code>
+          {t("projectDelete.warningEnd")}
         </p>
         <input
           name="confirmIdentifier"
           autoComplete="off"
           placeholder={projectIdentifier}
-          aria-label="確認のための識別子"
+          aria-label={t("projectDelete.identifierAria")}
           className="border rounded px-2 py-1"
         />
         {state.error ? (
@@ -35,7 +39,7 @@ export function DeleteProjectForm({ projectIdentifier }: { projectIdentifier: st
           </p>
         ) : null}
         <button type="submit" disabled={pending} className="bg-red-600 text-white rounded px-3 py-1 disabled:opacity-50 self-start">
-          {pending ? "削除中…" : "完全に削除する"}
+          {pending ? t("projectDelete.deleting") : t("projectDelete.submit")}
         </button>
       </form>
     </details>

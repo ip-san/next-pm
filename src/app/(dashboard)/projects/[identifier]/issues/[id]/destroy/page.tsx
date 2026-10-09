@@ -7,9 +7,12 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/time-entry-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { DeleteIssueForm } from "./delete-issue-form";
 
 export default async function DeleteIssuePage({ params }: { params: Promise<{ identifier: string; id: string }> }) {
+  const locale = await currentLocale();
   const { identifier, id } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -49,7 +52,7 @@ export default async function DeleteIssuePage({ params }: { params: Promise<{ id
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">チケットの削除</h1>
+      <h1 className="text-xl font-semibold">{translate(locale, "issueDelete.title")}</h1>
       <DeleteIssueForm
         issueId={issue.id}
         projectIdentifier={identifier}
@@ -57,6 +60,7 @@ export default async function DeleteIssuePage({ params }: { params: Promise<{ id
         descendantCount={doomedIds.length - 1}
         totalHours={totalHours}
         reassignCandidates={reassignCandidates}
+        locale={locale}
       />
     </main>
   );

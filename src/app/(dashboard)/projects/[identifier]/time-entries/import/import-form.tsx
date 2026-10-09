@@ -2,10 +2,13 @@
 
 import { useActionState } from "react";
 import { importTimeEntriesCsvAction, type ImportTimeEntriesActionState } from "@/interface/actions/time-entry-import-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: ImportTimeEntriesActionState = { error: null, summary: null };
 
-export function ImportTimeEntriesForm({ projectIdentifier }: { projectIdentifier: string }) {
+export function ImportTimeEntriesForm({ projectIdentifier, locale = "ja" }: { projectIdentifier: string; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(importTimeEntriesCsvAction, initialState);
 
   return (
@@ -13,12 +16,12 @@ export function ImportTimeEntriesForm({ projectIdentifier }: { projectIdentifier
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <div className="flex flex-col gap-1">
         <label htmlFor="file" className="text-sm font-medium">
-          CSVファイル
+          {t("timeEntries.importFile")}
         </label>
         <input id="file" name="file" type="file" accept=".csv,text/csv" required className="border rounded px-3 py-2 text-sm" />
       </div>
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "取り込み中…" : "取り込み"}
+        {pending ? t("timeEntries.importing") : t("timeEntries.import")}
       </button>
 
       {state.error ? (
@@ -29,7 +32,8 @@ export function ImportTimeEntriesForm({ projectIdentifier }: { projectIdentifier
       {state.summary ? (
         <div className="text-sm flex flex-col gap-1">
           <p className="text-green-700">
-            {state.summary.created}件作成しました。{state.summary.failed > 0 ? `（${state.summary.failed}件失敗）` : ""}
+            {interpolate(t("timeEntries.importCreated"), { count: state.summary.created })}
+            {state.summary.failed > 0 ? interpolate(t("timeEntries.importFailed"), { count: state.summary.failed }) : ""}
           </p>
           {state.summary.rowErrors.length > 0 ? (
             <ul className="text-red-600 text-xs flex flex-col gap-0.5">

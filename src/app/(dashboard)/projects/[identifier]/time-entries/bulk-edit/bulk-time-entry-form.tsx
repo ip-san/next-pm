@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { bulkUpdateTimeEntriesAction, type BulkTimeEntryActionState } from "@/interface/actions/time-entry-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: BulkTimeEntryActionState = { error: null, message: null };
 
@@ -10,11 +12,14 @@ export function BulkTimeEntryForm({
   projectIdentifier,
   entryIds,
   activities,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   entryIds: string[];
   activities: { id: string; name: string }[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(bulkUpdateTimeEntriesAction, initialState);
 
   return (
@@ -26,10 +31,10 @@ export function BulkTimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="bulk-activity" className="text-sm font-medium">
-          作業分類
+          {t("issue.activity")}
         </label>
         <select id="bulk-activity" name="activityId" defaultValue="" className="border rounded px-3 py-2">
-          <option value="">(変更しない)</option>
+          <option value="">{t("bulkEdit.noChange")}</option>
           {activities.map((activity) => (
             <option key={activity.id} value={activity.id}>
               {activity.name}
@@ -40,21 +45,21 @@ export function BulkTimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="bulk-hours" className="text-sm font-medium">
-          時間（空欄は変更しない）
+          {t("bulkEdit.hours")}
         </label>
         <input id="bulk-hours" name="hours" type="number" min="0.01" step="any" className="border rounded px-3 py-2" />
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="bulk-spent-on" className="text-sm font-medium">
-          日付（空欄は変更しない）
+          {t("bulkEdit.spentOn")}
         </label>
         <input id="bulk-spent-on" name="spentOn" type="date" className="border rounded px-3 py-2" />
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="bulk-comments" className="text-sm font-medium">
-          コメント（空欄は変更しない）
+          {t("bulkEdit.comments")}
         </label>
         <textarea id="bulk-comments" name="comments" rows={2} className="border rounded px-3 py-2" />
       </div>
@@ -66,7 +71,7 @@ export function BulkTimeEntryForm({
       ) : null}
       {state.message ? <p className="text-sm text-green-700">{state.message}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "更新中…" : "更新"}
+        {pending ? t("bulkEdit.submitting") : t("bulkEdit.submit")}
       </button>
     </form>
   );

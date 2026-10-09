@@ -7,9 +7,12 @@ import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/c
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { ImportTimeEntriesForm } from "./import-form";
 
 export default async function ImportTimeEntriesPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -35,25 +38,34 @@ export default async function ImportTimeEntriesPage({ params }: { params: Promis
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — 工数の取り込み (CSV)</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "timeEntries.importTitle"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/time-entries`} className="underline text-sm">
-          工数一覧
+          {translate(locale, "timeEntries.spentTimeList")}
         </Link>
       </div>
       <p className="text-sm text-gray-600">
-        1行目をヘッダー行として扱います。列名: <code className="font-mono">spent_on</code>（必須・YYYY-MM-DD）,{" "}
-        <code className="font-mono">hours</code>（必須）, <code className="font-mono">activity</code>（名称。省略時は既定の作業分類）,{" "}
-        <code className="font-mono">user</code>（ログインID。省略時は自分。他のユーザーを指定するには
-        <code className="font-mono">log_time_for_other_users</code> 権限が必要）, <code className="font-mono">issue_id</code>
-        （このプロジェクトのチケットID）, <code className="font-mono">comments</code>
-        {customFields.length > 0 ? (
-          <>
-            。カスタムフィールドはフィールド名を列名にします: {customFields.map((field) => field.name).join(", ")}
-          </>
-        ) : null}
-        。工数一覧のCSVエクスポートと同じ列構成なので、書き出したCSVをそのまま編集して取り込めます。
+        {translate(locale, "timeEntries.importIntro")}
+        <code className="font-mono">spent_on</code>
+        {translate(locale, "timeEntries.importSpentOn")}
+        <code className="font-mono">hours</code>
+        {translate(locale, "timeEntries.importHours")}
+        <code className="font-mono">activity</code>
+        {translate(locale, "timeEntries.importActivity")}
+        <code className="font-mono">user</code>
+        {translate(locale, "timeEntries.importUserStart")}
+        <code className="font-mono">log_time_for_other_users</code>
+        {translate(locale, "timeEntries.importUserEnd")}
+        <code className="font-mono">issue_id</code>
+        {translate(locale, "timeEntries.importIssueId")}
+        <code className="font-mono">comments</code>
+        {customFields.length > 0
+          ? interpolate(translate(locale, "timeEntries.importCustomFields"), {
+              fields: customFields.map((field) => field.name).join(", "),
+            })
+          : null}
+        {translate(locale, "timeEntries.importEnd")}
       </p>
-      <ImportTimeEntriesForm projectIdentifier={identifier} />
+      <ImportTimeEntriesForm projectIdentifier={identifier} locale={locale} />
     </main>
   );
 }

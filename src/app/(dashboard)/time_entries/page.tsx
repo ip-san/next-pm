@@ -17,6 +17,10 @@ import { TimeEntryTable } from "@/interface/components/query/time-entry-table";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { loadTimeEntryLookups, resolveGlobalTimeEntryScope } from "@/interface/http/time-entry-list";
 import { normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
+import { currentLocale } from "@/interface/http/locale";
+import { localizeTimeEntryColumns } from "@/interface/query/column-labels";
+import { translate } from "@/domain/i18n/messages";
+import type { Locale } from "@/domain/i18n/locales";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +36,7 @@ export default async function GlobalTimeEntriesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const locale = await currentLocale();
   const listParams = parseIssueListParams(normalizeSearchParams(await searchParams));
 
   const user = await currentUserFromCookies();
@@ -92,8 +97,8 @@ export default async function GlobalTimeEntriesPage({
   const valueOptions: Record<string, FilterValueOption[]> = {
     project_id: scope.projects.map((entry) => ({ value: entry.project.id, label: entry.project.name })),
     activity_id: activities.map((activity) => ({ value: activity.id, label: activity.name })),
-    user_id: userFilterOptions(lookups.users, user?.id),
-    author_id: userFilterOptions(lookups.users, user?.id),
+    user_id: userFilterOptions(locale, lookups.users, user?.id),
+    author_id: userFilterOptions(locale, lookups.users, user?.id),
     ...Object.fromEntries(
       result.customFields
         .filter((field) => field.fieldFormat === "list" || field.fieldFormat === "bool")
@@ -101,8 +106,8 @@ export default async function GlobalTimeEntriesPage({
           `cf_${field.id}`,
           field.fieldFormat === "bool"
             ? [
-                { value: "1", label: "はい" },
-                { value: "0", label: "いいえ" },
+                { value: "1", label: translate(locale, "query.yes") },
+                { value: "0", label: translate(locale, "query.no") },
               ]
             : field.possibleValues.map((value) => ({ value, label: value })),
         ]),
@@ -112,7 +117,7 @@ export default async function GlobalTimeEntriesPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">作業時間（全プロジェクト）</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "timeEntries.allTitle")}</h1>
         <a href={`/api/time_entries/csv?${exportParams}`} className="border rounded px-3 py-2 text-sm">
           CSV
         </a>
@@ -120,9 +125,9 @@ export default async function GlobalTimeEntriesPage({
 
       {visibleQueries.length > 0 && (
         <nav className="flex items-center gap-3 text-sm flex-wrap">
-          <span className="text-gray-500">保存済みクエリ:</span>
+          <span className="text-gray-500">{translate(locale, "query.savedQueries")}</span>
           <Link href={BASE_PATH} className={!savedQuery ? "font-semibold underline" : "underline"}>
-            (絞り込みなし)
+            {translate(locale, "query.noFilter")}
           </Link>
           {visibleQueries.map((query) => (
             <Link
@@ -138,7 +143,8 @@ export default async function GlobalTimeEntriesPage({
 
       <IssueQueryForm
         action={BASE_PATH}
-        columns={result.availableColumns}
+        columns={localizeTimeEntryColumns(locale, result.availableColumns)}
+        locale={locale}
         valueOptions={valueOptions}
         initialFilters={result.effective.filters}
         initialColumnKeys={result.displayColumns.map((column) => column.key)}
@@ -153,6 +159,7 @@ export default async function GlobalTimeEntriesPage({
         projectIdentifier={null}
         queryType="TimeEntryQuery"
         options={result.effective}
+        locale={locale}
         canPublish={user?.isAdmin ?? false}
         canSave={scope.canSaveQueries}
         roles={roles.map((role) => ({ id: role.id, name: role.name }))}
@@ -167,6 +174,7 @@ export default async function GlobalTimeEntriesPage({
         <SavedQueryControls
           projectIdentifier={null}
           queryType="TimeEntryQuery"
+          locale={locale}
           query={{ id: savedQuery.id, name: savedQuery.name, visibility: savedQuery.visibility, roleIds: savedQuery.roleIds }}
           canDelete={isQueryEditable(savedQuery, queryActor)}
           canCopy={scope.canSaveQueries}
@@ -176,6 +184,7 @@ export default async function GlobalTimeEntriesPage({
       <TimeEntryTable
         result={result}
         lookups={lookups}
+        locale={locale}
         basePath={BASE_PATH}
         listParams={listParams}
         projectIdentifierById={new Map(scope.projects.map((entry) => [entry.project.id, entry.project.identifier]))}
@@ -191,7 +200,7 @@ export default async function GlobalTimeEntriesPage({
   );
 }
 
-function userFilterOptions(users: Map<string, string>, currentUserId: string | undefined): FilterValueOption[] {
+function userFilterOptions(locale: Locale, users: Map<string, string>, currentUserId: string | undefined): FilterValueOption[] {
   const options = [...users].map(([value, label]) => ({ value, label }));
-  return currentUserId ? [{ value: "me", label: "<< 自分 >>" }, ...options] : options;
+  return currentUserId ? [{ value: "me", label: translate(locale, "query.me") }, ...options] : options;
 }

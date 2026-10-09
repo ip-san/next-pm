@@ -17,19 +17,21 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { timeEntryScopesFor } from "@/interface/http/time-entry-list";
 import { filterAccessibleTimeEntries } from "@/interface/http/time-entry-access";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 
 export const dynamic = "force-dynamic";
 
-const CRITERIA: { value: TimeReportCriterion; label: string }[] = [
-  { value: "user", label: "担当者" },
-  { value: "activity", label: "作業分類" },
-  { value: "issue", label: "チケット" },
+const CRITERIA: { value: TimeReportCriterion; labelKey: MessageKey }[] = [
+  { value: "user", labelKey: "timeReport.user" },
+  { value: "activity", labelKey: "timeReport.activity" },
+  { value: "issue", labelKey: "timeReport.issue" },
 ];
 
-const COLUMN_UNITS: { value: TimeReportColumnUnit; label: string }[] = [
-  { value: "day", label: "日" },
-  { value: "week", label: "週" },
-  { value: "month", label: "月" },
+const COLUMN_UNITS: { value: TimeReportColumnUnit; labelKey: MessageKey }[] = [
+  { value: "day", labelKey: "timeReport.day" },
+  { value: "week", labelKey: "timeReport.week" },
+  { value: "month", labelKey: "timeReport.month" },
 ];
 
 function parseCriterion(value: string | undefined): TimeReportCriterion {
@@ -47,6 +49,7 @@ export default async function TimeEntryReportPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ criteria?: string; columns?: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -127,34 +130,34 @@ export default async function TimeEntryReportPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — 工数レポート</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "timeReport.title"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/time-entries`} className="text-sm underline">
-          一覧に戻る
+          {translate(locale, "timeEntries.backToList")}
         </Link>
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm">
         <div className="flex items-center gap-2">
-          <span>集計</span>
+          <span>{translate(locale, "timeReport.criteria")}</span>
           {CRITERIA.map((c) => (
             <Link
               key={c.value}
               href={linkFor(c.value, columnUnit)}
               className={c.value === criterion ? "font-semibold underline" : "underline text-gray-500"}
             >
-              {c.label}
+              {translate(locale, c.labelKey)}
             </Link>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <span>単位</span>
+          <span>{translate(locale, "timeReport.unit")}</span>
           {COLUMN_UNITS.map((c) => (
             <Link
               key={c.value}
               href={linkFor(criterion, c.value)}
               className={c.value === columnUnit ? "font-semibold underline" : "underline text-gray-500"}
             >
-              {c.label}
+              {translate(locale, c.labelKey)}
             </Link>
           ))}
         </div>
@@ -164,13 +167,13 @@ export default async function TimeEntryReportPage({
         <table className="text-sm border-collapse">
           <thead>
             <tr className="text-left border-b">
-              <th className="pr-4 py-1">{CRITERIA.find((c) => c.value === criterion)?.label}</th>
+              <th className="pr-4 py-1">{translate(locale, CRITERIA.find((c) => c.value === criterion)?.labelKey ?? "timeReport.user")}</th>
               {report.periods.map((period) => (
                 <th key={period} className="pr-4 py-1 text-right">
                   {period}
                 </th>
               ))}
-              <th className="pr-4 py-1 text-right">合計</th>
+              <th className="pr-4 py-1 text-right">{translate(locale, "query.totals")}</th>
             </tr>
           </thead>
           <tbody>
@@ -188,7 +191,7 @@ export default async function TimeEntryReportPage({
             {report.rows.length === 0 ? (
               <tr>
                 <td colSpan={report.periods.length + 2} className="py-2 text-gray-500">
-                  工数の記録はまだありません。
+                  {translate(locale, "timeReport.empty")}
                 </td>
               </tr>
             ) : null}
@@ -196,7 +199,7 @@ export default async function TimeEntryReportPage({
           {report.rows.length > 0 ? (
             <tfoot>
               <tr className="border-t font-semibold">
-                <td className="pr-4 py-1">合計</td>
+                <td className="pr-4 py-1">{translate(locale, "query.totals")}</td>
                 {report.periods.map((period) => (
                   <td key={period} className="pr-4 py-1 text-right">
                     {(report.totalsByPeriod.get(period) ?? 0).toFixed(2)}

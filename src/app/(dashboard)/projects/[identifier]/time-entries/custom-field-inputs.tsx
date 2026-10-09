@@ -2,6 +2,8 @@
 
 import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { CustomField } from "@/domain/custom-field/entity";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 
 /**
  * Inputs for TimeEntry custom fields. Field names are `cf_<customFieldId>`, which
@@ -11,9 +13,11 @@ import type { CustomField } from "@/domain/custom-field/entity";
 export function CustomFieldInputs({
   fields,
   values,
+  locale = "ja",
 }: {
   fields: CustomField[];
   values?: Record<string, string | null>;
+  locale?: Locale;
 }) {
   if (fields.length === 0) {
     return null;
@@ -49,7 +53,7 @@ export function CustomFieldInputs({
               </select>
             ) : field.fieldFormat === "list" ? (
               <select id={name} name={name} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2">
-                <option value="">(未設定)</option>
+                <option value="">{translate(locale, "issue.unset")}</option>
                 {field.possibleValues.map((value) => (
                   <option key={value} value={value}>
                     {value}
@@ -58,9 +62,9 @@ export function CustomFieldInputs({
               </select>
             ) : field.fieldFormat === "bool" ? (
               <select id={name} name={name} required={field.isRequired} defaultValue={current} className="border rounded px-3 py-2">
-                <option value="">(未設定)</option>
-                <option value="1">はい</option>
-                <option value="0">いいえ</option>
+                <option value="">{translate(locale, "issue.unset")}</option>
+                <option value="1">{translate(locale, "query.yes")}</option>
+                <option value="0">{translate(locale, "query.no")}</option>
               </select>
             ) : (
               <input

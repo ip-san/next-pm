@@ -26,6 +26,10 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { loadTimeEntryLookups, timeEntryProjectScope, timeEntryScopesFor } from "@/interface/http/time-entry-list";
 import { normalizeSearchParams, parseIssueListParams, serializeIssueListParams } from "@/interface/query/issue-query-params";
+import { currentLocale } from "@/interface/http/locale";
+import type { Locale } from "@/domain/i18n/locales";
+import { localizeTimeEntryColumns } from "@/interface/query/column-labels";
+import { interpolate, translate } from "@/domain/i18n/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +45,7 @@ export default async function ProjectTimeEntriesPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const listParams = parseIssueListParams(normalizeSearchParams(await searchParams));
 
@@ -115,8 +120,8 @@ export default async function ProjectTimeEntriesPage({
 
   const valueOptions: Record<string, FilterValueOption[]> = {
     activity_id: activities.map((activity) => ({ value: activity.id, label: activity.name })),
-    user_id: userFilterOptions(memberUsers, user?.id),
-    author_id: userFilterOptions(memberUsers, user?.id),
+    user_id: userFilterOptions(locale, memberUsers, user?.id),
+    author_id: userFilterOptions(locale, memberUsers, user?.id),
     ...Object.fromEntries(
       result.customFields
         .filter((field) => field.fieldFormat === "list" || field.fieldFormat === "bool")
@@ -124,8 +129,8 @@ export default async function ProjectTimeEntriesPage({
           `cf_${field.id}`,
           field.fieldFormat === "bool"
             ? [
-                { value: "1", label: "はい" },
-                { value: "0", label: "いいえ" },
+                { value: "1", label: translate(locale, "query.yes") },
+                { value: "0", label: translate(locale, "query.no") },
               ]
             : field.possibleValues.map((value) => ({ value, label: value })),
         ]),
@@ -135,36 +140,36 @@ export default async function ProjectTimeEntriesPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — 工数</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "timeEntries.projectTitle"), { project: project.name })}</h1>
         <div className="flex items-center gap-4 text-sm">
           {canLogTime ? (
             <Link href={`${basePath}/new`} className="underline">
-              工数を記録
+              {translate(locale, "timeEntries.logTime")}
             </Link>
           ) : null}
           {canImport ? (
             <Link href={`${basePath}/import`} className="underline">
-              CSVの取り込み
+              {translate(locale, "timeEntries.importCsv")}
             </Link>
           ) : null}
           <a href={`/api/projects/${identifier}/time-entries/query-csv?${exportParams}`} className="underline">
-            CSV
+            {translate(locale, "timeEntries.csv")}
           </a>
           {/* The fixed-column export the importer round-trips with — see §9 of the parity checklist. */}
           <a href={`/api/projects/${identifier}/time-entries/csv`} className="underline">
-            CSV(取り込み形式)
+            {translate(locale, "timeEntries.csvImportFormat")}
           </a>
           <Link href={`${basePath}/report`} className="underline">
-            レポートを見る
+            {translate(locale, "timeEntries.viewReport")}
           </Link>
         </div>
       </div>
 
       {visibleQueries.length > 0 && (
         <nav className="flex items-center gap-3 text-sm flex-wrap">
-          <span className="text-gray-500">保存済みクエリ:</span>
+          <span className="text-gray-500">{translate(locale, "query.savedQueries")}</span>
           <Link href={basePath} className={!savedQuery ? "font-semibold underline" : "underline"}>
-            (絞り込みなし)
+            {translate(locale, "query.noFilter")}
           </Link>
           {visibleQueries.map((query) => (
             <Link
@@ -180,7 +185,8 @@ export default async function ProjectTimeEntriesPage({
 
       <IssueQueryForm
         action={basePath}
-        columns={result.availableColumns}
+        columns={localizeTimeEntryColumns(locale, result.availableColumns)}
+        locale={locale}
         valueOptions={valueOptions}
         initialFilters={result.effective.filters}
         initialColumnKeys={result.displayColumns.map((column) => column.key)}
@@ -195,6 +201,7 @@ export default async function ProjectTimeEntriesPage({
         projectIdentifier={identifier}
         queryType="TimeEntryQuery"
         options={result.effective}
+        locale={locale}
         canPublish={canManagePublicQueries}
         canSave={canSaveQueries}
         roles={roles.map((role) => ({ id: role.id, name: role.name }))}
@@ -209,6 +216,7 @@ export default async function ProjectTimeEntriesPage({
         <SavedQueryControls
           projectIdentifier={identifier}
           queryType="TimeEntryQuery"
+          locale={locale}
           query={{ id: savedQuery.id, name: savedQuery.name, visibility: savedQuery.visibility, roleIds: savedQuery.roleIds }}
           canDelete={isQueryEditable(savedQuery, queryActor)}
           canCopy={canSaveQueries}
@@ -218,6 +226,7 @@ export default async function ProjectTimeEntriesPage({
       <TimeEntryTable
         result={result}
         lookups={lookups}
+        locale={locale}
         basePath={basePath}
         listParams={listParams}
         projectIdentifierById={projectIdentifierById}
@@ -235,7 +244,11 @@ export default async function ProjectTimeEntriesPage({
   );
 }
 
-function userFilterOptions(users: { id: string; firstname: string; lastname: string }[], currentUserId: string | undefined): FilterValueOption[] {
+function userFilterOptions(
+  locale: Locale,
+  users: { id: string; firstname: string; lastname: string }[],
+  currentUserId: string | undefined,
+): FilterValueOption[] {
   const options = users.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` }));
-  return currentUserId ? [{ value: "me", label: "<< 自分 >>" }, ...options] : options;
+  return currentUserId ? [{ value: "me", label: translate(locale, "query.me") }, ...options] : options;
 }

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { Attachment } from "@/domain/attachment/entity";
 import { isThumbnailable } from "@/domain/attachment/entity";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 
 /**
  * Shared attachment list for the containers that show one (issues, documents, wiki pages).
@@ -12,14 +14,16 @@ import { isThumbnailable } from "@/domain/attachment/entity";
 export function AttachmentList({
   attachments,
   renderAction,
-  emptyLabel = "添付ファイルはありません。",
+  emptyLabel,
+  locale = "ja",
 }: {
   attachments: Attachment[];
   renderAction?: (attachment: Attachment) => ReactNode;
   emptyLabel?: string;
+  locale?: Locale;
 }) {
   if (attachments.length === 0) {
-    return <p className="text-gray-400 text-xs">{emptyLabel}</p>;
+    return <p className="text-gray-400 text-xs">{emptyLabel ?? translate(locale, "attachments.none")}</p>;
   }
 
   return (

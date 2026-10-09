@@ -10,6 +10,8 @@ import { DrizzleTimeEntryRepository } from "@/infrastructure/db/repositories/tim
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { canAccessTimeEntry } from "@/interface/http/time-entry-access";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { BulkTimeEntryForm } from "./bulk-time-entry-form";
 
 /**
@@ -23,6 +25,7 @@ export default async function BulkEditTimeEntriesPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ ids?: string | string[] }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { ids } = await searchParams;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -62,9 +65,9 @@ export default async function BulkEditTimeEntriesPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — 工数の一括編集（{entries.length}件）</h1>
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "bulkEdit.timeEntriesTitle"), { project: project.name, count: entries.length })}</h1>
       {entries.length === 0 ? (
-        <p className="text-sm text-gray-600">このプロジェクトの工数が選択されていません。一覧で工数にチェックを入れてください。</p>
+        <p className="text-sm text-gray-600">{translate(locale, "bulkEdit.timeEntriesNone")}</p>
       ) : (
         <>
           <ul className="text-sm text-gray-600 flex flex-col gap-1">
@@ -78,6 +81,7 @@ export default async function BulkEditTimeEntriesPage({
             projectIdentifier={identifier}
             entryIds={entries.map((entry) => entry.id)}
             activities={offered.map((activity) => ({ id: activity.id, name: activity.name }))}
+            locale={locale}
           />
         </>
       )}

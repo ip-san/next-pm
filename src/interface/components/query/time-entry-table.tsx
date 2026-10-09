@@ -1,10 +1,13 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import type { ListTimeEntriesResult } from "@/application/time-entries/list-time-entries";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import type { QueryColumn } from "@/domain/query/columns";
 import { linkedPages } from "@/domain/query/pagination";
 import { sortDirectionFor, toggleSortCriteria } from "@/domain/query/sort";
 import type { TimeEntry } from "@/domain/time-entry/entity";
+import { localizeTimeEntryColumns } from "@/interface/query/column-labels";
 import { issueListHref, type IssueListParams } from "@/interface/query/issue-query-params";
 import { timeEntryColumnValue, timeEntryGroupLabel, timeEntryGroupValue, type TimeEntryListLookups } from "@/interface/query/time-entry-list-view";
 import { DeleteTimeEntryButton } from "./delete-time-entry-button";
@@ -28,6 +31,8 @@ export interface TimeEntryTableProps {
   bulkEditHref?: string;
   /** Which rows get a bulk-edit checkbox. Defaults to the rows that offer edit. */
   isSelectable?: (entry: TimeEntry) => boolean;
+  /** The language for the table's own labels and its column names. */
+  locale?: Locale;
 }
 
 /**
@@ -44,10 +49,14 @@ export function TimeEntryTable({
   isEditable,
   bulkEditHref,
   isSelectable = isEditable,
+  locale = "ja",
 }: TimeEntryTableProps) {
+  const t = (key: MessageKey) => translate(locale, key);
+  const availableColumns = localizeTimeEntryColumns(locale, result.availableColumns);
+  const displayColumns = localizeTimeEntryColumns(locale, result.displayColumns);
   const groupsByValue = new Map((result.search.groups ?? []).map((group) => [group.value, group]));
   const totalColumns = result.effective.totalableNames
-    .map((key) => result.availableColumns.find((column) => column.key === key))
+    .map((key) => availableColumns.find((column) => column.key === key))
     .filter((column): column is QueryColumn => column !== undefined);
 
   const groupBy = result.effective.groupBy;
@@ -59,7 +68,7 @@ export function TimeEntryTable({
   });
 
   const rowContext = { lookups, customValues: result.search.customValues };
-  const columnCount = result.displayColumns.length + 1 + (bulkEditHref ? 1 : 0);
+  const columnCount = displayColumns.length + 1 + (bulkEditHref ? 1 : 0);
 
   const linkWith = (overrides: Partial<IssueListParams>) =>
     issueListHref(basePath, listParams, {
@@ -74,7 +83,7 @@ export function TimeEntryTable({
         <thead>
           <tr className="text-left border-b">
             {bulkEditHref ? <th className="pr-2 py-1" /> : null}
-            {result.displayColumns.map((column) => (
+            {displayColumns.map((column) => (
               <th key={column.key} className="pr-4 py-1">
                 {column.sortable ? (
                   <Link
@@ -105,7 +114,7 @@ export function TimeEntryTable({
                 {startsGroup ? (
                   <tr className="bg-gray-50 border-b">
                     <td colSpan={columnCount} className="py-1 font-semibold">
-                      {timeEntryGroupLabel(groupBy as string, groupValue ?? null, lookups)} ({group?.count ?? 0})
+                      {groupValue ? timeEntryGroupLabel(groupBy as string, groupValue, lookups) : t("query.none")} ({group?.count ?? 0})
                       {totalColumns.map((column) => (
                         <span key={column.key} className="ml-3 font-normal text-gray-600">
                           {column.label}: {group?.totals[column.key] ?? 0}
@@ -117,10 +126,10 @@ export function TimeEntryTable({
                 <tr className="border-b">
                   {bulkEditHref ? (
                     <td className="pr-2 py-1">
-                      {isSelectable(entry) ? <input type="checkbox" form={BULK_EDIT_FORM_ID} name="ids" value={entry.id} aria-label="選択" /> : null}
+                      {isSelectable(entry) ? <input type="checkbox" form={BULK_EDIT_FORM_ID} name="ids" value={entry.id} aria-label={t("timeEntries.select")} /> : null}
                     </td>
                   ) : null}
-                  {result.displayColumns.map((column) => (
+                  {displayColumns.map((column) => (
                     <td key={column.key} className="pr-4 py-1">
                       {column.key === "issue" && entry.issueId ? (
                         <Link href={`/projects/${identifier}/issues/${entry.issueId}`} className="underline">
@@ -139,9 +148,9 @@ export function TimeEntryTable({
                     {isEditable(entry) ? (
                       <span className="flex items-center gap-2">
                         <Link href={`/projects/${identifier}/time-entries/${entry.id}/edit`} className="text-xs underline">
-                          編集
+                          {t("timeEntries.edit")}
                         </Link>
-                        <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} />
+                        <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} locale={locale} />
                       </span>
                     ) : null}
                   </td>
@@ -153,20 +162,20 @@ export function TimeEntryTable({
         {totalColumns.length > 0 ? (
           <tfoot>
             <tr className="border-t-2 font-semibold">
-              {result.displayColumns.map((column, index) => (
+              {displayColumns.map((column, index) => (
                 <td key={column.key} className="pr-4 py-1">
-                  {index === 0 ? "合計" : null}
+                  {index === 0 ? t("query.totals") : null}
                   {result.effective.totalableNames.includes(column.key) ? (result.search.totals[column.key] ?? 0) : null}
                 </td>
               ))}
               <td />
             </tr>
             {/* Totals for columns that aren't displayed still have to appear somewhere. */}
-            {totalColumns.some((column) => !result.displayColumns.includes(column)) ? (
+            {totalColumns.some((column) => !displayColumns.some((displayed) => displayed.key === column.key)) ? (
               <tr>
                 <td colSpan={columnCount} className="py-1 text-gray-600 font-normal">
                   {totalColumns
-                    .filter((column) => !result.displayColumns.includes(column))
+                    .filter((column) => !displayColumns.some((displayed) => displayed.key === column.key))
                     .map((column) => `${column.label}: ${result.search.totals[column.key] ?? 0}`)
                     .join(" / ")}
                 </td>
@@ -180,7 +189,7 @@ export function TimeEntryTable({
   return (
     <>
       <p className="text-sm text-gray-600">
-        {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
+        {interpolate(t("issues.showing"), { total: result.pagination.itemCount, first: result.pagination.firstItem, last: result.pagination.lastItem })}
       </p>
 
       {/*
@@ -193,12 +202,12 @@ export function TimeEntryTable({
       {bulkEditHref ? (
         <div>
           <button type="submit" form={BULK_EDIT_FORM_ID} className="border rounded px-3 py-1.5 text-sm">
-            選択した工数を一括編集
+            {t("timeEntries.bulkEditSelected")}
           </button>
         </div>
       ) : null}
 
-      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label="ページ送り">
+      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label={t("query.pagination")}>
         {linkedPages(result.pagination).map((page) => (
           <Link
             key={page}
@@ -208,7 +217,7 @@ export function TimeEntryTable({
             {page}
           </Link>
         ))}
-        <span className="text-gray-500">表示件数:</span>
+        <span className="text-gray-500">{t("query.perPage")}</span>
         {result.perPageOptions.map((option) => (
           <Link
             key={option}

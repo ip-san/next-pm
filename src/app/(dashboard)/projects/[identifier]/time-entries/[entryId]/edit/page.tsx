@@ -18,6 +18,8 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
 import { canAccessTimeEntry } from "@/interface/http/time-entry-access";
 import { DeleteTimeEntryButton } from "@/interface/components/query/delete-time-entry-button";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { TimeEntryForm } from "../../time-entry-form";
 
 // Mirrors TimelogController#edit: find_time_entry then check_editability. The read half is
@@ -31,6 +33,7 @@ export default async function EditTimeEntryPage({
 }: {
   params: Promise<{ identifier: string; entryId: string }>;
 }) {
+  const locale = await currentLocale();
   const { identifier, entryId } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -95,9 +98,9 @@ export default async function EditTimeEntryPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — 工数の編集</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "timeEntries.editTitle"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/time-entries`} className="text-sm underline">
-          工数一覧
+          {translate(locale, "timeEntries.spentTimeList")}
         </Link>
       </div>
       <TimeEntryForm
@@ -107,6 +110,7 @@ export default async function EditTimeEntryPage({
         customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
         assignableUsers={assignableUsers}
         currentUserId={user.id}
+        locale={locale}
         entry={entry}
         customValues={Object.fromEntries(
           values
@@ -114,7 +118,7 @@ export default async function EditTimeEntryPage({
             .map((value) => [value.customFieldId, value.value]),
         )}
       />
-      <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} />
+      <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} locale={locale} />
     </main>
   );
 }

@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteIssueAction } from "@/interface/actions/issue-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 
 /**
  * Redmine's destroy confirmation (`issues/destroy.html.erb`): when the issues about to be
@@ -18,6 +20,7 @@ export function DeleteIssueForm({
   descendantCount,
   totalHours,
   reassignCandidates,
+  locale = "ja",
 }: {
   issueId: string;
   projectIdentifier: string;
@@ -26,7 +29,9 @@ export function DeleteIssueForm({
   totalHours: number;
   /** Other issues in the same project that logged time can be moved onto. */
   reassignCandidates: { id: string; number: number; subject: string }[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const router = useRouter();
   const [timeEntryMode, setTimeEntryMode] = useState<"destroy" | "nullify" | "reassign">("destroy");
   const [reassignToIssueId, setReassignToIssueId] = useState(reassignCandidates[0]?.id ?? "");
@@ -50,20 +55,20 @@ export function DeleteIssueForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-xl">
       <p className="text-sm">
-        「{subject}」を削除します。この操作は取り消せません。
-        {descendantCount > 0 ? `子チケット ${descendantCount} 件も一緒に削除されます。` : null}
+        {interpolate(t("issueDelete.confirm"), { subject })}
+        {descendantCount > 0 ? interpolate(t("issueDelete.descendants"), { count: descendantCount }) : null}
       </p>
 
       {totalHours > 0 ? (
         <fieldset className="flex flex-col gap-2 border rounded p-3">
-          <legend className="text-sm font-medium px-1">記録済みの工数（合計 {totalHours}h）の扱い</legend>
+          <legend className="text-sm font-medium px-1">{interpolate(t("issueDelete.timeLegend"), { hours: totalHours })}</legend>
           <label className="flex items-center gap-2 text-sm">
             <input type="radio" name="timeEntryMode" checked={timeEntryMode === "destroy"} onChange={() => setTimeEntryMode("destroy")} />
-            工数も削除する
+            {t("issueDelete.timeDestroy")}
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="radio" name="timeEntryMode" checked={timeEntryMode === "nullify"} onChange={() => setTimeEntryMode("nullify")} />
-            工数はプロジェクトに残す（チケットとの紐付けを外す）
+            {t("issueDelete.timeNullify")}
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -73,11 +78,11 @@ export function DeleteIssueForm({
               onChange={() => setTimeEntryMode("reassign")}
               disabled={reassignCandidates.length === 0}
             />
-            別のチケットに付け替える
+            {t("issueDelete.timeReassign")}
           </label>
           {timeEntryMode === "reassign" ? (
             <select
-              aria-label="付け替え先チケット"
+              aria-label={t("issueDelete.reassignTarget")}
               value={reassignToIssueId}
               onChange={(event) => setReassignToIssueId(event.target.value)}
               className="border rounded px-3 py-2 ml-6"
@@ -100,10 +105,10 @@ export function DeleteIssueForm({
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className="bg-red-700 text-white rounded px-3 py-2 disabled:opacity-50">
-          {pending ? "削除中…" : "削除する"}
+          {pending ? t("issueDelete.deleting") : t("issueDelete.submit")}
         </button>
         <Link href={`/projects/${projectIdentifier}/issues/${issueId}`} className="text-sm underline">
-          キャンセル
+          {t("issue.cancel")}
         </Link>
       </div>
     </form>

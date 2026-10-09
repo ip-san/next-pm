@@ -576,7 +576,7 @@ export default async function IssueDetailPage({
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">{t("issue.attachments")}</h2>
-        <AttachmentList attachments={attachments} />
+        <AttachmentList attachments={attachments} locale={locale} />
         {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} locale={locale} /> : null}
       </section>
 

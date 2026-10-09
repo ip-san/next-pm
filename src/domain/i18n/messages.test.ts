@@ -14,6 +14,13 @@ const KEYS: MessageKey[] = [
   "issue.attr.subject",
   "issue.statusProgress",
   "issueForm.create",
+  "timeEntries.logTime",
+  "timeEntries.importUserStart",
+  "timeReport.title",
+  "bulkEdit.submit",
+  "issueDelete.timeLegend",
+  "projectStatus.confirmArchive",
+  "projectDelete.warningEnd",
 ];
 
 describe("translate", () => {

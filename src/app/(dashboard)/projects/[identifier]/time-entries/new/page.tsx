@@ -13,11 +13,14 @@ import { DrizzleRoleRepository } from "@/infrastructure/db/repositories/role-rep
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject, visibleIssueFilter } from "@/interface/http/resolve-actor";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { TimeEntryForm } from "../time-entry-form";
 
 // Redmine's timelog/new reached from a project (no issue in the URL): the issue is optional,
 // so time can be booked against the project itself.
 export default async function NewTimeEntryPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -59,9 +62,9 @@ export default async function NewTimeEntryPage({ params }: { params: Promise<{ i
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — 工数の記録</h1>
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "timeEntries.newTitle"), { project: project.name })}</h1>
         <Link href={`/projects/${identifier}/time-entries`} className="text-sm underline">
-          工数一覧
+          {translate(locale, "timeEntries.spentTimeList")}
         </Link>
       </div>
       <TimeEntryForm
@@ -71,6 +74,7 @@ export default async function NewTimeEntryPage({ params }: { params: Promise<{ i
         customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}
         assignableUsers={assignableUsers}
         currentUserId={user.id}
+        locale={locale}
       />
     </main>
   );

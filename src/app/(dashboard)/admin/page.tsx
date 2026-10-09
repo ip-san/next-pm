@@ -4,6 +4,7 @@ import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/proje
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { DeleteProjectForm } from "../projects/delete-project-form";
 import { ProjectStatusButton } from "../projects/project-status-button";
+import { currentLocale } from "@/interface/http/locale";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function AdminIndexPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -89,10 +91,11 @@ export default async function AdminIndexPage() {
                     <ProjectStatusButton
                       projectIdentifier={project.identifier}
                       transition={project.status === "archived" ? "unarchive" : "archive"}
+                      locale={locale}
                     />
                     {/* An archived project's own pages 404 for everyone, so this list is the
                         only place one can be deleted — same as Redmine's admin list. */}
-                    <DeleteProjectForm projectIdentifier={project.identifier} />
+                    <DeleteProjectForm projectIdentifier={project.identifier} locale={locale} />
                   </span>
                 </td>
               </tr>

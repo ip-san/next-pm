@@ -10,6 +10,8 @@ import type { CustomField } from "@/domain/custom-field/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
 import type { TimeEntry } from "@/domain/time-entry/entity";
 import { CustomFieldInputs } from "./custom-field-inputs";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: LogTimeActionState = { error: null };
 
@@ -37,6 +39,7 @@ export function TimeEntryForm({
   currentUserId,
   entry,
   customValues,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   issues: TimeEntryFormIssue[];
@@ -48,7 +51,9 @@ export function TimeEntryForm({
   currentUserId: string;
   entry?: TimeEntry;
   customValues?: Record<string, string | null>;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(
     entry ? updateTimeEntryAction : createTimeEntryAction,
     initialState,
@@ -62,7 +67,7 @@ export function TimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="spentOn" className="text-sm font-medium">
-          日付
+          {t("issue.spentOn")}
         </label>
         <input
           id="spentOn"
@@ -76,7 +81,7 @@ export function TimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="hours" className="text-sm font-medium">
-          作業時間
+          {t("issue.hours")}
         </label>
         <input
           id="hours"
@@ -92,10 +97,10 @@ export function TimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="issueId" className="text-sm font-medium">
-          チケット（任意）
+          {t("timeEntryForm.issue")}
         </label>
         <select id="issueId" name="issueId" defaultValue={entry?.issueId ?? ""} className="border rounded px-3 py-2">
-          <option value="">(プロジェクト全体)</option>
+          <option value="">{t("timeEntryForm.wholeProject")}</option>
           {issues.map((issue) => (
             <option key={issue.id} value={issue.id}>
               #{issue.number} {issue.subject}
@@ -107,7 +112,7 @@ export function TimeEntryForm({
       {assignableUsers.length > 0 ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="userId" className="text-sm font-medium">
-            ユーザー
+            {t("issue.user")}
           </label>
           <select id="userId" name="userId" defaultValue={entry?.userId ?? currentUserId} className="border rounded px-3 py-2">
             {assignableUsers.map((user) => (
@@ -121,7 +126,7 @@ export function TimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="activityId" className="text-sm font-medium">
-          作業分類
+          {t("issue.activity")}
         </label>
         <select id="activityId" name="activityId" required defaultValue={defaultActivityId} className="border rounded px-3 py-2">
           {activities.map((activity) => (
@@ -134,12 +139,12 @@ export function TimeEntryForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="comments" className="text-sm font-medium">
-          コメント
+          {t("issue.comment")}
         </label>
         <input id="comments" name="comments" defaultValue={entry?.comments} className="border rounded px-3 py-2" />
       </div>
 
-      <CustomFieldInputs fields={customFields} values={customValues} />
+      <CustomFieldInputs fields={customFields} values={customValues} locale={locale} />
 
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
@@ -147,7 +152,7 @@ export function TimeEntryForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "保存中…" : entry ? "更新" : "工数を記録"}
+        {pending ? t("timeEntryForm.saving") : entry ? t("timeEntryForm.update") : t("timeEntries.logTime")}
       </button>
     </form>
   );

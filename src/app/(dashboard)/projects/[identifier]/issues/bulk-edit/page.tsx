@@ -17,6 +17,8 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/version-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { BulkEditForm } from "./bulk-edit-form";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +35,7 @@ export default async function BulkEditPage({
   params: Promise<{ identifier: string }>;
   searchParams: Promise<{ ids?: string | string[] }>;
 }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const { ids } = await searchParams;
   const requestedIds = normalizeIds(ids);
@@ -71,8 +74,8 @@ export default async function BulkEditPage({
   if (issues.length === 0) {
     return (
       <main className="p-8 flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">一括編集</h1>
-        <p className="text-sm text-gray-500">編集可能なチケットが選択されていません。</p>
+        <h1 className="text-xl font-semibold">{translate(locale, "issueBulkEdit.title")}</h1>
+        <p className="text-sm text-gray-500">{translate(locale, "issueBulkEdit.none")}</p>
       </main>
     );
   }
@@ -100,7 +103,7 @@ export default async function BulkEditPage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">一括編集（{issues.length}件）</h1>
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "issueBulkEdit.count"), { count: issues.length })}</h1>
       <ul className="text-sm text-gray-600 flex flex-col gap-1">
         {issues.map((issue) => (
           <li key={issue.id}>
@@ -120,6 +123,7 @@ export default async function BulkEditPage({
         priorities={priorities}
         members={memberUsers}
         groups={groups}
+        locale={locale}
       />
     </main>
   );
