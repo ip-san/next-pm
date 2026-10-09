@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateIssueCategoryAction, type IssueCategoryActionState } from "@/interface/actions/issue-category-actions";
 import type { IssueCategory } from "@/domain/issue-category/entity";
@@ -7,7 +9,8 @@ import type { User } from "@/domain/user/entity";
 
 const initialState: IssueCategoryActionState = { error: null };
 
-export function IssueCategoryEditForm({ projectIdentifier, category, members }: { projectIdentifier: string; category: IssueCategory; members: User[] }) {
+export function IssueCategoryEditForm({ locale = "ja", projectIdentifier, category, members }: { projectIdentifier: string; category: IssueCategory; members: User[]; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateIssueCategoryAction, initialState);
 
   return (
@@ -16,9 +19,9 @@ export function IssueCategoryEditForm({ projectIdentifier, category, members }: 
       <input type="hidden" name="categoryId" value={category.id} />
       <input name="name" defaultValue={category.name} maxLength={30} required className="border rounded px-3 py-2 text-sm" />
       <label className="text-xs text-gray-600 flex flex-col gap-1">
-        既定の担当者
+        {t("issueCategories.defaultAssignee")}
         <select name="assignedToId" defaultValue={category.assignedToId ?? ""} className="border rounded px-3 py-2 text-sm">
-          <option value="">(なし)</option>
+          <option value="">{t("query.none")}</option>
           {members.map((member) => (
             <option key={member.id} value={member.id}>
               {member.lastname} {member.firstname}
@@ -28,7 +31,7 @@ export function IssueCategoryEditForm({ projectIdentifier, category, members }: 
       </label>
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
-        保存
+        {t("issue.save")}
       </button>
     </form>
   );

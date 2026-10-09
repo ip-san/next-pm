@@ -25,6 +25,10 @@ const KEYS: MessageKey[] = [
   "documents.none",
   "wiki.indexTitle",
   "wiki.childrenQuestion",
+  "projectSettings.title",
+  "members.viaGroup",
+  "versions.sharingTree",
+  "projectNew.copyHelp",
   "projectDelete.warningEnd",
 ];
 

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
@@ -14,6 +16,7 @@ import { IssueCategoryCreateForm } from "./issue-category-create-form";
 export const dynamic = "force-dynamic";
 
 export default async function IssueCategoriesPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -39,8 +42,8 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — チケットカテゴリ</h1>
-      <ProjectSettingsTabs
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "issueCategories.title"), { project: project.name })}</h1>
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="issueCategories"
         visibleTabs={{
@@ -57,8 +60,8 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
       <table className="text-sm w-full">
         <thead>
           <tr className="text-left border-b">
-            <th className="pb-2">名前</th>
-            <th className="pb-2">既定の担当者</th>
+            <th className="pb-2">{translate(locale, "issueCategories.name")}</th>
+            <th className="pb-2">{translate(locale, "issueCategories.defaultAssignee")}</th>
             <th className="pb-2" />
           </tr>
         </thead>
@@ -71,7 +74,7 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
                 <td className="py-2">{assignee ? `${assignee.lastname} ${assignee.firstname}` : "-"}</td>
                 <td className="py-2">
                   <Link href={`/projects/${identifier}/issue-categories/${category.id}`} className="underline">
-                    編集
+                    {translate(locale, "issue.edit")}
                   </Link>
                 </td>
               </tr>
@@ -80,14 +83,14 @@ export default async function IssueCategoriesPage({ params }: { params: Promise<
           {categories.length === 0 ? (
             <tr>
               <td colSpan={3} className="py-2 text-gray-500">
-                カテゴリはまだありません。
+                {translate(locale, "issueCategories.none")}
               </td>
             </tr>
           ) : null}
         </tbody>
       </table>
 
-      <IssueCategoryCreateForm projectIdentifier={identifier} members={members} />
+      <IssueCategoryCreateForm locale={locale} projectIdentifier={identifier} members={members} />
     </main>
   );
 }

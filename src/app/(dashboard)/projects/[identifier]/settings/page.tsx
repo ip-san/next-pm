@@ -1,4 +1,6 @@
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -14,6 +16,7 @@ import { ProjectSettingsForm } from "./project-settings-form";
 export const dynamic = "force-dynamic";
 
 export default async function ProjectSettingsPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -38,8 +41,8 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — 設定</h1>
-      <ProjectSettingsTabs
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "projectSettings.title"), { project: project.name })}</h1>
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="settings"
         visibleTabs={{
@@ -52,7 +55,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
           wiki: hasWiki && can({ permission: "manage_wiki", project: projectContext, actor }),
         }}
       />
-      <ProjectSettingsForm
+      <ProjectSettingsForm locale={locale}
         project={project}
         trackers={trackers}
         customFields={visibleCustomFieldsFor(customFields, customFieldViewerFor(user, roleIds))}

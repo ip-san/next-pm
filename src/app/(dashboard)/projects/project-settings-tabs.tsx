@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 export type ProjectSettingsTab = "settings" | "members" | "versions" | "issueCategories" | "repositories" | "activities" | "wiki";
 
@@ -12,14 +14,14 @@ const TAB_PATH: Record<ProjectSettingsTab, string> = {
   wiki: "settings/wiki",
 };
 
-const TAB_LABEL: Record<ProjectSettingsTab, string> = {
-  settings: "情報",
-  members: "メンバー",
-  versions: "バージョン",
-  issueCategories: "チケットのカテゴリ",
-  repositories: "リポジトリ",
-  activities: "作業分類",
-  wiki: "Wiki",
+const TAB_LABEL: Record<ProjectSettingsTab, MessageKey> = {
+  settings: "projectSettings.tabSettings",
+  members: "projectSettings.tabMembers",
+  versions: "projectSettings.tabVersions",
+  issueCategories: "projectSettings.tabIssueCategories",
+  repositories: "projectSettings.tabRepositories",
+  activities: "projectSettings.tabActivities",
+  wiki: "projectSettings.tabWiki",
 };
 
 /**
@@ -32,10 +34,12 @@ export function ProjectSettingsTabs({
   identifier,
   active,
   visibleTabs,
+  locale = "ja",
 }: {
   identifier: string;
   active: ProjectSettingsTab;
   visibleTabs: Partial<Record<ProjectSettingsTab, boolean>>;
+  locale?: Locale;
 }) {
   const tabs: ProjectSettingsTab[] = ["settings", "members", "versions", "issueCategories", "repositories", "activities", "wiki"];
 
@@ -46,11 +50,11 @@ export function ProjectSettingsTabs({
         .map((tab) =>
           tab === active ? (
             <span key={tab} className="font-semibold">
-              {TAB_LABEL[tab]}
+              {translate(locale, TAB_LABEL[tab])}
             </span>
           ) : (
             <Link key={tab} href={`/projects/${identifier}/${TAB_PATH[tab]}`} className="underline">
-              {TAB_LABEL[tab]}
+              {translate(locale, TAB_LABEL[tab])}
             </Link>
           ),
         )}

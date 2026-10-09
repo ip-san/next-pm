@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -17,6 +18,7 @@ const VENDOR_LABEL: Record<string, string> = { git: "Git", subversion: "Subversi
 
 /** Redmine's project settings "Repositories" tab (RepositoriesController new/create/edit/update/destroy + committers). */
 export default async function ProjectRepositoriesPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -36,7 +38,7 @@ export default async function ProjectRepositoriesPage({ params }: { params: Prom
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{project.name} — リポジトリ</h1>
-      <ProjectSettingsTabs
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="repositories"
         visibleTabs={{

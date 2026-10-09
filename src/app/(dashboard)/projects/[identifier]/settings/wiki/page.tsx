@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { DEFAULT_WIKI_START_PAGE } from "@/domain/wiki/entity";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -12,6 +14,7 @@ export const dynamic = "force-dynamic";
 
 /** Redmine's project settings "Wiki" tab plus the WikisController#destroy confirmation. */
 export default async function WikiSettingsPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -33,8 +36,8 @@ export default async function WikiSettingsPage({ params }: { params: Promise<{ i
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — Wiki 設定</h1>
-      <ProjectSettingsTabs
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "projectSettings.wikiTitle"), { project: project.name })}</h1>
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="wiki"
         visibleTabs={{
@@ -43,14 +46,14 @@ export default async function WikiSettingsPage({ params }: { params: Promise<{ i
           wiki: true,
         }}
       />
-      <WikiStartPageForm
+      <WikiStartPageForm locale={locale}
         projectId={project.id}
         projectIdentifier={identifier}
         startPage={wiki?.startPage ?? DEFAULT_WIKI_START_PAGE}
       />
       <section className="flex flex-col gap-3 border-t pt-6">
-        <h2 className="font-medium">Wiki の削除</h2>
-        <DeleteProjectWikiForm projectId={project.id} projectIdentifier={identifier} pageCount={pages.length} />
+        <h2 className="font-medium">{translate(locale, "projectSettings.wikiDeleteHeading")}</h2>
+        <DeleteProjectWikiForm locale={locale} projectId={project.id} projectIdentifier={identifier} pageCount={pages.length} />
       </section>
     </main>
   );

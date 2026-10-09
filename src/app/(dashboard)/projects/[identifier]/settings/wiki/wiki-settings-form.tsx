@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import {
   deleteProjectWikiAction,
@@ -13,11 +15,14 @@ export function WikiStartPageForm({
   projectId,
   projectIdentifier,
   startPage,
+  locale = "ja",
 }: {
   projectId: string;
   projectIdentifier: string;
   startPage: string;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateWikiStartPageAction, initialState);
 
   return (
@@ -26,10 +31,10 @@ export function WikiStartPageForm({
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <div className="flex flex-col gap-1">
         <label htmlFor="startPage" className="text-sm font-medium">
-          開始ページ
+          {t("projectSettings.wikiStartPage")}
         </label>
         <input id="startPage" name="startPage" defaultValue={startPage} className="border rounded px-3 py-2" />
-        <p className="text-xs text-gray-500">プロジェクトの Wiki を開いたときに最初に表示されるページ名です。</p>
+        <p className="text-xs text-gray-500">{t("projectSettings.wikiStartPageHelp")}</p>
       </div>
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
@@ -37,7 +42,7 @@ export function WikiStartPageForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "保存中…" : "保存"}
+        {pending ? t("issue.saving") : t("issue.save")}
       </button>
     </form>
   );
@@ -47,11 +52,14 @@ export function DeleteProjectWikiForm({
   projectId,
   projectIdentifier,
   pageCount,
+  locale = "ja",
 }: {
   projectId: string;
   projectIdentifier: string;
   pageCount: number;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(deleteProjectWikiAction, initialState);
 
   return (
@@ -59,11 +67,11 @@ export function DeleteProjectWikiForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <p className="text-sm">
-        このプロジェクトの Wiki ページ {pageCount} 件とその版歴・添付ファイルをすべて削除します。元に戻せません。
+        {interpolate(t("projectSettings.wikiDeleteWarning"), { count: pageCount })}
       </p>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="confirm" />
-        削除してよいことを確認しました
+        {t("projectSettings.wikiDeleteConfirm")}
       </label>
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
@@ -71,7 +79,7 @@ export function DeleteProjectWikiForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-red-600 text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "削除中…" : "Wiki を削除"}
+        {pending ? t("issueDelete.deleting") : t("projectSettings.wikiDeleteSubmit")}
       </button>
     </form>
   );

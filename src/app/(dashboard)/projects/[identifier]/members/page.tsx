@@ -1,4 +1,6 @@
 import { UserAvatar } from "@/interface/components/user-avatar";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { loadAuthSettings } from "@/application/settings/auth-settings";
 import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 import { notFound } from "next/navigation";
@@ -22,6 +24,7 @@ import { RemoveMemberButton } from "./remove-member-button";
 export const dynamic = "force-dynamic";
 
 export default async function MembersPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -61,15 +64,15 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
     if (member.inheritedFromMemberId) {
       const via = memberById.get(member.inheritedFromMemberId);
       const groupName = via?.groupId ? groupById.get(via.groupId)?.name : undefined;
-      return `${label}（${groupName ?? "グループ"}経由）`;
+      return interpolate(translate(locale, "members.viaGroup"), { label, group: groupName ?? translate(locale, "members.groupDefault") });
     }
     return label;
   }
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — メンバー</h1>
-      <ProjectSettingsTabs
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "members.title"), { project: project.name })}</h1>
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="members"
         visibleTabs={{
@@ -85,8 +88,8 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">ユーザー / グループ</th>
-            <th className="pr-4 py-1">ロール</th>
+            <th className="pr-4 py-1">{translate(locale, "members.principal")}</th>
+            <th className="pr-4 py-1">{translate(locale, "members.roles")}</th>
             <th className="pr-4 py-1" />
           </tr>
         </thead>
@@ -105,7 +108,7 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
                 {/* A group-inherited row's roles belong to the group, so they are shown but
                     not editable — Member#any_inherited_role? blocks both edit and removal. */}
                 {isMembershipEditable(member) ? (
-                  <MemberRolesForm
+                  <MemberRolesForm locale={locale}
                     projectIdentifier={identifier}
                     memberId={member.id}
                     roles={roles}
@@ -116,21 +119,21 @@ export default async function MembersPage({ params }: { params: Promise<{ identi
                 )}
               </td>
               <td className="pr-4 py-1">
-                {isMembershipEditable(member) ? <RemoveMemberButton projectIdentifier={identifier} memberId={member.id} /> : null}
+                {isMembershipEditable(member) ? <RemoveMemberButton locale={locale} projectIdentifier={identifier} memberId={member.id} /> : null}
               </td>
             </tr>
           ))}
           {members.length === 0 ? (
             <tr>
               <td colSpan={3} className="text-gray-400 py-2">
-                メンバーはいません。
+                {translate(locale, "members.none")}
               </td>
             </tr>
           ) : null}
         </tbody>
       </table>
-      <AddMemberForm projectIdentifier={identifier} roles={roles} />
-      <AddGroupMemberForm projectIdentifier={identifier} groups={groups} roles={roles} />
+      <AddMemberForm locale={locale} projectIdentifier={identifier} roles={roles} />
+      <AddGroupMemberForm locale={locale} projectIdentifier={identifier} groups={groups} roles={roles} />
     </main>
   );
 }

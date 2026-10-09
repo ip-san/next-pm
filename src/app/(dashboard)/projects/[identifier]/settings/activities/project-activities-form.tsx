@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateProjectActivitiesAction, type ProjectActivitiesActionState } from "@/interface/actions/project-actions";
 
@@ -9,12 +11,15 @@ export function ProjectActivitiesForm({
   projectIdentifier,
   activities,
   activeByActivityId,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   /** The system-wide activities; a project can only switch these on and off, not add its own. */
   activities: { id: string; name: string }[];
   activeByActivityId: Record<string, boolean>;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateProjectActivitiesAction, initialState);
 
   return (
@@ -29,14 +34,14 @@ export function ProjectActivitiesForm({
           {activity.name}
         </label>
       ))}
-      {activities.length === 0 ? <p className="text-sm text-gray-400">作業分類が登録されていません。</p> : null}
+      {activities.length === 0 ? <p className="text-sm text-gray-400">{t("projectSettings.activitiesNone")}</p> : null}
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
           {state.error}
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "保存中…" : "保存"}
+        {pending ? t("issue.saving") : t("issue.save")}
       </button>
     </form>
   );

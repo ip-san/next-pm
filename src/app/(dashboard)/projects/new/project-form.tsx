@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import {
   copyProjectAction,
@@ -36,6 +38,7 @@ export function ProjectForm({
   allowNoParent = true,
   showPublicity = true,
   showModules = true,
+  locale = "ja",
 }: {
   /** Projects offerable as the parent — on /projects/new, only those the user holds add_subprojects on. */
   projects: Project[];
@@ -49,7 +52,9 @@ export function ProjectForm({
   showPublicity?: boolean;
   /** False when the creator's role lacks select_project_modules. */
   showModules?: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(copyFrom ? copyProjectAction : createProjectAction, initialState);
 
   const moduleChecked = (key: string) =>
@@ -65,25 +70,25 @@ export function ProjectForm({
       {copyFrom ? <input type="hidden" name="sourceProjectId" value={copyFrom.id} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="name" className="text-sm font-medium">
-          名称
+          {translate(locale, "projectSettings.name")}
         </label>
         <input id="name" name="name" required defaultValue={copyFrom?.name} className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="identifier" className="text-sm font-medium">
-          識別子
+          {translate(locale, "project.identifier")}
         </label>
         <input id="identifier" name="identifier" required defaultValue={defaults?.identifier ?? ""} className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="description" className="text-sm font-medium">
-          概要
+          {translate(locale, "projectSettings.description")}
         </label>
         <textarea id="description" name="description" defaultValue={copyFrom?.description} className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="parentId" className="text-sm font-medium">
-          親プロジェクト
+          {translate(locale, "projectNew.parent")}
         </label>
         <select
           id="parentId"
@@ -94,7 +99,7 @@ export function ProjectForm({
         >
           {/* Redmine's Project#allowed_parents only offers "no parent" to someone who may
               create a root project; without add_project a parent must be chosen. */}
-          {allowNoParent ? <option value="">(なし)</option> : <option value="">選択してください</option>}
+          {allowNoParent ? <option value="">{t("query.none")}</option> : <option value="">{t("projectNew.selectParent")}</option>}
           {projects
             .filter((project) => project.id !== copyFrom?.id)
             .map((project) => (
@@ -107,22 +112,22 @@ export function ProjectForm({
       {showPublicity ? (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="isPublic" defaultChecked={copyFrom ? copyFrom.isPublic : (defaults?.isPublic ?? true)} />
-          公開プロジェクト
+          {translate(locale, "projectSettings.isPublic")}
         </label>
       ) : null}
       {showModules ? (
         <fieldset className="flex flex-col gap-1">
-          <legend className="text-sm font-medium">モジュール</legend>
+          <legend className="text-sm font-medium">{t("projectSettings.modules")}</legend>
           {MODULE_OPTIONS.map((module) => (
             <label key={module.key} className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="enabledModules" value={module.key} defaultChecked={moduleChecked(module.key)} />
-              {module.label}
+              {translate(locale, module.labelKey)}
             </label>
           ))}
         </fieldset>
       ) : null}
       <fieldset className="flex flex-col gap-1">
-        <legend className="text-sm font-medium">トラッカー</legend>
+        <legend className="text-sm font-medium">{t("projectSettings.trackers")}</legend>
         {trackers.map((tracker) => (
           <label key={tracker.id} className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="trackerIds" value={tracker.id} defaultChecked={trackerChecked(tracker.id)} />
@@ -136,7 +141,7 @@ export function ProjectForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? (copyFrom ? "コピー中…" : "作成中…") : copyFrom ? "プロジェクトをコピー" : "プロジェクトを作成"}
+        {pending ? (copyFrom ? t("projectNew.copying") : t("projectNew.creating")) : copyFrom ? t("projectNew.copySubmit") : t("projectNew.createSubmit")}
       </button>
     </form>
   );

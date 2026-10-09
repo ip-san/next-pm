@@ -11,11 +11,14 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { listProjectsWithPermission, resolveGlobalRoles } from "@/interface/http/resolve-actor";
 import { ProjectForm } from "./project-form";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
 
 export default async function NewProjectPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user) {
     notFound();
@@ -47,8 +50,8 @@ export default async function NewProjectPage() {
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">新しいプロジェクト</h1>
-      <ProjectForm
+      <h1 className="text-xl font-semibold">{translate(locale, "projectNew.title")}</h1>
+      <ProjectForm locale={locale}
         projects={parentCandidates}
         trackers={trackers}
         allowNoParent={mayCreateRoot}

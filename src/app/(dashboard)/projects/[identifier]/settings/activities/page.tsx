@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { resolveProjectActivities } from "@/domain/enumeration/project-activities";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
@@ -12,6 +14,7 @@ import { ProjectActivitiesForm } from "./project-activities-form";
 export const dynamic = "force-dynamic";
 
 export default async function ProjectActivitiesPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
@@ -40,8 +43,8 @@ export default async function ProjectActivitiesPage({ params }: { params: Promis
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — 作業分類</h1>
-      <ProjectSettingsTabs
+      <h1 className="text-xl font-semibold">{interpolate(translate(locale, "projectSettings.activitiesTitle"), { project: project.name })}</h1>
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="activities"
         visibleTabs={{
@@ -53,9 +56,9 @@ export default async function ProjectActivitiesPage({ params }: { params: Promis
         }}
       />
       <p className="text-sm text-gray-600">
-        このプロジェクトで使用する作業分類を選びます。チェックを外した分類は、このプロジェクトの工数入力に表示されなくなります（既に記録済みの工数はそのまま残ります）。
+        {translate(locale, "projectSettings.activitiesHelp")}
       </p>
-      <ProjectActivitiesForm
+      <ProjectActivitiesForm locale={locale}
         projectIdentifier={identifier}
         activities={systemActivities.map((activity) => ({ id: activity.id, name: activity.name }))}
         activeByActivityId={activeByActivityId}

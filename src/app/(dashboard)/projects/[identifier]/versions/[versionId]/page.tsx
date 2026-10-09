@@ -1,4 +1,6 @@
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -14,6 +16,7 @@ import { VersionEditForm } from "./version-edit-form";
 export const dynamic = "force-dynamic";
 
 export default async function VersionDetailPage({ params }: { params: Promise<{ identifier: string; versionId: string }> }) {
+  const locale = await currentLocale();
   const { identifier, versionId } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -42,10 +45,10 @@ export default async function VersionDetailPage({ params }: { params: Promise<{ 
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">バージョンを編集</h1>
-      <VersionEditForm projectIdentifier={identifier} version={version} customFields={customFields} customValueByFieldId={customValueByFieldId} />
+      <h1 className="text-xl font-semibold">{translate(locale, "versions.editTitle")}</h1>
+      <VersionEditForm locale={locale} projectIdentifier={identifier} version={version} customFields={customFields} customValueByFieldId={customValueByFieldId} />
       <div className="border-t pt-4">
-        <DeleteVersionButton projectIdentifier={identifier} versionId={version.id} />
+        <DeleteVersionButton locale={locale} projectIdentifier={identifier} versionId={version.id} />
       </div>
     </main>
   );

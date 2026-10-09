@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
 import { DrizzleIssueCategoryRepository } from "@/infrastructure/db/repositories/issue-category-repository";
@@ -13,6 +15,7 @@ import { IssueCategoryEditForm } from "./issue-category-edit-form";
 export const dynamic = "force-dynamic";
 
 export default async function IssueCategoryDetailPage({ params }: { params: Promise<{ identifier: string; categoryId: string }> }) {
+  const locale = await currentLocale();
   const { identifier, categoryId } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -36,10 +39,10 @@ export default async function IssueCategoryDetailPage({ params }: { params: Prom
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">カテゴリを編集</h1>
-      <IssueCategoryEditForm projectIdentifier={identifier} category={category} members={members} />
+      <h1 className="text-xl font-semibold">{translate(locale, "issueCategories.editTitle")}</h1>
+      <IssueCategoryEditForm locale={locale} projectIdentifier={identifier} category={category} members={members} />
       <div className="border-t pt-4">
-        <DeleteIssueCategoryButton projectIdentifier={identifier} categoryId={category.id} />
+        <DeleteIssueCategoryButton locale={locale} projectIdentifier={identifier} categoryId={category.id} />
       </div>
     </main>
   );

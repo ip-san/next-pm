@@ -1,4 +1,6 @@
 import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { currentLocale } from "@/interface/http/locale";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
@@ -17,16 +19,21 @@ import { VersionCreateForm } from "./version-create-form";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL: Record<string, string> = { open: "進行中", locked: "ロック中", closed: "終了" };
-const SHARING_LABEL: Record<string, string> = {
-  none: "共有しない",
-  descendants: "サブプロジェクト",
-  hierarchy: "プロジェクト階層",
-  tree: "プロジェクトツリー",
-  system: "全プロジェクト",
+const STATUS_LABEL: Record<string, MessageKey> = {
+  open: "versions.statusOpen",
+  locked: "versions.statusLocked",
+  closed: "versions.statusClosed",
+};
+const SHARING_LABEL: Record<string, MessageKey> = {
+  none: "versions.sharingNone",
+  descendants: "versions.sharingDescendants",
+  hierarchy: "versions.sharingHierarchy",
+  tree: "versions.sharingTree",
+  system: "versions.sharingSystem",
 };
 
 export default async function VersionsPage({ params }: { params: Promise<{ identifier: string }> }) {
+  const locale = await currentLocale();
   const { identifier } = await params;
 
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
@@ -66,12 +73,12 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">バージョン</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "versions.title")}</h1>
         <Link href={`/projects/${identifier}/roadmap`} className="text-sm underline">
-          ロードマップを見る
+          {translate(locale, "versions.viewRoadmap")}
         </Link>
       </div>
-      <ProjectSettingsTabs
+      <ProjectSettingsTabs locale={locale}
         identifier={identifier}
         active="versions"
         visibleTabs={{
@@ -88,11 +95,11 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
       <table className="text-sm w-full">
         <thead>
           <tr className="text-left border-b">
-            <th className="pb-2">名前</th>
-            <th className="pb-2">期日</th>
-            <th className="pb-2">状態</th>
-            <th className="pb-2">共有</th>
-            <th className="pb-2">進捗</th>
+            <th className="pb-2">{translate(locale, "versions.name")}</th>
+            <th className="pb-2">{translate(locale, "versions.dueDate")}</th>
+            <th className="pb-2">{translate(locale, "versions.status")}</th>
+            <th className="pb-2">{translate(locale, "versions.sharing")}</th>
+            <th className="pb-2">{translate(locale, "versions.progress")}</th>
             {canManageVersions ? <th className="pb-2" /> : null}
           </tr>
         </thead>
@@ -115,13 +122,13 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
                   )}
                 </td>
                 <td className="py-2">{version.effectiveDate ?? "-"}</td>
-                <td className="py-2">{STATUS_LABEL[version.status]}</td>
-                <td className="py-2">{SHARING_LABEL[version.sharing]}</td>
+                <td className="py-2">{translate(locale, STATUS_LABEL[version.status])}</td>
+                <td className="py-2">{translate(locale, SHARING_LABEL[version.sharing])}</td>
                 <td className="py-2">{Math.round(progress.completedPercent)}%</td>
                 {canManageVersions ? (
                   <td className="py-2">
                     <Link href={`/projects/${identifier}/versions/${version.id}`} className="underline">
-                      編集
+                      {translate(locale, "issue.edit")}
                     </Link>
                   </td>
                 ) : null}
@@ -131,7 +138,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
         </tbody>
       </table>
 
-      {canManageVersions ? <VersionCreateForm projectIdentifier={identifier} customFields={versionFields} /> : null}
+      {canManageVersions ? <VersionCreateForm locale={locale} projectIdentifier={identifier} customFields={versionFields} /> : null}
     </main>
   );
 }

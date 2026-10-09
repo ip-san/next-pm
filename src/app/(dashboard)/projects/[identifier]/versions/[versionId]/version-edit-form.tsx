@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateVersionAction, type VersionActionState } from "@/interface/actions/version-actions";
 import type { Version } from "@/domain/version/entity";
@@ -13,12 +15,15 @@ export function VersionEditForm({
   version,
   customFields,
   customValueByFieldId,
+  locale = "ja",
 }: {
   projectIdentifier: string;
   version: Version;
   customFields: CustomField[];
   customValueByFieldId: Record<string, string | null>;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateVersionAction, initialState);
 
   return (
@@ -28,25 +33,25 @@ export function VersionEditForm({
       <input name="name" defaultValue={version.name} maxLength={60} required className="border rounded px-3 py-2 text-sm" />
       <textarea name="description" defaultValue={version.description} maxLength={255} className="border rounded px-3 py-2 text-sm" />
       <label className="text-xs text-gray-600 flex flex-col gap-1">
-        期日
+        {t("versions.dueDate")}
         <input type="date" name="effectiveDate" defaultValue={version.effectiveDate ?? ""} className="border rounded px-3 py-2 text-sm" />
       </label>
       <label className="text-xs text-gray-600 flex flex-col gap-1">
-        状態
+        {t("versions.status")}
         <select name="status" defaultValue={version.status} className="border rounded px-3 py-2 text-sm">
-          <option value="open">進行中</option>
-          <option value="locked">ロック中</option>
-          <option value="closed">終了</option>
+          <option value="open">{t("versions.statusOpen")}</option>
+          <option value="locked">{t("versions.statusLocked")}</option>
+          <option value="closed">{t("versions.statusClosed")}</option>
         </select>
       </label>
       <label className="text-xs text-gray-600 flex flex-col gap-1">
-        共有
+        {t("versions.sharing")}
         <select name="sharing" defaultValue={version.sharing} className="border rounded px-3 py-2 text-sm">
-          <option value="none">共有しない</option>
-          <option value="descendants">サブプロジェクト</option>
-          <option value="hierarchy">プロジェクト階層</option>
-          <option value="tree">プロジェクトツリー</option>
-          <option value="system">全プロジェクト</option>
+          <option value="none">{t("versions.sharingNone")}</option>
+          <option value="descendants">{t("versions.sharingDescendants")}</option>
+          <option value="hierarchy">{t("versions.sharingHierarchy")}</option>
+          <option value="tree">{t("versions.sharingTree")}</option>
+          <option value="system">{t("versions.sharingSystem")}</option>
         </select>
       </label>
       {customFields.map((field) => (
@@ -58,7 +63,7 @@ export function VersionEditForm({
       ))}
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
-        保存
+        {t("issue.save")}
       </button>
     </form>
   );
