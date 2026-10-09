@@ -1,4 +1,5 @@
 import { micromark } from "micromark";
+import { linkIssueReferences, type IssueLink } from "./issue-references";
 
 /**
  * Renders a text field (an issue description or note, a news item, wiki text, a message) as CommonMark HTML, the
@@ -9,7 +10,10 @@ import { micromark } from "micromark";
  * - a link or image address is kept only when its scheme is on micromark's allowlist (http, https, irc, ircs,
  *   mailto, xmpp) or it is relative; `javascript:`, `data:`, `vbscript:` and entity-encoded forms of them render
  *   with an empty address.
+ *
+ * `links` turns `#N` references into links; the caller decides which issues the viewer may link (see
+ * resolveIssueLinks). A number without a link stays as text.
  */
-export function renderFormattedText(source: string): string {
-  return micromark(source);
+export function renderFormattedText(source: string, links: ReadonlyMap<number, IssueLink> = new Map()): string {
+  return micromark(linkIssueReferences(source, links));
 }
