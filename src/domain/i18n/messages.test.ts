@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { LOCALES } from "./locales";
 import { translate, type MessageKey } from "./messages";
 
-const KEYS: MessageKey[] = ["nav.projects", "login.submit", "my.title", "projects.title", "projectMenu.issues"];
+const KEYS: MessageKey[] = ["nav.projects", "login.submit", "my.title", "projects.title", "projectMenu.issues", "issues.title", "query.column.tracker", "query.operator.!*"];
 
 describe("translate", () => {
   it("returns the Japanese text as it has always been", () => {

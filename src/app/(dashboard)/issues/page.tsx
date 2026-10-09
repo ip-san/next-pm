@@ -2,6 +2,10 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { listProjectIssues } from "@/application/issues/list-project-issues";
 import type { QueryColumn } from "@/domain/query/columns";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate } from "@/domain/i18n/messages";
+import { currentLocale } from "@/interface/http/locale";
+import { localizeColumns } from "@/interface/query/column-labels";
 import type { SavedQuery } from "@/domain/query/entity";
 import { linkedPages } from "@/domain/query/pagination";
 import { sortDirectionFor, toggleSortCriteria } from "@/domain/query/sort";
@@ -36,6 +40,7 @@ export default async function GlobalIssuesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const locale = await currentLocale();
   const raw = normalizeSearchParams(await searchParams);
   const listParams = parseIssueListParams(raw);
 
@@ -80,7 +85,9 @@ export default async function GlobalIssuesPage({
   );
 
   const [lookups, roles] = await Promise.all([loadGlobalIssueLookups(scope.projects), new DrizzleRoleRepository().listAssignable()]);
-  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours };
+  const columns = localizeColumns(locale, result.availableColumns);
+  const displayColumns = result.displayColumns.map((column) => columns.find((candidate) => candidate.key === column.key) ?? column);
+  const rowContext = { locale, lookups, customValues: result.search.customValues, spentHours: result.search.spentHours };
   const projectIdentifierById = new Map(scope.projects.map((entry) => [entry.project.id, entry.project.identifier]));
 
   const atomKey = user ? await getOrCreateAtomKey(new DrizzleUserRepository(), user.id) : null;
@@ -92,11 +99,11 @@ export default async function GlobalIssuesPage({
     tracker_id: [...lookups.trackers].map(([value, label]) => ({ value, label })),
     priority_id: [...lookups.priorities].map(([value, label]) => ({ value, label })),
     fixed_version_id: [...lookups.versions].map(([value, label]) => ({ value, label })),
-    author_id: userFilterOptions(lookups.users, user?.id),
-    assigned_to_id: userFilterOptions(lookups.users, user?.id),
+    author_id: userFilterOptions(locale, lookups.users, user?.id),
+    assigned_to_id: userFilterOptions(locale, lookups.users, user?.id),
     is_private: [
-      { value: "1", label: "はい" },
-      { value: "0", label: "いいえ" },
+      { value: "1", label: translate(locale, "query.yes") },
+      { value: "0", label: translate(locale, "query.no") },
     ],
     ...Object.fromEntries(
       result.customFields
@@ -105,8 +112,8 @@ export default async function GlobalIssuesPage({
           `cf_${field.id}`,
           field.fieldFormat === "bool"
             ? [
-                { value: "1", label: "はい" },
-                { value: "0", label: "いいえ" },
+                { value: "1", label: translate(locale, "query.yes") },
+                { value: "0", label: translate(locale, "query.no") },
               ]
             : field.possibleValues.map((value) => ({ value, label: value })),
         ]),
@@ -115,7 +122,7 @@ export default async function GlobalIssuesPage({
 
   const groupsByValue = new Map((result.search.groups ?? []).map((group) => [group.value, group]));
   const totalColumns = result.effective.totalableNames
-    .map((key) => result.availableColumns.find((column) => column.key === key))
+    .map((key) => columns.find((column) => column.key === key))
     .filter((column): column is QueryColumn => column !== undefined);
 
   const groupBy = result.effective.groupBy;
@@ -136,7 +143,7 @@ export default async function GlobalIssuesPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">チケット（全プロジェクト）</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "issues.titleAll")}</h1>
         <div className="flex items-center gap-2">
           <a href={`/api/issues/csv?${exportParams}`} className="border rounded px-3 py-2 text-sm">
             CSV
@@ -149,9 +156,9 @@ export default async function GlobalIssuesPage({
 
       {visibleQueries.length > 0 && (
         <nav className="flex items-center gap-3 text-sm flex-wrap">
-          <span className="text-gray-500">保存済みクエリ:</span>
+          <span className="text-gray-500">{translate(locale, "query.savedQueries")}</span>
           <Link href={BASE_PATH} className={!savedQuery ? "font-semibold underline" : "underline"}>
-            (絞り込みなし)
+            {translate(locale, "query.noFilter")}
           </Link>
           {visibleQueries.map((query) => (
             <Link
@@ -167,10 +174,11 @@ export default async function GlobalIssuesPage({
 
       <IssueQueryForm
         action={BASE_PATH}
-        columns={result.availableColumns}
+        columns={columns}
+        locale={locale}
         valueOptions={valueOptions}
         initialFilters={result.effective.filters}
-        initialColumnKeys={result.displayColumns.filter((column) => !column.frozen).map((column) => column.key)}
+        initialColumnKeys={displayColumns.filter((column) => !column.frozen).map((column) => column.key)}
         initialGroupBy={result.effective.groupBy}
         initialTotalableKeys={result.effective.totalableNames}
         sortCriteria={result.effective.sortCriteria}
@@ -182,6 +190,7 @@ export default async function GlobalIssuesPage({
         projectIdentifier={null}
         queryType="IssueQuery"
         options={result.effective}
+        locale={locale}
         // A *global* public query is admin-only in Redmine, since
         // `allowed_to?(:manage_public_queries, nil)` is false for everyone else.
         canPublish={user?.isAdmin ?? false}
@@ -206,17 +215,18 @@ export default async function GlobalIssuesPage({
             canManagePublicQueries: false,
           })}
           canCopy={scope.canSaveQueries}
+          locale={locale}
         />
       ) : null}
 
       <p className="text-sm text-gray-600">
-        {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
+        {interpolate(translate(locale, "issues.showing"), { total: result.pagination.itemCount, first: result.pagination.firstItem, last: result.pagination.lastItem })}
       </p>
 
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            {result.displayColumns.map((column) => (
+            {displayColumns.map((column) => (
               <th key={column.key} className="pr-4 py-1">
                 {column.sortable ? (
                   <Link
@@ -247,8 +257,8 @@ export default async function GlobalIssuesPage({
               <Fragment key={issue.id}>
                 {startsGroup ? (
                   <tr className="bg-gray-50 border-b">
-                    <td colSpan={result.displayColumns.length} className="py-1 font-semibold">
-                      {issueGroupLabel(groupBy as string, groupValue ?? null, lookups)} ({group?.count ?? 0})
+                    <td colSpan={displayColumns.length} className="py-1 font-semibold">
+                      {issueGroupLabel(groupBy as string, groupValue ?? null, lookups, locale)} ({group?.count ?? 0})
                       {totalColumns.map((column) => (
                         <span key={column.key} className="ml-3 font-normal text-gray-600">
                           {column.label}: {group?.totals[column.key] ?? 0}
@@ -258,7 +268,7 @@ export default async function GlobalIssuesPage({
                   </tr>
                 ) : null}
                 <tr className="border-b">
-                  {result.displayColumns.map((column) => (
+                  {displayColumns.map((column) => (
                     <td key={column.key} className="pr-4 py-1">
                       {column.key === "id" || column.key === "subject" ? (
                         <Link href={issueHref(issue)} className="underline">
@@ -281,20 +291,20 @@ export default async function GlobalIssuesPage({
         {totalColumns.length > 0 ? (
           <tfoot>
             <tr className="border-t-2 font-semibold">
-              {result.displayColumns.map((column, index) => (
+              {displayColumns.map((column, index) => (
                 <td key={column.key} className="pr-4 py-1">
-                  {index === 0 ? "合計" : null}
+                  {index === 0 ? translate(locale, "query.totals") : null}
                   {column.totalable && result.effective.totalableNames.includes(column.key)
                     ? (result.search.totals[column.key] ?? 0)
                     : null}
                 </td>
               ))}
             </tr>
-            {totalColumns.some((column) => !result.displayColumns.includes(column)) ? (
+            {totalColumns.some((column) => !displayColumns.includes(column)) ? (
               <tr>
-                <td colSpan={result.displayColumns.length} className="py-1 text-gray-600 font-normal">
+                <td colSpan={displayColumns.length} className="py-1 text-gray-600 font-normal">
                   {totalColumns
-                    .filter((column) => !result.displayColumns.includes(column))
+                    .filter((column) => !displayColumns.includes(column))
                     .map((column) => `${column.label}: ${result.search.totals[column.key] ?? 0}`)
                     .join(" / ")}
                 </td>
@@ -304,7 +314,7 @@ export default async function GlobalIssuesPage({
         ) : null}
       </table>
 
-      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label="ページ送り">
+      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label={translate(locale, "query.pagination")}>
         {linkedPages(result.pagination).map((page) => (
           <Link
             key={page}
@@ -320,7 +330,7 @@ export default async function GlobalIssuesPage({
             {page}
           </Link>
         ))}
-        <span className="text-gray-500">表示件数:</span>
+        <span className="text-gray-500">{translate(locale, "query.perPage")}</span>
         {result.perPageOptions.map((option) => (
           <Link
             key={option}
@@ -341,7 +351,7 @@ export default async function GlobalIssuesPage({
   );
 }
 
-function userFilterOptions(users: Map<string, string>, currentUserId: string | undefined): FilterValueOption[] {
+function userFilterOptions(locale: Locale, users: Map<string, string>, currentUserId: string | undefined): FilterValueOption[] {
   const options = [...users].map(([value, label]) => ({ value, label }));
-  return currentUserId ? [{ value: "me", label: "<< 自分 >>" }, ...options] : options;
+  return currentUserId ? [{ value: "me", label: translate(locale, "query.me") }, ...options] : options;
 }

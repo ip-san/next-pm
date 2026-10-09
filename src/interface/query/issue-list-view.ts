@@ -1,3 +1,5 @@
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { Issue } from "@/domain/issue/entity";
 import { parseCustomFieldKey, type QueryColumn } from "@/domain/query/columns";
@@ -17,6 +19,8 @@ export interface IssueListLookups {
 
 export interface IssueRowContext {
   lookups: IssueListLookups;
+  /** The language the HTML screens render in. Left out, the text is Japanese, as the CSV export always is. */
+  locale?: Locale;
   /** Keyed `${issueId}:${customFieldId}`, as the search repository returns it. */
   customValues: Map<string, string>;
   spentHours: Map<string, number>;
@@ -81,7 +85,7 @@ export function issueColumnValue(column: QueryColumn, issue: Issue, context: Iss
     case "done_ratio":
       return `${issue.doneRatio}%`;
     case "is_private":
-      return issue.isPrivate ? "はい" : "いいえ";
+      return issue.isPrivate ? translate(context.locale ?? "ja", "query.yes") : translate(context.locale ?? "ja", "query.no");
     case "created_on":
       return isoDate(issue.createdAt);
     case "updated_on":
@@ -137,8 +141,8 @@ export function issueGroupValue(groupBy: string, issue: Issue, customValues: Map
 }
 
 /** Turns a raw group value into something readable — the inverse of `issueGroupValue`'s id choice. */
-export function issueGroupLabel(groupBy: string, value: string | null, lookups: IssueListLookups): string {
-  if (value === null) return "(なし)";
+export function issueGroupLabel(groupBy: string, value: string | null, lookups: IssueListLookups, locale: Locale = "ja"): string {
+  if (value === null) return translate(locale, "query.none");
   switch (groupBy) {
     case "project":
       return lookups.projects?.get(value) ?? value;
@@ -157,7 +161,7 @@ export function issueGroupLabel(groupBy: string, value: string | null, lookups: 
     case "fixed_version":
       return lookups.versions.get(value) ?? value;
     case "is_private":
-      return value === "true" ? "はい" : "いいえ";
+      return value === "true" ? translate(locale, "query.yes") : translate(locale, "query.no");
     case "done_ratio":
       return `${value}%`;
     default:

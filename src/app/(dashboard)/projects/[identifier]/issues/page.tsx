@@ -10,6 +10,10 @@ import { subprojectIssueScope } from "@/interface/http/project-issue-scope";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
 import type { QueryColumn } from "@/domain/query/columns";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate } from "@/domain/i18n/messages";
+import { currentLocale } from "@/interface/http/locale";
+import { localizeColumns } from "@/interface/query/column-labels";
 import type { SavedQuery } from "@/domain/query/entity";
 import { linkedPages } from "@/domain/query/pagination";
 import { toggleSortCriteria, sortDirectionFor } from "@/domain/query/sort";
@@ -48,6 +52,7 @@ export default async function ProjectIssuesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { identifier } = await params;
+  const locale = await currentLocale();
   const raw = normalizeSearchParams(await searchParams);
   const listParams = parseIssueListParams(raw);
 
@@ -137,7 +142,7 @@ export default async function ProjectIssuesPage({
     categories: new Map(categories.map((category) => [category.id, category.name])),
     versions: new Map(versions.map((version) => [version.id, version.name])),
   };
-  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours };
+  const rowContext = { locale, lookups, customValues: result.search.customValues, spentHours: result.search.spentHours };
 
   const basePath = `/projects/${identifier}/issues`;
   const exportParams = serializeIssueListParams({ ...listParams, ...result.effective, page: undefined }).toString();
@@ -152,11 +157,11 @@ export default async function ProjectIssuesPage({
     fixed_version_id: versions.map((version) => ({ value: version.id, label: version.name })),
     // Redmine offers "me" as the first value of any user filter (`Query#statement` swaps it
     // for the current user's id at compile time).
-    author_id: userFilterOptions(memberUsers, user?.id),
-    assigned_to_id: userFilterOptions(memberUsers, user?.id),
+    author_id: userFilterOptions(locale, memberUsers, user?.id),
+    assigned_to_id: userFilterOptions(locale, memberUsers, user?.id),
     is_private: [
-      { value: "1", label: "はい" },
-      { value: "0", label: "いいえ" },
+      { value: "1", label: translate(locale, "query.yes") },
+      { value: "0", label: translate(locale, "query.no") },
     ],
     ...Object.fromEntries(
       result.customFields
@@ -165,8 +170,8 @@ export default async function ProjectIssuesPage({
           `cf_${field.id}`,
           field.fieldFormat === "bool"
             ? [
-                { value: "1", label: "はい" },
-                { value: "0", label: "いいえ" },
+                { value: "1", label: translate(locale, "query.yes") },
+                { value: "0", label: translate(locale, "query.no") },
               ]
             : field.possibleValues.map((value) => ({ value, label: value })),
         ]),
@@ -182,9 +187,11 @@ export default async function ProjectIssuesPage({
     ),
   };
 
+  const columns = localizeColumns(locale, result.availableColumns);
+  const displayColumns = result.displayColumns.map((column) => columns.find((candidate) => candidate.key === column.key) ?? column);
   const groupsByValue = new Map((result.search.groups ?? []).map((group) => [group.value, group]));
   const totalColumns = result.effective.totalableNames
-    .map((key) => result.availableColumns.find((column) => column.key === key))
+    .map((key) => columns.find((column) => column.key === key))
     .filter((column): column is QueryColumn => column !== undefined);
 
   // Group boundaries are worked out before rendering rather than with a running variable
@@ -212,19 +219,19 @@ export default async function ProjectIssuesPage({
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{project.name} — チケット</h1>
+        <h1 className="text-xl font-semibold">{project.name} — {translate(locale, "issues.title")}</h1>
         <div className="flex items-center gap-2">
           <Link href="/my" className="border rounded px-3 py-2 text-sm">
-            マイページ
+            {translate(locale, "my.title")}
           </Link>
           <Link href={`/projects/${identifier}/reports`} className="border rounded px-3 py-2 text-sm">
-            レポート
+            {translate(locale, "issues.report")}
           </Link>
           <Link href={`/projects/${identifier}/gantt`} className="border rounded px-3 py-2 text-sm">
-            ガントチャート
+            {translate(locale, "projectMenu.gantt")}
           </Link>
           <Link href={`/projects/${identifier}/calendar`} className="border rounded px-3 py-2 text-sm">
-            カレンダー
+            {translate(locale, "projectMenu.calendar")}
           </Link>
           <a href={`/api/projects/${identifier}/issues/csv?${exportParams}`} className="border rounded px-3 py-2 text-sm">
             CSV
@@ -240,20 +247,20 @@ export default async function ProjectIssuesPage({
           </a>
           {canImportIssues ? (
             <Link href={`/projects/${identifier}/issues/import`} className="border rounded px-3 py-2 text-sm">
-              CSV取り込み
+              {translate(locale, "issues.importCsv")}
             </Link>
           ) : null}
           <Link href={`/projects/${identifier}/issues/new`} className="bg-black text-white rounded px-3 py-2 text-sm">
-            新しいチケット
+            {translate(locale, "issues.new")}
           </Link>
         </div>
       </div>
 
       {visibleQueries.length > 0 && (
         <nav className="flex items-center gap-3 text-sm flex-wrap">
-          <span className="text-gray-500">保存済みクエリ:</span>
+          <span className="text-gray-500">{translate(locale, "query.savedQueries")}</span>
           <Link href={basePath} className={!savedQuery ? "font-semibold underline" : "underline"}>
-            (絞り込みなし)
+            {translate(locale, "query.noFilter")}
           </Link>
           {visibleQueries.map((query) => (
             <Link
@@ -269,10 +276,11 @@ export default async function ProjectIssuesPage({
 
       <IssueQueryForm
         action={basePath}
-        columns={result.availableColumns}
+        columns={columns}
+        locale={locale}
         valueOptions={valueOptions}
         initialFilters={result.effective.filters}
-        initialColumnKeys={result.displayColumns.filter((column) => !column.frozen).map((column) => column.key)}
+        initialColumnKeys={displayColumns.filter((column) => !column.frozen).map((column) => column.key)}
         initialGroupBy={result.effective.groupBy}
         initialTotalableKeys={result.effective.totalableNames}
         sortCriteria={result.effective.sortCriteria}
@@ -284,6 +292,7 @@ export default async function ProjectIssuesPage({
         projectIdentifier={identifier}
         queryType="IssueQuery"
         options={result.effective}
+        locale={locale}
         canPublish={canManagePublicQueries}
         canSave={canSaveQueries}
         roles={roles.map((role) => ({ id: role.id, name: role.name }))}
@@ -305,12 +314,13 @@ export default async function ProjectIssuesPage({
             canManagePublicQueries,
           })}
           canCopy={canSaveQueries}
+          locale={locale}
         />
       ) : null}
 
       <form method="get" action={`${basePath}/bulk-edit`} className="flex flex-col gap-3">
         <p className="text-sm text-gray-600">
-          {result.pagination.itemCount}件中 {result.pagination.firstItem}–{result.pagination.lastItem}件を表示
+          {interpolate(translate(locale, "issues.showing"), { total: result.pagination.itemCount, first: result.pagination.firstItem, last: result.pagination.lastItem })}
         </p>
 
         <IssueContextMenu
@@ -321,7 +331,7 @@ export default async function ProjectIssuesPage({
           priorities={priorities.map((priority) => ({ id: priority.id, name: priority.name }))}
           assignees={[
             ...memberUsers.map((member) => ({ id: member.id, name: `${member.lastname} ${member.firstname}` })),
-            ...allGroups.map((group) => ({ id: `group:${group.id}`, name: `${group.name}（グループ）` })),
+            ...allGroups.map((group) => ({ id: `group:${group.id}`, name: interpolate(translate(locale, "issues.groupName"), { name: group.name }) })),
           ]}
           versions={versions.map((version) => ({ id: version.id, name: version.name }))}
           permissions={contextMenuPermissions}
@@ -330,7 +340,7 @@ export default async function ProjectIssuesPage({
           <thead>
             <tr className="text-left border-b">
               <th className="pr-4 py-1" />
-              {result.displayColumns.map((column) => (
+              {displayColumns.map((column) => (
                 <th key={column.key} className="pr-4 py-1">
                   {column.sortable ? (
                     <Link
@@ -365,8 +375,8 @@ export default async function ProjectIssuesPage({
                 <Fragment key={issue.id}>
                   {startsGroup ? (
                     <tr className="bg-gray-50 border-b">
-                      <td colSpan={result.displayColumns.length + 1} className="py-1 font-semibold">
-                        {issueGroupLabel(groupBy as string, groupValue ?? null, lookups)} ({group?.count ?? 0})
+                      <td colSpan={displayColumns.length + 1} className="py-1 font-semibold">
+                        {issueGroupLabel(groupBy as string, groupValue ?? null, lookups, locale)} ({group?.count ?? 0})
                         {totalColumns.map((column) => (
                           <span key={column.key} className="ml-3 font-normal text-gray-600">
                             {column.label}: {group?.totals[column.key] ?? 0}
@@ -378,10 +388,10 @@ export default async function ProjectIssuesPage({
                   <tr className="border-b" {...(issue.projectId === project.id ? { "data-issue-id": issue.id } : {})}>
                     <td className="pr-4 py-1">
                       {issue.projectId === project.id ? (
-                        <input type="checkbox" name="ids" value={issue.id} aria-label={`${issue.subject}を選択`} />
+                        <input type="checkbox" name="ids" value={issue.id} aria-label={interpolate(translate(locale, "issues.selectIssue"), { subject: issue.subject })} />
                       ) : null}
                     </td>
-                    {result.displayColumns.map((column) => (
+                    {displayColumns.map((column) => (
                       <td key={column.key} className="pr-4 py-1">
                         {column.key === "id" || column.key === "subject" ? (
                           <Link
@@ -406,8 +416,8 @@ export default async function ProjectIssuesPage({
           {totalColumns.length > 0 ? (
             <tfoot>
               <tr className="border-t-2 font-semibold">
-                <td className="pr-4 py-1">合計</td>
-                {result.displayColumns.map((column) => (
+                <td className="pr-4 py-1">{translate(locale, "query.totals")}</td>
+                {displayColumns.map((column) => (
                   <td key={column.key} className="pr-4 py-1">
                     {column.totalable && result.effective.totalableNames.includes(column.key)
                       ? (result.search.totals[column.key] ?? 0)
@@ -416,11 +426,11 @@ export default async function ProjectIssuesPage({
                 ))}
               </tr>
               {/* Totals for columns that aren't displayed still have to appear somewhere. */}
-              {totalColumns.some((column) => !result.displayColumns.includes(column)) ? (
+              {totalColumns.some((column) => !displayColumns.includes(column)) ? (
                 <tr>
-                  <td colSpan={result.displayColumns.length + 1} className="py-1 text-gray-600 font-normal">
+                  <td colSpan={displayColumns.length + 1} className="py-1 text-gray-600 font-normal">
                     {totalColumns
-                      .filter((column) => !result.displayColumns.includes(column))
+                      .filter((column) => !displayColumns.includes(column))
                       .map((column) => `${column.label}: ${result.search.totals[column.key] ?? 0}`)
                       .join(" / ")}
                   </td>
@@ -430,11 +440,11 @@ export default async function ProjectIssuesPage({
           ) : null}
         </table>
         <button type="submit" className="border rounded px-3 py-2 text-sm self-start">
-          選択したチケットを編集
+          {translate(locale, "issues.editSelected")}
         </button>
       </form>
 
-      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label="ページ送り">
+      <nav className="flex items-center gap-3 text-sm flex-wrap" aria-label={translate(locale, "query.pagination")}>
         {linkedPages(result.pagination).map((page) => (
           <Link
             key={page}
@@ -450,7 +460,7 @@ export default async function ProjectIssuesPage({
             {page}
           </Link>
         ))}
-        <span className="text-gray-500">表示件数:</span>
+        <span className="text-gray-500">{translate(locale, "query.perPage")}</span>
         {result.perPageOptions.map((option) => (
           <Link
             key={option}
@@ -471,7 +481,7 @@ export default async function ProjectIssuesPage({
   );
 }
 
-function userFilterOptions(users: { id: string; firstname: string; lastname: string }[], currentUserId: string | undefined): FilterValueOption[] {
+function userFilterOptions(locale: Locale, users: { id: string; firstname: string; lastname: string }[], currentUserId: string | undefined): FilterValueOption[] {
   const options = users.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` }));
-  return currentUserId ? [{ value: "me", label: "<< 自分 >>" }, ...options] : options;
+  return currentUserId ? [{ value: "me", label: translate(locale, "query.me") }, ...options] : options;
 }

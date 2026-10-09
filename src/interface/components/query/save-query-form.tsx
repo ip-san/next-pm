@@ -8,6 +8,8 @@ import {
   updateQueryAction,
   type SaveQueryActionState,
 } from "@/interface/actions/query-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import type { QueryOptions, QueryType, QueryVisibility } from "@/domain/query/entity";
 
 const initialState: SaveQueryActionState = { error: null };
@@ -33,6 +35,8 @@ export interface SaveQueryFormProps {
   roles: { id: string; name: string }[];
   /** When set, the form edits that query instead of creating a new one. */
   editing?: SavedQuerySummary;
+  /** The language of the form's own text. */
+  locale?: Locale;
 }
 
 /** The hidden inputs that carry the list's current settings into every query action. */
@@ -60,6 +64,7 @@ function QuerySettingsFields({
 }
 
 export function SaveQueryForm(props: SaveQueryFormProps) {
+  const locale = props.locale ?? "ja";
   const [state, formAction, pending] = useActionState(props.editing ? updateQueryAction : saveQueryAction, initialState);
   const [visibility, setVisibility] = useState<QueryVisibility>(props.editing?.visibility ?? "private");
 
@@ -71,14 +76,14 @@ export function SaveQueryForm(props: SaveQueryFormProps) {
       {props.editing ? <input type="hidden" name="queryId" value={props.editing.id} /> : null}
 
       <label htmlFor="query-name" className="text-gray-500">
-        {props.editing ? "クエリを更新:" : "現在の条件を保存:"}
+        {props.editing ? translate(locale, "query.updateQuery") : translate(locale, "query.saveCurrent")}
       </label>
       <input
         id="query-name"
         name="name"
         required
         defaultValue={props.editing?.name ?? ""}
-        placeholder="クエリ名"
+        placeholder={translate(locale, "query.queryName")}
         className="border rounded px-2 py-1"
       />
 
@@ -87,12 +92,12 @@ export function SaveQueryForm(props: SaveQueryFormProps) {
           name="visibility"
           value={visibility}
           onChange={(event) => setVisibility(event.target.value as QueryVisibility)}
-          aria-label="公開範囲"
+          aria-label={translate(locale, "query.visibility")}
           className="border rounded px-2 py-1"
         >
-          <option value="private">自分のみ</option>
-          <option value="roles">指定したロールのみ</option>
-          <option value="public">全員に公開</option>
+          <option value="private">{translate(locale, "query.visibilityPrivate")}</option>
+          <option value="roles">{translate(locale, "query.visibilityRoles")}</option>
+          <option value="public">{translate(locale, "query.visibilityPublic")}</option>
         </select>
       ) : (
         // Without manage_public_queries the server forces "private" anyway (Redmine's
@@ -103,7 +108,7 @@ export function SaveQueryForm(props: SaveQueryFormProps) {
 
       {props.canPublish && visibility === "roles" ? (
         <fieldset className="flex items-center gap-2">
-          <legend className="sr-only">対象ロール</legend>
+          <legend className="sr-only">{translate(locale, "query.roles")}</legend>
           {props.roles.map((role) => (
             <label key={role.id} className="flex items-center gap-1">
               <input type="checkbox" name="roleIds" value={role.id} defaultChecked={props.editing?.roleIds.includes(role.id)} />
@@ -114,7 +119,7 @@ export function SaveQueryForm(props: SaveQueryFormProps) {
       ) : null}
 
       <button type="submit" disabled={pending} className="border rounded px-2 py-1 disabled:opacity-50">
-        {pending ? "保存中…" : props.editing ? "更新" : "保存"}
+        {pending ? translate(locale, "query.saving") : props.editing ? translate(locale, "query.update") : translate(locale, "query.save")}
       </button>
       {state.error ? (
         <span role="alert" className="text-red-600">
@@ -132,12 +137,14 @@ export function SavedQueryControls({
   query,
   canDelete,
   canCopy,
+  locale = "ja",
 }: {
   projectIdentifier: string | null;
   queryType: QueryType;
   query: SavedQuerySummary;
   canDelete: boolean;
   canCopy: boolean;
+  locale?: Locale;
 }) {
   const [deleteState, deleteAction, deletePending] = useActionState(deleteQueryAction, initialState);
   const [copyState, copyAction, copyPending] = useActionState(copyQueryAction, initialState);
@@ -152,12 +159,12 @@ export function SavedQueryControls({
           <input
             name="name"
             required
-            defaultValue={`${query.name} のコピー`}
-            aria-label="コピー後のクエリ名"
+            defaultValue={interpolate(translate(locale, "query.copyName"), { name: query.name })}
+            aria-label={translate(locale, "query.copyNameAria")}
             className="border rounded px-2 py-1"
           />
           <button type="submit" disabled={copyPending} className="border rounded px-2 py-1 disabled:opacity-50">
-            複製
+            {translate(locale, "query.copy")}
           </button>
         </form>
       ) : null}
@@ -168,7 +175,7 @@ export function SavedQueryControls({
           <input type="hidden" name="type" value={queryType} />
           <input type="hidden" name="queryId" value={query.id} />
           <button type="submit" disabled={deletePending} className="border rounded px-2 py-1 text-red-600 disabled:opacity-50">
-            このクエリを削除
+            {translate(locale, "query.deleteQuery")}
           </button>
         </form>
       ) : null}

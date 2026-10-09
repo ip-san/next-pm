@@ -7,43 +7,45 @@ import {
   VALUELESS_OPERATORS,
   type QueryColumn,
 } from "@/domain/query/columns";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import type { FilterCondition, FilterOperator } from "@/domain/query/filter-builder";
 import { serializeSortCriteria, type SortCriterion } from "@/domain/query/sort";
 
-/** Japanese labels for Redmine's operator keys (`Query.operators_labels`). */
-const OPERATOR_LABELS: Record<string, string> = {
-  "=": "等しい",
-  "!": "等しくない",
-  o: "未完了",
-  c: "完了",
-  "!*": "なし",
-  "*": "すべて",
-  ">=": "以上",
-  "<=": "以下",
-  "><": "期間",
-  "<t+": "今日から〜日以内",
-  ">t+": "今日から〜日より後",
-  "><t+": "これからの〜日以内",
-  "t+": "今日から〜日後",
-  nd: "明日",
-  t: "今日",
-  ld: "昨日",
-  nw: "来週",
-  w: "今週",
-  lw: "先週",
-  l2w: "過去2週間",
-  nm: "来月",
-  m: "今月",
-  lm: "先月",
-  y: "今年",
-  ">t-": "〜日以内",
-  "<t-": "〜日より前",
-  "><t-": "過去〜日以内",
-  "t-": "〜日前",
-  "~": "含む",
-  "!~": "含まない",
-  "^": "で始まる",
-  $: "で終わる",
+/** The catalog key for each of Redmine's operator keys (`Query.operators`). */
+const OPERATOR_LABEL_KEYS: Record<string, MessageKey> = {
+  "=": "query.operator.=",
+  "!": "query.operator.!",
+  o: "query.operator.o",
+  c: "query.operator.c",
+  "!*": "query.operator.!*",
+  "*": "query.operator.*",
+  ">=": "query.operator.>=",
+  "<=": "query.operator.<=",
+  "><": "query.operator.><",
+  "<t+": "query.operator.<t+",
+  ">t+": "query.operator.>t+",
+  "><t+": "query.operator.><t+",
+  "t+": "query.operator.t+",
+  nd: "query.operator.nd",
+  t: "query.operator.t",
+  ld: "query.operator.ld",
+  nw: "query.operator.nw",
+  w: "query.operator.w",
+  lw: "query.operator.lw",
+  "l2w": "query.operator.l2w",
+  nm: "query.operator.nm",
+  m: "query.operator.m",
+  lm: "query.operator.lm",
+  y: "query.operator.y",
+  ">t-": "query.operator.>t-",
+  "<t-": "query.operator.<t-",
+  "><t-": "query.operator.><t-",
+  "t-": "query.operator.t-",
+  "~": "query.operator.~",
+  "!~": "query.operator.!~",
+  "^": "query.operator.^",
+  "$": "query.operator.$",
 };
 
 export interface FilterValueOption {
@@ -53,6 +55,8 @@ export interface FilterValueOption {
 
 export interface IssueQueryFormProps {
   action: string;
+  /** The language of the form's own text. Column names arrive already translated in `columns`. */
+  locale?: Locale;
   /** Everything filterable/displayable for this viewer. */
   columns: QueryColumn[];
   /** Selectable values per filter field, for the list-style inputs. */
@@ -79,6 +83,11 @@ interface FilterRow {
   values: string[];
 }
 
+function operatorLabel(locale: Locale, operator: string): string {
+  const key = OPERATOR_LABEL_KEYS[operator];
+  return key ? translate(locale, key) : operator;
+}
+
 function valueCount(operator: FilterOperator): number {
   if (VALUELESS_OPERATORS.includes(operator)) return 0;
   return RANGE_OPERATORS.includes(operator) ? 2 : 1;
@@ -91,6 +100,7 @@ function valueCount(operator: FilterOperator): number {
  * stays shareable and bookmarkable without any client-side routing.
  */
 export function IssueQueryForm(props: IssueQueryFormProps) {
+  const locale = props.locale ?? "ja";
   const filterable = props.columns.filter((column) => column.filterField && column.filterOperators);
   const [rows, setRows] = useState<FilterRow[]>(
     props.initialFilters.map((filter) => ({ field: filter.field, operator: filter.operator, values: filter.values })),
@@ -124,9 +134,10 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
 
       <div className="flex items-center justify-between">
         <button type="button" onClick={() => setOpen((value) => !value)} className="font-semibold underline">
-          {open ? "▼ フィルタ" : "▶ フィルタ"}
+          {open ? "▼ " : "▶ "}
+          {translate(locale, "query.filters")}
         </button>
-        <span className="text-gray-500">{rows.length}件の条件</span>
+        <span className="text-gray-500">{interpolate(translate(locale, "query.filterCount"), { count: rows.length })}</span>
       </div>
 
       {open ? (
@@ -142,16 +153,17 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
                   name={`op[${row.field}]`}
                   value={row.operator}
                   onChange={(event) => updateRow(row.field, { operator: event.target.value as FilterOperator, values: [] })}
-                  aria-label={`${column.label}の条件`}
+                  aria-label={interpolate(translate(locale, "query.filterAria"), { label: column.label })}
                   className="border rounded px-2 py-1"
                 >
                   {column.filterOperators.map((operator) => (
                     <option key={operator} value={operator}>
-                      {OPERATOR_LABELS[operator] ?? operator}
+                      {operatorLabel(locale, operator)}
                     </option>
                   ))}
                 </select>
                 <FilterValueInput
+                  locale={locale}
                   row={row}
                   column={column}
                   options={props.valueOptions[row.field] ?? []}
@@ -162,21 +174,21 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
                   onClick={() => setRows((current) => current.filter((item) => item.field !== row.field))}
                   className="text-red-600 underline"
                 >
-                  削除
+                  {translate(locale, "query.remove")}
                 </button>
               </div>
             );
           })}
 
           <div className="flex items-center gap-2">
-            <label htmlFor="add-filter">条件を追加:</label>
+            <label htmlFor="add-filter">{translate(locale, "query.addFilter")}</label>
             <select
               id="add-filter"
               value=""
               onChange={(event) => event.target.value && addRow(event.target.value)}
               className="border rounded px-2 py-1"
             >
-              <option value="">(選択)</option>
+              <option value="">{translate(locale, "query.select")}</option>
               {unusedFields.map((column) => (
                 <option key={column.key} value={column.filterField ?? ""}>
                   {column.label}
@@ -188,7 +200,7 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
       ) : null}
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="font-semibold">表示列</legend>
+        <legend className="font-semibold">{translate(locale, "query.columns")}</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {props.columns
             .filter((column) => !column.frozen)
@@ -209,9 +221,9 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
 
       <div className="flex items-center gap-6 flex-wrap">
         <label className="flex items-center gap-2">
-          グループ条件:
+          {translate(locale, "query.groupBy")}
           <select name="group_by" defaultValue={props.initialGroupBy ?? ""} className="border rounded px-2 py-1">
-            <option value="">(なし)</option>
+            <option value="">{translate(locale, "query.none")}</option>
             {props.columns
               .filter((column) => column.groupable)
               .map((column) => (
@@ -223,8 +235,8 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
         </label>
 
         <fieldset className="flex items-center gap-2">
-          <legend className="sr-only">合計</legend>
-          <span>合計:</span>
+          <legend className="sr-only">{translate(locale, "query.totals")}</legend>
+          <span>{translate(locale, "query.totals")}:</span>
           {props.columns
             .filter((column) => column.totalable)
             .map((column) => (
@@ -236,7 +248,7 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
         </fieldset>
 
         <button type="submit" className="border rounded px-3 py-1">
-          適用
+          {translate(locale, "query.apply")}
         </button>
       </div>
     </form>
@@ -244,11 +256,13 @@ export function IssueQueryForm(props: IssueQueryFormProps) {
 }
 
 function FilterValueInput({
+  locale,
   row,
   column,
   options,
   onChange,
 }: {
+  locale: Locale;
   row: FilterRow;
   column: QueryColumn;
   options: FilterValueOption[];
@@ -258,7 +272,8 @@ function FilterValueInput({
   if (count === 0) return null;
 
   const name = `v[${row.field}][]`;
-  const label = `${column.label}の値`;
+  const label = interpolate(translate(locale, "query.valueAria"), { label: column.label });
+  const rangeLabel = (index: number) => interpolate(translate(locale, "query.rangeAria"), { label: column.label, n: index + 1 });
 
   if (DAY_COUNT_OPERATORS.includes(row.operator)) {
     return (
@@ -282,7 +297,7 @@ function FilterValueInput({
             key={index}
             type="date"
             name={name}
-            aria-label={count === 2 ? `${label}${index + 1}` : label}
+            aria-label={count === 2 ? rangeLabel(index) : label}
             value={row.values[index] ?? ""}
             onChange={(event) => onChange(replaceAt(row.values, index, event.target.value, count))}
             className="border rounded px-2 py-1"
@@ -301,7 +316,7 @@ function FilterValueInput({
             type="number"
             step="any"
             name={name}
-            aria-label={count === 2 ? `${label}${index + 1}` : label}
+            aria-label={count === 2 ? rangeLabel(index) : label}
             value={row.values[index] ?? ""}
             onChange={(event) => onChange(replaceAt(row.values, index, event.target.value, count))}
             className="border rounded px-2 py-1 w-28"
