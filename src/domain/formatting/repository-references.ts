@@ -11,8 +11,10 @@ export interface LinkTarget {
 export interface WikiReferenceTarget {
   /** The project named before the colon, or null when the link stays in the text's own project. */
   project: string | null;
-  /** The page title, which is empty for `[[project:]]`. */
+  /** The page title, which is empty for `[[project:]]` (the project's start page) and for `[[#anchor]]`. */
   title: string;
+  /** The section after `#`, as written, or null. `[[#anchor]]` alone is a section of the page the text is on. */
+  anchor: string | null;
 }
 
 const CODE_SEGMENT = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g;
@@ -23,13 +25,29 @@ function proseSegments(source: string): { text: string; code: boolean }[] {
 }
 
 /**
- * Splits a link's target at its first colon, as Redmine does: `project:Page` names a page of that project, and a
- * colon with nothing before it is part of the title.
+ * Splits a link's target as Redmine's parse_wiki_links does: `#anchor` alone is a section of this page; otherwise the
+ * first colon separates a project (`project:Page`; a colon with nothing before it is part of the title), and the
+ * first `#` after some title text separates the section (`Page#Section`).
  */
 export function parseWikiTarget(target: string): WikiReferenceTarget {
-  const colon = target.indexOf(":");
-  if (colon <= 0) return { project: null, title: target.trim() };
-  return { project: target.slice(0, colon).trim(), title: target.slice(colon + 1).trim() };
+  const trimmed = target.trim();
+  if (/^#./.test(trimmed)) return { project: null, title: "", anchor: trimmed.slice(1) };
+  const colon = trimmed.indexOf(":");
+  const project = colon > 0 ? trimmed.slice(0, colon).trim() : null;
+  const page = colon > 0 ? trimmed.slice(colon + 1).trim() : trimmed;
+  const hash = page.indexOf("#", 1);
+  if (hash > 0 && hash < page.length - 1) return { project, title: page.slice(0, hash).trim(), anchor: page.slice(hash + 1) };
+  return { project, title: page, anchor: null };
+}
+
+/**
+ * The text a link shows when it has no `|label`, as in Redmine: the page title, `#anchor` for a link within the page,
+ * and the project as written for `[[project:]]`.
+ */
+export function wikiLinkLabel(target: WikiReferenceTarget): string {
+  if (target.title !== "") return target.title;
+  if (target.project !== null) return target.project;
+  return target.anchor !== null ? `#${target.anchor}` : "";
 }
 
 /** The distinct link targets the text names, as written (trimmed), in order of first appearance. */
@@ -64,8 +82,8 @@ export function linkWikiReferences(source: string, links: ReadonlyMap<string, Li
         : segment.text.replace(WIKI_REFERENCE, (match, rawTarget: string, rawLabel?: string) => {
             const target = links.get(rawTarget.trim());
             if (!target) return match;
-            const { title } = parseWikiTarget(rawTarget);
-            return `[${safeLabel(rawLabel ?? title) || title}](${target.href})`;
+            const label = wikiLinkLabel(parseWikiTarget(rawTarget));
+            return `[${safeLabel(rawLabel ?? label) || safeLabel(label)}](${target.href})`;
           }),
     )
     .join("");

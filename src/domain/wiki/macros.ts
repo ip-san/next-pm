@@ -1,3 +1,5 @@
+import { anchorCounter } from "@/domain/formatting/anchors";
+
 export interface TocHeading {
   level: number;
   text: string;
@@ -6,22 +8,15 @@ export interface TocHeading {
 
 const HEADING_LINE = /^(#{1,6})\s+(.+)$/;
 
-/** Slugifies a heading the same way most Markdown renderers derive an anchor id. */
-function slugify(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .replace(/\s+/g, "-");
-}
-
+/** The headings of a page with the anchors the renderer gives them (domain/formatting/anchors.ts). */
 export function extractHeadings(text: string): TocHeading[] {
   const headings: TocHeading[] = [];
+  const nextAnchor = anchorCounter();
   for (const line of text.split("\n")) {
     const match = HEADING_LINE.exec(line);
     if (match) {
       const heading = match[2].trim();
-      headings.push({ level: match[1].length, text: heading, anchor: slugify(heading) });
+      headings.push({ level: match[1].length, text: heading, anchor: nextAnchor(heading.replace(/[*_`]/g, "")) });
     }
   }
   return headings;

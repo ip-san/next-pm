@@ -5,9 +5,9 @@ describe("extractHeadings", () => {
   it("extracts Markdown ATX headings with their level", () => {
     const headings = extractHeadings("# Title\nsome text\n## Section One\nmore\n### Sub");
     expect(headings).toEqual([
-      { level: 1, text: "Title", anchor: "title" },
-      { level: 2, text: "Section One", anchor: "section-one" },
-      { level: 3, text: "Sub", anchor: "sub" },
+      { level: 1, text: "Title", anchor: "Title" },
+      { level: 2, text: "Section One", anchor: "Section-One" },
+      { level: 3, text: "Sub", anchor: "Sub" },
     ]);
   });
 
@@ -66,7 +66,7 @@ describe("expandMacros", () => {
       childPages: [],
       resolveInclude: (title) => (title === "Other" ? "# Heading\n{{toc}}" : null),
     });
-    expect(result).toBe("# Heading\n- [Heading](#heading)");
+    expect(result).toBe("# Heading\n- [Heading](#Heading)");
   });
 
   it("leaves a [[title]] placeholder when the included page doesn't exist", () => {

@@ -1,11 +1,13 @@
 import { can } from "@/domain/authorization/authorization-service";
 import type { Project } from "@/domain/project/entity";
+import { anchorName } from "@/domain/formatting/anchors";
 import { parseWikiTarget, type LinkTarget } from "@/domain/formatting/repository-references";
+import { DEFAULT_WIKI_START_PAGE } from "@/domain/wiki/entity";
 import type { User } from "@/domain/user/entity";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
 import { DrizzleScmRepositoryRepository } from "@/infrastructure/db/repositories/scm-repository-repository";
-import { DrizzleWikiPageRepository } from "@/infrastructure/db/repositories/wiki-repository";
+import { DrizzleWikiPageRepository, DrizzleWikiRepository } from "@/infrastructure/db/repositories/wiki-repository";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 
 /** The project a piece of text belongs to: its links to wiki pages and revisions are judged against it. */
@@ -26,14 +28,21 @@ export async function resolveWikiLinks(user: User | null, project: TextProject, 
   const pages = new DrizzleWikiPageRepository();
   const viewable = new Map<string, boolean>();
   for (const target of targets) {
-    const { project: projectName, title } = parseWikiTarget(target);
-    if (title === "") continue;
+    const { project: projectName, title, anchor } = parseWikiTarget(target);
+    const fragment = anchor ? `#${anchorName(anchor)}` : "";
+    // `[[#anchor]]`: a section of the page the text is on, which needs no lookup.
+    if (projectName === null && title === "") {
+      if (fragment !== "#") links.set(target, { href: fragment });
+      continue;
+    }
     const linkProject = projectName === null ? await loadProject(project.id) : await findProjectByIdentifierOrName(projectName);
     if (!linkProject) continue;
     if (!viewable.has(linkProject.id)) viewable.set(linkProject.id, await canViewWiki(user, linkProject));
     if (!viewable.get(linkProject.id)) continue;
-    const page = await pages.findByTitle(linkProject.id, title);
-    if (page) links.set(target, { href: `/projects/${linkProject.identifier}/wiki/${encodeURIComponent(page.title)}` });
+    // `[[project:]]` names the project's start page (Redmine's Wiki#find_page with a blank title).
+    const pageTitle = title !== "" ? title : ((await new DrizzleWikiRepository().findByProject(linkProject.id))?.startPage ?? DEFAULT_WIKI_START_PAGE);
+    const page = await pages.findByTitle(linkProject.id, pageTitle);
+    if (page) links.set(target, { href: `/projects/${linkProject.identifier}/wiki/${encodeURIComponent(page.title)}${fragment}` });
   }
   return links;
 }
@@ -62,7 +71,7 @@ export async function resolveRevisionLinks(user: User | null, project: TextProje
   const changesets = new DrizzleChangesetRepository();
   for (const id of ids) {
     for (const repository of repositories) {
-      const changeset = await changesets.findByRevision(repository.id, id);
+      const changeset = await changesets.findByRevisionOrPrefix(repository.id, id);
       if (changeset) {
         links.set(id, { href: `/projects/${project.identifier}/repository/${repository.id}/revisions/${changeset.revision}` });
         break;

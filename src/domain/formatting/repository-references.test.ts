@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { linkRevisionReferences, linkWikiReferences, parseWikiTarget, revisionReferenceIds, wikiReferenceTargets } from "./repository-references";
+import { linkRevisionReferences, linkWikiReferences, parseWikiTarget, wikiLinkLabel, revisionReferenceIds, wikiReferenceTargets } from "./repository-references";
 
 describe("wiki references", () => {
   it("finds the page titles a text links to, outside code", () => {
@@ -11,15 +11,15 @@ describe("wiki references", () => {
   });
 
   it("splits a target at its first colon into project and page", () => {
-    expect(parseWikiTarget("Setup")).toEqual({ project: null, title: "Setup" });
-    expect(parseWikiTarget("shop:Setup")).toEqual({ project: "shop", title: "Setup" });
-    expect(parseWikiTarget(" shop : Setup ")).toEqual({ project: "shop", title: "Setup" });
-    expect(parseWikiTarget("shop:")).toEqual({ project: "shop", title: "" });
-    expect(parseWikiTarget("shop:Setup:two")).toEqual({ project: "shop", title: "Setup:two" });
+    expect(parseWikiTarget("Setup")).toEqual({ project: null, title: "Setup", anchor: null });
+    expect(parseWikiTarget("shop:Setup")).toEqual({ project: "shop", title: "Setup", anchor: null });
+    expect(parseWikiTarget(" shop : Setup ")).toEqual({ project: "shop", title: "Setup", anchor: null });
+    expect(parseWikiTarget("shop:")).toEqual({ project: "shop", title: "", anchor: null });
+    expect(parseWikiTarget("shop:Setup:two")).toEqual({ project: "shop", title: "Setup:two", anchor: null });
   });
 
   it("keeps a colon with nothing before it as part of the title", () => {
-    expect(parseWikiTarget(":Setup")).toEqual({ project: null, title: ":Setup" });
+    expect(parseWikiTarget(":Setup")).toEqual({ project: null, title: ":Setup", anchor: null });
   });
 
   it("labels a project-qualified link with its page title, not the project", () => {
@@ -66,3 +66,27 @@ describe("revision references", () => {
     );
   });
 });
+
+describe("wiki link sections and start pages", () => {
+  it("splits a section off the page, and reads #anchor alone as a section of this page", () => {
+    expect(parseWikiTarget("Setup#Install steps")).toEqual({ project: null, title: "Setup", anchor: "Install steps" });
+    expect(parseWikiTarget("shop:Setup#Install")).toEqual({ project: "shop", title: "Setup", anchor: "Install" });
+    expect(parseWikiTarget("#Install")).toEqual({ project: null, title: "", anchor: "Install" });
+    expect(parseWikiTarget("C#")).toEqual({ project: null, title: "C#", anchor: null });
+  });
+
+  it("labels a link as Redmine does when it has no label of its own", () => {
+    expect(wikiLinkLabel(parseWikiTarget("Setup#Install"))).toBe("Setup");
+    expect(wikiLinkLabel(parseWikiTarget("#Install"))).toBe("#Install");
+    expect(wikiLinkLabel(parseWikiTarget("shop:"))).toBe("shop");
+  });
+
+  it("links a section and a start page with the href it was given", () => {
+    const links = new Map([
+      ["#Install", { href: "#Install" }],
+      ["shop:", { href: "/projects/shop/wiki/Wiki" }],
+    ]);
+    expect(linkWikiReferences("See [[#Install]] and [[shop:]].", links)).toBe("See [#Install](#Install) and [shop](/projects/shop/wiki/Wiki).");
+  });
+});
+

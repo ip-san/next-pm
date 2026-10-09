@@ -3,7 +3,7 @@ import { renderFormattedText } from "./markdown";
 
 describe("renderFormattedText", () => {
   it("renders CommonMark structure", () => {
-    expect(renderFormattedText("# Title\n\n- one\n- two")).toContain("<h1>Title</h1>");
+    expect(renderFormattedText("# Title\n\n- one\n- two")).toContain('<h1 id="Title">Title</h1>');
     expect(renderFormattedText("**bold**")).toContain("<strong>bold</strong>");
   });
 
@@ -54,5 +54,13 @@ describe("renderFormattedText", () => {
 
   it("keeps entity text as text, not markup", () => {
     expect(renderFormattedText("&lt;b&gt;text&lt;/b&gt;")).toContain("&lt;b&gt;text&lt;/b&gt;");
+  });
+
+  it("gives headings Redmine's anchors, numbering repeats, so the heading HTML can't be broken out of", () => {
+    const html = renderFormattedText('# Café & "Bar"\n\n## Notes\n\n## Notes\n\n## <img onerror=x>');
+    expect(html).toContain('<h1 id="Café-Bar">');
+    expect(html).toContain('<h2 id="Notes">Notes</h2>');
+    expect(html).toContain('<h2 id="Notes-2">Notes</h2>');
+    expect(html).toContain('<h2 id="img-onerrorx">&lt;img onerror=x&gt;</h2>');
   });
 });

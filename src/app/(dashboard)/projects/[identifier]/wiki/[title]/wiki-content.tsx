@@ -26,11 +26,7 @@ export async function WikiContent({
       {blocks.map((block, index) => {
         switch (block.kind) {
           case "text":
-            return (
-              <p key={index} className="whitespace-pre-wrap">
-                {block.text}
-              </p>
-            );
+            return <FormattedText key={index} project={project} text={block.text} />;
 
           case "collapse":
             // <details> gives Redmine's show/hide toggle without any client JavaScript.

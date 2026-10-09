@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { db } from "@/infrastructure/db/client";
 import { changesetIssues } from "@/infrastructure/db/schema/changeset-issues";
 import { changesets } from "@/infrastructure/db/schema/changesets";
@@ -25,6 +25,23 @@ export class DrizzleChangesetRepository implements ChangesetRepository {
       .select()
       .from(changesets)
       .where(and(eq(changesets.scmRepositoryId, scmRepositoryId), eq(changesets.revision, revision)))
+      .limit(1);
+    return row ? toDomain(row) : null;
+  }
+
+  /**
+   * Redmine's Repository#find_changeset_by_name for a written reference: the exact revision, or else the latest
+   * changeset whose revision starts with it, so `r1a2b3c4` finds a commit by a short hash.
+   */
+  async findByRevisionOrPrefix(scmRepositoryId: string, name: string): Promise<Changeset | null> {
+    const exact = await this.findByRevision(scmRepositoryId, name);
+    if (exact) return exact;
+    const prefix = name.replace(/[\\%_]/g, (character) => `\\${character}`);
+    const [row] = await db
+      .select()
+      .from(changesets)
+      .where(and(eq(changesets.scmRepositoryId, scmRepositoryId), like(changesets.revision, `${prefix}%`)))
+      .orderBy(desc(changesets.committedOn))
       .limit(1);
     return row ? toDomain(row) : null;
   }
