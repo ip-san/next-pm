@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { currentLocale } from "@/interface/http/locale";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,14 +18,16 @@ export const metadata: Metadata = {
   description: "Project management, redone",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The document language follows the language the interface is shown in (Redmine's layout uses current_language).
+  const locale = await currentLocale();
   return (
     <html
-      lang="en"
+      lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
