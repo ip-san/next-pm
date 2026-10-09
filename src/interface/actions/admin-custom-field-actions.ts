@@ -83,7 +83,7 @@ async function resolveAttributes(
 
   // Visibility by role only exists for Issue, Project and TimeEntry fields (Redmine shows the selector for
   // exactly these), and a restricted field names roles an admin can give. Anything else is public.
-  const roleVisibilityOffered = customizedType === "Issue" || customizedType === "Project" || customizedType === "TimeEntry";
+  const roleVisibilityOffered = customizedType === "Issue" || customizedType === "Project" || customizedType === "TimeEntry" || customizedType === "Version";
   const visibility = roleVisibilityOffered
     ? normalizeFieldVisibility({ visible: attributes.visible, roleIds: attributes.roleIds })
     : { visible: true, roleIds: [] };

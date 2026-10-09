@@ -1,3 +1,9 @@
+import { CustomFieldValidationError } from "@/application/projects/set-project-custom-field-values";
+import { setVersionCustomFieldValues, validateVersionCustomFieldValues } from "@/application/versions/set-version-custom-field-values";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -34,12 +40,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ vers
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ version });
+  // The version's custom values, for the fields this viewer may see (judged against the version's own project).
+  const [fields, values] = await Promise.all([
+    new DrizzleCustomFieldRepository().listForCustomizedType("Version"),
+    new DrizzleCustomValueRepository().listForCustomized("Version", version.id),
+  ]);
+  const visibleIds = new Set(visibleCustomFieldsFor(fields, customFieldViewerFor(user, roleIds)).map((field) => field.id));
+  return NextResponse.json({ version, customValues: values.filter((value) => visibleIds.has(value.customFieldId)) });
 }
 
 const updateVersionSchema = z.object({
@@ -49,6 +61,7 @@ const updateVersionSchema = z.object({
   status: z.enum(["open", "locked", "closed"]).default("open"),
   sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]).default("none"),
   wiki_page_title: z.string().nullable().default(null),
+  custom_field_values: z.record(z.string(), z.string()).default({}),
 });
 
 export async function PUT(request: Request, { params }: { params: Promise<{ versionId: string }> }) {
@@ -72,7 +85,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ vers
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -80,6 +93,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ vers
   const parsed = updateVersionSchema.safeParse((await request.json().catch(() => null))?.version);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.issues }, { status: 422 });
+  }
+
+  // Validated before the version is written, so a rejected value can't leave a half-applied update.
+  const viewer = customFieldViewerFor(user, roleIds);
+  try {
+    await validateVersionCustomFieldValues(new DrizzleCustomFieldRepository(), parsed.data.custom_field_values, viewer);
+  } catch (error) {
+    if (error instanceof CustomFieldValidationError) {
+      return NextResponse.json({ error: "invalid_custom_field_values", details: error.fieldErrors }, { status: 422 });
+    }
+    throw error;
   }
 
   try {
@@ -94,6 +118,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ vers
         sharing: parsed.data.sharing,
         wikiPageTitle: parsed.data.wiki_page_title,
       },
+    );
+    await setVersionCustomFieldValues(
+      { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+      versionId,
+      parsed.data.custom_field_values,
+      viewer,
     );
     return NextResponse.json({ version: updated });
   } catch (error) {

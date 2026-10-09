@@ -1,5 +1,10 @@
 "use server";
 
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { CustomFieldValidationError } from "@/application/projects/set-project-custom-field-values";
+import { setVersionCustomFieldValues, validateVersionCustomFieldValues } from "@/application/versions/set-version-custom-field-values";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { can } from "@/domain/authorization/authorization-service";
@@ -22,7 +27,13 @@ const createVersionSchema = z.object({
   description: z.string(),
   effectiveDate: z.string(),
   sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]),
+  customFieldIds: z.array(z.string().uuid()).default([]),
 });
+
+/** The Version custom field values the form submitted, keyed by field id. A field the viewer can't see is dropped in the write. */
+function versionCustomFieldValuesFrom(formData: FormData, customFieldIds: string[]): Record<string, string> {
+  return Object.fromEntries(customFieldIds.map((fieldId) => [fieldId, (formData.get(`customField_${fieldId}`) ?? "").toString()]));
+}
 
 export async function createVersionAction(_prevState: VersionActionState, formData: FormData): Promise<VersionActionState> {
   const parsed = createVersionSchema.safeParse({
@@ -31,6 +42,7 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
     description: formData.get("description") ?? "",
     effectiveDate: formData.get("effectiveDate") ?? "",
     sharing: formData.get("sharing") ?? "none",
+    customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -46,13 +58,25 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
     return { error: "プロジェクトが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
   }
 
+  const customFieldValues = versionCustomFieldValuesFrom(formData, parsed.data.customFieldIds);
+  const viewer = customFieldViewerFor(user, roleIds);
   try {
-    await createVersion(
+    await validateVersionCustomFieldValues(new DrizzleCustomFieldRepository(), customFieldValues, viewer);
+  } catch (error) {
+    if (error instanceof CustomFieldValidationError) {
+      return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+    }
+    throw error;
+  }
+
+  let createdId: string;
+  try {
+    const created = await createVersion(
       { versionRepository: new DrizzleVersionRepository() },
       {
         projectId: project.id,
@@ -63,11 +87,28 @@ export async function createVersionAction(_prevState: VersionActionState, formDa
         wikiPageTitle: null,
       },
     );
+    createdId = created.id;
   } catch (error) {
     if (error instanceof InvalidVersionError) {
       return { error: error.message };
     }
     throw error;
+  }
+
+  if (parsed.data.customFieldIds.length > 0) {
+    try {
+      await setVersionCustomFieldValues(
+        { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+        createdId,
+        customFieldValues,
+        viewer,
+      );
+    } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+      }
+      throw error;
+    }
   }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/versions`);
@@ -82,6 +123,7 @@ const updateVersionSchema = z.object({
   effectiveDate: z.string(),
   status: z.enum(["open", "locked", "closed"]),
   sharing: z.enum(["none", "descendants", "hierarchy", "tree", "system"]),
+  customFieldIds: z.array(z.string().uuid()).default([]),
 });
 
 export async function updateVersionAction(_prevState: VersionActionState, formData: FormData): Promise<VersionActionState> {
@@ -93,6 +135,7 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
     effectiveDate: formData.get("effectiveDate") ?? "",
     status: formData.get("status"),
     sharing: formData.get("sharing") ?? "none",
+    customFieldIds: formData.getAll("customFieldIds"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。" };
@@ -114,9 +157,20 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
     return { error: "バージョンが見つかりません。" };
   }
 
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
     return { error: "この操作を行う権限がありません。" };
+  }
+
+  const customFieldValues = versionCustomFieldValuesFrom(formData, parsed.data.customFieldIds);
+  const viewer = customFieldViewerFor(user, roleIds);
+  try {
+    await validateVersionCustomFieldValues(new DrizzleCustomFieldRepository(), customFieldValues, viewer);
+  } catch (error) {
+    if (error instanceof CustomFieldValidationError) {
+      return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+    }
+    throw error;
   }
 
   try {
@@ -137,6 +191,22 @@ export async function updateVersionAction(_prevState: VersionActionState, formDa
       return { error: error.message };
     }
     throw error;
+  }
+
+  if (parsed.data.customFieldIds.length > 0) {
+    try {
+      await setVersionCustomFieldValues(
+        { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+        parsed.data.versionId,
+        customFieldValues,
+        viewer,
+      );
+    } catch (error) {
+      if (error instanceof CustomFieldValidationError) {
+        return { error: Object.values(error.fieldErrors)[0] ?? "カスタムフィールドの入力内容を確認してください。" };
+      }
+      throw error;
+    }
   }
 
   revalidatePath(`/projects/${parsed.data.projectIdentifier}/versions`);

@@ -28,6 +28,7 @@ const CUSTOMIZED_TYPE_LABEL: Record<string, string> = {
   Issue: "チケット",
   Project: "プロジェクト",
   TimeEntry: "作業時間",
+  Version: "バージョン",
 };
 
 export default async function CustomFieldsPage() {

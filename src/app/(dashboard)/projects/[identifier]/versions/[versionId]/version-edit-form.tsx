@@ -3,10 +3,22 @@
 import { useActionState } from "react";
 import { updateVersionAction, type VersionActionState } from "@/interface/actions/version-actions";
 import type { Version } from "@/domain/version/entity";
+import type { CustomField } from "@/domain/custom-field/entity";
+import { CustomFieldValueInput } from "@/interface/components/custom-field-value-input";
 
 const initialState: VersionActionState = { error: null };
 
-export function VersionEditForm({ projectIdentifier, version }: { projectIdentifier: string; version: Version }) {
+export function VersionEditForm({
+  projectIdentifier,
+  version,
+  customFields,
+  customValueByFieldId,
+}: {
+  projectIdentifier: string;
+  version: Version;
+  customFields: CustomField[];
+  customValueByFieldId: Record<string, string | null>;
+}) {
   const [state, formAction, pending] = useActionState(updateVersionAction, initialState);
 
   return (
@@ -37,6 +49,13 @@ export function VersionEditForm({ projectIdentifier, version }: { projectIdentif
           <option value="system">全プロジェクト</option>
         </select>
       </label>
+      {customFields.map((field) => (
+        <div key={field.id} className="flex flex-col gap-1 text-xs text-gray-600">
+          <input type="hidden" name="customFieldIds" value={field.id} />
+          <label htmlFor={`customField-${field.id}`}>{field.name}</label>
+          <CustomFieldValueInput field={field} defaultValue={customValueByFieldId[field.id] ?? null} />
+        </div>
+      ))}
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
         保存

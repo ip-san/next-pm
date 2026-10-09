@@ -3,7 +3,7 @@ import { roles } from "./roles";
 import { trackers } from "./trackers";
 
 export const customFieldFormatEnum = ["string", "text", "int", "float", "date", "bool", "list", "link", "user", "version", "enumeration"] as const;
-export const customizedTypeEnum = ["Issue", "Project", "TimeEntry"] as const;
+export const customizedTypeEnum = ["Issue", "Project", "TimeEntry", "Version"] as const;
 
 export const customFields = pgTable("custom_fields", {
   id: uuid("id").primaryKey().defaultRandom(),

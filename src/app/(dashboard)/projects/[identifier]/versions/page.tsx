@@ -1,3 +1,7 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
@@ -31,7 +35,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
   }
 
   const user = await currentUserFromCookies();
-  const { actor, userGroupIds } = await resolveActor(user, project.id);
+  const { actor, userGroupIds, roleIds } = await resolveActor(user, project.id);
   const projectContext = toAuthorizationProject(project);
   if (!can({ permission: "view_issues", project: projectContext, actor })) {
     notFound();
@@ -40,11 +44,22 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
   const hasIssueTracking = project.enabledModules.includes("issue_tracking");
   const hasWiki = project.enabledModules.includes("wiki");
 
-  const [versions, allIssues, statuses] = await Promise.all([
+  const [versions, allIssues, statuses, allVersionFields] = await Promise.all([
     new DrizzleVersionRepository().listByProject(project.id),
     new DrizzleIssueRepository().listByProject(project.id),
     new DrizzleIssueStatusRepository().listAll(),
+    new DrizzleCustomFieldRepository().listForCustomizedType("Version"),
   ]);
+  const customFieldViewer = customFieldViewerFor(user, roleIds);
+  const versionFields = visibleCustomFieldsFor(allVersionFields, customFieldViewer);
+  const versionValues = new Map(
+    await Promise.all(
+      versions.map(async (version) => [
+        version.id,
+        new Map((await new DrizzleCustomValueRepository().listForCustomized("Version", version.id)).map((v) => [v.customFieldId, v.value])),
+      ] as const),
+    ),
+  );
   const issues = allIssues.filter(visibleIssueFilter(user?.id ?? null, actor, userGroupIds));
   const statusById = new Map(statuses.map((status) => [status.id, status]));
 
@@ -89,7 +104,16 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
             );
             return (
               <tr key={version.id} className="border-b">
-                <td className="py-2">{version.name}</td>
+                <td className="py-2">
+                  {version.name}
+                  {versionFields.map((field) =>
+                    versionValues.get(version.id)?.get(field.id) ? (
+                      <div key={field.id} className="text-xs text-gray-500">
+                        {field.name}: {versionValues.get(version.id)?.get(field.id)}
+                      </div>
+                    ) : null,
+                  )}
+                </td>
                 <td className="py-2">{version.effectiveDate ?? "-"}</td>
                 <td className="py-2">{STATUS_LABEL[version.status]}</td>
                 <td className="py-2">{SHARING_LABEL[version.sharing]}</td>
@@ -107,7 +131,7 @@ export default async function VersionsPage({ params }: { params: Promise<{ ident
         </tbody>
       </table>
 
-      {canManageVersions ? <VersionCreateForm projectIdentifier={identifier} /> : null}
+      {canManageVersions ? <VersionCreateForm projectIdentifier={identifier} customFields={versionFields} /> : null}
     </main>
   );
 }

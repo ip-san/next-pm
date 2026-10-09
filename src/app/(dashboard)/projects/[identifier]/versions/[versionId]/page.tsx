@@ -1,3 +1,7 @@
+import { customFieldViewerFor } from "@/interface/http/custom-field-viewer";
+import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
+import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
+import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -18,7 +22,7 @@ export default async function VersionDetailPage({ params }: { params: Promise<{ 
   }
 
   const user = await currentUserFromCookies();
-  const { actor } = await resolveActor(user, project.id);
+  const { actor, roleIds } = await resolveActor(user, project.id);
   if (!can({ permission: "manage_versions", project: toAuthorizationProject(project), actor })) {
     notFound();
   }
@@ -28,10 +32,18 @@ export default async function VersionDetailPage({ params }: { params: Promise<{ 
     notFound();
   }
 
+  const [allFields, values] = await Promise.all([
+    new DrizzleCustomFieldRepository().listForCustomizedType("Version"),
+    new DrizzleCustomValueRepository().listForCustomized("Version", version.id),
+  ]);
+  const customFields = visibleCustomFieldsFor(allFields, customFieldViewerFor(user, roleIds));
+  const visibleIds = new Set(customFields.map((field) => field.id));
+  const customValueByFieldId = Object.fromEntries(values.filter((v) => visibleIds.has(v.customFieldId)).map((v) => [v.customFieldId, v.value]));
+
   return (
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">バージョンを編集</h1>
-      <VersionEditForm projectIdentifier={identifier} version={version} />
+      <VersionEditForm projectIdentifier={identifier} version={version} customFields={customFields} customValueByFieldId={customValueByFieldId} />
       <div className="border-t pt-4">
         <DeleteVersionButton projectIdentifier={identifier} versionId={version.id} />
       </div>

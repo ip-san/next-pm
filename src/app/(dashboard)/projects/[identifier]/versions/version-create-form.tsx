@@ -2,10 +2,12 @@
 
 import { useActionState } from "react";
 import { createVersionAction, type VersionActionState } from "@/interface/actions/version-actions";
+import type { CustomField } from "@/domain/custom-field/entity";
+import { CustomFieldValueInput } from "@/interface/components/custom-field-value-input";
 
 const initialState: VersionActionState = { error: null };
 
-export function VersionCreateForm({ projectIdentifier }: { projectIdentifier: string }) {
+export function VersionCreateForm({ projectIdentifier, customFields }: { projectIdentifier: string; customFields: CustomField[] }) {
   const [state, formAction, pending] = useActionState(createVersionAction, initialState);
 
   return (
@@ -28,6 +30,13 @@ export function VersionCreateForm({ projectIdentifier }: { projectIdentifier: st
           <option value="system">全プロジェクト</option>
         </select>
       </label>
+      {customFields.map((field) => (
+        <div key={field.id} className="flex flex-col gap-1 text-xs text-gray-600">
+          <input type="hidden" name="customFieldIds" value={field.id} />
+          <label htmlFor={`customField-${field.id}`}>{field.name}</label>
+          <CustomFieldValueInput field={field} defaultValue={null} />
+        </div>
+      ))}
       {state.error ? <p role="alert" className="text-xs text-red-600">{state.error}</p> : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 text-sm self-start disabled:opacity-50">
         作成

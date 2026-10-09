@@ -24,12 +24,13 @@ const FORMAT_OPTIONS = [
 ] as const;
 
 /** Redmine shows the role-visibility selector for exactly these custom field types. */
-const ROLE_VISIBILITY_TYPES: CustomizedType[] = ["Issue", "Project", "TimeEntry"];
+const ROLE_VISIBILITY_TYPES: CustomizedType[] = ["Issue", "Project", "TimeEntry", "Version"];
 
 const CUSTOMIZED_TYPE_OPTIONS: { value: CustomizedType; label: string }[] = [
   { value: "Issue", label: "チケット" },
   { value: "Project", label: "プロジェクト" },
   { value: "TimeEntry", label: "作業時間" },
+  { value: "Version", label: "バージョン" },
 ];
 
 /**
