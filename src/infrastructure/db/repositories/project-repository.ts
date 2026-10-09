@@ -102,6 +102,14 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return withRelations;
   }
 
+  /** Redmine's fallback for `[[project:Page]]` when no identifier matches. Not on the port: only wiki links use it. */
+  async findByName(name: string): Promise<Project | null> {
+    const [row] = await db.select().from(projects).where(eq(projects.name, name)).limit(1);
+    if (!row) return null;
+    const [withRelations] = await attachRelations([row]);
+    return withRelations;
+  }
+
   async listAll(): Promise<Project[]> {
     const rows = await db.select().from(projects).orderBy(projects.lft);
     return attachRelations(rows);

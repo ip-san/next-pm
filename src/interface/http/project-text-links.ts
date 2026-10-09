@@ -1,5 +1,6 @@
 import { can } from "@/domain/authorization/authorization-service";
-import type { LinkTarget } from "@/domain/formatting/repository-references";
+import type { Project } from "@/domain/project/entity";
+import { parseWikiTarget, type LinkTarget } from "@/domain/formatting/repository-references";
 import type { User } from "@/domain/user/entity";
 import { DrizzleChangesetRepository } from "@/infrastructure/db/repositories/changeset-repository";
 import { DrizzleProjectRepository } from "@/infrastructure/db/repositories/project-repository";
@@ -14,21 +15,37 @@ export interface TextProject {
 }
 
 /**
- * The `[[Page]]` links for a text in a project: a page the viewer may read (view_wiki_pages) and that exists. Any
- * other title gets no link.
+ * The wiki links for a text in a project: `[[Page]]` names a page of the text's project, and `[[project:Page]]` a page
+ * of the project found by identifier, or else by name, as Redmine does. A target gets a link only when its project
+ * exists, the viewer may view its wiki (view_wiki_pages), and the page exists. Any other target gets no link, so a
+ * private project's existence is never revealed.
  */
-export async function resolveWikiLinks(user: User | null, project: TextProject, titles: string[]): Promise<Map<string, LinkTarget>> {
+export async function resolveWikiLinks(user: User | null, project: TextProject, targets: string[]): Promise<Map<string, LinkTarget>> {
   const links = new Map<string, LinkTarget>();
-  if (titles.length === 0) return links;
-  const { actor } = await resolveActor(user, project.id);
-  const projectRecord = await loadProject(project.id);
-  if (!projectRecord || !can({ permission: "view_wiki_pages", project: toAuthorizationProject(projectRecord), actor })) return links;
+  if (targets.length === 0) return links;
   const pages = new DrizzleWikiPageRepository();
-  for (const title of titles) {
-    const page = await pages.findByTitle(project.id, title);
-    if (page) links.set(title, { href: `/projects/${project.identifier}/wiki/${encodeURIComponent(page.title)}` });
+  const viewable = new Map<string, boolean>();
+  for (const target of targets) {
+    const { project: projectName, title } = parseWikiTarget(target);
+    if (title === "") continue;
+    const linkProject = projectName === null ? await loadProject(project.id) : await findProjectByIdentifierOrName(projectName);
+    if (!linkProject) continue;
+    if (!viewable.has(linkProject.id)) viewable.set(linkProject.id, await canViewWiki(user, linkProject));
+    if (!viewable.get(linkProject.id)) continue;
+    const page = await pages.findByTitle(linkProject.id, title);
+    if (page) links.set(target, { href: `/projects/${linkProject.identifier}/wiki/${encodeURIComponent(page.title)}` });
   }
   return links;
+}
+
+async function canViewWiki(user: User | null, projectRecord: Project): Promise<boolean> {
+  const { actor } = await resolveActor(user, projectRecord.id);
+  return can({ permission: "view_wiki_pages", project: toAuthorizationProject(projectRecord), actor });
+}
+
+async function findProjectByIdentifierOrName(identifierOrName: string): Promise<Project | null> {
+  const repository = new DrizzleProjectRepository();
+  return (await repository.findByIdentifier(identifierOrName)) ?? (await repository.findByName(identifierOrName));
 }
 
 /**

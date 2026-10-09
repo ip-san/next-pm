@@ -1,9 +1,37 @@
 import { describe, expect, it } from "bun:test";
-import { linkRevisionReferences, linkWikiReferences, revisionReferenceIds, wikiReferenceTitles } from "./repository-references";
+import { linkRevisionReferences, linkWikiReferences, parseWikiTarget, revisionReferenceIds, wikiReferenceTargets } from "./repository-references";
 
 describe("wiki references", () => {
   it("finds the page titles a text links to, outside code", () => {
-    expect(wikiReferenceTitles("See [[Setup]] and [[Setup|the setup]], not `[[Code]]`.")).toEqual(["Setup"]);
+    expect(wikiReferenceTargets("See [[Setup]] and [[Setup|the setup]], not `[[Code]]`.")).toEqual(["Setup"]);
+  });
+
+  it("keeps the project prefix in the target, so the same title in two projects stays apart", () => {
+    expect(wikiReferenceTargets("[[shop:Setup]] [[Setup]] [[shop:Setup|again]]")).toEqual(["shop:Setup", "Setup"]);
+  });
+
+  it("splits a target at its first colon into project and page", () => {
+    expect(parseWikiTarget("Setup")).toEqual({ project: null, title: "Setup" });
+    expect(parseWikiTarget("shop:Setup")).toEqual({ project: "shop", title: "Setup" });
+    expect(parseWikiTarget(" shop : Setup ")).toEqual({ project: "shop", title: "Setup" });
+    expect(parseWikiTarget("shop:")).toEqual({ project: "shop", title: "" });
+    expect(parseWikiTarget("shop:Setup:two")).toEqual({ project: "shop", title: "Setup:two" });
+  });
+
+  it("keeps a colon with nothing before it as part of the title", () => {
+    expect(parseWikiTarget(":Setup")).toEqual({ project: null, title: ":Setup" });
+  });
+
+  it("labels a project-qualified link with its page title, not the project", () => {
+    const links = new Map([["shop:Setup", { href: "/projects/shop/wiki/Setup" }]]);
+    expect(linkWikiReferences("[[shop:Setup]] and [[shop:Setup|install]]", links)).toBe(
+      "[Setup](/projects/shop/wiki/Setup) and [install](/projects/shop/wiki/Setup)",
+    );
+  });
+
+  it("does not link a project-qualified reference that has no link, even when its page title has one", () => {
+    const links = new Map([["Setup", { href: "/projects/blog/wiki/Setup" }]]);
+    expect(linkWikiReferences("[[secret:Setup]] and [[Setup]]", links)).toBe("[[secret:Setup]] and [Setup](/projects/blog/wiki/Setup)");
   });
 
   it("links a page the viewer can read, with its label", () => {
