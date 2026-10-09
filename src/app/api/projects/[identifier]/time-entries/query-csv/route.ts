@@ -17,6 +17,8 @@ import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-a
 import { loadTimeEntryLookups, timeEntryProjectScope, timeEntryScopesFor } from "@/interface/http/time-entry-list";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
 import { timeEntryColumnValue } from "@/interface/query/time-entry-list-view";
+import { localeForViewer } from "@/interface/http/locale";
+import { localizeTimeEntryColumns } from "@/interface/query/column-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +90,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   const rowContext = { lookups, customValues: result.search.customValues };
 
   const rows = [
-    result.displayColumns.map((column) => column.label),
+    localizeTimeEntryColumns(await localeForViewer(user), result.displayColumns).map((column) => column.label),
     ...result.search.entries.map((entry) => result.displayColumns.map((column) => timeEntryColumnValue(column, entry, rowContext))),
   ];
 

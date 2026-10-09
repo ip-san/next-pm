@@ -18,6 +18,7 @@ import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/in
 import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
 import { IssuesPdfDocument } from "./issues-pdf-document";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +89,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
     doneRatio: issue.doneRatio,
   }));
 
-  const buffer = await renderToBuffer(<IssuesPdfDocument projectName={project.name} rows={rows} />);
+  const buffer = await renderToBuffer(<IssuesPdfDocument projectName={project.name} rows={rows} locale={await localeForViewer(user)} />);
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

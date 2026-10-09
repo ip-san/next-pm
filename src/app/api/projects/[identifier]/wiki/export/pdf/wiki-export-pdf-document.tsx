@@ -1,5 +1,7 @@
 import path from "node:path";
 import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 
 // Same registration as the gantt/issues PDF exports — no CJK glyphs in React-PDF's built-in
 // fonts, and this app assumes no internet access at render time.
@@ -24,15 +26,15 @@ export interface WikiExportPage {
   text: string;
 }
 
-export function WikiExportPdfDocument({ projectName, pages }: { projectName: string; pages: WikiExportPage[] }) {
+export function WikiExportPdfDocument({ projectName, pages, locale }: { projectName: string; pages: WikiExportPage[]; locale: Locale }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>{projectName} — Wiki</Text>
 
-        <Text style={styles.tocHeading}>目次</Text>
+        <Text style={styles.tocHeading}>{translate(locale, "export.toc")}</Text>
         {pages.length === 0 ? (
-          <Text style={styles.emptyMessage}>ページはありません。</Text>
+          <Text style={styles.emptyMessage}>{translate(locale, "export.noPages")}</Text>
         ) : (
           pages.map((page) => (
             <Text key={page.title} style={styles.tocItem}>

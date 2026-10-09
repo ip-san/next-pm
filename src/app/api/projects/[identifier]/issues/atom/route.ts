@@ -21,6 +21,8 @@ import { issueFeedEntries } from "@/interface/http/issue-feed";
 import { issueVisibilityScope, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { spentHoursScopeFor } from "@/interface/http/time-entry-access";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
+import { translate } from "@/domain/i18n/messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +97,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   };
 
   const xml = buildAtomFeed(
-    { id: `${url.origin}/projects/${identifier}/issues`, title: `${project.name} - チケット`, selfUrl: url.toString() },
+    { id: `${url.origin}/projects/${identifier}/issues`, title: `${project.name} - ${translate(await localeForViewer(user), "export.issues")}`, selfUrl: url.toString() },
     issueFeedEntries(result.search.issues, lookups, url.origin, (issue) => `/projects/${identifier}/issues/${issue.id}`),
   );
 

@@ -1,5 +1,7 @@
 import path from "node:path";
 import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 
 // Same registration as the gantt PDF export — React-PDF's built-in fonts have no CJK glyphs,
 // and this app is meant to run self-hosted with no assumed internet access, so the font is
@@ -31,22 +33,22 @@ export interface IssuesPdfRow {
   doneRatio: number;
 }
 
-export function IssuesPdfDocument({ projectName, rows }: { projectName: string; rows: IssuesPdfRow[] }) {
+export function IssuesPdfDocument({ projectName, rows, locale }: { projectName: string; rows: IssuesPdfRow[]; locale: Locale }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>{projectName} — チケット一覧</Text>
+        <Text style={styles.title}>{projectName} — {translate(locale, "export.issueList")}</Text>
 
         <View style={styles.headerRow}>
           <Text style={styles.colId}>#</Text>
-          <Text style={styles.colTracker}>トラッカー</Text>
-          <Text style={styles.colSubject}>件名</Text>
-          <Text style={styles.colStatus}>ステータス</Text>
-          <Text style={styles.colDoneRatio}>進捗率</Text>
+          <Text style={styles.colTracker}>{translate(locale, "issue.attr.trackerId")}</Text>
+          <Text style={styles.colSubject}>{translate(locale, "issue.attr.subject")}</Text>
+          <Text style={styles.colStatus}>{translate(locale, "issue.attr.statusId")}</Text>
+          <Text style={styles.colDoneRatio}>{translate(locale, "issue.attr.doneRatio")}</Text>
         </View>
 
         {rows.length === 0 ? (
-          <Text style={styles.emptyMessage}>該当するチケットはありません。</Text>
+          <Text style={styles.emptyMessage}>{translate(locale, "export.noIssues")}</Text>
         ) : (
           rows.map((row) => (
             <View key={row.id} style={styles.row}>

@@ -10,11 +10,15 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
  * browser's Accept-Language for anonymous visitors, and the default, with the two force-default settings applied.
  */
 export async function currentLocale(): Promise<Locale> {
-  const [user, settings, requestHeaders] = await Promise.all([
-    currentUserFromCookies(),
-    loadGeneralSettings(new DrizzleSettingsRepository()),
-    headers(),
-  ]);
+  return localeForViewer(await currentUserFromCookies());
+}
+
+/**
+ * The same rule for a user the route resolved itself, such as an export or feed reached with an API or Atom key, where
+ * the cookie may name nobody or someone else.
+ */
+export async function localeForViewer(user: { language: string | null } | null): Promise<Locale> {
+  const [settings, requestHeaders] = await Promise.all([loadGeneralSettings(new DrizzleSettingsRepository()), headers()]);
   return resolveLocale({
     userLanguage: user?.language ?? null,
     loggedIn: user !== null,

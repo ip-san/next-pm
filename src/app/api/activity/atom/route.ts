@@ -7,6 +7,8 @@ import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/sett
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { activityRepositories, resolveGlobalActivityProjects } from "@/interface/http/activity-scope";
 import { atomResponse, resolveAtomUser } from "@/interface/http/atom-feed";
+import { translate } from "@/domain/i18n/messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
   const authors = await userRepository.findByIds([...new Set(events.map((event) => event.authorId).filter((id): id is string => id !== null))]);
   const authorById = new Map(authors.map((a) => [a.id, `${a.lastname} ${a.firstname}`]));
 
-  const title = authorFilter ? `${authorFilter.lastname} ${authorFilter.firstname}` : "アクティビティ";
+  const title = authorFilter ? `${authorFilter.lastname} ${authorFilter.firstname}` : translate(await localeForViewer(user), "export.activity");
   const xml = buildAtomFeed(
     { id: `${url.origin}/activity`, title: `next-pm - ${title}`, selfUrl: url.toString() },
     events.map((event) => {

@@ -7,6 +7,7 @@ import { DrizzleWikiContentRepository, DrizzleWikiPageRepository } from "@/infra
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { WikiExportPdfDocument } from "./wiki-export-pdf-document";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ide
   const buffer = await renderToBuffer(
     <WikiExportPdfDocument
       projectName={project.name}
+      locale={await localeForViewer(user)}
       pages={pages.map((page, index) => ({ title: page.title, text: contents[index]?.text ?? "" }))}
     />,
   );

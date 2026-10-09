@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { usersCsvBody } from "@/application/users/users-csv";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
+import { localeForViewer } from "@/interface/http/locale";
 
 /**
  * Redmine's `users.csv` (UsersController#index in CSV form): every account except the anonymous
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   const records = await new DrizzleUserRepository().listForCsvExport();
-  return new NextResponse(usersCsvBody(records), {
+  return new NextResponse(usersCsvBody(records, await localeForViewer(user)), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": 'attachment; filename="users.csv"',

@@ -9,6 +9,8 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { atomResponse, resolveAtomUser } from "@/interface/http/atom-feed";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { can } from "@/domain/authorization/authorization-service";
+import { translate } from "@/domain/i18n/messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   const authorById = new Map(authors.map((author) => [author.id, `${author.lastname} ${author.firstname}`]));
 
   const xml = buildAtomFeed(
-    { id: `${url.origin}/projects/${identifier}/activity`, title: `${project.name} - アクティビティ`, selfUrl: url.toString() },
+    { id: `${url.origin}/projects/${identifier}/activity`, title: `${project.name} - ${translate(await localeForViewer(user), "export.activity")}`, selfUrl: url.toString() },
     limited.map(({ event, identifier: eventIdentifier }) => ({
       id: `${url.origin}${activityEventPath(eventIdentifier, event)}#${event.type}-${event.id}`,
       title: event.title,

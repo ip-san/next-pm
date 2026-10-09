@@ -1,6 +1,8 @@
 import path from "node:path";
 import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { GanttMonthTick } from "@/domain/gantt/layout";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 
 const ROW_HEIGHT = 18;
 const LABEL_WIDTH = 220;
@@ -44,7 +46,9 @@ export function GanttPdfDocument({
   windowEnd,
   monthTicks,
   rows,
+  locale,
 }: {
+  locale: Locale;
   projectName: string;
   windowStart: string;
   windowEnd: string;
@@ -54,13 +58,13 @@ export function GanttPdfDocument({
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        <Text style={styles.title}>{projectName} — ガントチャート</Text>
+        <Text style={styles.title}>{projectName} — {translate(locale, "export.gantt")}</Text>
         <Text style={styles.subtitle}>
           {windowStart} 〜 {windowEnd}
         </Text>
 
         <View style={styles.headerRow}>
-          <Text style={styles.labelHeaderCell}>チケット</Text>
+          <Text style={styles.labelHeaderCell}>{translate(locale, "export.ganttIssue")}</Text>
           <View style={styles.timelineHeader}>
             {monthTicks.map((tick) => (
               <Text key={tick.label} style={[styles.monthTick, { left: `${tick.leftPercent}%` }]}>
@@ -71,7 +75,7 @@ export function GanttPdfDocument({
         </View>
 
         {rows.length === 0 ? (
-          <Text style={styles.emptyMessage}>この期間に開始日・期日が設定されたチケットはありません。</Text>
+          <Text style={styles.emptyMessage}>{translate(locale, "export.ganttEmpty")}</Text>
         ) : (
           rows.map((row, index) => (
             <View key={index} style={styles.row}>

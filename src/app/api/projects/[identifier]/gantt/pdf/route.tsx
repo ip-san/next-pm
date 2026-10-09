@@ -10,6 +10,7 @@ import { DrizzleTrackerRepository } from "@/infrastructure/db/repositories/track
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { GanttPdfDocument } from "./gantt-pdf-document";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ iden
   }));
 
   const buffer = await renderToBuffer(
-    <GanttPdfDocument projectName={project.name} windowStart={window.start} windowEnd={window.end} monthTicks={monthTicks} rows={rows} />,
+    <GanttPdfDocument projectName={project.name} windowStart={window.start} windowEnd={window.end} monthTicks={monthTicks} rows={rows} locale={await localeForViewer(user)} />,
   );
 
   return new NextResponse(new Uint8Array(buffer), {

@@ -13,6 +13,8 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { loadGlobalIssueLookups, resolveGlobalIssueListScope } from "@/interface/http/global-issue-list";
 import { issueColumnValue } from "@/interface/query/issue-list-view";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
+import { localeForViewer } from "@/interface/http/locale";
+import { localizeColumns } from "@/interface/query/column-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -64,10 +66,12 @@ export async function GET(request: Request) {
   );
 
   const lookups = await loadGlobalIssueLookups(scope.projects);
-  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours, fullIds: true };
+  // Redmine's CSV is written in the viewer's language: the column names and the yes/no cells.
+  const locale = await localeForViewer(user);
+  const rowContext = { lookups, customValues: result.search.customValues, spentHours: result.search.spentHours, fullIds: true, locale };
 
   const rows = [
-    result.displayColumns.map((column) => column.label),
+    localizeColumns(locale, result.displayColumns).map((column) => column.label),
     ...result.search.issues.map((issue) => result.displayColumns.map((column) => issueColumnValue(column, issue, rowContext))),
   ];
 

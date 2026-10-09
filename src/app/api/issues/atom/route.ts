@@ -13,6 +13,8 @@ import { atomResponse, resolveAtomUser } from "@/interface/http/atom-feed";
 import { loadGlobalIssueLookups, resolveGlobalIssueListScope } from "@/interface/http/global-issue-list";
 import { issueFeedEntries } from "@/interface/http/issue-feed";
 import { normalizeSearchParams, parseIssueListParams } from "@/interface/query/issue-query-params";
+import { translate } from "@/domain/i18n/messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
   const identifierById = new Map(scope.projects.map((entry) => [entry.project.id, entry.project.identifier]));
 
   const xml = buildAtomFeed(
-    { id: `${url.origin}/issues`, title: `next-pm - チケット`, selfUrl: url.toString() },
+    { id: `${url.origin}/issues`, title: `next-pm - ${translate(await localeForViewer(user), "export.issues")}`, selfUrl: url.toString() },
     issueFeedEntries(result.search.issues, lookups, url.origin, (issue) => `/projects/${identifierById.get(issue.projectId) ?? ""}/issues/${issue.id}`),
   );
 
