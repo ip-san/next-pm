@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { copyIssueAction } from "@/interface/actions/issue-actions";
 import type { Project } from "@/domain/project/entity";
 import type { Tracker } from "@/domain/tracker/entity";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 /**
  * Redmine's copy form (`IssuesController#new` with `copy_from`), reduced to the choices that
@@ -20,6 +22,7 @@ export function CopyIssueForm({
   canAddWatchers,
   targets,
   trackersByProjectId,
+  locale,
 }: {
   issueId: string;
   currentProjectId: string;
@@ -28,8 +31,10 @@ export function CopyIssueForm({
   canAddWatchers: boolean;
   targets: Project[];
   trackersByProjectId: Record<string, Tracker[]>;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const t = (key: MessageKey) => translate(locale, key);
   const [targetProjectId, setTargetProjectId] = useState(currentProjectId);
   const [targetTrackerId, setTargetTrackerId] = useState("");
   const [copyAttachments, setCopyAttachments] = useState(false);
@@ -66,7 +71,7 @@ export function CopyIssueForm({
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label htmlFor="copyTargetProjectId" className="text-sm font-medium">
-            コピー先プロジェクト
+            {t("issue.copyTarget")}
           </label>
           <select
             id="copyTargetProjectId"
@@ -86,7 +91,7 @@ export function CopyIssueForm({
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="copyTargetTrackerId" className="text-sm font-medium">
-            トラッカー
+            {t("issue.attr.trackerId")}
           </label>
           <select
             id="copyTargetTrackerId"
@@ -94,7 +99,7 @@ export function CopyIssueForm({
             onChange={(event) => setTargetTrackerId(event.target.value)}
             className="border rounded px-3 py-2"
           >
-            <option value="">(そのまま / 自動)</option>
+            <option value="">{t("issue.trackerAuto")}</option>
             {trackers.map((tracker) => (
               <option key={tracker.id} value={tracker.id}>
                 {tracker.name}
@@ -103,7 +108,7 @@ export function CopyIssueForm({
           </select>
         </div>
         <button type="submit" disabled={pending} className="border rounded px-3 py-2 disabled:opacity-50">
-          {pending ? "コピー中…" : "コピー"}
+          {pending ? t("issue.copying") : t("issue.copySubmit")}
         </button>
       </div>
 
@@ -111,19 +116,19 @@ export function CopyIssueForm({
         {hasAttachments ? (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={copyAttachments} onChange={(event) => setCopyAttachments(event.target.checked)} />
-            添付ファイルもコピー
+            {t("issue.copyAttachments")}
           </label>
         ) : null}
         {hasSubtasks ? (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={copySubtasks} onChange={(event) => setCopySubtasks(event.target.checked)} />
-            子チケットもコピー
+            {t("issue.copySubtasks")}
           </label>
         ) : null}
         {canAddWatchers ? (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={copyWatchers} onChange={(event) => setCopyWatchers(event.target.checked)} />
-            ウォッチャーもコピー
+            {t("issue.copyWatchers")}
           </label>
         ) : null}
       </div>

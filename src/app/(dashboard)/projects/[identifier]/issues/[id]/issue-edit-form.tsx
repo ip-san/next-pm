@@ -20,6 +20,8 @@ import { workflowRuleByAttribute } from "@/domain/workflow/field-permission-rule
 import { allowedNewStatusIds } from "@/domain/workflow/transition-rules";
 import { IssueAutocomplete } from "../issue-autocomplete";
 import { CustomFieldInputs } from "../custom-field-inputs";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 
 interface FormState {
   trackerId: string;
@@ -76,6 +78,7 @@ export function IssueEditForm({
   derivedFields,
   canEditAttributes,
   canSetNotesPrivate,
+  locale,
 }: {
   issue: Issue;
   parentIssueLabel: string | null;
@@ -118,8 +121,10 @@ export function IssueEditForm({
   canEditAttributes: boolean;
   /** `set_notes_private` — offers the private-note checkbox next to the comment box. */
   canSetNotesPrivate: boolean;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, setState] = useState<FormState>({
     trackerId: issue.trackerId,
     statusId: issue.statusId,
@@ -254,7 +259,7 @@ export function IssueEditForm({
       {!canEditAttributes ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="trackerId" className="text-sm font-medium">
-          トラッカー
+          {t("issue.attr.trackerId")}
         </label>
         <select
           id="trackerId"
@@ -274,7 +279,7 @@ export function IssueEditForm({
       {!canEditAttributes ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="statusId" className="text-sm font-medium">
-          ステータス
+          {t("issue.attr.statusId")}
         </label>
         {allowedStatuses.length > 0 ? (
           <select
@@ -292,17 +297,17 @@ export function IssueEditForm({
         ) : (
           // Mirrors Redmine's _attributes partial falling back to a plain label when
           // new_statuses_allowed_to is empty — the rest of the form stays editable.
-          <p className="text-sm">{statusName}（遷移できるステータスがありません）</p>
+          <p className="text-sm">{interpolate(t("issueForm.noTransitions"), { status: statusName })}</p>
         )}
       </div>
       )}
 
       {isReadOnly("subject") ? (
-        <ReadOnlyField label="件名" value={issue.subject} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.subject")} value={issue.subject} />
       ) : (
         <div className="flex flex-col gap-1">
           <label htmlFor="subject" className="text-sm font-medium">
-            {label("subject", "件名")}
+            {label("subject", t("issue.attr.subject"))}
           </label>
           <input
             id="subject"
@@ -314,11 +319,11 @@ export function IssueEditForm({
       )}
 
       {isDisabledForTracker("description") ? null : isReadOnly("description") ? (
-        <ReadOnlyField label="説明" value={issue.description} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.description")} value={issue.description} />
       ) : (
         <div className="flex flex-col gap-1">
           <label htmlFor="description" className="text-sm font-medium">
-            {label("description", "説明")}
+            {label("description", t("issue.attr.description"))}
           </label>
           <textarea
             id="description"
@@ -331,11 +336,11 @@ export function IssueEditForm({
       )}
 
       {isDisabledForTracker("priorityId") ? null : isReadOnly("priorityId") ? (
-        <ReadOnlyField label="優先度" value={priorities.find((p) => p.id === issue.priorityId)?.name ?? "?"} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.priorityId")} value={priorities.find((p) => p.id === issue.priorityId)?.name ?? "?"} />
       ) : (
         <div className="flex flex-col gap-1">
           <label htmlFor="priorityId" className="text-sm font-medium">
-            {label("priorityId", "優先度")}
+            {label("priorityId", t("issue.attr.priorityId"))}
           </label>
           <select
             id="priorityId"
@@ -353,11 +358,11 @@ export function IssueEditForm({
       )}
 
       {isDisabledForTracker("assignedToId") ? null : isReadOnly("assignedToId") ? (
-        <ReadOnlyField label="担当者" value={currentAssigneeLabel} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.assignedToId")} value={currentAssigneeLabel} />
       ) : (
         <div className="flex flex-col gap-1">
           <label htmlFor="assignedToId" className="text-sm font-medium">
-            {label("assignedToId", "担当者")}
+            {label("assignedToId", t("issue.attr.assignedToId"))}
           </label>
           <select
             id="assignedToId"
@@ -365,7 +370,7 @@ export function IssueEditForm({
             onChange={(event) => set("assignedToId", event.target.value)}
             className="border rounded px-3 py-2"
           >
-            <option value="">(未割当)</option>
+            <option value="">{t("issue.unassigned")}</option>
             {members.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.lastname} {member.firstname}
@@ -373,7 +378,7 @@ export function IssueEditForm({
             ))}
             {groups.map((group) => (
               <option key={group.id} value={`group:${group.id}`}>
-                {group.name}（グループ）
+                {interpolate(t("issue.groupName"), { name: group.name })}
               </option>
             ))}
             {/* The current assignee may have left the project; keep them selectable so saving
@@ -388,11 +393,11 @@ export function IssueEditForm({
       )}
 
       {isDisabledForTracker("categoryId") ? null : isReadOnly("categoryId") ? (
-        <ReadOnlyField label="カテゴリ" value={categories.find((c) => c.id === issue.categoryId)?.name ?? "(なし)"} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.categoryId")} value={categories.find((c) => c.id === issue.categoryId)?.name ?? t("issue.none")} />
       ) : (
         <div className="flex flex-col gap-1">
           <label htmlFor="categoryId" className="text-sm font-medium">
-            {label("categoryId", "カテゴリ")}
+            {label("categoryId", t("issue.attr.categoryId"))}
           </label>
           <select
             id="categoryId"
@@ -400,7 +405,7 @@ export function IssueEditForm({
             onChange={(event) => set("categoryId", event.target.value)}
             className="border rounded px-3 py-2"
           >
-            <option value="">(なし)</option>
+            <option value="">{t("issue.none")}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -411,11 +416,11 @@ export function IssueEditForm({
       )}
 
       {isDisabledForTracker("fixedVersionId") ? null : isReadOnly("fixedVersionId") ? (
-        <ReadOnlyField label="対象バージョン" value={versions.find((v) => v.id === issue.fixedVersionId)?.name ?? "(なし)"} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.fixedVersionId")} value={versions.find((v) => v.id === issue.fixedVersionId)?.name ?? t("issue.none")} />
       ) : (
         <div className="flex flex-col gap-1">
           <label htmlFor="fixedVersionId" className="text-sm font-medium">
-            {label("fixedVersionId", "対象バージョン")}
+            {label("fixedVersionId", t("issue.attr.fixedVersionId"))}
           </label>
           <select
             id="fixedVersionId"
@@ -423,7 +428,7 @@ export function IssueEditForm({
             onChange={(event) => set("fixedVersionId", event.target.value)}
             className="border rounded px-3 py-2"
           >
-            <option value="">(なし)</option>
+            <option value="">{t("issue.none")}</option>
             {versions.map((version) => (
               <option key={version.id} value={version.id}>
                 {version.name}
@@ -436,7 +441,7 @@ export function IssueEditForm({
       {canManageSubtasks && !isDisabledForTracker("parentId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="parentId" className="text-sm font-medium">
-            親チケット
+            {t("issue.attr.parentId")}
           </label>
           <IssueAutocomplete
             projectIdentifier={projectIdentifier}
@@ -450,11 +455,11 @@ export function IssueEditForm({
 
       <div className="flex gap-4 flex-wrap">
         {isDisabledForTracker("startDate") ? null : isReadOnly("startDate") ? (
-          <ReadOnlyField label="開始日" value={issue.startDate ?? "(なし)"} />
+          <ReadOnlyField locale={locale} label={t("issue.attr.startDate")} value={issue.startDate ?? t("issue.none")} />
         ) : (
           <div className="flex flex-col gap-1">
             <label htmlFor="startDate" className="text-sm font-medium">
-              {label("startDate", "開始日")}
+              {label("startDate", t("issue.attr.startDate"))}
             </label>
             <input
               id="startDate"
@@ -466,11 +471,11 @@ export function IssueEditForm({
           </div>
         )}
         {isDisabledForTracker("dueDate") ? null : isReadOnly("dueDate") ? (
-          <ReadOnlyField label="期日" value={issue.dueDate ?? "(なし)"} />
+          <ReadOnlyField locale={locale} label={t("issue.attr.dueDate")} value={issue.dueDate ?? t("issue.none")} />
         ) : (
           <div className="flex flex-col gap-1">
             <label htmlFor="dueDate" className="text-sm font-medium">
-              {label("dueDate", "期日")}
+              {label("dueDate", t("issue.attr.dueDate"))}
             </label>
             <input
               id="dueDate"
@@ -482,11 +487,11 @@ export function IssueEditForm({
           </div>
         )}
         {isDisabledForTracker("estimatedHours") ? null : isReadOnly("estimatedHours") ? (
-          <ReadOnlyField label="予定工数" value={issue.estimatedHours === null ? "(なし)" : String(issue.estimatedHours)} />
+          <ReadOnlyField locale={locale} label={t("issue.attr.estimatedHours")} value={issue.estimatedHours === null ? t("issue.none") : String(issue.estimatedHours)} />
         ) : (
           <div className="flex flex-col gap-1">
             <label htmlFor="estimatedHours" className="text-sm font-medium">
-              {label("estimatedHours", "予定工数")}
+              {label("estimatedHours", t("issue.attr.estimatedHours"))}
             </label>
             <input
               id="estimatedHours"
@@ -506,7 +511,7 @@ export function IssueEditForm({
         {isDisabledForTracker("doneRatio") ? null : doneRatioEditable && !isReadOnly("doneRatio") ? (
           <div className="flex flex-col gap-1">
             <label htmlFor="doneRatio" className="text-sm font-medium">
-              {label("doneRatio", "進捗率")}
+              {label("doneRatio", t("issue.attr.doneRatio"))}
             </label>
             <select
               id="doneRatio"
@@ -522,16 +527,16 @@ export function IssueEditForm({
             </select>
           </div>
         ) : (
-          <ReadOnlyField label="進捗率" value={`${issue.doneRatio} %`} />
+          <ReadOnlyField locale={locale} label={t("issue.attr.doneRatio")} value={`${issue.doneRatio} %`} />
         )}
       </div>
 
       {!canSetPrivate || isReadOnly("isPrivate") ? (
-        <ReadOnlyField label="プライベート" value={issue.isPrivate ? "はい" : "いいえ"} />
+        <ReadOnlyField locale={locale} label={t("issue.attr.isPrivate")} value={issue.isPrivate ? t("issue.yes") : t("issue.no")} />
       ) : (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={state.isPrivate} onChange={(event) => set("isPrivate", event.target.checked)} />
-          プライベートチケットにする
+          {t("issueForm.privateIssue")}
         </label>
       )}
 
@@ -539,6 +544,7 @@ export function IssueEditForm({
       <CustomFieldInputs
         choices={customFieldChoiceOptions(applicableCustomFields, { users: members.map((member) => ({ value: member.id, label: `${member.lastname} ${member.firstname}` })), versions: versions.map((version) => ({ value: version.id, label: version.name })) })}
         fields={applicableCustomFields}
+        locale={locale}
         values={state.customFieldValues}
         errors={fieldErrors}
         idPrefix="edit"
@@ -553,7 +559,7 @@ export function IssueEditForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="notes" className="text-sm font-medium">
-          コメント
+          {t("issueForm.notes")}
         </label>
         <textarea
           id="notes"
@@ -567,7 +573,7 @@ export function IssueEditForm({
       {canSetNotesPrivate ? (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={privateNote} onChange={(event) => setPrivateNote(event.target.checked)} />
-          プライベート注記にする（閲覧権限のある人だけに表示）
+          {t("issueForm.privateNotes")}
         </label>
       ) : null}
 
@@ -578,7 +584,7 @@ export function IssueEditForm({
       ) : null}
 
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "更新中…" : "更新"}
+        {pending ? t("issueForm.updating") : t("issueForm.update")}
       </button>
     </form>
   );
@@ -586,11 +592,11 @@ export function IssueEditForm({
 
 const DONE_RATIO_OPTIONS = Array.from({ length: 11 }, (_, index) => index * 10);
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyField({ label, value, locale }: { label: string; value: string; locale: Locale }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-sm font-medium text-gray-500">{label}</span>
-      <p className="text-sm whitespace-pre-wrap">{value || "(なし)"}</p>
+      <p className="text-sm whitespace-pre-wrap">{value || translate(locale, "issue.none")}</p>
     </div>
   );
 }

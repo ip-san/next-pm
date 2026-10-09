@@ -335,6 +335,7 @@ export default async function ProjectIssuesPage({
           ]}
           versions={versions.map((version) => ({ id: version.id, name: version.name }))}
           permissions={contextMenuPermissions}
+          locale={locale}
         />
         <table className="text-sm border-collapse">
           <thead>

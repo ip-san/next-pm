@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateJournalAction } from "@/interface/actions/journal-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 /**
  * Inline note editor, Redmine's journals#edit. Clearing the note of an entry that records
@@ -15,14 +17,17 @@ export function JournalEditForm({
   privateNotes,
   hasDetails,
   canSetNotesPrivate,
+  locale,
 }: {
   journalId: string;
   notes: string;
   privateNotes: boolean;
   hasDetails: boolean;
   canSetNotesPrivate: boolean;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const t = (key: MessageKey) => translate(locale, key);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(notes);
   const [draftPrivate, setDraftPrivate] = useState(privateNotes);
@@ -32,7 +37,7 @@ export function JournalEditForm({
   if (!editing) {
     return (
       <button type="button" onClick={() => setEditing(true)} className="text-xs underline self-start">
-        編集
+        {t("issue.edit")}
       </button>
     );
   }
@@ -57,11 +62,11 @@ export function JournalEditForm({
       {canSetNotesPrivate ? (
         <label className="flex items-center gap-2 text-xs">
           <input type="checkbox" checked={draftPrivate} onChange={(event) => setDraftPrivate(event.target.checked)} />
-          プライベート注記にする
+          {t("issue.privateNotesCheck")}
         </label>
       ) : null}
       {draft.trim().length === 0 && !hasDetails ? (
-        <p className="text-xs text-amber-700">本文を空にすると、このコメントは削除されます。</p>
+        <p className="text-xs text-amber-700">{t("issue.emptyNoteWarning")}</p>
       ) : null}
       {error ? (
         <p role="alert" className="text-xs text-red-600">
@@ -70,7 +75,7 @@ export function JournalEditForm({
       ) : null}
       <div className="flex items-center gap-2">
         <button type="submit" disabled={pending} className="border rounded px-2 py-1 text-xs disabled:opacity-50">
-          {pending ? "保存中…" : "保存"}
+          {pending ? t("issue.saving") : t("issue.save")}
         </button>
         <button
           type="button"
@@ -81,7 +86,7 @@ export function JournalEditForm({
           }}
           className="text-xs underline"
         >
-          キャンセル
+          {t("issue.cancel")}
         </button>
       </div>
     </form>

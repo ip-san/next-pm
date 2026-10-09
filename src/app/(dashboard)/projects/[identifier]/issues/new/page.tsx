@@ -17,6 +17,8 @@ import { DrizzleVersionRepository } from "@/infrastructure/db/repositories/versi
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { NewIssueForm } from "./new-issue-form";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
+import { currentLocale } from "@/interface/http/locale";
 
 export default async function NewIssuePage({
   params,
@@ -24,6 +26,8 @@ export default async function NewIssuePage({
   params: Promise<{ identifier: string }>;
 }) {
   const { identifier } = await params;
+  const locale = await currentLocale();
+  const t = (key: MessageKey) => translate(locale, key);
   const project = await new DrizzleProjectRepository().findByIdentifier(identifier);
   if (!project) {
     notFound();
@@ -58,13 +62,13 @@ export default async function NewIssuePage({
 
   return (
     <main className="p-8 flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{project.name} — 新しいチケット</h1>
+      <h1 className="text-xl font-semibold">{interpolate(t("issueForm.title"), { project: project.name })}</h1>
       {trackers.length === 0 ? (
         // Mirrors Redmine's error_no_tracker_in_project — showing an empty tracker <select>
         // let a submit reach the server with trackerId: "" (failing zod's uuid check with no
         // visible error, since the form never rendered one for this field), so the click
         // appeared to silently do nothing.
-        <p className="text-sm text-gray-600">このプロジェクトにはトラッカーが割り当てられていないため、チケットを作成できません。</p>
+        <p className="text-sm text-gray-600">{t("issueForm.noTracker")}</p>
       ) : (
         <NewIssueForm
           identifier={identifier}
@@ -82,6 +86,7 @@ export default async function NewIssuePage({
             can({ permission: "set_own_issues_private", project: projectContext, actor })
           }
           canManageSubtasks={can({ permission: "manage_subtasks", project: projectContext, actor })}
+          locale={locale}
         />
       )}
     </main>

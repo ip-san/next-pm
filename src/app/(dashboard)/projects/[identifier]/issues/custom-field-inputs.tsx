@@ -3,6 +3,8 @@
 import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { ChoiceOption } from "@/domain/custom-field/choices";
+import { DEFAULT_LOCALE, type Locale } from "@/domain/i18n/locales";
+import { translate } from "@/domain/i18n/messages";
 
 /**
  * Per-format input widgets for issue custom fields, shared by the create and edit forms —
@@ -22,6 +24,7 @@ export function CustomFieldInputs({
   onChange,
   idPrefix,
   choices = {},
+  locale = DEFAULT_LOCALE,
 }: {
   fields: CustomField[];
   values: Record<string, string>;
@@ -30,6 +33,8 @@ export function CustomFieldInputs({
   idPrefix: string;
   /** The options for each user / version field, from customFieldChoiceOptions. */
   choices?: Record<string, ChoiceOption[]>;
+  /** The language the fixed text (unset, yes, no) is written in. Japanese unless a caller passes the viewer's locale. */
+  locale?: Locale;
 }) {
   if (fields.length === 0) return null;
 
@@ -45,7 +50,7 @@ export function CustomFieldInputs({
               {field.name}
               {field.isRequired ? <span className="text-red-600"> *</span> : null}
             </label>
-            {renderInput(field, inputId, value, onChange, choices[field.id] ?? [])}
+            {renderInput(field, inputId, value, onChange, choices[field.id] ?? [], locale)}
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
           </div>
         );
@@ -60,6 +65,7 @@ function renderInput(
   value: string,
   onChange: (customFieldId: string, value: string) => void,
   choices: ChoiceOption[],
+  locale: Locale,
 ) {
   const className = "border rounded px-3 py-2";
   // A multiple-valued choice field is a multi-select; its value is the chosen options one per line.
@@ -102,15 +108,15 @@ function renderInput(
     case "bool":
       return (
         <select {...common}>
-          <option value="">(未設定)</option>
-          <option value="1">はい</option>
-          <option value="0">いいえ</option>
+          <option value="">{translate(locale, "issue.unset")}</option>
+          <option value="1">{translate(locale, "issue.yes")}</option>
+          <option value="0">{translate(locale, "issue.no")}</option>
         </select>
       );
     case "list":
       return (
         <select {...common}>
-          <option value="">(未設定)</option>
+          <option value="">{translate(locale, "issue.unset")}</option>
           {field.possibleValues.map((possibleValue) => (
             <option key={possibleValue} value={possibleValue}>
               {possibleValue}
@@ -126,7 +132,7 @@ function renderInput(
     case "enumeration":
       return (
         <select {...common} className={className}>
-          <option value="">(未設定)</option>
+          <option value="">{translate(locale, "issue.unset")}</option>
           {choices.map((choice) => (
             <option key={choice.value} value={choice.value}>
               {choice.label}

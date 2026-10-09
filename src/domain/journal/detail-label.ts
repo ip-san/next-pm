@@ -1,23 +1,25 @@
 import { CUSTOM_VALUE_SEPARATOR } from "@/domain/custom-value/separator";
+import { DEFAULT_LOCALE, type Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import type { JournalDetail } from "./entity";
 
-/** Japanese labels for the issue attributes that get journalled, mirroring Redmine's field_* keys. */
-const ATTR_LABELS: Record<string, string> = {
-  projectId: "プロジェクト",
-  trackerId: "トラッカー",
-  statusId: "ステータス",
-  priorityId: "優先度",
-  subject: "件名",
-  description: "説明",
-  assignedToId: "担当者",
-  parentId: "親チケット",
-  fixedVersionId: "対象バージョン",
-  categoryId: "カテゴリ",
-  isPrivate: "プライベート",
-  doneRatio: "進捗率",
-  estimatedHours: "予定工数",
-  startDate: "開始日",
-  dueDate: "期日",
+/** Message keys for the issue attributes that get journalled, mirroring Redmine's field_* keys. */
+const ATTR_LABEL_KEYS: Record<string, MessageKey> = {
+  projectId: "issue.attr.projectId",
+  trackerId: "issue.attr.trackerId",
+  statusId: "issue.attr.statusId",
+  priorityId: "issue.attr.priorityId",
+  subject: "issue.attr.subject",
+  description: "issue.attr.description",
+  assignedToId: "issue.attr.assignedToId",
+  parentId: "issue.attr.parentId",
+  fixedVersionId: "issue.attr.fixedVersionId",
+  categoryId: "issue.attr.categoryId",
+  isPrivate: "issue.attr.isPrivate",
+  doneRatio: "issue.attr.doneRatio",
+  estimatedHours: "issue.attr.estimatedHours",
+  startDate: "issue.attr.startDate",
+  dueDate: "issue.attr.dueDate",
 };
 
 /**
@@ -37,22 +39,27 @@ export type JournalDetailDescription =
   | { kind: "added"; label: string; value: string }
   | { kind: "removed"; label: string; value: string };
 
-const BLANK = "(なし)";
-
 /**
  * Port of the shape of Redmine's `details_to_strings`: one readable sentence per journal
  * detail rather than a raw column name and two ids.
  *
  * `description` reports as "updated" with no values, as Redmine does — the before and after
  * are whole documents and belong in a diff view, not in the history list.
+ *
+ * `locale` is the language the labels are written in; it defaults to Japanese, which is what the
+ * activity feed and mail have always shown.
  */
-export function describeJournalDetail(detail: JournalDetail, names: JournalDetailNames): JournalDetailDescription {
+export function describeJournalDetail(
+  detail: JournalDetail,
+  names: JournalDetailNames,
+  locale: Locale = DEFAULT_LOCALE,
+): JournalDetailDescription {
   if (detail.property === "attachment") {
     // The filename sits in newValue when added and oldValue when removed.
     const added = detail.newValue !== null;
     return {
       kind: added ? "added" : "removed",
-      label: "ファイル",
+      label: translate(locale, "issue.file"),
       value: (added ? detail.newValue : detail.oldValue) ?? shortId(detail.fieldName),
     };
   }
@@ -60,15 +67,15 @@ export function describeJournalDetail(detail: JournalDetail, names: JournalDetai
   if (detail.property === "relation") {
     return {
       kind: detail.newValue !== null ? "added" : "removed",
-      label: "関連チケット",
-      value: displayValue(detail.fieldName, (detail.newValue ?? detail.oldValue) ?? "", names),
+      label: translate(locale, "issue.related"),
+      value: displayValue(detail.fieldName, (detail.newValue ?? detail.oldValue) ?? "", names, locale),
     };
   }
 
   const label =
     detail.property === "cf"
       ? (names.customFields.get(detail.fieldName) ?? shortId(detail.fieldName))
-      : (ATTR_LABELS[detail.fieldName] ?? detail.fieldName);
+      : (ATTR_LABEL_KEYS[detail.fieldName] ? translate(locale, ATTR_LABEL_KEYS[detail.fieldName]) : detail.fieldName);
 
   if (detail.property === "attr" && detail.fieldName === "description") {
     return { kind: "updated", label };
@@ -77,13 +84,13 @@ export function describeJournalDetail(detail: JournalDetail, names: JournalDetai
   return {
     kind: "changed",
     label,
-    from: detail.oldValue === null ? BLANK : displayValue(detail.fieldName, detail.oldValue, names),
-    to: detail.newValue === null ? BLANK : displayValue(detail.fieldName, detail.newValue, names),
+    from: detail.oldValue === null ? translate(locale, "issue.none") : displayValue(detail.fieldName, detail.oldValue, names, locale),
+    to: detail.newValue === null ? translate(locale, "issue.none") : displayValue(detail.fieldName, detail.newValue, names, locale),
   };
 }
 
-function displayValue(fieldName: string, raw: string, names: JournalDetailNames): string {
-  if (fieldName === "isPrivate") return raw === "true" ? "はい" : "いいえ";
+function displayValue(fieldName: string, raw: string, names: JournalDetailNames, locale: Locale): string {
+  if (fieldName === "isPrivate") return translate(locale, raw === "true" ? "issue.yes" : "issue.no");
   // A multiple-valued custom field's values come one per line; each is shown on its own, joined with commas.
   return raw
     .split(CUSTOM_VALUE_SEPARATOR)
@@ -101,15 +108,15 @@ function shortId(raw: string): string {
 }
 
 /** One-line rendering of a described detail, for places with no room for markup. */
-export function summariseJournalDetail(described: JournalDetailDescription): string {
+export function summariseJournalDetail(described: JournalDetailDescription, locale: Locale = DEFAULT_LOCALE): string {
   switch (described.kind) {
     case "updated":
-      return `${described.label} を更新`;
+      return interpolate(translate(locale, "issue.journalUpdated"), { label: described.label });
     case "changed":
-      return `${described.label}: ${described.from} → ${described.to}`;
+      return interpolate(translate(locale, "issue.journalChanged"), { label: described.label, from: described.from, to: described.to });
     case "added":
-      return `${described.label} ${described.value} を追加`;
+      return interpolate(translate(locale, "issue.journalAdded"), { label: described.label, value: described.value });
     case "removed":
-      return `${described.label} ${described.value} を削除`;
+      return interpolate(translate(locale, "issue.journalRemoved"), { label: described.label, value: described.value });
   }
 }

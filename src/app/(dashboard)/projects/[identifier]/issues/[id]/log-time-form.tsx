@@ -5,6 +5,8 @@ import { logTimeAction, type LogTimeActionState } from "@/interface/actions/time
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { Enumeration } from "@/domain/enumeration/entity";
 import { CustomFieldInputs } from "../../time-entries/custom-field-inputs";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 const initialState: LogTimeActionState = { error: null };
 
@@ -15,13 +17,16 @@ export function LogTimeForm({
   customFields = [],
   /** Empty unless the actor holds log_time_for_other_users — then the user picker is shown. */
   assignableUsers = [],
+  locale,
 }: {
   issueId: string;
   projectIdentifier: string;
   activities: Enumeration[];
   customFields?: CustomField[];
   assignableUsers?: { id: string; name: string }[];
+  locale: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(logTimeAction, initialState);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -31,7 +36,7 @@ export function LogTimeForm({
       <input type="hidden" name="projectIdentifier" value={projectIdentifier} />
       <div className="flex flex-col gap-1">
         <label htmlFor="activityId" className="text-sm font-medium">
-          作業分類
+          {t("issue.activity")}
         </label>
         <select id="activityId" name="activityId" className="border rounded px-3 py-2">
           {activities.map((activity) => (
@@ -44,7 +49,7 @@ export function LogTimeForm({
       {assignableUsers.length > 0 ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="userId" className="text-sm font-medium">
-            ユーザー
+            {t("issue.user")}
           </label>
           <select id="userId" name="userId" className="border rounded px-3 py-2">
             {assignableUsers.map((user) => (
@@ -57,19 +62,19 @@ export function LogTimeForm({
       ) : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="hours" className="text-sm font-medium">
-          作業時間
+          {t("issue.hours")}
         </label>
         <input id="hours" name="hours" type="number" step="0.25" min="0.25" required className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="spentOn" className="text-sm font-medium">
-          日付
+          {t("issue.spentOn")}
         </label>
         <input id="spentOn" name="spentOn" type="date" defaultValue={today} required className="border rounded px-3 py-2" />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="comments" className="text-sm font-medium">
-          コメント
+          {t("issue.comment")}
         </label>
         <input id="comments" name="comments" className="border rounded px-3 py-2" />
       </div>
@@ -80,7 +85,7 @@ export function LogTimeForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "記録中…" : "工数を記録"}
+        {pending ? t("issue.logging") : t("issue.logTime")}
       </button>
     </form>
   );

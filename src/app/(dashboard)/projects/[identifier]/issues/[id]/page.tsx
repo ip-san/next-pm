@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { isPrivateIssueVisible } from "@/domain/issue/visibility";
 import { describeJournalDetail, summariseJournalDetail } from "@/domain/journal/detail-label";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { memberUserIds } from "@/domain/member/entity";
 import { canEditTimeEntry } from "@/domain/time-entry/visibility";
 import { listAssignableTimeEntryUsers } from "@/application/time-entries/assignable-users";
@@ -41,6 +42,7 @@ import { DrizzleWatcherRepository } from "@/infrastructure/db/repositories/watch
 import { DrizzleWorkflowFieldPermissionRepository } from "@/infrastructure/db/repositories/workflow-field-permission-repository";
 import { DrizzleWorkflowRepository } from "@/infrastructure/db/repositories/workflow-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
 import {
   issuesVisibilityRoles,
   journalViewerFor,
@@ -71,6 +73,8 @@ export default async function IssueDetailPage({
   params: Promise<{ identifier: string; id: string }>;
 }) {
   const { identifier, id } = await params;
+  const locale = await currentLocale();
+  const t = (key: MessageKey) => translate(locale, key);
 
   const [issue, statuses] = await Promise.all([
     new DrizzleIssueRepository().findById(id),
@@ -256,13 +260,13 @@ export default async function IssueDetailPage({
           raw.split(CUSTOM_VALUE_SEPARATOR).map(async (id) => {
             if (field.fieldFormat === "enumeration") {
               // A choice's name is not personal data; a removed choice still shows its name.
-              return field.enumerations?.find((choice) => choice.id === id)?.name ?? "(不明な選択肢)";
+              return field.enumerations?.find((choice) => choice.id === id)?.name ?? t("issue.unknownChoice");
             }
             if (field.fieldFormat === "user") {
               const candidate = await new DrizzleUserRepository().findById(id);
-              return candidate && isActiveUser(candidate) && canSeeUser(candidate.id) ? `${candidate.lastname} ${candidate.firstname}` : "(非公開)";
+              return candidate && isActiveUser(candidate) && canSeeUser(candidate.id) ? `${candidate.lastname} ${candidate.firstname}` : t("issue.hidden");
             }
-            return sharedVersionById.get(id) ?? "(非公開)";
+            return sharedVersionById.get(id) ?? t("issue.hidden");
           }),
         );
         choiceLabelByFieldId.set(field.id, labels.join(", "));
@@ -311,9 +315,9 @@ export default async function IssueDetailPage({
       ? (userLabelById.get(issue.assignedToId) ?? (await new DrizzleUserRepository().findById(issue.assignedToId)))
       : null;
   const currentAssigneeLabel = !issue.assignedToId
-    ? "(未割当)"
+    ? t("issue.unassigned")
     : issue.assignedToType === "group"
-      ? `${assignableGroups.find((group) => group.id === issue.assignedToId)?.name ?? issue.assignedToId}（グループ）`
+      ? interpolate(t("issue.groupName"), { name: assignableGroups.find((group) => group.id === issue.assignedToId)?.name ?? issue.assignedToId })
       : typeof assigneeUser === "string"
         ? assigneeUser
         : assigneeUser
@@ -327,7 +331,7 @@ export default async function IssueDetailPage({
           <p className="text-sm text-gray-500">{tracker?.name}</p>
           {visibleParentIssue ? (
             <p className="text-xs text-gray-500">
-              親チケット:{" "}
+              {t("issue.parentIssue")}{" "}
               <Link href={`/projects/${identifier}/issues/${visibleParentIssue.id}`} className="underline">
                 {visibleParentIssue.subject}
               </Link>
@@ -335,14 +339,14 @@ export default async function IssueDetailPage({
           ) : null}
           <h1 className="text-xl font-semibold">{issue.subject}</h1>
           <p className="text-sm text-gray-600">
-            ステータス: {statusById.get(issue.statusId)?.name ?? "?"} / 進捗: {issue.doneRatio}%
+            {interpolate(t("issue.statusProgress"), { status: statusById.get(issue.statusId)?.name ?? "?", ratio: issue.doneRatio })}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {user ? <WatchToggleForm issueId={issue.id} projectIdentifier={identifier} isWatching={isWatching} /> : null}
+          {user ? <WatchToggleForm issueId={issue.id} projectIdentifier={identifier} isWatching={isWatching} locale={locale} /> : null}
           {canDeleteIssues ? (
             <Link href={`/projects/${identifier}/issues/${issue.id}/destroy`} className="text-sm text-red-700 underline">
-              削除
+              {t("issue.delete")}
             </Link>
           ) : null}
         </div>
@@ -352,7 +356,7 @@ export default async function IssueDetailPage({
 
       {customFields.length > 0 ? (
         <section className="flex flex-col gap-1">
-          <h2 className="font-medium">カスタムフィールド</h2>
+          <h2 className="font-medium">{t("issue.customFields")}</h2>
           <dl className="text-sm flex flex-col gap-1">
             {customFields.map((field) => (
               <div key={field.id}>
@@ -363,7 +367,7 @@ export default async function IssueDetailPage({
                       {customValueByFieldId.get(field.id)}
                     </a>
                   ) : (
-                    (choiceLabelByFieldId.get(field.id) ?? customValueByFieldId.get(field.id)?.split(CUSTOM_VALUE_SEPARATOR).join(", ") ?? "(未設定)")
+                    (choiceLabelByFieldId.get(field.id) ?? customValueByFieldId.get(field.id)?.split(CUSTOM_VALUE_SEPARATOR).join(", ") ?? t("issue.unset"))
                   )}
                 </dd>
               </div>
@@ -373,7 +377,7 @@ export default async function IssueDetailPage({
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium">履歴</h2>
+        <h2 className="font-medium">{t("issue.history")}</h2>
         <ul className="flex flex-col gap-2 text-sm">
           {orderedJournals.map((journal) => {
             const reaction = reactionsByJournalId.get(journal.id) ?? { count: 0, reacted: false };
@@ -381,20 +385,24 @@ export default async function IssueDetailPage({
               <li key={journal.id} className="border rounded p-2 flex flex-col gap-1">
                 <p className="text-gray-500 text-xs">
                   {journal.createdAt.toISOString()}
-                  {journal.privateNotes ? <span className="ml-2 text-amber-700">（プライベート注記）</span> : null}
-                  {journal.updatedById ? <span className="ml-2">（編集済み）</span> : null}
+                  {journal.privateNotes ? <span className="ml-2 text-amber-700">{t("issue.privateNote")}</span> : null}
+                  {journal.updatedById ? <span className="ml-2">{t("issue.edited")}</span> : null}
                 </p>
                 {journal.notes ? <FormattedText project={project} text={journal.notes} /> : null}
                 {journal.details
                   .filter((detail) => detail.property !== "cf" || visibleFieldIds.has(detail.fieldName))
                   .map((detail, index) => {
-                  const described = describeJournalDetail(detail, {
-                    customFields: customFieldNameById,
-                    values: journalValueNames,
-                  });
+                  const described = describeJournalDetail(
+                    detail,
+                    {
+                      customFields: customFieldNameById,
+                      values: journalValueNames,
+                    },
+                    locale,
+                  );
                   return (
                     <p key={index} className="text-xs text-gray-600">
-                      {summariseJournalDetail(described)}
+                      {summariseJournalDetail(described, locale)}
                     </p>
                   );
                 })}
@@ -405,6 +413,7 @@ export default async function IssueDetailPage({
                     privateNotes={journal.privateNotes}
                     hasDetails={journal.details.length > 0}
                     canSetNotesPrivate={canSetNotesPrivate}
+                    locale={locale}
                   />
                 ) : null}
                 {user ? (
@@ -420,19 +429,20 @@ export default async function IssueDetailPage({
 
       {canEditThisIssue && moveTargets.some((candidate) => candidate.id !== project.id) ? (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">別プロジェクトへ移動</h2>
+          <h2 className="font-medium">{t("issue.moveToProject")}</h2>
           <MoveIssueForm
             issueId={issue.id}
             currentProjectId={project.id}
             targets={moveTargets}
             trackersByProjectId={moveTargetTrackers}
+            locale={locale}
           />
         </section>
       ) : null}
 
       {canCopyIssues && moveTargets.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">チケットのコピー</h2>
+          <h2 className="font-medium">{t("issue.copy")}</h2>
           <CopyIssueForm
             issueId={issue.id}
             currentProjectId={project.id}
@@ -441,17 +451,19 @@ export default async function IssueDetailPage({
             canAddWatchers={canAddWatchers}
             targets={moveTargets}
             trackersByProjectId={moveTargetTrackers}
+            locale={locale}
           />
         </section>
       ) : null}
 
       {canEditThisIssue || canAddNotes ? (
         <section>
-          <h2 className="font-medium mb-2">{canEditThisIssue ? "チケットの編集" : "コメントの追加"}</h2>
+          <h2 className="font-medium mb-2">{canEditThisIssue ? t("issue.editHeading") : t("issue.addNoteHeading")}</h2>
           <IssueEditForm
             issue={issue}
             parentIssueLabel={visibleParentIssue ? `#${visibleParentIssue.number} ${visibleParentIssue.subject}` : null}
             projectIdentifier={identifier}
+            locale={locale}
             trackers={trackers}
             statuses={statuses}
             transitions={transitions}
@@ -488,7 +500,7 @@ export default async function IssueDetailPage({
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">工数（合計 {totalHours}h）</h2>
+        <h2 className="font-medium">{interpolate(t("issue.timeEntries"), { hours: totalHours })}</h2>
         <ul className="flex flex-col gap-1 text-sm">
           {visibleTimeEntries.map((entry) => (
             <li key={entry.id} className="flex items-center gap-2">
@@ -504,7 +516,7 @@ export default async function IssueDetailPage({
               }) ? (
                 <>
                   <Link href={`/projects/${identifier}/time-entries/${entry.id}/edit`} className="text-xs underline">
-                    編集
+                    {t("issue.edit")}
                   </Link>
                   <DeleteTimeEntryButton projectIdentifier={identifier} entryId={entry.id} />
                 </>
@@ -519,13 +531,14 @@ export default async function IssueDetailPage({
             activities={activities}
             customFields={timeEntryCustomFields}
             assignableUsers={timeEntryAssignableUsers}
+            locale={locale}
           />
         ) : null}
       </section>
 
       {childIssues.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">子チケット</h2>
+          <h2 className="font-medium">{t("issue.childIssues")}</h2>
           <ul className="flex flex-col gap-1 text-sm">
             {childIssues.map((child) => (
               <li key={child.id}>
@@ -540,7 +553,7 @@ export default async function IssueDetailPage({
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium">関連チケット</h2>
+        <h2 className="font-medium">{t("issue.related")}</h2>
         <ul className="flex flex-col gap-1 text-sm">
           {relatedIssues.map(({ relation, issue: other }) =>
             other ? (
@@ -551,20 +564,20 @@ export default async function IssueDetailPage({
                 </Link>
                 <span className="text-gray-500 text-xs">— {statusById.get(other.statusId)?.name ?? "?"}</span>
                 {canManageRelations ? (
-                  <DeleteIssueRelationButton projectIdentifier={identifier} issueId={issue.id} relationId={relation.id} />
+                  <DeleteIssueRelationButton projectIdentifier={identifier} issueId={issue.id} relationId={relation.id} locale={locale} />
                 ) : null}
               </li>
             ) : null,
           )}
-          {relatedIssues.length === 0 ? <li className="text-gray-400 text-xs">関連チケットはありません。</li> : null}
+          {relatedIssues.length === 0 ? <li className="text-gray-400 text-xs">{t("issue.noRelated")}</li> : null}
         </ul>
-        {canManageRelations ? <IssueRelationForm projectIdentifier={identifier} issueId={issue.id} /> : null}
+        {canManageRelations ? <IssueRelationForm projectIdentifier={identifier} issueId={issue.id} locale={locale} /> : null}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">添付ファイル</h2>
+        <h2 className="font-medium">{t("issue.attachments")}</h2>
         <AttachmentList attachments={attachments} />
-        {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} /> : null}
+        {canAttachFiles ? <AttachmentUploadForm issueId={issue.id} projectIdentifier={identifier} locale={locale} /> : null}
       </section>
 
       {canViewWatchers || canAddWatchers || canDeleteWatchers ? (
@@ -578,6 +591,7 @@ export default async function IssueDetailPage({
             candidates={canAddWatchers ? watcherCandidates : []}
             canAdd={canAddWatchers}
             canRemove={canDeleteWatchers}
+            locale={locale}
           />
         </section>
       ) : null}

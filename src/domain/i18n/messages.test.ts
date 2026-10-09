@@ -1,8 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { LOCALES } from "./locales";
-import { translate, type MessageKey } from "./messages";
+import { interpolate, translate, type MessageKey } from "./messages";
 
-const KEYS: MessageKey[] = ["nav.projects", "login.submit", "my.title", "projects.title", "projectMenu.issues", "issues.title", "query.column.tracker", "query.operator.!*"];
+const KEYS: MessageKey[] = [
+  "nav.projects",
+  "login.submit",
+  "my.title",
+  "projects.title",
+  "projectMenu.issues",
+  "issues.title",
+  "query.column.tracker",
+  "query.operator.!*",
+  "issue.attr.subject",
+  "issue.statusProgress",
+  "issueForm.create",
+];
 
 describe("translate", () => {
   it("returns the Japanese text as it has always been", () => {
@@ -19,5 +31,10 @@ describe("translate", () => {
         expect(translate(locale, key).length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("fills the placeholders of a translated sentence in either locale", () => {
+    expect(interpolate(translate("ja", "issue.statusProgress"), { status: "新規", ratio: 40 })).toBe("ステータス: 新規 / 進捗: 40%");
+    expect(interpolate(translate("en", "issue.statusProgress"), { status: "New", ratio: 40 })).toBe("Status: New / Progress: 40%");
   });
 });

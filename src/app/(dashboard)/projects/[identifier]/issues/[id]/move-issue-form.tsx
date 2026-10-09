@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { moveIssueAction } from "@/interface/actions/issue-actions";
 import type { Project } from "@/domain/project/entity";
 import type { Tracker } from "@/domain/tracker/entity";
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 
 /**
  * Redmine's "move to another project" control, kept separate from the edit form on purpose:
@@ -17,14 +19,17 @@ export function MoveIssueForm({
   currentProjectId,
   targets,
   trackersByProjectId,
+  locale,
 }: {
   issueId: string;
   currentProjectId: string;
   targets: Project[];
   /** Trackers enabled per candidate project, so the tracker select follows the chosen target. */
   trackersByProjectId: Record<string, Tracker[]>;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const t = (key: MessageKey) => translate(locale, key);
   const otherProjects = targets.filter((project) => project.id !== currentProjectId);
   const [targetProjectId, setTargetProjectId] = useState(otherProjects[0]?.id ?? "");
   const [targetTrackerId, setTargetTrackerId] = useState("");
@@ -53,7 +58,7 @@ export function MoveIssueForm({
     <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1">
         <label htmlFor="targetProjectId" className="text-sm font-medium">
-          移動先プロジェクト
+          {t("issue.moveTarget")}
         </label>
         <select
           id="targetProjectId"
@@ -73,7 +78,7 @@ export function MoveIssueForm({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="targetTrackerId" className="text-sm font-medium">
-          トラッカー
+          {t("issue.attr.trackerId")}
         </label>
         <select
           id="targetTrackerId"
@@ -83,7 +88,7 @@ export function MoveIssueForm({
         >
           {/* Blank keeps Redmine's rule: the current tracker if the target enables it,
               otherwise that project's first one. */}
-          <option value="">(そのまま / 自動)</option>
+          <option value="">{t("issue.trackerAuto")}</option>
           {trackers.map((tracker) => (
             <option key={tracker.id} value={tracker.id}>
               {tracker.name}
@@ -92,7 +97,7 @@ export function MoveIssueForm({
         </select>
       </div>
       <button type="submit" disabled={pending} className="border rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "移動中…" : "移動"}
+        {pending ? t("issue.moving") : t("issue.move")}
       </button>
       {error ? (
         <p role="alert" className="text-sm text-red-600 w-full">

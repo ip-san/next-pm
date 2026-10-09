@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { bulkUpdateIssuesAction } from "@/interface/actions/bulk-edit-actions";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 
 export interface ContextMenuOption {
   id: string;
@@ -36,6 +38,7 @@ export function IssueContextMenu({
   assignees,
   versions,
   permissions,
+  locale,
 }: {
   projectIdentifier: string;
   basePath: string;
@@ -46,8 +49,10 @@ export function IssueContextMenu({
   assignees: ContextMenuOption[];
   versions: ContextMenuOption[];
   permissions: IssueContextMenuPermissions;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const t = (key: MessageKey) => translate(locale, key);
   const [menu, setMenu] = useState<{ x: number; y: number; ids: string[] } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,21 +135,21 @@ export function IssueContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      aria-label="チケットの操作"
+      aria-label={t("issue.menuLabel")}
       style={{ top: menu.y, left: menu.x }}
       className="fixed z-50 min-w-56 bg-white border rounded shadow-lg py-1"
     >
-      <p className="px-3 py-1 text-xs text-gray-500">{selection.length}件を選択中</p>
+      <p className="px-3 py-1 text-xs text-gray-500">{interpolate(t("issue.menuSelected"), { count: selection.length })}</p>
 
       {permissions.edit ? (
         <>
-          {picker("ステータス", "statusId", statuses)}
-          {picker("トラッカー", "trackerId", trackers)}
-          {picker("優先度", "priorityId", priorities)}
-          {picker("担当者", "assignedToId", assignees, { id: "__none__", name: "(未割当)" })}
-          {picker("対象バージョン", "fixedVersionId", versions, { id: "__none__", name: "(なし)" })}
+          {picker(t("issue.attr.statusId"), "statusId", statuses)}
+          {picker(t("issue.attr.trackerId"), "trackerId", trackers)}
+          {picker(t("issue.attr.priorityId"), "priorityId", priorities)}
+          {picker(t("issue.attr.assignedToId"), "assignedToId", assignees, { id: "__none__", name: t("issue.unassigned") })}
+          {picker(t("issue.attr.fixedVersionId"), "fixedVersionId", versions, { id: "__none__", name: t("issue.none") })}
           {picker(
-            "進捗率",
+            t("issue.attr.doneRatio"),
             "doneRatio",
             Array.from({ length: 11 }, (_, index) => ({ id: String(index * 10), name: `${index * 10} %` })),
           )}
@@ -160,17 +165,17 @@ export function IssueContextMenu({
       <div className="border-t mt-1 pt-1 flex flex-col">
         {permissions.edit ? (
           <Link href={`${basePath}/bulk-edit?${selection.map((id) => `ids=${id}`).join("&")}`} className="px-3 py-1 text-sm hover:bg-gray-100">
-            一括編集…
+            {t("issue.bulkEdit")}
           </Link>
         ) : null}
         {permissions.copy && selection.length === 1 ? (
           <Link href={`${basePath}/${selection[0]}`} className="px-3 py-1 text-sm hover:bg-gray-100">
-            コピー…（単票から）
+            {t("issue.copyFromSingle")}
           </Link>
         ) : null}
         {permissions.delete && selection.length === 1 ? (
           <Link href={`${basePath}/${selection[0]}/destroy`} className="px-3 py-1 text-sm text-red-700 hover:bg-gray-100">
-            削除…
+            {t("issue.deleteMenu")}
           </Link>
         ) : null}
       </div>

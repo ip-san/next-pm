@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { describeJournalDetail, type JournalDetailNames } from "./detail-label";
+import { describeJournalDetail, summariseJournalDetail, type JournalDetailNames } from "./detail-label";
 import type { JournalDetail } from "./entity";
 
 const names: JournalDetailNames = {
@@ -77,5 +77,23 @@ describe("describeJournalDetail", () => {
   it("renders the private flag as a word rather than a boolean literal", () => {
     const result = describeJournalDetail(detail({ fieldName: "isPrivate", oldValue: "false", newValue: "true" }), names);
     expect(result).toEqual({ kind: "changed", label: "プライベート", from: "いいえ", to: "はい" });
+  });
+
+  it("writes the labels in the locale it is asked for, and in Japanese by default", () => {
+    const change = detail({ fieldName: "isPrivate", oldValue: "false", newValue: "true" });
+    expect(describeJournalDetail(change, names)).toEqual({ kind: "changed", label: "プライベート", from: "いいえ", to: "はい" });
+    expect(describeJournalDetail(change, names, "en")).toEqual({ kind: "changed", label: "Private", from: "No", to: "Yes" });
+    expect(describeJournalDetail(detail({ fieldName: "description", oldValue: "a", newValue: "b" }), names, "en")).toEqual({
+      kind: "updated",
+      label: "Description",
+    });
+  });
+
+  it("summarises a description in the locale it is asked for", () => {
+    const changed = describeJournalDetail(detail({ fieldName: "dueDate", oldValue: null, newValue: "2026-10-01" }), names, "en");
+    expect(summariseJournalDetail(changed, "en")).toBe("Due date: (None) → 2026-10-01");
+    expect(summariseJournalDetail(describeJournalDetail(detail({ fieldName: "dueDate", oldValue: null, newValue: "2026-10-01" }), names))).toBe(
+      "期日: (なし) → 2026-10-01",
+    );
   });
 });

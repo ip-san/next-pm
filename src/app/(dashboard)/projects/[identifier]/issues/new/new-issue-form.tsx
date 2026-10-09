@@ -9,6 +9,8 @@ import { createIssueFormAction } from "@/interface/actions/issue-actions";
 import { createIssueFormSchema, type CreateIssueFormValues } from "@/interface/actions/issue-schemas";
 import { IssueAutocomplete } from "../issue-autocomplete";
 import { CustomFieldInputs } from "../custom-field-inputs";
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { isCoreFieldDisabled, type TrackerCoreField } from "@/domain/tracker/core-fields";
 import type { CustomField } from "@/domain/custom-field/entity";
 import type { Tracker } from "@/domain/tracker/entity";
@@ -31,6 +33,7 @@ export function NewIssueForm({
   doneRatioEditable,
   canSetPrivate,
   canManageSubtasks,
+  locale,
 }: {
   identifier: string;
   projectId: string;
@@ -47,8 +50,10 @@ export function NewIssueForm({
   canSetPrivate: boolean;
   /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
   canManageSubtasks: boolean;
+  locale: Locale;
 }) {
   const router = useRouter();
+  const t = (key: MessageKey) => translate(locale, key);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const {
@@ -113,7 +118,7 @@ export function NewIssueForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="trackerId" className="text-sm font-medium">
-          トラッカー
+          {t("issue.attr.trackerId")}
         </label>
         <select id="trackerId" {...register("trackerId")} className="border rounded px-3 py-2">
           {trackers.map((tracker) => (
@@ -128,7 +133,7 @@ export function NewIssueForm({
       {off("priorityId") ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="priorityId" className="text-sm font-medium">
-          優先度
+          {t("issue.attr.priorityId")}
         </label>
         <select id="priorityId" {...register("priorityId")} className="border rounded px-3 py-2">
           {priorities.map((priority) => (
@@ -143,7 +148,7 @@ export function NewIssueForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="subject" className="text-sm font-medium">
-          件名
+          {t("issue.attr.subject")}
         </label>
         <input id="subject" {...register("subject")} className="border rounded px-3 py-2" />
         {errors.subject ? <p className="text-sm text-red-600">{errors.subject.message}</p> : null}
@@ -152,7 +157,7 @@ export function NewIssueForm({
       {off("description") ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="description" className="text-sm font-medium">
-          説明
+          {t("issue.attr.description")}
         </label>
         <textarea id="description" {...register("description")} className="border rounded px-3 py-2" rows={5} />
       </div>
@@ -161,10 +166,10 @@ export function NewIssueForm({
       {off("assignedToId") ? null : (
       <div className="flex flex-col gap-1">
         <label htmlFor="assignedToId" className="text-sm font-medium">
-          担当者
+          {t("issue.attr.assignedToId")}
         </label>
         <select id="assignedToId" {...register("assignedToId")} className="border rounded px-3 py-2">
-          <option value="">(未割当)</option>
+          <option value="">{t("issue.unassigned")}</option>
           {members.map((member) => (
             <option key={member.id} value={member.id}>
               {member.firstname} {member.lastname}
@@ -172,7 +177,7 @@ export function NewIssueForm({
           ))}
           {groups.map((group) => (
             <option key={group.id} value={`group:${group.id}`}>
-              {group.name}（グループ）
+              {interpolate(t("issue.groupName"), { name: group.name })}
             </option>
           ))}
         </select>
@@ -182,10 +187,10 @@ export function NewIssueForm({
       {categories.length > 0 && !off("categoryId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="categoryId" className="text-sm font-medium">
-            カテゴリ
+            {t("issue.attr.categoryId")}
           </label>
           <select id="categoryId" {...register("categoryId")} className="border rounded px-3 py-2">
-            <option value="">(なし)</option>
+            <option value="">{t("issue.none")}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -198,10 +203,10 @@ export function NewIssueForm({
       {versions.length > 0 && !off("fixedVersionId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="fixedVersionId" className="text-sm font-medium">
-            対象バージョン
+            {t("issue.attr.fixedVersionId")}
           </label>
           <select id="fixedVersionId" {...register("fixedVersionId")} className="border rounded px-3 py-2">
-            <option value="">(なし)</option>
+            <option value="">{t("issue.none")}</option>
             {versions.map((version) => (
               <option key={version.id} value={version.id}>
                 {version.name}
@@ -214,7 +219,7 @@ export function NewIssueForm({
       {canManageSubtasks && !off("parentId") ? (
         <div className="flex flex-col gap-1">
           <label htmlFor="parentId" className="text-sm font-medium">
-            親チケット
+            {t("issue.attr.parentId")}
           </label>
           <IssueAutocomplete
             projectIdentifier={identifier}
@@ -230,7 +235,7 @@ export function NewIssueForm({
         {off("startDate") ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="startDate" className="text-sm font-medium">
-            開始日
+            {t("issue.attr.startDate")}
           </label>
           <input id="startDate" type="date" {...register("startDate")} className="border rounded px-3 py-2" />
         </div>
@@ -238,7 +243,7 @@ export function NewIssueForm({
         {off("dueDate") ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="dueDate" className="text-sm font-medium">
-            期日
+            {t("issue.attr.dueDate")}
           </label>
           <input id="dueDate" type="date" {...register("dueDate")} className="border rounded px-3 py-2" />
         </div>
@@ -246,7 +251,7 @@ export function NewIssueForm({
         {off("estimatedHours") ? null : (
         <div className="flex flex-col gap-1">
           <label htmlFor="estimatedHours" className="text-sm font-medium">
-            予定工数
+            {t("issue.attr.estimatedHours")}
           </label>
           <input id="estimatedHours" type="number" min="0" step="0.1" {...register("estimatedHours")} className="border rounded px-3 py-2" />
         </div>
@@ -254,7 +259,7 @@ export function NewIssueForm({
         {doneRatioEditable && !off("doneRatio") ? (
           <div className="flex flex-col gap-1">
             <label htmlFor="doneRatio" className="text-sm font-medium">
-              進捗率
+              {t("issue.attr.doneRatio")}
             </label>
             {/* Mirrors Redmine's `Issue.use_field_for_done_ratio?` guard, with its default
                 issue_done_ratio_interval of 10 (next-pm has no setting for the interval). */}
@@ -272,7 +277,7 @@ export function NewIssueForm({
       {canSetPrivate ? (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" {...register("isPrivate")} />
-          プライベートチケットにする
+          {t("issueForm.privateIssue")}
         </label>
       ) : null}
 
@@ -282,6 +287,7 @@ export function NewIssueForm({
         values={customFieldValues}
         errors={fieldErrors}
         idPrefix="new"
+        locale={locale}
         onChange={(customFieldId, value) =>
           setValue("customFieldValues", { ...customFieldValues, [customFieldId]: value })
         }
@@ -290,7 +296,7 @@ export function NewIssueForm({
       {serverError ? <p className="text-sm text-red-600">{serverError}</p> : null}
 
       <button type="submit" disabled={isSubmitting} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {isSubmitting ? "作成中…" : "チケットを作成"}
+        {isSubmitting ? t("issueForm.creating") : t("issueForm.create")}
       </button>
     </form>
   );
