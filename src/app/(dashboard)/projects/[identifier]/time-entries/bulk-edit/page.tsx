@@ -18,6 +18,8 @@ import { BulkTimeEntryForm } from "./bulk-time-entry-form";
  * Redmine's TimelogController#bulk_edit. Each entry is checked again when the change is saved
  * (bulkUpdateTimeEntriesAction), so this page lists the selection for the viewer and offers the form.
  */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function BulkEditTimeEntriesPage({
   params,
   searchParams,
@@ -44,7 +46,8 @@ export default async function BulkEditTimeEntriesPage({
 
   // Only the entries the viewer may both see and edit are listed, with the same predicates the single
   // edit page applies, so a selection can't be used to read an entry's hours or comments.
-  const requested = Array.isArray(ids) ? ids : ids ? [ids] : [];
+  // Ids come from the query string; anything that isn't a uuid is dropped before it reaches the database.
+  const requested = (Array.isArray(ids) ? ids : ids ? [ids] : []).filter((id) => UUID_PATTERN.test(id));
   const timeEntryRepository = new DrizzleTimeEntryRepository();
   const candidates = (await Promise.all(requested.map((id) => timeEntryRepository.findById(id))))
     .filter((entry) => entry !== null)

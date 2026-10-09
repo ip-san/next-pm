@@ -25,7 +25,8 @@ export const dynamic = "force-dynamic";
 
 function normalizeIds(ids: string | string[] | undefined): string[] {
   if (!ids) return [];
-  return Array.isArray(ids) ? ids : [ids];
+  // Ids come from the query string; anything that isn't a uuid is dropped before it reaches the database.
+  return (Array.isArray(ids) ? ids : [ids]).filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 }
 
 export default async function BulkEditPage({
