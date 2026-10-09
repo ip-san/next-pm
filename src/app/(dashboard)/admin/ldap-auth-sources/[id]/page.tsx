@@ -6,6 +6,7 @@ import { DrizzleLdapAuthSourceRepository } from "@/infrastructure/db/repositorie
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { LdapAuthSourceForm } from "../ldap-auth-source-form";
 import { DeleteLdapAuthSourceButton } from "./delete-ldap-auth-source-button";
+import { TestLdapConnectionButton } from "./test-ldap-connection-button";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function EditLdapAuthSourcePage({ params }: { params: Promi
     <main className="p-8 flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{interpolate(translate(locale, "admin.ldap.editTitle"), { name: source.name })}</h1>
       <LdapAuthSourceForm locale={locale} source={source} />
+      <TestLdapConnectionButton locale={locale} id={source.id} />
       <DeleteLdapAuthSourceButton locale={locale} id={source.id} />
       <Link href="/admin/ldap-auth-sources" className="text-sm underline">
         {translate(locale, "admin.users.backToList")}

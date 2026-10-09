@@ -83,6 +83,11 @@ export class DrizzleLdapAuthSourceRepository implements LdapAuthSourceRepository
     return rows.map((row) => ({ source: toDomain(row), encryptedPassword: row.accountPasswordEncrypted }));
   }
 
+  async findWithEncryptedPassword(id: string): Promise<{ source: LdapAuthSource; encryptedPassword: string | null } | null> {
+    const [row] = await db.select().from(ldapAuthSources).where(eq(ldapAuthSources.id, id)).limit(1);
+    return row ? { source: toDomain(row), encryptedPassword: row.accountPasswordEncrypted } : null;
+  }
+
   async countUsers(id: string): Promise<number> {
     const [row] = await db.select({ total: count() }).from(users).where(eq(users.ldapAuthSourceId, id));
     return row?.total ?? 0;

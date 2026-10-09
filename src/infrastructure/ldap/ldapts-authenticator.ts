@@ -1,4 +1,4 @@
-import { Client } from "ldapts";
+import { Client, InvalidCredentialsError, ResultCodeError } from "ldapts";
 import type { LdapConfig } from "@/domain/ldap/config";
 import type { LdapAuthenticator, LdapUserAttributes } from "@/domain/ldap/authenticator";
 import { loginSearchFilter, substituteLoginInAccount } from "@/domain/ldap/dn";
@@ -70,10 +70,46 @@ export class LdaptsAuthenticator implements LdapAuthenticator {
     }
   }
 
+  /**
+   * Mirrors AuthSourceLdap#test_connection: opens a connection and, when the source has a service account (one without
+   * "$login") and its password, binds as it. Resolves when that works and rejects with the reason otherwise. Without a
+   * service account the connection is opened with an anonymous bind, and a directory that answers by refusing that
+   * bind still counts as reachable.
+   */
+  async testConnection(): Promise<void> {
+    const client = this.newClient();
+    try {
+      const account = this.config.account;
+      if (account && !account.includes("$login") && this.config.accountPassword) {
+        try {
+          await client.bind(account, this.config.accountPassword);
+        } catch (error) {
+          // Redmine's error_ldap_bind_credentials.
+          if (error instanceof InvalidCredentialsError) throw new Error("Invalid LDAP Account/Password");
+          throw error;
+        }
+        return;
+      }
+      try {
+        await client.bind("", "");
+      } catch (error) {
+        if (!(error instanceof ResultCodeError)) throw error;
+      }
+    } finally {
+      await client.unbind().catch(() => {});
+    }
+  }
+
   private newClient(): Client {
     return new Client({
       url: this.config.url,
-      tlsOptions: { rejectUnauthorized: this.config.verifyPeer },
+      // Redmine's with_timeout wraps the test in the source's timeout; a host that never answers fails here instead
+      // of holding the admin's request open.
+      connectTimeout: 10_000,
+      timeout: 10_000,
+      // ldapts switches to TLS whenever tlsOptions holds a value, even for an ldap:// URL, so they are only given for
+      // ldaps://. Passing them always made every plain-LDAP connection attempt a TLS handshake.
+      ...(this.config.url.startsWith("ldaps:") ? { tlsOptions: { rejectUnauthorized: this.config.verifyPeer } } : {}),
     });
   }
 }
