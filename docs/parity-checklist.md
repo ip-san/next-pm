@@ -251,7 +251,7 @@
 | attachments | done | `/api/attachments/[id]`(ダウンロード、API キー可)と `/api/attachments/[id]/thumbnail`、`/api/v1/uploads`、`/api/v1/attachments/[id]` の GET / PATCH(PUT エイリアス有り)/ DELETE |
 | files | done | `GET /api/v1/projects/[identifier]/files`(バージョン情報・ダイジェスト・DL 数付き)と `POST`(`uploads` のトークンを `version_id` / `description` 付きで引き換え) |
 | my/account | done | GET / PUT。PUT は本人のプロフィールと設定(`user`: 氏名・メール・言語・通知方式、`pref`: メール非公開・タイムゾーン・履歴の並び・自己通知)を部分更新する。画面と同じ `updateMyAccount` を使うので、メール変更の重複確認と通知も同じ。認証は API キーまたは Cookie(CSRF 確認あり) |
-| OAuth2 プロバイダ | missing | 本家 `oauth2_applications` |
+| OAuth2 プロバイダ | out of scope | 本家は gem `doorkeeper`(5.8.2)による認可サーバー(`oauth2_applications_controller.rb`)。認可コード(PKCE)、トークンの保管、権限のスコープ、取り消しを持つ、認証に直結する仕組み。API キーで個別の連携は足りるので、このループでは作らない。必要になったら専用の作業として設計する |
 
 ## 13. 横断機能
 
@@ -275,7 +275,7 @@
 | Textile 記法 | missing | 本家は既定で両対応(旧データの互換用) |
 | 本文プレビュー | missing(保留) | 本家 `PreviewsController` は Textile / Markdown を HTML にして返す。next-pm の説明文・コメントは記法を持たず、`whitespace-pre-wrap` の素のテキストとして表示している(`issues/[id]/page.tsx`)ため、プレビューの対象となる描画が無い。記法を入れる時(§4 の大項目「Textile 記法」)にあわせて作る |
 | 国際化(i18n) | missing | 文言が直書き。ユーザー別言語設定も無い |
-| テーマ切り替え | missing | |
+| テーマ切り替え | out of scope | 本家の `ui_theme` は、インストールされたテーマのフォルダ(CSS と画像)を選ぶ設定で、本体にはテーマが同梱されていない(この版の `public/themes` は無い)。この app は背景・文字色の変数だけがあり(`globals.css`)、灰色などの色は 101 ファイルに 248 か所直書きされているため、変数だけでは大半の画面が変わらない。ダーク表示は OS の設定に従う既存の仕組みのまま |
 | 添付画像のサムネイル/インライン表示 | done | 課題・Wiki・文書の添付一覧で表示。`/api/attachments/[id]/thumbnail` が sharp で PNG に再エンコードして返す(本家の `Redmine::Thumbnail.convert_available?` と同じく、使えない環境ではサムネイル無しに縮退)。本家 `Redmine::Thumbnail.generate` と同じくレンダラに渡す前に**ファイル先頭のバイト列から実フォーマットを判定**し、許可したラスタ形式以外(SVG/HTML 等)は宣言された content-type が `image/png` でも 404。サイズは 50 刻み・最大 800 に丸め、40 メガピクセル超の入力はデコードしない。元のバイト列は常に `Content-Disposition: attachment` のままなので SVG/HTML はインライン描画されない |
 | キーボード操作 | done | マイページのブロック移動をボタン化するなど、本家より意図的にアクセシブルにしている箇所がある(§15) |
 
