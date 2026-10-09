@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState, useState } from "react";
 import { createUserAction, updateUserAction } from "@/interface/actions/admin-user-actions";
 import type { AdminActionState } from "@/interface/actions/admin-action-state";
@@ -33,11 +35,14 @@ export function UserForm({
   user,
   isSelf = false,
   authModeOptions,
+  locale = "ja",
 }: {
   user?: User;
   isSelf?: boolean;
   authModeOptions: AuthModeOptionsView;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(user ? updateUserAction : createUserAction, initialState);
   const [authMode, setAuthMode] = useState(initialAuthMode(user));
   const isInternal = authMode === INTERNAL_AUTH_MODE;
@@ -54,7 +59,7 @@ export function UserForm({
       {user ? <input type="hidden" name="userId" value={user.id} /> : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="login" className="text-sm font-medium">
-          ログインID
+          {t("login.loginId")}
         </label>
         <input
           id="login"
@@ -67,7 +72,7 @@ export function UserForm({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="mail" className="text-sm font-medium">
-          メールアドレス
+          {t("account.mail")}
         </label>
         <input
           id="mail"
@@ -81,7 +86,7 @@ export function UserForm({
       <div className="flex gap-3">
         <div className="flex flex-col gap-1 flex-1">
           <label htmlFor="lastname" className="text-sm font-medium">
-            姓
+            {t("admin.users.lastname")}
           </label>
           <input
             id="lastname"
@@ -93,7 +98,7 @@ export function UserForm({
         </div>
         <div className="flex flex-col gap-1 flex-1">
           <label htmlFor="firstname" className="text-sm font-medium">
-            名
+            {t("admin.users.firstname")}
           </label>
           <input
             id="firstname"
@@ -106,7 +111,7 @@ export function UserForm({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="authMode" className="text-sm font-medium">
-          認証方式
+          {t("admin.users.authMode")}
         </label>
         <select
           id="authMode"
@@ -115,8 +120,8 @@ export function UserForm({
           onChange={(event) => setAuthMode(event.target.value)}
           className="border rounded px-3 py-2"
         >
-          <option value={INTERNAL_AUTH_MODE}>内部(パスワード)</option>
-          {showEnvOption ? <option value={ENV_LDAP_AUTH_MODE}>LDAP(環境変数の設定)</option> : null}
+          <option value={INTERNAL_AUTH_MODE}>{t("admin.users.authInternal")}</option>
+          {showEnvOption ? <option value={ENV_LDAP_AUTH_MODE}>{t("admin.users.authEnv")}</option> : null}
           {authModeOptions.ldapSources.map((source) => (
             <option key={source.id} value={source.id}>
               LDAP: {source.name}
@@ -126,8 +131,8 @@ export function UserForm({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="password" className="text-sm font-medium">
-          パスワード
-          {!isInternal ? "(LDAP認証では不要)" : user?.authSource === "ldap" ? "(内部認証への切り替えには必須)" : user ? "(変更する場合のみ)" : ""}
+          {t("login.password")}
+          {!isInternal ? t("admin.users.pwNotNeeded") : user?.authSource === "ldap" ? t("admin.users.pwRequiredToSwitch") : user ? t("admin.users.pwOnlyIfChanging") : ""}
         </label>
         <input
           id="password"
@@ -143,7 +148,7 @@ export function UserForm({
       {isSelf ? null : (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="isAdmin" defaultChecked={user?.isAdmin} />
-          システム管理者
+          {t("admin.users.isAdmin")}
         </label>
       )}
       {state.error ? (
@@ -152,7 +157,7 @@ export function UserForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50">
-        {pending ? "保存中…" : user ? "変更を保存" : "ユーザーを追加"}
+        {pending ? t("issue.saving") : user ? t("admin.users.saveChanges") : t("admin.users.add")}
       </button>
     </form>
   );

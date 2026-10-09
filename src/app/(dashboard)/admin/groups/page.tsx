@@ -2,12 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
 import { currentUserFromCookies } from "@/interface/http/current-user";
+import { currentLocale } from "@/interface/http/locale";
+import { translate } from "@/domain/i18n/messages";
 import { GroupForm } from "./group-form";
 
 // See admin/issue-statuses/page.tsx — same reasoning, opt out of static prerendering.
 export const dynamic = "force-dynamic";
 
 export default async function GroupsPage() {
+  const locale = await currentLocale();
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
     notFound();
@@ -18,15 +21,15 @@ export default async function GroupsPage() {
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">グループ</h1>
+        <h1 className="text-xl font-semibold">{translate(locale, "admin.groups")}</h1>
         <Link href="/admin/users" className="underline text-sm">
-          ユーザー
+          {translate(locale, "admin.users")}
         </Link>
       </div>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">名前</th>
+            <th className="pr-4 py-1">{translate(locale, "issueCategories.name")}</th>
             <th className="pr-4 py-1" />
           </tr>
         </thead>
@@ -43,13 +46,13 @@ export default async function GroupsPage() {
           {groups.length === 0 ? (
             <tr>
               <td colSpan={2} className="text-gray-400 py-2">
-                グループはありません。
+                {translate(locale, "admin.groups.none")}
               </td>
             </tr>
           ) : null}
         </tbody>
       </table>
-      <GroupForm />
+      <GroupForm locale={locale} />
     </main>
   );
 }

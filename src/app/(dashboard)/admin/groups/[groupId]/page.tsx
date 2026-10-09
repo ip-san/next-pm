@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleCustomValueRepository } from "@/infrastructure/db/repositories/custom-value-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
@@ -12,6 +14,7 @@ import { RemoveUserFromGroupButton } from "./remove-user-button";
 export const dynamic = "force-dynamic";
 
 export default async function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
+  const locale = await currentLocale();
   const { groupId } = await params;
   const user = await currentUserFromCookies();
   if (!user?.isAdmin) {
@@ -35,14 +38,14 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
   return (
     <main className="p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">グループ: {group.name}</h1>
-        <DeleteGroupButton groupId={group.id} />
+        <h1 className="text-xl font-semibold">{interpolate(translate(locale, "admin.groups.title"), { name: group.name })}</h1>
+        <DeleteGroupButton locale={locale} groupId={group.id} />
       </div>
 
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">ユーザー</th>
+            <th className="pr-4 py-1">{translate(locale, "admin.users")}</th>
             <th className="pr-4 py-1" />
           </tr>
         </thead>
@@ -53,23 +56,23 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
                 {groupUser.login} ({groupUser.lastname} {groupUser.firstname})
               </td>
               <td className="pr-4 py-1">
-                <RemoveUserFromGroupButton groupId={group.id} userId={groupUser.id} />
+                <RemoveUserFromGroupButton locale={locale} groupId={group.id} userId={groupUser.id} />
               </td>
             </tr>
           ))}
           {users.length === 0 ? (
             <tr>
               <td colSpan={2} className="text-gray-400 py-2">
-                メンバーはいません。
+                {translate(locale, "admin.groups.noMembers")}
               </td>
             </tr>
           ) : null}
         </tbody>
       </table>
 
-      <AddUserToGroupForm groupId={group.id} />
+      <AddUserToGroupForm locale={locale} groupId={group.id} />
       {groupFields.length > 0 ? (
-        <GroupCustomFieldsForm groupId={group.id} customFields={groupFields} customValueByFieldId={customValueByFieldId} />
+        <GroupCustomFieldsForm locale={locale} groupId={group.id} customFields={groupFields} customValueByFieldId={customValueByFieldId} />
       ) : null}
     </main>
   );

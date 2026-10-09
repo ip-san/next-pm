@@ -34,6 +34,8 @@ const KEYS: MessageKey[] = [
   "admin.settings.general",
   "admin.duration.unlimited",
   "admin.mail.apiKeyHelp",
+  "admin.users.deleteConfirm",
+  "admin.groups.title",
 ];
 
 describe("translate", () => {

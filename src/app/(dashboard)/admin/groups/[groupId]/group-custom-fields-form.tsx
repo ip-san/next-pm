@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateGroupCustomFieldValuesAction, type GroupActionState } from "@/interface/actions/group-actions";
 import type { CustomField } from "@/domain/custom-field/entity";
@@ -12,16 +14,19 @@ export function GroupCustomFieldsForm({
   groupId,
   customFields,
   customValueByFieldId,
+  locale = "ja",
 }: {
   groupId: string;
   customFields: CustomField[];
   customValueByFieldId: Record<string, string | null>;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(updateGroupCustomFieldValuesAction, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-sm border-t pt-4">
-      <h2 className="text-sm font-medium">カスタムフィールド</h2>
+      <h2 className="text-sm font-medium">{t("admin.customFields")}</h2>
       <input type="hidden" name="groupId" value={groupId} />
       {customFields.map((field) => (
         <div key={field.id} className="flex flex-col gap-1 text-sm">
@@ -36,7 +41,7 @@ export function GroupCustomFieldsForm({
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 self-start">
-        {pending ? "保存中…" : "保存"}
+        {pending ? t("issue.saving") : t("issue.save")}
       </button>
     </form>
   );

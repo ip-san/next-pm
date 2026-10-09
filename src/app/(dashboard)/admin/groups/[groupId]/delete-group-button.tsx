@@ -1,12 +1,15 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteGroupAction, type GroupActionState } from "@/interface/actions/group-actions";
 
 const initialState: GroupActionState = { error: null };
 
-export function DeleteGroupButton({ groupId }: { groupId: string }) {
+export function DeleteGroupButton({ locale = "ja", groupId }: { groupId: string; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(deleteGroupAction, initialState);
   const router = useRouter();
 
@@ -24,7 +27,7 @@ export function DeleteGroupButton({ groupId }: { groupId: string }) {
         </p>
       ) : null}
       <button type="submit" disabled={pending} className="border rounded px-3 py-2 text-sm text-red-600">
-        グループを削除
+        {t("admin.groups.delete")}
       </button>
     </form>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import {
   addUserMembershipAction,
@@ -21,12 +23,15 @@ function MembershipRowControls({
   member,
   roles,
   editable,
+  locale = "ja",
 }: {
   userId: string;
   member: Member;
   roles: Role[];
   editable: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [updateState, updateFormAction, updating] = useActionState(updateUserMembershipAction, initialState);
   const [removeState, removeFormAction, removing] = useActionState(removeUserMembershipAction, initialState);
   const error = updateState.error ?? removeState.error;
@@ -39,7 +44,7 @@ function MembershipRowControls({
           .filter((role) => current.has(role.id))
           .map((role) => role.name)
           .join(", ")}
-        （グループから継承）
+        {t("admin.users.inheritedFromGroup")}
       </span>
     );
   }
@@ -56,14 +61,14 @@ function MembershipRowControls({
           </label>
         ))}
         <button type="submit" disabled={updating} className="border rounded px-2 py-1 disabled:opacity-50">
-          {updating ? "保存中…" : "保存"}
+          {updating ? t("issue.saving") : t("issue.save")}
         </button>
       </form>
       <form action={removeFormAction}>
         <input type="hidden" name="userId" value={userId} />
         <input type="hidden" name="memberId" value={member.id} />
         <button type="submit" disabled={removing} className="text-red-700 underline disabled:opacity-50">
-          {removing ? "削除中…" : "削除"}
+          {removing ? t("admin.deleting") : t("issue.delete")}
         </button>
       </form>
       {error ? (
@@ -81,22 +86,25 @@ export function UserMemberships({
   rows,
   roles,
   joinableProjects,
+  locale = "ja",
 }: {
   userId: string;
   rows: MembershipRow[];
   roles: Role[];
   joinableProjects: Project[];
+  locale?: Locale;
 }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [state, formAction, pending] = useActionState(addUserMembershipAction, initialState);
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">プロジェクト</h2>
+      <h2 className="text-base font-semibold">{t("admin.projects")}</h2>
       <table className="text-sm border-collapse">
         <thead>
           <tr className="text-left border-b">
-            <th className="pr-4 py-1">プロジェクト</th>
-            <th className="pr-4 py-1">ロール</th>
+            <th className="pr-4 py-1">{t("admin.projects")}</th>
+            <th className="pr-4 py-1">{t("members.roles")}</th>
           </tr>
         </thead>
         <tbody>
@@ -104,7 +112,7 @@ export function UserMemberships({
             <tr key={member.id} className="border-b align-top">
               <td className="pr-4 py-1">{project?.name ?? "?"}</td>
               <td className="pr-4 py-1">
-                <MembershipRowControls
+                <MembershipRowControls locale={locale}
                   userId={userId}
                   member={member}
                   roles={roles}
@@ -116,7 +124,7 @@ export function UserMemberships({
           {rows.length === 0 ? (
             <tr>
               <td colSpan={2} className="text-gray-400 py-2">
-                所属しているプロジェクトはありません。
+                {t("admin.users.noMemberships")}
               </td>
             </tr>
           ) : null}
@@ -128,10 +136,10 @@ export function UserMemberships({
           <input type="hidden" name="userId" value={userId} />
           <div className="flex flex-col gap-1">
             <label htmlFor="projectId" className="text-sm font-medium">
-              プロジェクト
+              {t("admin.projects")}
             </label>
             <select id="projectId" name="projectId" required defaultValue="" className="border rounded px-3 py-2">
-              <option value="">選択してください</option>
+              <option value="">{t("admin.select")}</option>
               {joinableProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -140,7 +148,7 @@ export function UserMemberships({
             </select>
           </div>
           <fieldset className="flex flex-wrap items-center gap-2 text-sm">
-            <legend className="text-sm font-medium">ロール</legend>
+            <legend className="text-sm font-medium">{t("members.roles")}</legend>
             {roles.map((role) => (
               <label key={role.id} className="flex items-center gap-1">
                 <input type="checkbox" name="roleIds" value={role.id} />
@@ -154,7 +162,7 @@ export function UserMemberships({
             </p>
           ) : null}
           <button type="submit" disabled={pending} className="border rounded px-3 py-2 disabled:opacity-50">
-            {pending ? "追加中…" : "プロジェクトに追加"}
+            {pending ? t("issue.adding") : t("admin.users.addToProject")}
           </button>
         </form>
       )}

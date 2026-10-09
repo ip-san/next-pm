@@ -1,5 +1,7 @@
 "use client";
 
+import type { Locale } from "@/domain/i18n/locales";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import Link from "next/link";
 import { useActionState } from "react";
 import { changeUserStatusAction, deleteUserAction } from "@/interface/actions/admin-user-actions";
@@ -16,7 +18,8 @@ const initialState: AdminActionState = { error: null };
  * None of them is offered for the acting admin's own row, matching the `User.current`
  * exclusions in UsersController.
  */
-export function UserRowControls({ user, isSelf }: { user: User; isSelf: boolean }) {
+export function UserRowControls({ locale = "ja", user, isSelf }: { user: User; isSelf: boolean; locale?: Locale }) {
+  const t = (key: MessageKey) => translate(locale, key);
   const [statusState, statusFormAction, changing] = useActionState(changeUserStatusAction, initialState);
   const [deleteState, deleteFormAction, deleting] = useActionState(deleteUserAction, initialState);
   const error = statusState.error ?? deleteState.error;
@@ -24,7 +27,7 @@ export function UserRowControls({ user, isSelf }: { user: User; isSelf: boolean 
   return (
     <span className="flex items-center gap-3 text-sm">
       <Link href={`/admin/users/${user.id}`} className="text-blue-700 underline">
-        編集
+        {t("issue.edit")}
       </Link>
       {isSelf ? null : (
         <>
@@ -37,7 +40,7 @@ export function UserRowControls({ user, isSelf }: { user: User; isSelf: boolean 
               disabled={changing}
               className="underline disabled:opacity-50"
             >
-              {user.status === "active" ? "ロック" : user.status === "locked" ? "ロック解除" : "有効化"}
+              {user.status === "active" ? t("admin.users.lock") : user.status === "locked" ? t("admin.users.unlock") : t("admin.users.activate")}
             </button>
           </form>
           <form
@@ -45,7 +48,7 @@ export function UserRowControls({ user, isSelf }: { user: User; isSelf: boolean 
             onSubmit={(event) => {
               if (
                 !window.confirm(
-                  `ユーザー「${user.login}」を削除しますか? 作成したチケットなどは匿名ユーザーに引き継がれます。`,
+                  interpolate(t("admin.users.deleteConfirm"), { login: user.login }),
                 )
               ) {
                 event.preventDefault();
@@ -54,7 +57,7 @@ export function UserRowControls({ user, isSelf }: { user: User; isSelf: boolean 
           >
             <input type="hidden" name="userId" value={user.id} />
             <button type="submit" disabled={deleting} className="text-red-700 underline disabled:opacity-50">
-              {deleting ? "削除中…" : "削除"}
+              {deleting ? t("admin.deleting") : t("issue.delete")}
             </button>
           </form>
         </>

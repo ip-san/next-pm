@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { currentLocale } from "@/interface/http/locale";
+import { interpolate, translate } from "@/domain/i18n/messages";
 import { notFound } from "next/navigation";
 import { loadAuthModeOptions } from "@/application/users/load-auth-mode-options";
 import { ROLE_BUILTIN_MEMBER } from "@/domain/role/entity";
@@ -14,6 +16,7 @@ import { UserMemberships } from "./user-memberships";
 export const dynamic = "force-dynamic";
 
 export default async function EditUserPage({ params }: { params: Promise<{ userId: string }> }) {
+  const locale = await currentLocale();
   const { userId } = await params;
   const actor = await currentUserFromCookies();
   if (!actor?.isAdmin) {
@@ -43,17 +46,17 @@ export default async function EditUserPage({ params }: { params: Promise<{ userI
   return (
     <main className="p-8 flex flex-col gap-8">
       <h1 className="text-xl font-semibold">
-        ユーザー: {user.login} ({user.lastname} {user.firstname})
+        {interpolate(translate(locale, "admin.users.editTitle"), { login: user.login, name: `${user.lastname} ${user.firstname}` })}
       </h1>
-      <UserForm user={user} isSelf={user.id === actor.id} authModeOptions={authModeOptions} />
-      <UserMemberships
+      <UserForm locale={locale} user={user} isSelf={user.id === actor.id} authModeOptions={authModeOptions} />
+      <UserMemberships locale={locale}
         userId={user.id}
         rows={rows}
         roles={givableRoles}
         joinableProjects={projects.filter((project) => !joinedProjectIds.has(project.id))}
       />
       <Link href="/admin/users" className="text-sm text-blue-700 underline">
-        一覧へ戻る
+        {translate(locale, "admin.users.backToList")}
       </Link>
     </main>
   );
