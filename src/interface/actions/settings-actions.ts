@@ -200,6 +200,8 @@ const updateAuthSettingsSchema = z.object({
   sessionLifetimeMinutes: z.coerce.number().int().min(0),
   sessionTimeoutMinutes: z.coerce.number().int().min(0),
   maxAdditionalEmails: z.coerce.number().int().min(0),
+  emailDomainsAllowed: z.string().default(""),
+  emailDomainsDenied: z.string().default(""),
 });
 
 /** Redmine's Administration > Settings > Authentication tab (SettingsController#edit, tab=authentication). */
@@ -225,6 +227,8 @@ export async function updateAuthSettingsAction(
     sessionLifetimeMinutes: formData.get("sessionLifetimeMinutes"),
     sessionTimeoutMinutes: formData.get("sessionTimeoutMinutes"),
     maxAdditionalEmails: formData.get("maxAdditionalEmails"),
+    emailDomainsAllowed: formData.get("emailDomainsAllowed") ?? "",
+    emailDomainsDenied: formData.get("emailDomainsDenied") ?? "",
   });
   if (!parsed.success) {
     return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };

@@ -10,6 +10,7 @@ import { ACTIVATION_TOKEN_TTL_MS, hashUserToken } from "@/domain/user-token/enti
 import type { UserTokenRepository } from "@/domain/user-token/repository";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
+import { emailDomainMessage, rejectedEmailDomain } from "@/domain/email-address/domain-policy";
 
 export class SelfRegistrationDisabledError extends Error {}
 export class RegistrationInputError extends Error {}
@@ -64,6 +65,12 @@ export async function registerAccount(
   );
   if (policyFailure) {
     throw new RegistrationInputError(policyFailure);
+  }
+
+  // EmailAddress#validate_email_domain; the visitor isn't signed in, so the message doesn't name the domain.
+  const rejectedDomain = rejectedEmailDomain(input.mail, { allowed: settings.emailDomainsAllowed, denied: settings.emailDomainsDenied });
+  if (rejectedDomain) {
+    throw new RegistrationInputError(emailDomainMessage(rejectedDomain, { anonymous: true }));
   }
 
   if (await repositories.userRepository.findByLogin(input.login)) {

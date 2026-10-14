@@ -206,6 +206,7 @@ export const ERROR_MESSAGES_EN: Record<string, string> = {
   "ファイルが見つかりません。": "The file was not found.",
   "件名を入力してください。": "Enter a subject.",
   "正しいメールアドレスを入力してください。": "Enter a valid email address.",
+  "メールアドレスは許可されていないドメインを含んでいます ({0})": "Email contains a domain not allowed ({0})",
   "LDAP認証のユーザーにはパスワードを設定できません。": "A password can't be set for an LDAP user.",
   "そのログインIDは既に使用されています。": "That login is already taken.",
   "そのメールアドレスは既に使用されています。": "That email address is already taken.",

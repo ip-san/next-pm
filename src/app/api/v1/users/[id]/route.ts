@@ -12,6 +12,7 @@ import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/in
 import { verifyCsrf } from "@/interface/http/csrf";
 import { localizeMessage } from "@/domain/i18n/error-messages";
 import { localeForViewer } from "@/interface/http/locale";
+import { emailDomainPolicy } from "@/interface/http/email-domain-policy";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -99,6 +100,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       { userRepository, userAdminRepository: userRepository },
       {
         userId: id,
+        emailDomainPolicy: await emailDomainPolicy(),
         login: body.data.login ?? target.login,
         mail: body.data.mail ?? target.mail,
         firstname: body.data.firstname ?? target.firstname,

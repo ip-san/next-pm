@@ -9,6 +9,7 @@ import type { JobRepository } from "@/domain/job/repository";
 import { enqueueNotification } from "@/application/jobs/enqueue-notification";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
+import { rejectedEmailDomain, type EmailDomainPolicy } from "@/domain/email-address/domain-policy";
 
 /** Mirrors Redmine's Token::LOST_PASSWORD_VALIDITY (1 day), same as request-password-reset.ts. */
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -25,6 +26,8 @@ export interface CreateUserFromEmailInput {
   /** False for `no_account_notice` / `no_notification`. */
   notify: boolean;
   appOrigin: string;
+  /** The allowed and denied email domains; a sender outside them gets no account, as the User save fails in Redmine. */
+  emailDomainPolicy?: EmailDomainPolicy;
 }
 
 /**
@@ -47,6 +50,7 @@ export async function createUserFromEmail(
   },
   input: CreateUserFromEmailInput,
 ): Promise<User | null> {
+  if (input.emailDomainPolicy && rejectedEmailDomain(input.mail, input.emailDomainPolicy)) return null;
   const login = await availableLogin(repositories.userRepository, input.mail);
   const { firstname, lastname } = splitName(input.mail, input.fullname);
   const salt = generateSalt();

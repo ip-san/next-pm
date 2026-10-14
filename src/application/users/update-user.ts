@@ -1,11 +1,14 @@
 import { generateSalt, hashPassword } from "@/domain/user/password";
 import type { UserAdminRepository, UserRepository } from "@/domain/user/repository";
+import { emailDomainMessage, rejectedEmailDomain, type EmailDomainPolicy } from "@/domain/email-address/domain-policy";
 
 /** A refusal the caller can show as-is: the admin form and the REST API both print the message. */
 export class UserUpdateError extends Error {}
 
 export interface UpdateUserInput {
   userId: string;
+  /** The allowed and denied email domains, checked when the address changes. */
+  emailDomainPolicy?: EmailDomainPolicy;
   login: string;
   mail: string;
   firstname: string;
@@ -33,6 +36,11 @@ export async function updateUser(
   const existing = await userRepository.findById(input.userId);
   if (!existing || existing.status === "anonymous") {
     throw new UserUpdateError("ユーザーが見つかりません。");
+  }
+
+  if (input.emailDomainPolicy && input.mail.toLowerCase() !== existing.mail.toLowerCase()) {
+    const rejected = rejectedEmailDomain(input.mail, input.emailDomainPolicy);
+    if (rejected) throw new UserUpdateError(emailDomainMessage(rejected));
   }
 
   const byLogin = await userRepository.findByLogin(input.login);

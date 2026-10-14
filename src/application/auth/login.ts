@@ -4,6 +4,7 @@ import type { UserRepository } from "@/domain/user/repository";
 import type { User } from "@/domain/user/entity";
 import type { TwofaMode } from "@/domain/settings/auth-settings";
 import { ldapSourceForUser, type LdapSource, type LdapUserAttributes } from "@/domain/ldap/authenticator";
+import { rejectedEmailDomain, type EmailDomainPolicy } from "@/domain/email-address/domain-policy";
 
 export type LoginResult =
   /** The password (or LDAP bind) was wrong — deliberately indistinguishable from "no such login". */
@@ -19,6 +20,8 @@ export interface LoginRepositories {
   userRepository: UserRepository;
   /** The LDAP sources a sign-in may be checked against; empty when LDAP isn't configured (local-only sign-in). */
   ldapSources: LdapSource[];
+  /** The allowed and denied email domains; an on-the-fly account whose directory address is outside them isn't created. */
+  emailDomainPolicy?: EmailDomainPolicy;
 }
 
 /**
@@ -80,6 +83,9 @@ async function provisionLdapUser(
   // would either violate the unique constraint or, for an additional address, quietly produce
   // two accounts reachable by the same address.
   if (await repositories.userRepository.findByMail(attrs.mail)) {
+    return { ok: false, reason: "invalid_credentials" };
+  }
+  if (repositories.emailDomainPolicy && rejectedEmailDomain(attrs.mail, repositories.emailDomainPolicy)) {
     return { ok: false, reason: "invalid_credentials" };
   }
 

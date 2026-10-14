@@ -21,6 +21,8 @@ export const AUTH_SETTING_KEYS = [
   "session_lifetime",
   "session_timeout",
   "max_additional_emails",
+  "email_domains_allowed",
+  "email_domains_denied",
 ] as const;
 
 export type AuthSettingKey = (typeof AUTH_SETTING_KEYS)[number];
@@ -65,6 +67,9 @@ export const AUTH_SETTING_DEFAULTS: Record<AuthSettingKey, string> = {
   session_timeout: "0",
   // Redmine's own default.
   max_additional_emails: "5",
+  // Redmine's defaults: empty lists, so every domain is allowed.
+  email_domains_allowed: "",
+  email_domains_denied: "",
 };
 
 export interface AuthSettings {
@@ -83,6 +88,10 @@ export interface AuthSettings {
   /** Minutes of inactivity after which a session dies. 0 = unlimited. */
   sessionTimeoutMinutes: number;
   maxAdditionalEmails: number;
+  /** Domains an address may use (email_domains_allowed); empty allows any. */
+  emailDomainsAllowed: string;
+  /** Domains an address may not use (email_domains_denied). */
+  emailDomainsDenied: string;
 }
 
 function nonNegativeIntOr(raw: string | undefined, fallback: number): number {
@@ -127,6 +136,8 @@ export function resolveAuthSettings(overrides: Record<string, string>): AuthSett
     sessionLifetimeMinutes: nonNegativeIntOr(overrides.session_lifetime, Number(AUTH_SETTING_DEFAULTS.session_lifetime)),
     sessionTimeoutMinutes: nonNegativeIntOr(overrides.session_timeout, Number(AUTH_SETTING_DEFAULTS.session_timeout)),
     maxAdditionalEmails: nonNegativeIntOr(overrides.max_additional_emails, Number(AUTH_SETTING_DEFAULTS.max_additional_emails)),
+    emailDomainsAllowed: overrides.email_domains_allowed ?? AUTH_SETTING_DEFAULTS.email_domains_allowed,
+    emailDomainsDenied: overrides.email_domains_denied ?? AUTH_SETTING_DEFAULTS.email_domains_denied,
   };
 }
 

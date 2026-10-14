@@ -3,6 +3,7 @@ import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repos
 import { DrizzlePasswordResetTokenRepository } from "@/infrastructure/db/repositories/password-reset-token-repository";
 import { DrizzleUserPreferencesRepository } from "@/infrastructure/db/repositories/user-preferences-repository";
 import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-repository";
+import { DrizzleSettingsRepository } from "@/infrastructure/db/repositories/settings-repository";
 
 /** What updateMyAccount needs; shared by the account screen and the REST account resource. */
 export function accountRepositories() {
@@ -12,5 +13,6 @@ export function accountRepositories() {
     passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository(),
     jobRepository: new DrizzleJobRepository(),
     userPreferencesRepository: new DrizzleUserPreferencesRepository(),
+    settingsRepository: new DrizzleSettingsRepository(),
   };
 }

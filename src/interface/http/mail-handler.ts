@@ -77,6 +77,7 @@ import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "./r
 import { triggerIssueWebhook } from "./webhook-trigger";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { translate } from "@/domain/i18n/messages";
+import { emailDomainPolicy } from "@/interface/http/email-domain-policy";
 
 /**
  * next-pm's MailHandler — the port of Redmine's `MailHandler#receive` / `#dispatch`. It lives
@@ -197,6 +198,7 @@ export async function receiveEmail(raw: string, options: MailHandlerOptions): Pr
         jobRepository: new DrizzleJobRepository(),
       },
       {
+        emailDomainPolicy: await emailDomainPolicy(),
         mail: email.fromEmail,
         fullname: email.fromName,
         defaultGroupNames: options.defaultGroup ?? null,

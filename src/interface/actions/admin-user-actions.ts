@@ -26,6 +26,8 @@ import type { AdminActionState } from "./admin-action-state";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
 import { localizeError } from "@/interface/http/localize-error";
+import { emailDomainPolicy } from "@/interface/http/email-domain-policy";
+import { emailDomainMessage, rejectedEmailDomain } from "@/domain/email-address/domain-policy";
 
 export type { AdminActionState } from "./admin-action-state";
 
@@ -129,6 +131,10 @@ export async function createUserAction(_prevState: AdminActionState, formData: F
   if (await userRepository.findByMail(parsed.data.mail)) {
     return { error: await localizeError("そのメールアドレスは既に使用されています。") };
   }
+  const rejectedDomain = rejectedEmailDomain(parsed.data.mail, await emailDomainPolicy());
+  if (rejectedDomain) {
+    return { error: await localizeError(emailDomainMessage(rejectedDomain)) };
+  }
 
   const salt = isLdap ? "" : generateSalt();
   try {
@@ -189,6 +195,7 @@ export async function updateUserAction(_prevState: AdminActionState, formData: F
       { userRepository: new DrizzleUserRepository(), userAdminRepository: new DrizzleUserRepository() },
       {
         userId: parsed.data.userId,
+        emailDomainPolicy: await emailDomainPolicy(),
         login: parsed.data.login,
         mail: parsed.data.mail,
         firstname: parsed.data.firstname,

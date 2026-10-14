@@ -160,6 +160,13 @@ describe("registerAccount", () => {
     expect(jobs).toEqual([]);
   });
 
+  it("refuses an address outside the allowed domains without naming them to the visitor", async () => {
+    const { repositories, created } = makeRepositories({ all: [] });
+    const settings = resolveAuthSettings({ self_registration: "3", email_domains_allowed: "corp.test" });
+    await expect(registerAccount(repositories, INPUT, settings, ORIGIN)).rejects.toThrow("正しいメールアドレスを入力してください。");
+    expect(created).toEqual([]);
+  });
+
   it("never lets a registrant grant themselves administrator", async () => {
     const { repositories, created } = makeRepositories();
     await registerAccount(repositories, { ...INPUT, ...({ isAdmin: true } as object) }, settingsFor("3"), ORIGIN);

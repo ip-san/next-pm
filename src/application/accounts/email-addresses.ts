@@ -7,6 +7,9 @@ import type { UserRepository } from "@/domain/user/repository";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { interpolate, translate } from "@/domain/i18n/messages";
 import type { Locale } from "@/domain/i18n/locales";
+import { emailDomainMessage, rejectedEmailDomain } from "@/domain/email-address/domain-policy";
+import type { SettingsRepository } from "@/domain/settings/repository";
+import { resolveAuthSettings } from "@/domain/settings/auth-settings";
 
 export class EmailAddressError extends Error {}
 
@@ -15,6 +18,15 @@ export interface EmailAddressRepositories {
   emailAddressRepository: EmailAddressRepository;
   passwordResetTokenRepository: PasswordResetTokenRepository;
   jobRepository: JobRepository;
+  /** For the allowed and denied email domains (EmailAddress#validate_email_domain). */
+  settingsRepository: SettingsRepository;
+}
+
+/** The domain check every saved address goes through, with the message Redmine gives a signed-in user. */
+async function assertDomainAllowed(repositories: Pick<EmailAddressRepositories, "settingsRepository">, address: string): Promise<void> {
+  const settings = resolveAuthSettings(await repositories.settingsRepository.getAll());
+  const rejected = rejectedEmailDomain(address, { allowed: settings.emailDomainsAllowed, denied: settings.emailDomainsDenied });
+  if (rejected) throw new EmailAddressError(emailDomainMessage(rejected));
 }
 
 /**
@@ -56,6 +68,7 @@ export async function addEmailAddress(
   if (!isValidEmailAddress(address)) {
     throw new EmailAddressError("正しいメールアドレスを入力してください。");
   }
+  await assertDomainAllowed(repositories, address);
 
   const user = await repositories.userRepository.findById(userId);
   if (!user) {
@@ -153,6 +166,7 @@ export async function changeDefaultEmailAddress(
   if (user.mail.toLowerCase() === address.toLowerCase()) {
     return;
   }
+  await assertDomainAllowed(repositories, address);
 
   // Not `owner.id !== userId`: matching one of *your own* additional addresses has to be
   // refused too, or the same address ends up in both users.mail and email_addresses, which

@@ -26,6 +26,8 @@ export interface UpdateAuthSettingsInput {
   sessionLifetimeMinutes: number;
   sessionTimeoutMinutes: number;
   maxAdditionalEmails: number;
+  emailDomainsAllowed: string;
+  emailDomainsDenied: string;
 }
 
 export async function updateAuthSettings(
@@ -45,5 +47,7 @@ export async function updateAuthSettings(
     session_lifetime: String(Math.round(input.sessionLifetimeMinutes)),
     session_timeout: String(Math.round(input.sessionTimeoutMinutes)),
     max_additional_emails: String(Math.round(input.maxAdditionalEmails)),
+    email_domains_allowed: input.emailDomainsAllowed.trim(),
+    email_domains_denied: input.emailDomainsDenied.trim(),
   });
 }

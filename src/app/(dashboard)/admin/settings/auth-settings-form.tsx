@@ -170,6 +170,18 @@ export function AuthSettingsForm({ locale = "ja", settings }: { settings: AuthSe
         />
       </label>
 
+      {/* Redmine's email_domains_allowed / email_domains_denied: domains separated by commas or line breaks;
+          a leading "." also covers subdomains. */}
+      <label className="flex flex-col gap-1 text-sm">
+        {t("admin.auth.emailDomainsAllowed")}
+        <textarea name="emailDomainsAllowed" rows={2} defaultValue={settings.emailDomainsAllowed} className="border rounded px-2 py-1" />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("admin.auth.emailDomainsDenied")}
+        <textarea name="emailDomainsDenied" rows={2} defaultValue={settings.emailDomainsDenied} className="border rounded px-2 py-1" />
+        <span className="text-xs text-gray-500">{t("admin.auth.emailDomainsHint")}</span>
+      </label>
+
       {state.error ? (
         <p role="alert" className="text-sm text-red-600">
           {state.error}

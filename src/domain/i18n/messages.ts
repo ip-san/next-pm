@@ -1185,6 +1185,9 @@ const JA = {
   "bulkEdit.none": "(なし)",
   "issueBulkEdit.clearDate": "日付を消す",
   "issueForm.files": "ファイル",
+  "admin.auth.emailDomainsAllowed": "許可するメールアドレスのドメイン",
+  "admin.auth.emailDomainsDenied": "禁止するメールアドレスのドメイン",
+  "admin.auth.emailDomainsHint": "カンマか改行で区切ります。「.」で始めるとサブドメインも含みます(例: example.com, .example.org)。",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2369,6 +2372,9 @@ const EN: Record<MessageKey, string> = {
   "bulkEdit.none": "(none)",
   "issueBulkEdit.clearDate": "Clear the date",
   "issueForm.files": "Files",
+  "admin.auth.emailDomainsAllowed": "Allowed email domains",
+  "admin.auth.emailDomainsDenied": "Disallowed email domains",
+  "admin.auth.emailDomainsHint": "Separate with commas or line breaks. A leading \".\" also covers subdomains (e.g. example.com, .example.org).",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

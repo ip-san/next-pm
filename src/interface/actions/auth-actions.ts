@@ -25,6 +25,7 @@ import { currentUserFromCookies } from "@/interface/http/current-user";
 import { destroyCurrentSession, establishSession, revokeAllSessions } from "@/interface/http/session";
 import { startPendingTwofaSetup, TWOFA_PENDING_COOKIE_NAME } from "@/interface/http/twofa-pending-cookie";
 import { localizeError } from "@/interface/http/localize-error";
+import { emailDomainPolicy } from "@/interface/http/email-domain-policy";
 
 const loginSchema = z.object({
   login: z.string().min(1),
@@ -51,7 +52,11 @@ export async function loginAction(
 
   const { twofa } = await loadAuthSettings(new DrizzleSettingsRepository());
   const result = await login(
-    { userRepository: new DrizzleUserRepository(), ldapSources: await ldapSourcesFromConfiguration(process.env) },
+    {
+      userRepository: new DrizzleUserRepository(),
+      ldapSources: await ldapSourcesFromConfiguration(process.env),
+      emailDomainPolicy: await emailDomainPolicy(),
+    },
     parsed.data.login,
     parsed.data.password,
     twofa,

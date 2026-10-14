@@ -8,6 +8,10 @@ import { DrizzleUserRepository } from "@/infrastructure/db/repositories/user-rep
 import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/interface/http/current-user";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { paginate, parsePagination } from "@/interface/http/pagination";
+import { emailDomainMessage, rejectedEmailDomain } from "@/domain/email-address/domain-policy";
+import { emailDomainPolicy } from "@/interface/http/email-domain-policy";
+import { localizeMessage } from "@/domain/i18n/error-messages";
+import { localeForViewer } from "@/interface/http/locale";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -79,6 +83,10 @@ export async function POST(request: Request) {
   // someone's additional address in email_addresses. findByMail searches both tables.
   if (await userRepository.findByMail(parsed.data.mail)) {
     return NextResponse.json({ error: "mail_taken" }, { status: 422 });
+  }
+  const rejectedDomain = rejectedEmailDomain(parsed.data.mail, await emailDomainPolicy());
+  if (rejectedDomain) {
+    return NextResponse.json({ error: "mail_domain_not_allowed", message: localizeMessage(await localeForViewer(user), emailDomainMessage(rejectedDomain)) }, { status: 422 });
   }
 
   const salt = generateSalt();

@@ -59,6 +59,14 @@ describe("updateUser", () => {
     expect(repository.updatePassword).not.toHaveBeenCalled();
   });
 
+  it("refuses a new address on a denied domain, naming the domain, and lets an unchanged one through", async () => {
+    const policy = { allowed: "", denied: "example.com" };
+    await expect(updateUser(repositoryWith(user({})), { ...base, mail: "alice@example.com", emailDomainPolicy: policy }, "admin-1")).resolves.toBeUndefined();
+    await expect(updateUser(repositoryWith(user({})), { ...base, mail: "alice@spam.example.com", emailDomainPolicy: { allowed: "", denied: ".example.com" } }, "admin-1")).rejects.toThrow(
+      "メールアドレスは許可されていないドメインを含んでいます (spam.example.com)",
+    );
+  });
+
   it("refuses an unknown user", async () => {
     await expect(updateUser(repositoryWith(null), base, "admin-1")).rejects.toThrow(UserUpdateError);
   });
