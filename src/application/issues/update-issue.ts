@@ -145,7 +145,8 @@ export async function updateIssue(repositories: UpdateIssueRepositories, input: 
   // must not still trigger a cascade that rewrites *other* issues.
   if (appliedChanges.statusId && after.statusId === appliedChanges.statusId) {
     const targetStatus = await repositories.issueStatusRepository.findById(after.statusId);
-    if (targetStatus?.isClosed) {
+    // Setting.close_duplicate_issues? gates the cascade (on by default, as in Redmine).
+    if (targetStatus?.isClosed && resolveGeneralSettings(await repositories.settingsRepository.getAll()).closeDuplicateIssues) {
       await closeDuplicates(repositories, input.issueId, after.statusId, input.actingUserId, input.actorRoleIds, new Set([input.issueId]));
     }
   }

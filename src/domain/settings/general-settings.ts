@@ -32,6 +32,7 @@ export const GENERAL_SETTING_KEYS = [
   "default_issue_due_date_offset",
   "link_copied_issue",
   "copy_attachments_on_issue_copy",
+  "close_duplicate_issues",
 ] as const;
 
 /** Redmine's link_copied_issue / copy_attachments_on_issue_copy: ask on the copy form, always, or never. */
@@ -71,6 +72,8 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // Redmine's defaults: the copy form asks.
   link_copied_issue: "ask",
   copy_attachments_on_issue_copy: "ask",
+  // Redmine's default, and what next-pm already did: closing an issue closes its duplicates.
+  close_duplicate_issues: "1",
   // next-pm previously never derived done_ratio from status at all (only the SCM commit-hook
   // path did) — "issue_field" (manual, Redmine's own default too) preserves that.
   issue_done_ratio: "issue_field",
@@ -110,6 +113,8 @@ export interface GeneralSettings {
   defaultIssueDueDateOffsetDays: number | null;
   linkCopiedIssue: CopyOptionMode;
   copyAttachmentsOnIssueCopy: CopyOptionMode;
+  /** close_duplicate_issues: closing an issue also closes the issues that duplicate it. */
+  closeDuplicateIssues: boolean;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   /**
@@ -159,6 +164,7 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
       (overrides.default_issue_start_date_to_creation_date ?? GENERAL_SETTING_DEFAULTS.default_issue_start_date_to_creation_date) === "1",
     linkCopiedIssue: copyOption(overrides.link_copied_issue),
     copyAttachmentsOnIssueCopy: copyOption(overrides.copy_attachments_on_issue_copy),
+    closeDuplicateIssues: (overrides.close_duplicate_issues ?? GENERAL_SETTING_DEFAULTS.close_duplicate_issues) === "1",
     defaultIssueDueDateOffsetDays: dueDateOffsetDays(overrides.default_issue_due_date_offset ?? GENERAL_SETTING_DEFAULTS.default_issue_due_date_offset),
     issueDoneRatio: ISSUE_DONE_RATIO_VALUES.includes(overrides.issue_done_ratio as IssueDoneRatioMode)
       ? (overrides.issue_done_ratio as IssueDoneRatioMode)

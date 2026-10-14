@@ -771,6 +771,30 @@ describe("updateIssue — close duplicates cascade", () => {
     expect(dupJournal?.userId).toBe("user-1");
   });
 
+  it("leaves the duplicates open when close_duplicate_issues is off", async () => {
+    const { repos, issuesById } = makeCascadeRepositories({
+      issues: [cascadeIssue({ id: "canonical" }), cascadeIssue({ id: "dup" })],
+      relations: [{ id: "rel-1", issueFromId: "dup", issueToId: "canonical", relationType: "duplicates", delay: null }],
+      transitions: [{ id: "t1", trackerId: "tracker-1", roleId: "role-1", oldStatusId: "new", newStatusId: "closed", author: false, assignee: false }],
+    });
+    repos.settingsRepository.getAll = mock(async () => ({ close_duplicate_issues: "0" }));
+
+    await updateIssue(repos, {
+      issueId: "canonical",
+      expectedLockVersion: 0,
+      changes: { statusId: "closed" },
+      notes: "",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
+      isAuthor: false,
+      isAssignee: false,
+    });
+
+    expect(issuesById.get("canonical")?.statusId).toBe("closed");
+    expect(issuesById.get("dup")?.statusId).not.toBe("closed");
+  });
+
   it("cascades through a chain of duplicates", async () => {
     const { repos, issuesById } = makeCascadeRepositories({
       issues: [cascadeIssue({ id: "a" }), cascadeIssue({ id: "b" }), cascadeIssue({ id: "c" })],

@@ -25,6 +25,7 @@ export interface UpdateGeneralSettingsInput {
   defaultIssueDueDateOffset: string;
   linkCopiedIssue: CopyOptionMode;
   copyAttachmentsOnIssueCopy: CopyOptionMode;
+  closeDuplicateIssues: boolean;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   displaySubprojectsIssues: boolean;
@@ -55,6 +56,7 @@ export async function updateGeneralSettings(
     default_issue_due_date_offset: input.defaultIssueDueDateOffset.trim(),
     link_copied_issue: input.linkCopiedIssue,
     copy_attachments_on_issue_copy: input.copyAttachmentsOnIssueCopy,
+    close_duplicate_issues: input.closeDuplicateIssues ? "1" : "0",
     issue_done_ratio: input.issueDoneRatio,
     webhooks_enabled: input.webhooksEnabled ? "1" : "0",
     display_subprojects_issues: input.displaySubprojectsIssues ? "1" : "0",

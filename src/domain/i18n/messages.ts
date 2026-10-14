@@ -1200,6 +1200,7 @@ const JA = {
   "admin.general.copyYes": "はい",
   "admin.general.copyNo": "いいえ",
   "issue.linkCopy": "コピー元のチケットと関連付ける",
+  "admin.general.closeDuplicateIssues": "重複しているチケットをまとめてクローズ",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2399,6 +2400,7 @@ const EN: Record<MessageKey, string> = {
   "admin.general.copyYes": "Yes",
   "admin.general.copyNo": "No",
   "issue.linkCopy": "Link to the original issue",
+  "admin.general.closeDuplicateIssues": "Close duplicated issues automatically",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

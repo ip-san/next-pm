@@ -74,6 +74,10 @@ export function GeneralSettingsForm({ locale = "ja", settings }: { settings: Gen
         <input type="checkbox" name="defaultIssueStartDateToCreationDate" defaultChecked={settings.defaultIssueStartDateToCreationDate} />
         {t("admin.general.defaultStartDate")}
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="closeDuplicateIssues" defaultChecked={settings.closeDuplicateIssues} />
+        {t("admin.general.closeDuplicateIssues")}
+      </label>
       {(["linkCopiedIssue", "copyAttachmentsOnIssueCopy"] as const).map((name) => (
         <label key={name} className="flex flex-col gap-1 text-sm">
           {t(name === "linkCopiedIssue" ? "admin.general.linkCopiedIssue" : "admin.general.copyAttachmentsOnIssueCopy")}
