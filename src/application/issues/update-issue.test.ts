@@ -167,6 +167,29 @@ describe("updateIssue", () => {
     expect(repos.journalRepository.create).toHaveBeenCalled();
   });
 
+  it("puts the files sent with an edit in the same journal as its note", async () => {
+    const repos = makeRepositories();
+    await updateIssue(repos, {
+      issueId: "issue-1",
+      expectedLockVersion: 0,
+      changes: {},
+      notes: "See the log",
+      actingUserId: "user-1",
+      actorRoleIds: ["role-1"],
+      customFieldViewer: { isAdmin: true, roleIds: [] },
+      isAuthor: true,
+      isAssignee: false,
+      attachmentDetails: [{ property: "attachment", fieldName: "att-1", oldValue: null, newValue: "log.txt" }],
+    });
+    expect(repos.journalRepository.create).toHaveBeenCalledTimes(1);
+    expect(repos.journalRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notes: "See the log",
+        details: [{ property: "attachment", fieldName: "att-1", oldValue: null, newValue: "log.txt" }],
+      }),
+    );
+  });
+
   it("skips the journal when nothing changed and there are no notes", async () => {
     const repos = makeRepositories();
     await updateIssue(repos, {

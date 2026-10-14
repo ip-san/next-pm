@@ -1,7 +1,7 @@
 "use client";
 
 import { customFieldChoiceOptions } from "@/domain/custom-field/choices";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateIssueFormAction } from "@/interface/actions/issue-actions";
 import type { UpdateIssueFormValues } from "@/interface/actions/issue-schemas";
@@ -203,6 +203,8 @@ export function IssueEditForm({
     !canEditAttributes || rules[field] === "readonly" || derivedByParentRollup[field] === true;
   const isRequired = (field: keyof typeof rules) => rules[field] === "required";
 
+  const fileInput = useRef<HTMLInputElement>(null);
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
@@ -236,7 +238,11 @@ export function IssueEditForm({
     if (canSetPrivate && !isReadOnly("isPrivate")) values.isPrivate = state.isPrivate;
     if (doneRatioEditable && !isReadOnly("doneRatio")) values.doneRatio = state.doneRatio;
 
-    const result = await updateIssueFormAction(values);
+    // Files go as FormData, the form a server action receives them in; they join this edit's journal.
+    const files = new FormData();
+    for (const file of Array.from(fileInput.current?.files ?? [])) files.append("attachments", file);
+
+    const result = await updateIssueFormAction(values, files);
     setPending(false);
     if (!result.ok) {
       setError(result.error);
@@ -244,6 +250,7 @@ export function IssueEditForm({
       return;
     }
     set("notes", "");
+    if (fileInput.current) fileInput.current.value = "";
     router.refresh();
   }
 
@@ -568,6 +575,13 @@ export function IssueEditForm({
           rows={3}
           className="border rounded px-3 py-2"
         />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="issue-edit-files" className="text-sm font-medium">
+          {t("issueForm.files")}
+        </label>
+        <input id="issue-edit-files" ref={fileInput} type="file" multiple className="text-sm" />
       </div>
 
       {canSetNotesPrivate ? (

@@ -1184,6 +1184,7 @@ const JA = {
   "bulkEdit.user": "ユーザー",
   "bulkEdit.none": "(なし)",
   "issueBulkEdit.clearDate": "日付を消す",
+  "issueForm.files": "ファイル",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2367,6 +2368,7 @@ const EN: Record<MessageKey, string> = {
   "bulkEdit.user": "User",
   "bulkEdit.none": "(none)",
   "issueBulkEdit.clearDate": "Clear the date",
+  "issueForm.files": "Files",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

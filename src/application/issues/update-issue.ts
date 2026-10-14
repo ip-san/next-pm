@@ -1,3 +1,4 @@
+import type { JournalDetail } from "@/domain/journal/entity";
 import type { CustomFieldRepository } from "@/domain/custom-field/repository";
 import type { CustomFieldViewer } from "@/domain/custom-field/visibility";
 import type { CustomValueRepository } from "@/domain/custom-value/repository";
@@ -92,6 +93,11 @@ export interface UpdateIssueInput {
   /** Mark the note private. Requires `set_notes_private`; false otherwise (fails closed). */
   privateNotes?: boolean;
   canSetNotesPrivate?: boolean;
+  /**
+   * Files the caller already stored on the issue in this submission, as their "attachment added" details. They join
+   * the same journal as the note and the changes, as Redmine's save_attachments + current_journal do.
+   */
+  attachmentDetails?: JournalDetail[];
 }
 
 /**
@@ -491,7 +497,7 @@ async function applyIssueUpdate(
 
   let persistedNotes = "";
   let persistedNotesPrivate = false;
-  const details = [...diffIssueChanges(before, changes), ...customFieldDetails];
+  const details = [...diffIssueChanges(before, changes), ...customFieldDetails, ...(input.attachmentDetails ?? [])];
   if (details.length > 0 || notes.trim().length > 0) {
     // Mirrors Journal#split_private_notes: a private note carrying attribute changes
     // becomes two journals so the changes stay public, and a blank note is never private.

@@ -71,6 +71,8 @@ import {
   type UpdateIssueFormValues,
 } from "./issue-schemas";
 import { localizeError, localizeErrorMap } from "@/interface/http/localize-error";
+import { uploadAttachment } from "@/application/attachments/upload-attachment";
+import { InvalidAttachmentError } from "@/domain/attachment/validate";
 
 /** `{ ok: false }` carries `fieldErrors` keyed by custom field id when the custom values are what failed. */
 const ISSUE_ATTRIBUTE_MESSAGES: Record<string, string> = {
@@ -261,7 +263,7 @@ export async function createIssueFormAction(values: CreateIssueFormValues): Prom
  * Absent keys mean "untouched": a field the workflow marks read-only is never rendered, so
  * it must not be read as a blanked-out value.
  */
-export async function updateIssueFormAction(values: UpdateIssueFormValues): Promise<IssueFormActionResult> {
+export async function updateIssueFormAction(values: UpdateIssueFormValues, files?: FormData): Promise<IssueFormActionResult> {
   const parsed = updateIssueFormSchema.safeParse(values);
   if (!parsed.success) {
     return { ok: false, error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。") };
@@ -366,6 +368,45 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
     changes.doneRatio = parsedRatio;
   }
 
+  // Files sent with the edit (Redmine's attachments on the issue form). Issue#attachments_addable? is
+  // attributes_editable? || notes_addable?, the same rule the separate upload form applies. They are stored before the
+  // update so their "added" details join its journal, and removed again if the update fails.
+  const submittedFiles = (files?.getAll("attachments") ?? []).filter((file): file is File => file instanceof File && file.size > 0);
+  if (submittedFiles.length > 0 && !canEditAttributes && !canAddNotes) {
+    return { ok: false, error: await localizeError("この操作を行う権限がありません。") };
+  }
+  const attachmentRepository = new DrizzleAttachmentRepository();
+  const attachmentStorage = new FsAttachmentStore();
+  const stored: { id: string; filename: string; storageKey: string }[] = [];
+  const removeStored = async () => {
+    for (const attachment of stored) {
+      await attachmentRepository.delete(attachment.id);
+      await attachmentStorage.delete(attachment.storageKey);
+    }
+  };
+  for (const file of submittedFiles) {
+    try {
+      stored.push(
+        await uploadAttachment(
+          { attachmentRepository, attachmentStorage, settingsRepository: new DrizzleSettingsRepository() },
+          {
+            containerType: "Issue",
+            containerId: existing.id,
+            authorId: user.id,
+            filename: file.name,
+            contentType: file.type,
+            description: "",
+            data: Buffer.from(await file.arrayBuffer()),
+          },
+        ),
+      );
+    } catch (error) {
+      await removeStored();
+      if (error instanceof InvalidAttachmentError) return { ok: false, error: await localizeError(error.message) };
+      throw error;
+    }
+  }
+
   let outcome;
   try {
     outcome = await updateIssue(
@@ -404,9 +445,16 @@ export async function updateIssueFormAction(values: UpdateIssueFormValues): Prom
         canAddNotes,
         privateNotes: parsed.data.privateNotes === true,
         canSetNotesPrivate,
+        attachmentDetails: stored.map((attachment) => ({
+          property: "attachment" as const,
+          fieldName: attachment.id,
+          oldValue: null,
+          newValue: attachment.filename,
+        })),
       },
     );
   } catch (error) {
+    await removeStored();
     if (error instanceof StaleIssueError) {
       return { ok: false, error: await localizeError("他の変更と競合しました。ページを再読み込みして再度お試しください。") };
     }
