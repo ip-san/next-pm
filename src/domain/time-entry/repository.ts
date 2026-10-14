@@ -2,7 +2,7 @@ import type { TimeEntry } from "./entity";
 
 /** Fields that stay editable after creation — mirrors TimeEntry's safe_attributes list. */
 export type TimeEntryUpdate = Partial<
-  Pick<TimeEntry, "issueId" | "userId" | "activityId" | "hours" | "comments" | "spentOn">
+  Pick<TimeEntry, "projectId" | "issueId" | "userId" | "activityId" | "hours" | "comments" | "spentOn">
 >;
 
 export interface TimeEntryRepository {

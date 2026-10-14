@@ -536,18 +536,36 @@ export type BulkTimeEntryActionState = {
 const bulkTimeEntrySchema = z.object({
   projectIdentifier: z.string().min(1),
   ids: z.array(z.string().uuid()).min(1, "工数を選択してください。"),
+  targetProjectId: z.string().uuid().nullable(),
+  /** An issue number, "none" to detach the entries, or null to leave the issue alone. */
+  issue: z.union([z.literal("none"), z.coerce.number().int().positive()]).nullable(),
+  userId: z.string().uuid().nullable(),
   activityId: z.string().uuid().nullable(),
   hours: z.number().positive("時間は0より大きい値を入力してください。").nullable(),
   spentOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付はYYYY-MM-DD形式で入力してください。").nullable(),
   comments: z.string().nullable(),
 });
 
+/** The marker a bulk custom field select posts to clear the value (Redmine's `__none__`). */
+const CLEAR_VALUE = "__none__";
+
+/** `cf_<uuid>` inputs of the bulk form: a blank one leaves the value alone, `__none__` clears it. */
+function bulkCustomFieldValuesFromForm(formData: FormData): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(customFieldValuesFromForm(formData)).flatMap(([id, value]) =>
+      value === "" ? [] : [[id, value === CLEAR_VALUE ? "" : value] as const],
+    ),
+  );
+}
+
 /**
- * Redmine's TimelogController#bulk_update for the attributes that don't move an entry between
- * projects or issues. Every entry is checked the way the single-entry edit checks it (loadEditableEntry),
- * and a blank field leaves that attribute alone, as parse_params_for_bulk_update does. An entry that
- * can't be edited, or that the change makes invalid, is skipped and counted, so one bad entry doesn't
- * stop the rest.
+ * Redmine's TimelogController#bulk_update. Every entry is checked the way the single-entry edit checks it
+ * (loadEditableEntry), and a blank field leaves that attribute alone, as parse_params_for_bulk_update does. The
+ * entries can move to another project and issue, change user, and take custom field values, with
+ * TimeEntry#safe_attributes='s rules judged in the project each entry ends up in: the actor logs time there, the
+ * issue is one they may attach, and a new user is one they may log time for. A chosen issue without a chosen
+ * project carries its own project. An entry that can't be edited, or that the change makes invalid, is skipped
+ * and counted, so one bad entry doesn't stop the rest.
  */
 export async function bulkUpdateTimeEntriesAction(
   _prevState: BulkTimeEntryActionState,
@@ -555,9 +573,13 @@ export async function bulkUpdateTimeEntriesAction(
 ): Promise<BulkTimeEntryActionState> {
   const blank = (value: FormDataEntryValue | null) => (typeof value === "string" && value.trim().length > 0 ? value.trim() : null);
   const hoursRaw = blank(formData.get("hours"));
+  const issueRaw = blank(formData.get("issue"));
   const parsed = bulkTimeEntrySchema.safeParse({
     projectIdentifier: formData.get("projectIdentifier"),
     ids: formData.getAll("ids"),
+    targetProjectId: blank(formData.get("targetProjectId")),
+    issue: issueRaw === null ? null : issueRaw.replace(/^#/, ""),
+    userId: blank(formData.get("userId")),
     activityId: blank(formData.get("activityId")),
     hours: hoursRaw === null ? null : Number(hoursRaw),
     spentOn: blank(formData.get("spentOn")),
@@ -566,11 +588,28 @@ export async function bulkUpdateTimeEntriesAction(
   if (!parsed.success) {
     return { error: await localizeError(parsed.error.issues[0]?.message ?? "入力内容を確認してください。"), message: null };
   }
-  const { activityId, hours, spentOn, comments } = parsed.data;
-  if (activityId === null && hours === null && spentOn === null && (comments === null || comments.trim().length === 0)) {
+  const { targetProjectId, issue: issueChoice, userId, activityId, hours, spentOn, comments } = parsed.data;
+  const customValues = bulkCustomFieldValuesFromForm(formData);
+  if (
+    targetProjectId === null &&
+    issueChoice === null &&
+    userId === null &&
+    activityId === null &&
+    hours === null &&
+    spentOn === null &&
+    (comments === null || comments.trim().length === 0) &&
+    Object.keys(customValues).length === 0
+  ) {
     return { error: await localizeError("変更する項目を1つ以上入力してください。"), message: null };
   }
 
+  const issueRepository = new DrizzleIssueRepository();
+  const chosenIssue = typeof issueChoice === "number" ? await issueRepository.findByNumber(issueChoice) : null;
+  if (typeof issueChoice === "number" && !chosenIssue) {
+    return { error: await localizeError(ISSUE_NOT_FOUND), message: null };
+  }
+
+  const touchedProjects = new Set<string>();
   let saved = 0;
   let skipped = 0;
   for (const entryId of parsed.data.ids) {
@@ -579,18 +618,68 @@ export async function bulkUpdateTimeEntriesAction(
       skipped += 1;
       continue;
     }
+    const { user, entry } = loaded;
+
+    // The project the entry ends up in, and the actor's rights there.
+    const projectId = targetProjectId ?? chosenIssue?.projectId ?? entry.projectId;
+    let target = { project: loaded.project, projectContext: loaded.projectContext, actor: loaded.actor, userGroupIds: loaded.userGroupIds, roleIds: loaded.roleIds };
+    if (projectId !== entry.projectId) {
+      const project = await new DrizzleProjectRepository().findById(projectId);
+      if (!project) {
+        skipped += 1;
+        continue;
+      }
+      const resolved = await resolveActor(user, project.id);
+      target = { project, projectContext: toAuthorizationProject(project), ...resolved };
+      if (!can({ permission: "log_time", project: target.projectContext, actor: target.actor })) {
+        skipped += 1;
+        continue;
+      }
+    }
+    const accessContext = { userId: user.id, actor: target.actor, userGroupIds: target.userGroupIds, projectContext: target.projectContext };
+    if (chosenIssue && !canAttachIssueToTimeEntry(chosenIssue, projectId, accessContext)) {
+      skipped += 1;
+      continue;
+    }
+    let attributedUserId: string | undefined;
+    if (userId !== null) {
+      const resolvedUser = await resolveTargetUserId({
+        requestedUserId: userId,
+        currentUser: user,
+        authorId: entry.authorId,
+        currentUserIdOfEntry: entry.userId,
+        projectId,
+        canLogForOthers: can({ permission: "log_time_for_other_users", project: target.projectContext, actor: target.actor }),
+      });
+      if (!resolvedUser.ok) {
+        skipped += 1;
+        continue;
+      }
+      attributedUserId = resolvedUser.userId;
+    }
+    const viewer = customFieldViewerFor(user, target.roleIds);
+    if (Object.keys(customValues).length > 0) {
+      const fieldErrors = await validateTimeEntryCustomFieldValues(new DrizzleCustomFieldRepository(), customValues, { full: false }, viewer);
+      if (Object.keys(fieldErrors).length > 0) {
+        skipped += 1;
+        continue;
+      }
+    }
+
     try {
       await updateTimeEntry(
-        { ...writeRepositories(), timeEntryRepository: loaded.timeEntryRepository, issueRepository: new DrizzleIssueRepository() },
-        loaded.entry,
+        { ...writeRepositories(), timeEntryRepository: loaded.timeEntryRepository, issueRepository },
+        entry,
         {
+          projectId: projectId !== entry.projectId ? projectId : undefined,
+          issueId: issueChoice === "none" ? null : (chosenIssue?.id ?? undefined),
+          userId: attributedUserId,
           activityId: activityId ?? undefined,
           hours: hours ?? undefined,
           spentOn: spentOn ?? undefined,
           comments: comments && comments.trim().length > 0 ? comments : undefined,
         },
       );
-      saved += 1;
     } catch (error) {
       if (error instanceof InvalidTimeEntryError) {
         skipped += 1;
@@ -598,9 +687,25 @@ export async function bulkUpdateTimeEntriesAction(
       }
       throw error;
     }
+    if (Object.keys(customValues).length > 0) {
+      await setTimeEntryCustomFieldValues(
+        { customFieldRepository: new DrizzleCustomFieldRepository(), customValueRepository: new DrizzleCustomValueRepository() },
+        entry.id,
+        customValues,
+        viewer,
+      );
+    }
+    touchedProjects.add(target.project.identifier);
+    saved += 1;
   }
 
-  revalidatePath(`/projects/${parsed.data.projectIdentifier}/time-entries`);
+  touchedProjects.add(parsed.data.projectIdentifier);
+  for (const identifier of touchedProjects) revalidatePath(`/projects/${identifier}/time-entries`);
+  // As bulk_update does: when every entry saved, back to the list (entries moved away would leave this page empty);
+  // otherwise stay and say how many were left out.
+  if (saved > 0 && skipped === 0) {
+    redirect(`/projects/${parsed.data.projectIdentifier}/time-entries`);
+  }
   const message = skipped > 0 ? `${saved}件を更新しました。${skipped}件は更新できませんでした。` : `${saved}件を更新しました。`;
   return { error: await localizeError(saved === 0 ? "更新できる工数がありませんでした。" : null), message: await localizeError(message) };
 }

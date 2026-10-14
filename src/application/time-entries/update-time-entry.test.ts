@@ -174,4 +174,22 @@ describe("updateTimeEntry", () => {
     await updateTimeEntry(repos, existing, { issueId: existing.issueId, hours: 4 });
     expect(repos.issueRepository.findById).not.toHaveBeenCalled();
   });
+
+  it("moves the entry to another project together with an issue of that project", async () => {
+    const repos = makeRepos({ issue: issue({ projectId: "proj-2" }) });
+    await updateTimeEntry(repos, existing, { projectId: "proj-2", issueId: "issue-2" });
+    expect(repos.timeEntryRepository.update).toHaveBeenCalledWith(existing.id, { projectId: "proj-2", issueId: "issue-2" });
+  });
+
+  it("refuses to move the project while the entry keeps an issue of the old project", async () => {
+    const repos = makeRepos({ issue: issue({ id: existing.issueId ?? "issue-1", projectId: "proj-1" }) });
+    await expect(updateTimeEntry(repos, existing, { projectId: "proj-2" })).rejects.toThrow(InvalidTimeEntryError);
+    expect(repos.timeEntryRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("moves the project when the issue is cleared", async () => {
+    const repos = makeRepos();
+    await updateTimeEntry(repos, existing, { projectId: "proj-2", issueId: null });
+    expect(repos.timeEntryRepository.update).toHaveBeenCalledWith(existing.id, { projectId: "proj-2", issueId: null });
+  });
 });

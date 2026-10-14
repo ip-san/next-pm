@@ -1178,6 +1178,11 @@ const JA = {
   "webhooks.event.news.created": "ニュースの作成",
   "webhooks.event.wiki_page.updated": "Wikiページの更新",
   "admin.ldap.testConnection": "接続テスト",
+  "bulkEdit.project": "プロジェクト",
+  "bulkEdit.issue": "チケット",
+  "bulkEdit.issueHint": "番号(none で関連を外す)",
+  "bulkEdit.user": "ユーザー",
+  "bulkEdit.none": "(なし)",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2355,6 +2360,11 @@ const EN: Record<MessageKey, string> = {
   "webhooks.event.news.created": "News created",
   "webhooks.event.wiki_page.updated": "Wiki page updated",
   "admin.ldap.testConnection": "Test",
+  "bulkEdit.project": "Project",
+  "bulkEdit.issue": "Issue",
+  "bulkEdit.issueHint": "Number, or none to detach",
+  "bulkEdit.user": "User",
+  "bulkEdit.none": "(none)",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };
