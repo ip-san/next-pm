@@ -1194,6 +1194,12 @@ const JA = {
   "auth.passwordExpired": "パスワードの有効期限が切れたか、管理者がパスワードの変更を求めています。変更してください。",
   "admin.general.defaultStartDate": "現在の日付を新しいチケットの開始日とする",
   "admin.general.defaultDueDateOffset": "新しいチケットの期日を今日から何日後にするか(空欄で設定しない)",
+  "admin.general.linkCopiedIssue": "コピーしたチケットを元のチケットと関連付ける",
+  "admin.general.copyAttachmentsOnIssueCopy": "チケットのコピー時に添付ファイルもコピー",
+  "admin.general.copyAsk": "都度選択",
+  "admin.general.copyYes": "はい",
+  "admin.general.copyNo": "いいえ",
+  "issue.linkCopy": "コピー元のチケットと関連付ける",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2387,6 +2393,12 @@ const EN: Record<MessageKey, string> = {
   "auth.passwordExpired": "Your password has expired or the administrator requires you to change it.",
   "admin.general.defaultStartDate": "Use current date as start date for new issues",
   "admin.general.defaultDueDateOffset": "Default due date for new issues, in days from today (blank for none)",
+  "admin.general.linkCopiedIssue": "Link issues on copy",
+  "admin.general.copyAttachmentsOnIssueCopy": "Copy attachments on copy",
+  "admin.general.copyAsk": "Ask",
+  "admin.general.copyYes": "Yes",
+  "admin.general.copyNo": "No",
+  "issue.linkCopy": "Link to the original issue",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

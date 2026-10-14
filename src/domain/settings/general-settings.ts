@@ -30,7 +30,13 @@ export const GENERAL_SETTING_KEYS = [
   "parent_issue_done_ratio",
   "default_issue_start_date_to_creation_date",
   "default_issue_due_date_offset",
+  "link_copied_issue",
+  "copy_attachments_on_issue_copy",
 ] as const;
+
+/** Redmine's link_copied_issue / copy_attachments_on_issue_copy: ask on the copy form, always, or never. */
+export const COPY_OPTION_VALUES = ["ask", "yes", "no"] as const;
+export type CopyOptionMode = (typeof COPY_OPTION_VALUES)[number];
 
 export const ISSUE_DONE_RATIO_VALUES = ["issue_field", "issue_status"] as const;
 export type IssueDoneRatioMode = (typeof ISSUE_DONE_RATIO_VALUES)[number];
@@ -62,6 +68,9 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // Redmine's defaults: a new issue's dates start empty.
   default_issue_start_date_to_creation_date: "0",
   default_issue_due_date_offset: "",
+  // Redmine's defaults: the copy form asks.
+  link_copied_issue: "ask",
+  copy_attachments_on_issue_copy: "ask",
   // next-pm previously never derived done_ratio from status at all (only the SCM commit-hook
   // path did) — "issue_field" (manual, Redmine's own default too) preserves that.
   issue_done_ratio: "issue_field",
@@ -99,6 +108,8 @@ export interface GeneralSettings {
   defaultIssueStartDateToCreationDate: boolean;
   /** default_issue_due_date_offset: a new issue's due date defaults to today plus this many days; null leaves it empty. */
   defaultIssueDueDateOffsetDays: number | null;
+  linkCopiedIssue: CopyOptionMode;
+  copyAttachmentsOnIssueCopy: CopyOptionMode;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   /**
@@ -146,6 +157,8 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
     crossProjectIssueRelations: (overrides.cross_project_issue_relations ?? GENERAL_SETTING_DEFAULTS.cross_project_issue_relations) === "1",
     defaultIssueStartDateToCreationDate:
       (overrides.default_issue_start_date_to_creation_date ?? GENERAL_SETTING_DEFAULTS.default_issue_start_date_to_creation_date) === "1",
+    linkCopiedIssue: copyOption(overrides.link_copied_issue),
+    copyAttachmentsOnIssueCopy: copyOption(overrides.copy_attachments_on_issue_copy),
     defaultIssueDueDateOffsetDays: dueDateOffsetDays(overrides.default_issue_due_date_offset ?? GENERAL_SETTING_DEFAULTS.default_issue_due_date_offset),
     issueDoneRatio: ISSUE_DONE_RATIO_VALUES.includes(overrides.issue_done_ratio as IssueDoneRatioMode)
       ? (overrides.issue_done_ratio as IssueDoneRatioMode)
@@ -180,4 +193,13 @@ export function defaultNewIssueDates(
       ? null
       : new Date(Date.parse(`${today}T00:00:00Z`) + settings.defaultIssueDueDateOffsetDays * 86_400_000).toISOString().slice(0, 10);
   return { startDate: settings.defaultIssueStartDateToCreationDate ? today : null, dueDate };
+}
+
+function copyOption(raw: string | undefined): CopyOptionMode {
+  return COPY_OPTION_VALUES.includes(raw as CopyOptionMode) ? (raw as CopyOptionMode) : "ask";
+}
+
+/** IssuesController#link_copy? / copy_attachments?: the setting decides, unless it asks, when the form's box does. */
+export function resolveCopyOption(mode: CopyOptionMode, submitted: boolean): boolean {
+  return mode === "ask" ? submitted : mode === "yes";
 }

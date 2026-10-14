@@ -19,6 +19,7 @@ import { PREFERRED_BODY_PART_VALUES } from "@/domain/settings/mail-handler-setti
 import { REMINDERS_JOB_TYPE, type RemindersJobPayload } from "@/application/jobs/send-reminders";
 import { DrizzleJobRepository } from "@/infrastructure/db/repositories/job-repository";
 import { localizeError } from "@/interface/http/localize-error";
+import { COPY_OPTION_VALUES } from "@/domain/settings/general-settings";
 
 export type SettingsActionState = {
   error: string | null;
@@ -72,6 +73,8 @@ const updateGeneralSettingsSchema = z.object({
   defaultIssueStartDateToCreationDate: z.coerce.boolean().default(false),
   // Redmine's Setting validation: blank, or a whole number of days.
   defaultIssueDueDateOffset: z.string().trim().regex(/^\d*$/, "正の整数を入力してください。").default(""),
+  linkCopiedIssue: z.enum(COPY_OPTION_VALUES).default("ask"),
+  copyAttachmentsOnIssueCopy: z.enum(COPY_OPTION_VALUES).default("ask"),
   webhooksEnabled: z.coerce.boolean().default(false),
   displaySubprojectsIssues: z.coerce.boolean().default(false),
   defaultLanguage: z.enum(LOCALES).default(DEFAULT_LOCALE),
@@ -104,6 +107,8 @@ export async function updateGeneralSettingsAction(
     crossProjectIssueRelations: formData.get("crossProjectIssueRelations") === "on",
     defaultIssueStartDateToCreationDate: formData.get("defaultIssueStartDateToCreationDate") === "on",
     defaultIssueDueDateOffset: formData.get("defaultIssueDueDateOffset") ?? "",
+    linkCopiedIssue: formData.get("linkCopiedIssue") ?? "ask",
+    copyAttachmentsOnIssueCopy: formData.get("copyAttachmentsOnIssueCopy") ?? "ask",
     issueDoneRatio: formData.get("issueDoneRatio"),
     webhooksEnabled: formData.get("webhooksEnabled") === "on",
     displaySubprojectsIssues: formData.get("displaySubprojectsIssues") === "on",
@@ -130,6 +135,8 @@ export async function updateGeneralSettingsAction(
     crossProjectIssueRelations: parsed.data.crossProjectIssueRelations,
     defaultIssueStartDateToCreationDate: parsed.data.defaultIssueStartDateToCreationDate,
     defaultIssueDueDateOffset: parsed.data.defaultIssueDueDateOffset,
+    linkCopiedIssue: parsed.data.linkCopiedIssue,
+    copyAttachmentsOnIssueCopy: parsed.data.copyAttachmentsOnIssueCopy,
     issueDoneRatio: parsed.data.issueDoneRatio,
     webhooksEnabled: parsed.data.webhooksEnabled,
     displaySubprojectsIssues: parsed.data.displaySubprojectsIssues,

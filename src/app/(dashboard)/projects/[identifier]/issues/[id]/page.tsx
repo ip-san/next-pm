@@ -448,6 +448,8 @@ export default async function IssueDetailPage({
             currentProjectId={project.id}
             hasSubtasks={childIssues.length > 0}
             hasAttachments={attachments.length > 0}
+            askCopyAttachments={resolveGeneralSettings(settings).copyAttachmentsOnIssueCopy === "ask"}
+            askLinkCopy={resolveGeneralSettings(settings).linkCopiedIssue === "ask"}
             canAddWatchers={canAddWatchers}
             targets={moveTargets}
             trackersByProjectId={moveTargetTrackers}

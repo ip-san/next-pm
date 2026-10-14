@@ -86,6 +86,8 @@ export const copyIssueFormSchema = z.object({
   targetProjectId: z.string().uuid(),
   targetTrackerId: z.string().uuid().or(z.literal("")),
   copyAttachments: z.boolean(),
+  /** The "link to the original" box; only read while link_copied_issue is "ask". */
+  linkCopy: z.boolean().default(true),
   copySubtasks: z.boolean(),
   copyWatchers: z.boolean(),
 });

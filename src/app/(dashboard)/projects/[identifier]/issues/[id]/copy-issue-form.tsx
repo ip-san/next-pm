@@ -19,6 +19,8 @@ export function CopyIssueForm({
   currentProjectId,
   hasSubtasks,
   hasAttachments,
+  askCopyAttachments,
+  askLinkCopy,
   canAddWatchers,
   targets,
   trackersByProjectId,
@@ -28,6 +30,10 @@ export function CopyIssueForm({
   currentProjectId: string;
   hasSubtasks: boolean;
   hasAttachments: boolean;
+  /** copy_attachments_on_issue_copy is "ask": offer the box (otherwise the setting decides on the server). */
+  askCopyAttachments: boolean;
+  /** link_copied_issue is "ask": offer the "link to the original" box. */
+  askLinkCopy: boolean;
   canAddWatchers: boolean;
   targets: Project[];
   trackersByProjectId: Record<string, Tracker[]>;
@@ -37,7 +43,9 @@ export function CopyIssueForm({
   const t = (key: MessageKey) => translate(locale, key);
   const [targetProjectId, setTargetProjectId] = useState(currentProjectId);
   const [targetTrackerId, setTargetTrackerId] = useState("");
-  const [copyAttachments, setCopyAttachments] = useState(false);
+  // Both start checked, as Redmine's copy form does on first display.
+  const [copyAttachments, setCopyAttachments] = useState(true);
+  const [linkCopy, setLinkCopy] = useState(true);
   const [copySubtasks, setCopySubtasks] = useState(hasSubtasks);
   const [copyWatchers, setCopyWatchers] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +62,7 @@ export function CopyIssueForm({
       targetProjectId,
       targetTrackerId,
       copyAttachments,
+      linkCopy,
       copySubtasks,
       copyWatchers,
     });
@@ -113,7 +122,13 @@ export function CopyIssueForm({
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm">
-        {hasAttachments ? (
+        {askLinkCopy ? (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={linkCopy} onChange={(event) => setLinkCopy(event.target.checked)} />
+            {t("issue.linkCopy")}
+          </label>
+        ) : null}
+        {hasAttachments && askCopyAttachments ? (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={copyAttachments} onChange={(event) => setCopyAttachments(event.target.checked)} />
             {t("issue.copyAttachments")}

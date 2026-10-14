@@ -74,6 +74,16 @@ export function GeneralSettingsForm({ locale = "ja", settings }: { settings: Gen
         <input type="checkbox" name="defaultIssueStartDateToCreationDate" defaultChecked={settings.defaultIssueStartDateToCreationDate} />
         {t("admin.general.defaultStartDate")}
       </label>
+      {(["linkCopiedIssue", "copyAttachmentsOnIssueCopy"] as const).map((name) => (
+        <label key={name} className="flex flex-col gap-1 text-sm">
+          {t(name === "linkCopiedIssue" ? "admin.general.linkCopiedIssue" : "admin.general.copyAttachmentsOnIssueCopy")}
+          <select name={name} defaultValue={settings[name]} className="border rounded px-2 py-1 w-40">
+            <option value="ask">{t("admin.general.copyAsk")}</option>
+            <option value="yes">{t("admin.general.copyYes")}</option>
+            <option value="no">{t("admin.general.copyNo")}</option>
+          </select>
+        </label>
+      ))}
       <label className="flex flex-col gap-1 text-sm">
         {t("admin.general.defaultDueDateOffset")}
         <input

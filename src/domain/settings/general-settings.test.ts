@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { defaultNewIssueDates, dueDateOffsetDays, GENERAL_SETTING_DEFAULTS, resolveGeneralSettings } from "./general-settings";
+import { defaultNewIssueDates, resolveCopyOption, dueDateOffsetDays, GENERAL_SETTING_DEFAULTS, resolveGeneralSettings } from "./general-settings";
 
 describe("resolveGeneralSettings", () => {
   it("falls back to next-pm's prior hardcoded defaults when nothing is persisted", () => {
@@ -113,6 +113,16 @@ describe("new issue default dates", () => {
     expect(defaultNewIssueDates(resolveGeneralSettings({}), "2026-10-14")).toEqual({ startDate: null, dueDate: null });
     const settings = resolveGeneralSettings({ default_issue_start_date_to_creation_date: "1", default_issue_due_date_offset: "20" });
     expect(defaultNewIssueDates(settings, "2026-10-14")).toEqual({ startDate: "2026-10-14", dueDate: "2026-11-03" });
+  });
+});
+
+describe("copy options", () => {
+  it("follows the box only while the setting asks", () => {
+    expect(resolveCopyOption("ask", true)).toBe(true);
+    expect(resolveCopyOption("ask", false)).toBe(false);
+    expect(resolveCopyOption("yes", false)).toBe(true);
+    expect(resolveCopyOption("no", true)).toBe(false);
+    expect(resolveGeneralSettings({}).linkCopiedIssue).toBe("ask");
   });
 });
 

@@ -6,6 +6,7 @@ import {
   type ParentIssueRollupMode,
 } from "@/domain/settings/general-settings";
 import type { SettingsRepository } from "@/domain/settings/repository";
+import type { CopyOptionMode } from "@/domain/settings/general-settings";
 
 export async function loadGeneralSettings(settingsRepository: SettingsRepository): Promise<GeneralSettings> {
   const overrides = await settingsRepository.getAll();
@@ -22,6 +23,8 @@ export interface UpdateGeneralSettingsInput {
   crossProjectIssueRelations: boolean;
   defaultIssueStartDateToCreationDate: boolean;
   defaultIssueDueDateOffset: string;
+  linkCopiedIssue: CopyOptionMode;
+  copyAttachmentsOnIssueCopy: CopyOptionMode;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   displaySubprojectsIssues: boolean;
@@ -50,6 +53,8 @@ export async function updateGeneralSettings(
     cross_project_issue_relations: input.crossProjectIssueRelations ? "1" : "0",
     default_issue_start_date_to_creation_date: input.defaultIssueStartDateToCreationDate ? "1" : "0",
     default_issue_due_date_offset: input.defaultIssueDueDateOffset.trim(),
+    link_copied_issue: input.linkCopiedIssue,
+    copy_attachments_on_issue_copy: input.copyAttachmentsOnIssueCopy,
     issue_done_ratio: input.issueDoneRatio,
     webhooks_enabled: input.webhooksEnabled ? "1" : "0",
     display_subprojects_issues: input.displaySubprojectsIssues ? "1" : "0",

@@ -73,6 +73,8 @@ import {
 import { localizeError, localizeErrorMap } from "@/interface/http/localize-error";
 import { uploadAttachment } from "@/application/attachments/upload-attachment";
 import { InvalidAttachmentError } from "@/domain/attachment/validate";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { resolveCopyOption } from "@/domain/settings/general-settings";
 
 /** `{ ok: false }` carries `fieldErrors` keyed by custom field id when the custom values are what failed. */
 const ISSUE_ATTRIBUTE_MESSAGES: Record<string, string> = {
@@ -798,6 +800,8 @@ export async function copyIssueAction(
     return { ok: false, error: await localizeError("コピー先のプロジェクトが見つかりません。") };
   }
 
+  // IssuesController#link_copy? / copy_attachments?: the settings decide unless they ask, when the form's boxes do.
+  const copySettings = await loadGeneralSettings(new DrizzleSettingsRepository());
   let result;
   try {
     result = await copyIssue(
@@ -829,7 +833,8 @@ export async function copyIssueAction(
         actorGroupIds: source.userGroupIds,
         actorRoleIdsOnTarget: target.roleIds,
         customFieldViewerOnTarget: customFieldViewerFor(user, target.roleIds),
-        copyAttachments: parsed.data.copyAttachments,
+        copyAttachments: resolveCopyOption(copySettings.copyAttachmentsOnIssueCopy, parsed.data.copyAttachments),
+        linkCopy: resolveCopyOption(copySettings.linkCopiedIssue, parsed.data.linkCopy),
         copySubtasks: parsed.data.copySubtasks,
         // Mirrors the copy form's `@copy_watchers = User.current.allowed_to?(:add_issue_watchers, @project)`.
         copyWatchers:

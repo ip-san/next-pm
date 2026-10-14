@@ -199,6 +199,12 @@ describe("copyIssue", () => {
     expect(relations[0]).toMatchObject({ issueFromId: "source", issueToId: result.issue.id, relationType: "copied_to" });
   });
 
+  it("doesn't link the copy when the copier (or link_copied_issue) says no", async () => {
+    const { repositories, relations } = makeRepositories({ issues: [source] });
+    await copyIssue(repositories, { ...baseInput, linkCopy: false });
+    expect(relations).toHaveLength(0);
+  });
+
   it("skips the copied_to link across projects while cross-project relations are off", async () => {
     // next-pm defaults cross_project_issue_relations to off, and createIssueRelation
     // refuses the link; the copy itself must still succeed.

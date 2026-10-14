@@ -73,6 +73,8 @@ export interface CopyIssueInput {
   /** The copier's view of custom fields on the target project; a value the copier can't write is not copied. */
   customFieldViewerOnTarget: CustomFieldViewer;
   copyAttachments: boolean;
+  /** Link the copy to its source with a copied_to relation (Redmine's :link option); defaults to true. */
+  linkCopy?: boolean;
   copySubtasks: boolean;
   /** Caller passes `add_issue_watchers` on the target project, as Redmine's form does. */
   copyWatchers: boolean;
@@ -150,10 +152,12 @@ export async function copyIssue(repositories: CopyIssueRepositories, input: Copy
   // Mirrors after_create_from_copy: the copied_to link is only created for a same-project
   // copy, or when cross-project relations are allowed. A failure here is logged and ignored
   // in Redmine rather than failing the copy, so it is swallowed the same way.
-  try {
-    await createIssueRelation(repositories, { issueFromId: source.id, issueToId: copy.id, relationType: "copied_to", delay: null });
-  } catch {
-    // the copy itself stands
+  if (input.linkCopy !== false) {
+    try {
+      await createIssueRelation(repositories, { issueFromId: source.id, issueToId: copy.id, relationType: "copied_to", delay: null });
+    } catch {
+      // the copy itself stands
+    }
   }
 
   if (input.copySubtasks) {
