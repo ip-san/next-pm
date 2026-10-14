@@ -78,6 +78,8 @@ import { triggerIssueWebhook } from "./webhook-trigger";
 import { localizedMail } from "@/domain/i18n/mail-text";
 import { translate } from "@/domain/i18n/messages";
 import { emailDomainPolicy } from "@/interface/http/email-domain-policy";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { defaultNewIssueDates } from "@/domain/settings/general-settings";
 
 /**
  * next-pm's MailHandler — the port of Redmine's `MailHandler#receive` / `#dispatch`. It lives
@@ -577,6 +579,7 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
   const subject = base.email.subject.trim().slice(0, 255);
   let issue;
   try {
+    const defaultDates = defaultNewIssueDates(await loadGeneralSettings(new DrizzleSettingsRepository()), new Date().toISOString().slice(0, 10));
     issue = await createIssue(
       {
         ...drizzleIssueAttributeRepositories(),
@@ -603,8 +606,9 @@ async function handleNewIssue(base: BaseContext, cleanedBody: string): Promise<M
         isPrivate: resolved.isPrivate ?? defaultsPrivate,
         doneRatio: resolved.changes.doneRatio ?? 0,
         estimatedHours: resolved.changes.estimatedHours ?? null,
-        startDate: resolved.changes.startDate ?? null,
-        dueDate: resolved.changes.dueDate ?? null,
+        // MailHandler#receive_issue: a date the mail doesn't give takes the configured default.
+        startDate: resolved.changes.startDate ?? defaultDates.startDate,
+        dueDate: resolved.changes.dueDate ?? defaultDates.dueDate,
         actorRoleIds: roleIds,
         canSetPrivate: base.options.noPermissionCheck || canSetPrivate,
         canManageSubtasks: false,

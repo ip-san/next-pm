@@ -28,6 +28,8 @@ export const GENERAL_SETTING_KEYS = [
   "parent_issue_dates",
   "parent_issue_priority",
   "parent_issue_done_ratio",
+  "default_issue_start_date_to_creation_date",
+  "default_issue_due_date_offset",
 ] as const;
 
 export const ISSUE_DONE_RATIO_VALUES = ["issue_field", "issue_status"] as const;
@@ -57,6 +59,9 @@ export const GENERAL_SETTING_DEFAULTS: Record<GeneralSettingKey, string> = {
   // of Redmine's own default (allow). Defaulting to "0" (reject) here preserves that prior
   // behavior.
   cross_project_issue_relations: "0",
+  // Redmine's defaults: a new issue's dates start empty.
+  default_issue_start_date_to_creation_date: "0",
+  default_issue_due_date_offset: "",
   // next-pm previously never derived done_ratio from status at all (only the SCM commit-hook
   // path did) — "issue_field" (manual, Redmine's own default too) preserves that.
   issue_done_ratio: "issue_field",
@@ -90,6 +95,10 @@ export interface GeneralSettings {
   timelogAccept0Hours: boolean;
   repositoryLogDisplayLimit: number;
   crossProjectIssueRelations: boolean;
+  /** default_issue_start_date_to_creation_date: a new issue's start date defaults to the day it is created. */
+  defaultIssueStartDateToCreationDate: boolean;
+  /** default_issue_due_date_offset: a new issue's due date defaults to today plus this many days; null leaves it empty. */
+  defaultIssueDueDateOffsetDays: number | null;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   /**
@@ -135,6 +144,9 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
     timelogAccept0Hours: (overrides.timelog_accept_0_hours ?? GENERAL_SETTING_DEFAULTS.timelog_accept_0_hours) === "1",
     repositoryLogDisplayLimit: positiveIntOr(overrides.repository_log_display_limit, PRIOR_HARDCODED_REPOSITORY_LOG_LIMIT),
     crossProjectIssueRelations: (overrides.cross_project_issue_relations ?? GENERAL_SETTING_DEFAULTS.cross_project_issue_relations) === "1",
+    defaultIssueStartDateToCreationDate:
+      (overrides.default_issue_start_date_to_creation_date ?? GENERAL_SETTING_DEFAULTS.default_issue_start_date_to_creation_date) === "1",
+    defaultIssueDueDateOffsetDays: dueDateOffsetDays(overrides.default_issue_due_date_offset ?? GENERAL_SETTING_DEFAULTS.default_issue_due_date_offset),
     issueDoneRatio: ISSUE_DONE_RATIO_VALUES.includes(overrides.issue_done_ratio as IssueDoneRatioMode)
       ? (overrides.issue_done_ratio as IssueDoneRatioMode)
       : (GENERAL_SETTING_DEFAULTS.issue_done_ratio as IssueDoneRatioMode),
@@ -149,4 +161,23 @@ export function resolveGeneralSettings(overrides: Record<string, string>): Gener
     parentIssuePriority: rollupMode(overrides.parent_issue_priority, "parent_issue_priority"),
     parentIssueDoneRatio: rollupMode(overrides.parent_issue_done_ratio, "parent_issue_done_ratio"),
   };
+}
+
+/** Setting.default_issue_due_date_offset_in_days: a whole number of days, 0 or more; anything else means no default. */
+export function dueDateOffsetDays(raw: string): number | null {
+  const value = raw.trim();
+  if (!/^\d+$/.test(value)) return null;
+  return Number(value);
+}
+
+/** The default dates of a new issue (IssuesController#build_new_issue_from_params), as YYYY-MM-DD. */
+export function defaultNewIssueDates(
+  settings: Pick<GeneralSettings, "defaultIssueStartDateToCreationDate" | "defaultIssueDueDateOffsetDays">,
+  today: string,
+): { startDate: string | null; dueDate: string | null } {
+  const dueDate =
+    settings.defaultIssueDueDateOffsetDays === null
+      ? null
+      : new Date(Date.parse(`${today}T00:00:00Z`) + settings.defaultIssueDueDateOffsetDays * 86_400_000).toISOString().slice(0, 10);
+  return { startDate: settings.defaultIssueStartDateToCreationDate ? today : null, dueDate };
 }

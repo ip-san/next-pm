@@ -20,6 +20,8 @@ export interface UpdateGeneralSettingsInput {
   timelogAccept0Hours: boolean;
   repositoryLogDisplayLimit: number;
   crossProjectIssueRelations: boolean;
+  defaultIssueStartDateToCreationDate: boolean;
+  defaultIssueDueDateOffset: string;
   issueDoneRatio: IssueDoneRatioMode;
   webhooksEnabled: boolean;
   displaySubprojectsIssues: boolean;
@@ -46,6 +48,8 @@ export async function updateGeneralSettings(
     timelog_accept_0_hours: input.timelogAccept0Hours ? "1" : "0",
     repository_log_display_limit: String(Math.round(input.repositoryLogDisplayLimit)),
     cross_project_issue_relations: input.crossProjectIssueRelations ? "1" : "0",
+    default_issue_start_date_to_creation_date: input.defaultIssueStartDateToCreationDate ? "1" : "0",
+    default_issue_due_date_offset: input.defaultIssueDueDateOffset.trim(),
     issue_done_ratio: input.issueDoneRatio,
     webhooks_enabled: input.webhooksEnabled ? "1" : "0",
     display_subprojects_issues: input.displaySubprojectsIssues ? "1" : "0",

@@ -1192,6 +1192,8 @@ const JA = {
   "admin.auth.disabled": "無効",
   "admin.auth.days": "{count}日",
   "auth.passwordExpired": "パスワードの有効期限が切れたか、管理者がパスワードの変更を求めています。変更してください。",
+  "admin.general.defaultStartDate": "現在の日付を新しいチケットの開始日とする",
+  "admin.general.defaultDueDateOffset": "新しいチケットの期日を今日から何日後にするか(空欄で設定しない)",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2383,6 +2385,8 @@ const EN: Record<MessageKey, string> = {
   "admin.auth.disabled": "disabled",
   "admin.auth.days": "{count} days",
   "auth.passwordExpired": "Your password has expired or the administrator requires you to change it.",
+  "admin.general.defaultStartDate": "Use current date as start date for new issues",
+  "admin.general.defaultDueDateOffset": "Default due date for new issues, in days from today (blank for none)",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

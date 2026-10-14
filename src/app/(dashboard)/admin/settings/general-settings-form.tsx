@@ -70,6 +70,19 @@ export function GeneralSettingsForm({ locale = "ja", settings }: { settings: Gen
         <input type="checkbox" name="crossProjectIssueRelations" defaultChecked={settings.crossProjectIssueRelations} />
         {t("admin.general.crossProjectRelations")}
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="defaultIssueStartDateToCreationDate" defaultChecked={settings.defaultIssueStartDateToCreationDate} />
+        {t("admin.general.defaultStartDate")}
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {t("admin.general.defaultDueDateOffset")}
+        <input
+          name="defaultIssueDueDateOffset"
+          inputMode="numeric"
+          defaultValue={settings.defaultIssueDueDateOffsetDays ?? ""}
+          className="border rounded px-2 py-1 w-24"
+        />
+      </label>
       <label className="flex flex-col gap-1 text-sm">
         {t("admin.general.doneRatio")}
         <select name="issueDoneRatio" defaultValue={settings.issueDoneRatio} className="border rounded px-2 py-1">

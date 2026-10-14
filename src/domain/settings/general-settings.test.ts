@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { GENERAL_SETTING_DEFAULTS, resolveGeneralSettings } from "./general-settings";
+import { defaultNewIssueDates, dueDateOffsetDays, GENERAL_SETTING_DEFAULTS, resolveGeneralSettings } from "./general-settings";
 
 describe("resolveGeneralSettings", () => {
   it("falls back to next-pm's prior hardcoded defaults when nothing is persisted", () => {
@@ -99,3 +99,20 @@ describe("language settings", () => {
     expect(resolveGeneralSettings({ default_language: "fr" }).defaultLanguage).toBe("ja");
   });
 });
+
+describe("new issue default dates", () => {
+  it("reads the due date offset as whole days and ignores anything else", () => {
+    expect(dueDateOffsetDays("")).toBeNull();
+    expect(dueDateOffsetDays(" 7 ")).toBe(7);
+    expect(dueDateOffsetDays("0")).toBe(0);
+    expect(dueDateOffsetDays("-1")).toBeNull();
+    expect(dueDateOffsetDays("1.5")).toBeNull();
+  });
+
+  it("starts empty by default, and fills today and today plus the offset when set", () => {
+    expect(defaultNewIssueDates(resolveGeneralSettings({}), "2026-10-14")).toEqual({ startDate: null, dueDate: null });
+    const settings = resolveGeneralSettings({ default_issue_start_date_to_creation_date: "1", default_issue_due_date_offset: "20" });
+    expect(defaultNewIssueDates(settings, "2026-10-14")).toEqual({ startDate: "2026-10-14", dueDate: "2026-11-03" });
+  });
+});
+

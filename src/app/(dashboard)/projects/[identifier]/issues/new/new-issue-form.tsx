@@ -33,6 +33,7 @@ export function NewIssueForm({
   doneRatioEditable,
   canSetPrivate,
   canManageSubtasks,
+  defaultDates,
   locale,
 }: {
   identifier: string;
@@ -50,6 +51,8 @@ export function NewIssueForm({
   canSetPrivate: boolean;
   /** `manage_subtasks` — without it the parent field isn't offered, as in Redmine. */
   canManageSubtasks: boolean;
+  /** The start and due dates a new issue starts with (default_issue_start_date_to_creation_date, due date offset). */
+  defaultDates: { startDate: string | null; dueDate: string | null };
   locale: Locale;
 }) {
   const router = useRouter();
@@ -77,8 +80,8 @@ export function NewIssueForm({
       isPrivate: false,
       estimatedHours: "",
       doneRatio: "0",
-      startDate: "",
-      dueDate: "",
+      startDate: defaultDates.startDate ?? "",
+      dueDate: defaultDates.dueDate ?? "",
       // Mirrors Redmine's IssuesController#build_new_issue_from_params seeding a new issue
       // with each applicable custom field's default_value.
       customFieldValues: Object.fromEntries(customFields.map((field) => [field.id, field.defaultValue ?? ""])),

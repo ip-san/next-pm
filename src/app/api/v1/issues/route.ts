@@ -27,6 +27,8 @@ import { currentUserFromAuthorizationHeader, currentUserFromCookies } from "@/in
 import { issuesVisibilityRoles, resolveActor, toAuthorizationProject } from "@/interface/http/resolve-actor";
 import { verifyCsrf } from "@/interface/http/csrf";
 import { paginate, parsePagination } from "@/interface/http/pagination";
+import { loadGeneralSettings } from "@/application/settings/general-settings";
+import { defaultNewIssueDates } from "@/domain/settings/general-settings";
 
 async function resolveUser(request: Request) {
   const viaApiKey = await currentUserFromAuthorizationHeader(request);
@@ -80,8 +82,9 @@ const createIssueSchema = z.object({
   category_id: z.string().uuid().nullable().default(null),
   is_private: z.boolean().default(false),
   estimated_hours: z.number().nullable().default(null),
-  start_date: z.string().nullable().default(null),
-  due_date: z.string().nullable().default(null),
+  // Absent takes the configured default (IssuesController#build_new_issue_from_params); an explicit null stays empty.
+  start_date: z.string().nullable().optional(),
+  due_date: z.string().nullable().optional(),
   custom_field_values: restCustomFieldValuesSchema,
   uploads: z.array(z.object({ token: z.string() })).default([]),
 });
@@ -146,6 +149,7 @@ export async function POST(request: Request) {
 
   let issue;
   try {
+    const defaultDates = defaultNewIssueDates(await loadGeneralSettings(new DrizzleSettingsRepository()), new Date().toISOString().slice(0, 10));
     issue = await createIssue(
       {
         ...drizzleIssueAttributeRepositories(),
@@ -172,8 +176,8 @@ export async function POST(request: Request) {
         isPrivate: parsed.data.is_private,
         doneRatio: 0,
         estimatedHours: parsed.data.estimated_hours,
-        startDate: parsed.data.start_date,
-        dueDate: parsed.data.due_date,
+        startDate: parsed.data.start_date === undefined ? defaultDates.startDate : parsed.data.start_date,
+        dueDate: parsed.data.due_date === undefined ? defaultDates.dueDate : parsed.data.due_date,
         actorRoleIds: roleIds,
         canSetPrivate:
           can({ permission: "set_issues_private", project: projectContext, actor }) ||

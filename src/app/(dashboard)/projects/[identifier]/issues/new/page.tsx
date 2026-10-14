@@ -3,7 +3,7 @@ import { visibleCustomFieldsFor } from "@/domain/custom-field/visibility";
 import { notFound } from "next/navigation";
 import { can } from "@/domain/authorization/authorization-service";
 import { memberUserIds } from "@/domain/member/entity";
-import { resolveGeneralSettings } from "@/domain/settings/general-settings";
+import { defaultNewIssueDates, resolveGeneralSettings } from "@/domain/settings/general-settings";
 import { DrizzleCustomFieldRepository } from "@/infrastructure/db/repositories/custom-field-repository";
 import { DrizzleEnumerationRepository } from "@/infrastructure/db/repositories/enumeration-repository";
 import { DrizzleGroupRepository } from "@/infrastructure/db/repositories/group-repository";
@@ -86,6 +86,7 @@ export default async function NewIssuePage({
             can({ permission: "set_own_issues_private", project: projectContext, actor })
           }
           canManageSubtasks={can({ permission: "manage_subtasks", project: projectContext, actor })}
+          defaultDates={defaultNewIssueDates(resolveGeneralSettings(settings), new Date().toISOString().slice(0, 10))}
           locale={locale}
         />
       )}
