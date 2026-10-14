@@ -1183,6 +1183,7 @@ const JA = {
   "bulkEdit.issueHint": "番号(none で関連を外す)",
   "bulkEdit.user": "ユーザー",
   "bulkEdit.none": "(なし)",
+  "issueBulkEdit.clearDate": "日付を消す",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2365,6 +2366,7 @@ const EN: Record<MessageKey, string> = {
   "bulkEdit.issueHint": "Number, or none to detach",
   "bulkEdit.user": "User",
   "bulkEdit.none": "(none)",
+  "issueBulkEdit.clearDate": "Clear the date",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

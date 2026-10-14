@@ -154,6 +154,11 @@ export function BulkEditForm({
           {t("query.column.start_date")}
         </label>
         <input id="startDate" name="startDate" type="date" className="border rounded px-3 py-2" />
+        {/* Redmine's "none" checkbox next to a bulk date: clears the date on every selected issue. */}
+        <label className="text-sm flex items-center gap-2">
+          <input type="checkbox" name="clearStartDate" />
+          {t("issueBulkEdit.clearDate")}
+        </label>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -161,6 +166,11 @@ export function BulkEditForm({
           {t("query.column.due_date")}
         </label>
         <input id="dueDate" name="dueDate" type="date" className="border rounded px-3 py-2" />
+        {/* Redmine's "none" checkbox next to a bulk date: clears the date on every selected issue. */}
+        <label className="text-sm flex items-center gap-2">
+          <input type="checkbox" name="clearDueDate" />
+          {t("issueBulkEdit.clearDate")}
+        </label>
       </div>
 
       <div className="flex flex-col gap-1">

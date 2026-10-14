@@ -61,8 +61,9 @@ export async function bulkUpdateIssuesAction(
     priorityId: formData.get("priorityId") ?? "",
     fixedVersionId: formData.get("fixedVersionId") ?? "",
     categoryId: formData.get("categoryId") ?? "",
-    startDate: formData.get("startDate") ?? "",
-    dueDate: formData.get("dueDate") ?? "",
+    // The "clear" checkbox wins over a typed date, as "__none__", the value the other controls clear with.
+    startDate: formData.get("clearStartDate") === "on" ? "__none__" : (formData.get("startDate") ?? ""),
+    dueDate: formData.get("clearDueDate") === "on" ? "__none__" : (formData.get("dueDate") ?? ""),
     privateNotes: formData.get("privateNotes") === "on",
     customFieldValues: Object.fromEntries(
       [...formData.entries()].flatMap(([key, value]) =>
