@@ -47,9 +47,12 @@ export async function updateTimeEntry(
     await assertValidHours(repositories.settingsRepository, input.hours);
   }
   const projectId = input.projectId ?? entry.projectId;
-  // `errors.add :activity_id, :inclusion if activity_id_changed? && project && !project.activities.include?(activity)`
-  if (input.activityId !== undefined && input.activityId !== entry.activityId) {
-    await assertActivityAvailable(repositories, projectId, input.activityId);
+  // `errors.add :activity_id, :inclusion if activity_id_changed? && project && !project.activities.include?(activity)`.
+  // A move to another project checks the activity the entry keeps as well: next-pm's per-project activity rows belong
+  // to one project, and an entry must not carry the source project's activity into a project that doesn't offer it.
+  const activityId = input.activityId ?? entry.activityId;
+  if (activityId !== entry.activityId || projectId !== entry.projectId) {
+    await assertActivityAvailable(repositories, projectId, activityId);
   }
   // `errors.add :issue_id, :invalid if (issue_id && !issue) || (issue && project != issue.project)`, which also
   // holds the issue an entry keeps when only its project moves.

@@ -604,10 +604,9 @@ export async function bulkUpdateTimeEntriesAction(
   }
 
   const issueRepository = new DrizzleIssueRepository();
+  // A number that names no issue is handled like one the viewer can't attach: the entries are skipped. Answering
+  // "not found" up front would tell the two apart and reveal which numbers belong to private issues.
   const chosenIssue = typeof issueChoice === "number" ? await issueRepository.findByNumber(issueChoice) : null;
-  if (typeof issueChoice === "number" && !chosenIssue) {
-    return { error: await localizeError(ISSUE_NOT_FOUND), message: null };
-  }
 
   const touchedProjects = new Set<string>();
   let saved = 0;
@@ -637,7 +636,7 @@ export async function bulkUpdateTimeEntriesAction(
       }
     }
     const accessContext = { userId: user.id, actor: target.actor, userGroupIds: target.userGroupIds, projectContext: target.projectContext };
-    if (chosenIssue && !canAttachIssueToTimeEntry(chosenIssue, projectId, accessContext)) {
+    if (typeof issueChoice === "number" && (!chosenIssue || !canAttachIssueToTimeEntry(chosenIssue, projectId, accessContext))) {
       skipped += 1;
       continue;
     }

@@ -192,4 +192,11 @@ describe("updateTimeEntry", () => {
     await updateTimeEntry(repos, existing, { projectId: "proj-2", issueId: null });
     expect(repos.timeEntryRepository.update).toHaveBeenCalledWith(existing.id, { projectId: "proj-2", issueId: null });
   });
+
+  it("refuses to move the entry into a project that doesn't offer its activity", async () => {
+    const repos = makeRepos();
+    repos.enumerationRepository.listByType = mock(async () => []) as never;
+    await expect(updateTimeEntry(repos, existing, { projectId: "proj-2", issueId: null })).rejects.toThrow(InvalidTimeEntryError);
+    expect(repos.timeEntryRepository.update).not.toHaveBeenCalled();
+  });
 });
