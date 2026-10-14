@@ -7,6 +7,8 @@ import { translate, type MessageKey } from "@/domain/i18n/messages";
 import { currentUserFromCookies } from "@/interface/http/current-user";
 import { currentLocale } from "@/interface/http/locale";
 import { listProjectsWithPermission } from "@/interface/http/resolve-actor";
+import { mustChangePassword } from "@/domain/user/password-expiry";
+import { PasswordSection } from "./my/account/password-section";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUserFromCookies();
@@ -17,11 +19,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // never reaches a page at all. resolve-actor.ts enforces the same rule for the data paths
   // (Route Handlers, Server Actions); this is what turns it into a redirect instead of an
   // empty page.
-  if (!user) {
-    const { loginRequired } = await loadAuthSettings(new DrizzleSettingsRepository());
-    if (loginRequired) {
-      redirect("/login");
-    }
+  const authSettings = await loadAuthSettings(new DrizzleSettingsRepository());
+  if (!user && authSettings.loginRequired) {
+    redirect("/login");
+  }
+
+  // Redmine's check_password_change: a user whose password must change (flagged by an administrator, or older than
+  // password_max_age) sees only the password form, with the reason, until it is changed. A successful change
+  // refreshes the page and lets them through.
+  if (user && mustChangePassword(user, authSettings.passwordMaxAgeDays)) {
+    return (
+      <div className="flex flex-col flex-1">
+        <header className="border-b px-4 py-2 flex items-center justify-between text-sm">
+          <span className="font-semibold">next-pm</span>
+          <form action={logoutAction}>
+            <button type="submit" className="hover:underline">
+              {t("nav.logout")}
+            </button>
+          </form>
+        </header>
+        <main className="p-8 flex flex-col gap-4 max-w-xl">
+          <p role="alert" className="text-sm text-red-600">
+            {t("auth.passwordExpired")}
+          </p>
+          <PasswordSection locale={locale} authSource={user.authSource} />
+        </main>
+      </div>
+    );
   }
   // Redmine's application_menu hides the global Issues and Spent time entries unless the
   // viewer holds the permission in at least one visible project with the module enabled

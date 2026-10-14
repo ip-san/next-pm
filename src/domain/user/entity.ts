@@ -19,12 +19,14 @@ export interface User {
   lastname: string;
   isAdmin: boolean;
   status: UserStatus;
-  /** Stored but not yet read: next-pm has no i18n framework. See schema/users.ts. */
+  /** The interface and mail language (resolve-locale.ts); null follows the default language. */
   language: string | null;
   mailNotification: MailNotificationOption;
   passwordHash: string;
   passwordSalt: string;
   mustChangePassword: boolean;
+  /** When the password was last set (Redmine's passwd_changed_on). Optional so callers building a User needn't know it. */
+  passwdChangedOn?: Date | null;
   apiKey: string | null;
   /** Separate from apiKey — scoped to feed URLs only, so a leaked feed link can't grant full API access. */
   atomKey: string | null;

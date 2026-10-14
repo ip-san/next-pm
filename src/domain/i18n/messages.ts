@@ -1188,6 +1188,10 @@ const JA = {
   "admin.auth.emailDomainsAllowed": "許可するメールアドレスのドメイン",
   "admin.auth.emailDomainsDenied": "禁止するメールアドレスのドメイン",
   "admin.auth.emailDomainsHint": "カンマか改行で区切ります。「.」で始めるとサブドメインも含みます(例: example.com, .example.org)。",
+  "admin.auth.passwordMaxAge": "パスワードの有効期間",
+  "admin.auth.disabled": "無効",
+  "admin.auth.days": "{count}日",
+  "auth.passwordExpired": "パスワードの有効期限が切れたか、管理者がパスワードの変更を求めています。変更してください。",
 } as const;
 
 export type MessageKey = keyof typeof JA;
@@ -2375,6 +2379,10 @@ const EN: Record<MessageKey, string> = {
   "admin.auth.emailDomainsAllowed": "Allowed email domains",
   "admin.auth.emailDomainsDenied": "Disallowed email domains",
   "admin.auth.emailDomainsHint": "Separate with commas or line breaks. A leading \".\" also covers subdomains (e.g. example.com, .example.org).",
+  "admin.auth.passwordMaxAge": "Require password change after",
+  "admin.auth.disabled": "disabled",
+  "admin.auth.days": "{count} days",
+  "auth.passwordExpired": "Your password has expired or the administrator requires you to change it.",
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { ja: JA, en: EN };

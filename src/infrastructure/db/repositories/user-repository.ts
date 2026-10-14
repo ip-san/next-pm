@@ -28,6 +28,7 @@ function toDomain(row: typeof users.$inferSelect): User {
     passwordHash: row.passwordHash,
     passwordSalt: row.passwordSalt,
     mustChangePassword: row.mustChangePassword,
+    passwdChangedOn: row.passwdChangedOn,
     apiKey: row.apiKey,
     atomKey: row.atomKey,
     authSource: row.authSource,
@@ -168,6 +169,8 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
         passwordHash: user.passwordHash,
         passwordSalt: user.passwordSalt,
         mustChangePassword: user.mustChangePassword,
+        // User#salt_password stamps passwd_changed_on whenever a password is set.
+        passwdChangedOn: user.passwordHash !== "" ? new Date() : null,
         apiKey: user.apiKey,
         atomKey: user.atomKey,
         authSource: user.authSource,
@@ -204,7 +207,7 @@ export class DrizzleUserRepository implements UserRepository, UserAdminRepositor
   }
 
   async updatePassword(userId: string, passwordHash: string, passwordSalt: string): Promise<void> {
-    await db.update(users).set({ passwordHash, passwordSalt, mustChangePassword: false }).where(eq(users.id, userId));
+    await db.update(users).set({ passwordHash, passwordSalt, mustChangePassword: false, passwdChangedOn: new Date() }).where(eq(users.id, userId));
   }
 
   async setTotpPairing(userId: string, encryptedKey: string): Promise<void> {

@@ -23,6 +23,7 @@ export const AUTH_SETTING_KEYS = [
   "max_additional_emails",
   "email_domains_allowed",
   "email_domains_denied",
+  "password_max_age",
 ] as const;
 
 export type AuthSettingKey = (typeof AUTH_SETTING_KEYS)[number];
@@ -38,6 +39,9 @@ export type TwofaMode = (typeof TWOFA_MODES)[number];
 /** Redmine Setting::PASSWORD_CHAR_CLASSES — the keys only; the character ranges live in password-policy.ts. */
 export const PASSWORD_CHAR_CLASSES = ["uppercase", "lowercase", "digits", "special_chars"] as const;
 export type PasswordCharClass = (typeof PASSWORD_CHAR_CLASSES)[number];
+
+/** Redmine's password_max_age choices in days; 0 disables expiry. */
+export const PASSWORD_MAX_AGE_DAY_OPTIONS = [0, 7, 30, 60, 90, 180, 365] as const;
 
 /** Redmine offers a fixed set of autologin durations rather than a free-form number of days. */
 export const AUTOLOGIN_DAY_OPTIONS = [0, 1, 7, 30, 365] as const;
@@ -70,6 +74,8 @@ export const AUTH_SETTING_DEFAULTS: Record<AuthSettingKey, string> = {
   // Redmine's defaults: empty lists, so every domain is allowed.
   email_domains_allowed: "",
   email_domains_denied: "",
+  // Redmine's own default: passwords don't expire.
+  password_max_age: "0",
 };
 
 export interface AuthSettings {
@@ -92,6 +98,8 @@ export interface AuthSettings {
   emailDomainsAllowed: string;
   /** Domains an address may not use (email_domains_denied). */
   emailDomainsDenied: string;
+  /** Days a password stays valid (password_max_age); 0 = never expires. */
+  passwordMaxAgeDays: number;
 }
 
 function nonNegativeIntOr(raw: string | undefined, fallback: number): number {
@@ -138,6 +146,7 @@ export function resolveAuthSettings(overrides: Record<string, string>): AuthSett
     maxAdditionalEmails: nonNegativeIntOr(overrides.max_additional_emails, Number(AUTH_SETTING_DEFAULTS.max_additional_emails)),
     emailDomainsAllowed: overrides.email_domains_allowed ?? AUTH_SETTING_DEFAULTS.email_domains_allowed,
     emailDomainsDenied: overrides.email_domains_denied ?? AUTH_SETTING_DEFAULTS.email_domains_denied,
+    passwordMaxAgeDays: nonNegativeIntOr(overrides.password_max_age, Number(AUTH_SETTING_DEFAULTS.password_max_age)),
   };
 }
 

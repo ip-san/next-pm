@@ -28,6 +28,7 @@ export interface UpdateAuthSettingsInput {
   maxAdditionalEmails: number;
   emailDomainsAllowed: string;
   emailDomainsDenied: string;
+  passwordMaxAgeDays: number;
 }
 
 export async function updateAuthSettings(
@@ -49,5 +50,6 @@ export async function updateAuthSettings(
     max_additional_emails: String(Math.round(input.maxAdditionalEmails)),
     email_domains_allowed: input.emailDomainsAllowed.trim(),
     email_domains_denied: input.emailDomainsDenied.trim(),
+    password_max_age: String(Math.round(input.passwordMaxAgeDays)),
   });
 }

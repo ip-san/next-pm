@@ -1,10 +1,10 @@
 "use client";
 
 import type { Locale } from "@/domain/i18n/locales";
-import { translate, type MessageKey } from "@/domain/i18n/messages";
+import { interpolate, translate, type MessageKey } from "@/domain/i18n/messages";
 import { useActionState } from "react";
 import { updateAuthSettingsAction, type SettingsActionState } from "@/interface/actions/settings-actions";
-import { AUTOLOGIN_DAY_OPTIONS, PASSWORD_CHAR_CLASSES, type AuthSettings, type PasswordCharClass } from "@/domain/settings/auth-settings";
+import { AUTOLOGIN_DAY_OPTIONS, PASSWORD_CHAR_CLASSES, PASSWORD_MAX_AGE_DAY_OPTIONS, type AuthSettings, type PasswordCharClass } from "@/domain/settings/auth-settings";
 
 const initialState: SettingsActionState = { error: null };
 
@@ -59,6 +59,17 @@ export function AuthSettingsForm({ locale = "ja", settings }: { settings: AuthSe
           {AUTOLOGIN_DAY_OPTIONS.map((days) => (
             <option key={days} value={days}>
               {t(AUTOLOGIN_LABELS[days])}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        {t("admin.auth.passwordMaxAge")}
+        <select name="passwordMaxAgeDays" defaultValue={String(settings.passwordMaxAgeDays)} className="border rounded px-2 py-1">
+          {PASSWORD_MAX_AGE_DAY_OPTIONS.map((days) => (
+            <option key={days} value={days}>
+              {days === 0 ? t("admin.auth.disabled") : interpolate(t("admin.auth.days"), { count: days })}
             </option>
           ))}
         </select>

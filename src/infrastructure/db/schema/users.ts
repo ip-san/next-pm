@@ -33,6 +33,8 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   passwordSalt: text("password_salt").notNull(),
   mustChangePassword: boolean("must_change_password").notNull().default(false),
+  /** Redmine's passwd_changed_on: set whenever a password is stored, for Setting.password_max_age. Null = never recorded. */
+  passwdChangedOn: timestamp("passwd_changed_on", { withTimezone: true }),
   apiKey: text("api_key").unique(),
   /**
    * A separate token from apiKey, deliberately — this one gets embedded in feed URLs (query
